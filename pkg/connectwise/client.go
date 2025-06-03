@@ -31,6 +31,20 @@ func NewClient(creds Creds, httpClient *http.Client) *Client {
 	}
 }
 
+func NewClientFromAWS(ctx context.Context, httpClient *http.Client, s *ssm.Client, paramName string, withDecryption bool) (*Client, error) {
+	creds, err := GetCredsFromAWS(ctx, s, paramName, withDecryption)
+	if err != nil {
+		return nil, fmt.Errorf("getting creds from AWS: %w", err)
+	}
+
+	username := fmt.Sprintf("%s+%s", creds.CompanyId, creds.PublicKey)
+	return &Client{
+		httpClient:   httpClient,
+		encodedCreds: basicAuth(username, creds.PrivateKey),
+		clientId:     creds.ClientId,
+	}, nil
+}
+
 func GetCredsFromAWS(ctx context.Context, s *ssm.Client, paramName string, withDecryption bool) (*Creds, error) {
 	c := &Creds{}
 	if err := aws.GetAndUnmarshalParam(ctx, s, paramName, withDecryption, c); err != nil {
