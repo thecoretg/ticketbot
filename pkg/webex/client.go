@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"io"
 	"net/http"
-	"tctg-automation/pkg/aws"
+	"tctg-automation/pkg/amz"
 )
 
 const (
@@ -39,7 +39,7 @@ func NewClientFromAWS(ctx context.Context, httpClient *http.Client, s *ssm.Clien
 }
 
 func GetKeyFromAWS(ctx context.Context, s *ssm.Client, paramName string, withDecryption bool) (string, error) {
-	p, err := aws.GetParam(ctx, s, paramName, withDecryption)
+	p, err := amz.GetParam(ctx, s, paramName, withDecryption)
 	if err != nil {
 		return "", err
 	}

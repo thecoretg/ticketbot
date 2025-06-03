@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/gin-gonic/gin"
 	"net/http"
-	"tctg-automation/pkg/aws"
+	"tctg-automation/pkg/amz"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/webex"
 )
@@ -19,24 +19,25 @@ const (
 	webexCredsParam = "/webex/keys/ticketbot"
 )
 
-type Client struct {
+type Server struct {
 	cwClient    *connectwise.Client
 	webexClient *webex.Client
 	db          *dynamodb.DynamoDB
+
+	Boards []boardSetting `json:"boards"`
 }
 
-func NewRouter() (*gin.Engine, error) {
-
+func (s *Server) NewRouter() (*gin.Engine, error) {
 	r := gin.Default()
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "pong"})
-	})
+	r.GET("/boards", s.listBoardsEndpoint)
+	r.POST("/boards", s.addOrUpdateBoardEndpoint)
+	r.DELETE("/boards/:board_id", s.deleteBoardEndpoint)
 
 	return r, nil
 }
 
-func newClient(ctx context.Context) (*Client, error) {
+func NewServer(ctx context.Context) (*Server, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("creating aws default config: %w", err)
@@ -54,27 +55,28 @@ func newClient(ctx context.Context) (*Client, error) {
 		return nil, fmt.Errorf("creating webex client via AWS: %w", err)
 	}
 
-	db := aws.NewDBConn()
+	db := amz.NewDBConn()
 
-	return &Client{
+	server := &Server{
 		cwClient:    cw,
 		webexClient: w,
 		db:          db,
-	}, nil
+		Boards:      []boardSetting{},
+	}
+
+	if err := server.refreshBoards(); err != nil {
+		return nil, fmt.Errorf("refreshing boards: %w", err)
+	}
+
+	return server, nil
 }
 
-func getCwClient() (*connectwise.Client, error) {
-	ctx := context.Background()
-	cfg, err := config.LoadDefaultConfig(ctx)
+func (s *Server) refreshBoards() error {
+	var err error
+	s.Boards, err = s.listBoards()
 	if err != nil {
-		return nil, fmt.Errorf("creating aws default config: %w", err)
-	}
-	s := ssm.NewFromConfig(cfg)
-
-	c, err := connectwise.GetCredsFromAWS(ctx, s, cwCredsParam, true)
-	if err != nil {
-		return nil, fmt.Errorf("getting credentials from AWS: %w", err)
+		return fmt.Errorf("refreshing boards: %w", err)
 	}
 
-	return connectwise.NewClient(*c, http.DefaultClient), nil
+	return nil
 }

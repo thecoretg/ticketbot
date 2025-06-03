@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"net/http"
-	"tctg-automation/pkg/aws"
+	"tctg-automation/pkg/amz"
 )
 
 type Client struct {
@@ -47,7 +47,7 @@ func NewClientFromAWS(ctx context.Context, httpClient *http.Client, s *ssm.Clien
 
 func GetCredsFromAWS(ctx context.Context, s *ssm.Client, paramName string, withDecryption bool) (*Creds, error) {
 	c := &Creds{}
-	if err := aws.GetAndUnmarshalParam(ctx, s, paramName, withDecryption, c); err != nil {
+	if err := amz.GetAndUnmarshalParam(ctx, s, paramName, withDecryption, c); err != nil {
 		return nil, fmt.Errorf("getting connectwise creds from AWS: %w", err)
 	}
 
