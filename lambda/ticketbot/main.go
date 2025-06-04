@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
@@ -12,6 +13,7 @@ import (
 var ginLambda *ginadapter.GinLambda
 
 func main() {
+	fmt.Println("Starting ticketbot server...if running via Lambda, this is a cold start.")
 	ctx := context.Background()
 	s, err := ticketbot.NewServer(ctx)
 	if err != nil {

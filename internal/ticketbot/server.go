@@ -30,10 +30,12 @@ type Server struct {
 func (s *Server) NewRouter() (*gin.Engine, error) {
 	r := gin.Default()
 
-	r.GET("/boards", s.listBoardsEndpoint)
-	r.POST("/boards", s.addOrUpdateBoardEndpoint)
-	r.DELETE("/boards/:board_id", s.deleteBoardEndpoint)
-
+	ticketbot := r.Group("/ticketbot")
+	{
+		ticketbot.GET("/boards", s.listBoardsEndpoint)
+		ticketbot.POST("/boards", s.addOrUpdateBoardEndpoint)
+		ticketbot.DELETE("/boards/:board_id", s.deleteBoardEndpoint)
+	}
 	return r, nil
 }
 
