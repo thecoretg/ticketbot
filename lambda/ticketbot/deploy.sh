@@ -5,3 +5,5 @@ aws lambda update-function-code \
   --function-name ticketbot \
   --zip-file fileb://lambda-function.zip \
   --publish
+
+rm -rf lambda-function.zip
