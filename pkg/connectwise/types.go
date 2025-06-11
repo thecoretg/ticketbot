@@ -603,6 +603,286 @@ type Contact struct {
 	Zip                string `json:"zip,omitempty"`
 }
 
+type Member struct {
+	Info                                     interface{} `json:"_info,omitempty"`
+	AdminFlag                                bool        `json:"adminFlag,omitempty"`
+	AgreementInvoicingDisplayOptions         string      `json:"agreementInvoicingDisplayOptions,omitempty"`
+	AllowExpensesEnteredAgainstCompaniesFlag bool        `json:"allowExpensesEnteredAgainstCompaniesFlag,omitempty"`
+	AllowInCellEntryOnTimeSheet              bool        `json:"allowInCellEntryOnTimeSheet,omitempty"`
+	AuthenticationServiceType                string      `json:"authenticationServiceType,omitempty"`
+	AutoPopupQuickNotesWithStopwatch         bool        `json:"autoPopupQuickNotesWithStopwatch,omitempty"`
+	AutoStartStopwatch                       bool        `json:"autoStartStopwatch,omitempty"`
+	BillableForecast                         float64     `json:"billableForecast,omitempty"`
+	Calendar                                 struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"calendar,omitempty"`
+	CalendarSyncIntegrationFlag bool   `json:"calendarSyncIntegrationFlag,omitempty"`
+	ClientId                    string `json:"clientId,omitempty"`
+	CompanyActivityTabFormat    string `json:"companyActivityTabFormat,omitempty"`
+	CopyColumnLayoutsAndFilters bool   `json:"copyColumnLayoutsAndFilters,omitempty"`
+	CopyPodLayouts              bool   `json:"copyPodLayouts,omitempty"`
+	CopySharedDefaultViews      bool   `json:"copySharedDefaultViews,omitempty"`
+	Country                     struct {
+		Info       interface{} `json:"_info,omitempty"`
+		ID         int         `json:"id,omitempty"`
+		Identifier string      `json:"identifier,omitempty"`
+		Name       string      `json:"name,omitempty"`
+	} `json:"country,omitempty"`
+	CustomFields []struct {
+		Caption          string      `json:"caption,omitempty"`
+		ConnectWiseId    string      `json:"connectWiseId,omitempty"`
+		EntryMethod      string      `json:"entryMethod,omitempty"`
+		ID               int         `json:"id,omitempty"`
+		NumberOfDecimals int         `json:"numberOfDecimals,omitempty"`
+		Type             string      `json:"type,omitempty"`
+		Value            interface{} `json:"value,omitempty"`
+	} `json:"customFields,omitempty"`
+	DailyCapacity     float64 `json:"dailyCapacity,omitempty"`
+	DaysTolerance     int     `json:"daysTolerance,omitempty"`
+	DefaultDepartment struct {
+		Info       interface{} `json:"_info,omitempty"`
+		ID         int         `json:"id,omitempty"`
+		Identifier string      `json:"identifier,omitempty"`
+		Name       string      `json:"name,omitempty"`
+	} `json:"defaultDepartment,omitempty"`
+	DefaultEmail    string `json:"defaultEmail,omitempty"`
+	DefaultLocation struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"defaultLocation,omitempty"`
+	DefaultPhone    string `json:"defaultPhone,omitempty"`
+	DirectionalSync struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"directionalSync,omitempty"`
+	DisableOnlineFlag            bool   `json:"disableOnlineFlag,omitempty"`
+	EmployeeIdentifer            string `json:"employeeIdentifer,omitempty"`
+	EnableLdapAuthenticationFlag bool   `json:"enableLdapAuthenticationFlag,omitempty"`
+	EnableMobileFlag             bool   `json:"enableMobileFlag,omitempty"`
+	EnableMobileGpsFlag          bool   `json:"enableMobileGpsFlag,omitempty"`
+	EnterTimeAgainstCompanyFlag  bool   `json:"enterTimeAgainstCompanyFlag,omitempty"`
+	ExcludedProjectBoardIds      []int  `json:"excludedProjectBoardIds,omitempty"`
+	ExcludedServiceBoardIds      []int  `json:"excludedServiceBoardIds,omitempty"`
+	ExpenseApprover              struct {
+		Info          interface{} `json:"_info,omitempty"`
+		DailyCapacity float64     `json:"dailyCapacity,omitempty"`
+		ID            int         `json:"id,omitempty"`
+		Identifier    string      `json:"identifier,omitempty"`
+		Name          string      `json:"name,omitempty"`
+	} `json:"expenseApprover,omitempty"`
+	FirstName                         string    `json:"firstName"`
+	FromMemberRecId                   int       `json:"fromMemberRecId,omitempty"`
+	FromMemberTemplateRecId           int       `json:"fromMemberTemplateRecId,omitempty"`
+	GlobalSearchDefaultSort           string    `json:"globalSearchDefaultSort,omitempty"`
+	GlobalSearchDefaultTicketFilter   string    `json:"globalSearchDefaultTicketFilter,omitempty"`
+	HideMemberInDispatchPortalFlag    bool      `json:"hideMemberInDispatchPortalFlag,omitempty"`
+	HireDate                          time.Time `json:"hireDate"`
+	HomeEmail                         string    `json:"homeEmail,omitempty"`
+	HomeExtension                     string    `json:"homeExtension,omitempty"`
+	HomePhone                         string    `json:"homePhone,omitempty"`
+	HourlyCost                        float64   `json:"hourlyCost,omitempty"`
+	HourlyRate                        float64   `json:"hourlyRate,omitempty"`
+	ID                                int       `json:"id,omitempty"`
+	Identifier                        string    `json:"identifier"`
+	InactiveDate                      time.Time `json:"inactiveDate,omitempty"`
+	InactiveFlag                      bool      `json:"inactiveFlag,omitempty"`
+	IncludeInUtilizationReportingFlag bool      `json:"includeInUtilizationReportingFlag,omitempty"`
+	InvoiceScreenDefaultTabFormat     string    `json:"invoiceScreenDefaultTabFormat,omitempty"`
+	InvoiceTimeTabFormat              string    `json:"invoiceTimeTabFormat,omitempty"`
+	InvoicingDisplayOptions           string    `json:"invoicingDisplayOptions,omitempty"`
+	LastLogin                         string    `json:"lastLogin,omitempty"`
+	LastName                          string    `json:"lastName"`
+	LdapConfiguration                 struct {
+		Info   interface{} `json:"_info,omitempty"`
+		ID     int         `json:"id,omitempty"`
+		Name   string      `json:"name,omitempty"`
+		Server string      `json:"server,omitempty"`
+	} `json:"ldapConfiguration,omitempty"`
+	LdapUserName    string  `json:"ldapUserName,omitempty"`
+	LicenseClass    string  `json:"licenseClass,omitempty"`
+	MapiName        string  `json:"mapiName,omitempty"`
+	MemberPersonas  []int   `json:"memberPersonas,omitempty"`
+	MiddleInitial   string  `json:"middleInitial,omitempty"`
+	MinimumHours    float64 `json:"minimumHours,omitempty"`
+	MobileEmail     string  `json:"mobileEmail,omitempty"`
+	MobileExtension string  `json:"mobileExtension,omitempty"`
+	MobilePhone     string  `json:"mobilePhone,omitempty"`
+	Notes           string  `json:"notes,omitempty"`
+	Office365       struct {
+		ID   string `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"office365,omitempty"`
+	OfficeEmail          string `json:"officeEmail,omitempty"`
+	OfficeExtension      string `json:"officeExtension,omitempty"`
+	OfficePhone          string `json:"officePhone,omitempty"`
+	PartnerPortalFlag    bool   `json:"partnerPortalFlag,omitempty"`
+	Password             string `json:"password,omitempty"`
+	PhoneIntegrationType string `json:"phoneIntegrationType,omitempty"`
+	PhoneSource          string `json:"phoneSource,omitempty"`
+	Photo                struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"photo,omitempty"`
+	PrimaryEmail        string `json:"primaryEmail,omitempty"`
+	ProjectDefaultBoard struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"projectDefaultBoard,omitempty"`
+	ProjectDefaultDepartment struct {
+		Info       interface{} `json:"_info,omitempty"`
+		ID         int         `json:"id,omitempty"`
+		Identifier string      `json:"identifier,omitempty"`
+		Name       string      `json:"name,omitempty"`
+	} `json:"projectDefaultDepartment,omitempty"`
+	ProjectDefaultLocation struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"projectDefaultLocation,omitempty"`
+	ReportCard struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"reportCard,omitempty"`
+	ReportsTo struct {
+		Info          interface{} `json:"_info,omitempty"`
+		DailyCapacity float64     `json:"dailyCapacity,omitempty"`
+		ID            int         `json:"id,omitempty"`
+		Identifier    string      `json:"identifier,omitempty"`
+		Name          string      `json:"name,omitempty"`
+	} `json:"reportsTo,omitempty"`
+	RequireExpenseEntryFlag               bool `json:"requireExpenseEntryFlag,omitempty"`
+	RequireStartAndEndTimeOnTimeEntryFlag bool `json:"requireStartAndEndTimeOnTimeEntryFlag,omitempty"`
+	RequireTimeSheetEntryFlag             bool `json:"requireTimeSheetEntryFlag,omitempty"`
+	RestrictDefaultSalesTerritoryFlag     bool `json:"restrictDefaultSalesTerritoryFlag,omitempty"`
+	RestrictDefaultWarehouseBinFlag       bool `json:"restrictDefaultWarehouseBinFlag,omitempty"`
+	RestrictDefaultWarehouseFlag          bool `json:"restrictDefaultWarehouseFlag,omitempty"`
+	RestrictDepartmentFlag                bool `json:"restrictDepartmentFlag,omitempty"`
+	RestrictLocationFlag                  bool `json:"restrictLocationFlag,omitempty"`
+	RestrictProjectDefaultDepartmentFlag  bool `json:"restrictProjectDefaultDepartmentFlag,omitempty"`
+	RestrictProjectDefaultLocationFlag    bool `json:"restrictProjectDefaultLocationFlag,omitempty"`
+	RestrictScheduleFlag                  bool `json:"restrictScheduleFlag,omitempty"`
+	RestrictServiceDefaultDepartmentFlag  bool `json:"restrictServiceDefaultDepartmentFlag,omitempty"`
+	RestrictServiceDefaultLocationFlag    bool `json:"restrictServiceDefaultLocationFlag,omitempty"`
+	SalesDefaultLocation                  struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"salesDefaultLocation,omitempty"`
+	ScheduleCapacity          float64 `json:"scheduleCapacity,omitempty"`
+	ScheduleDefaultDepartment struct {
+		Info       interface{} `json:"_info,omitempty"`
+		ID         int         `json:"id,omitempty"`
+		Identifier string      `json:"identifier,omitempty"`
+		Name       string      `json:"name,omitempty"`
+	} `json:"scheduleDefaultDepartment,omitempty"`
+	ScheduleDefaultLocation struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"scheduleDefaultLocation,omitempty"`
+	SecurityLocation struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"securityLocation,omitempty"`
+	SecurityRole struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"securityRole"`
+	ServiceBoardTeamIds []int `json:"serviceBoardTeamIds,omitempty"`
+	ServiceDefaultBoard struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"serviceDefaultBoard,omitempty"`
+	ServiceDefaultDepartment struct {
+		Info       interface{} `json:"_info,omitempty"`
+		ID         int         `json:"id,omitempty"`
+		Identifier string      `json:"identifier,omitempty"`
+		Name       string      `json:"name,omitempty"`
+	} `json:"serviceDefaultDepartment,omitempty"`
+	ServiceDefaultLocation struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"serviceDefaultLocation,omitempty"`
+	ServiceLocation struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"serviceLocation,omitempty"`
+	Signature   string `json:"signature,omitempty"`
+	SsoSettings struct {
+		Info      interface{} `json:"_info,omitempty"`
+		Email     string      `json:"email,omitempty"`
+		ID        int         `json:"id,omitempty"`
+		SsoUserId string      `json:"ssoUserId,omitempty"`
+		UserName  string      `json:"userName,omitempty"`
+	} `json:"ssoSettings,omitempty"`
+	StructureLevel struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"structureLevel,omitempty"`
+	StsUserAdminUrl string `json:"stsUserAdminUrl,omitempty"`
+	Teams           []int  `json:"teams,omitempty"`
+	TimeApprover    struct {
+		Info          interface{} `json:"_info,omitempty"`
+		DailyCapacity float64     `json:"dailyCapacity,omitempty"`
+		ID            int         `json:"id,omitempty"`
+		Identifier    string      `json:"identifier,omitempty"`
+		Name          string      `json:"name,omitempty"`
+	} `json:"timeApprover,omitempty"`
+	TimeReminderEmailFlag bool   `json:"timeReminderEmailFlag,omitempty"`
+	TimeSheetStartDate    string `json:"timeSheetStartDate,omitempty"`
+	TimeZone              struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"timeZone,omitempty"`
+	TimebasedOneTimePasswordActivated bool   `json:"timebasedOneTimePasswordActivated,omitempty"`
+	Title                             string `json:"title,omitempty"`
+	ToastNotificationFlag             bool   `json:"toastNotificationFlag,omitempty"`
+	Token                             string `json:"token,omitempty"`
+	Type                              struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"type,omitempty"`
+	UseBrowserLanguageFlag bool   `json:"useBrowserLanguageFlag,omitempty"`
+	VendorNumber           string `json:"vendorNumber,omitempty"`
+	Warehouse              struct {
+		Info       interface{} `json:"_info,omitempty"`
+		ID         int         `json:"id,omitempty"`
+		LockedFlag bool        `json:"lockedFlag,omitempty"`
+		Name       string      `json:"name,omitempty"`
+	} `json:"warehouse,omitempty"`
+	WarehouseBin struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"warehouseBin,omitempty"`
+	WorkRole struct {
+		Info interface{} `json:"_info,omitempty"`
+		ID   int         `json:"id,omitempty"`
+		Name string      `json:"name,omitempty"`
+	} `json:"workRole,omitempty"`
+	WorkType struct {
+		Info            interface{} `json:"_info,omitempty"`
+		ID              int         `json:"id,omitempty"`
+		Name            string      `json:"name,omitempty"`
+		UtilizationFlag bool        `json:"utilizationFlag,omitempty"`
+	} `json:"workType,omitempty"`
+}
+
 type Ticket struct {
 	Info         interface{} `json:"_info,omitempty"`
 	ActualHours  float64     `json:"actualHours,omitempty"`

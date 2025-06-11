@@ -25,6 +25,8 @@ type Server struct {
 	webexClient *webex.Client
 	db          *dynamodb.DynamoDB
 
+	// map of user identifiers to their emails
+	users   map[string]string
 	rootUrl string
 
 	Boards []boardSetting `json:"boards"`
@@ -79,6 +81,7 @@ func NewServer(ctx context.Context) (*Server, error) {
 		db:          db,
 		Boards:      []boardSetting{},
 		rootUrl:     u,
+		users:       make(map[string]string),
 	}
 
 	if err := server.refreshBoards(); err != nil {
