@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
+	"github.com/joho/godotenv"
+	"log/slog"
 	"net/http"
 	"os"
-	"tctg-automation/pkg/amz"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/webex"
 )
@@ -20,39 +21,56 @@ const (
 	webexCredsParam = "/webex/keys/ticketbot"
 )
 
-type Server struct {
+type server struct {
 	cwClient    *connectwise.Client
 	webexClient *webex.Client
-	db          *dynamodb.DynamoDB
+	db          *sqlx.DB
 
-	// map of user identifiers to their emails
-	users   map[string]string
 	rootUrl string
-
-	Boards []boardSetting `json:"boards"`
 }
 
-func (s *Server) NewRouter() (*gin.Engine, error) {
+func Run() error {
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("loading .env file", "error", err)
+	}
+	setLogger(os.Getenv("TICKETBOT_DEBUG"))
+
 	ctx := context.Background()
-	if err := s.initiateWebhook(ctx); err != nil {
-		return nil, fmt.Errorf("initiating tickets webhook: %w", err)
+	s, err := newServer(ctx, os.Getenv("TICKETBOT_ROOT_URL"))
+	if err != nil {
+		slog.Error("creating server config", "error", err)
+		return fmt.Errorf("error creating server config: %w", err)
 	}
 
-	r := gin.Default()
-
-	ticketbot := r.Group("/ticketbot")
-	{
-		ticketbot.GET("/boards", s.listBoardsEndpoint)
-		ticketbot.POST("/boards", s.addOrUpdateBoardEndpoint)
-		ticketbot.DELETE("/boards/:board_id", s.deleteBoardEndpoint)
-		ticketbot.POST("/tickets", s.handleTicketEndpoint)
+	r, err := s.newRouter()
+	if err != nil {
+		slog.Error("creating router", "error", err)
+		return fmt.Errorf("error creating router: %w", err)
 	}
-	return r, nil
+
+	if err := r.Run(":80"); err != nil {
+		slog.Error("running server", "error", err)
+		return fmt.Errorf("error running server: %w", err)
+	}
+
+	return nil
 }
 
-func NewServer(ctx context.Context) (*Server, error) {
-	u := os.Getenv("TICKETBOT_ROOT_URL")
-	if u == "" {
+func setLogger(e string) {
+	level := slog.LevelInfo
+	if e == "1" || e == "true" {
+		slog.Info("----- DEBUG ON -----")
+		level = slog.LevelDebug
+	}
+
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	})
+	slog.SetDefault(slog.New(handler))
+}
+
+func newServer(ctx context.Context, addr string) (*server, error) {
+	if addr == "" {
 		return nil, fmt.Errorf("TICKETBOT_ROOT_URL cannot be blank")
 	}
 
@@ -73,30 +91,35 @@ func NewServer(ctx context.Context) (*Server, error) {
 		return nil, fmt.Errorf("creating webex client via AWS: %w", err)
 	}
 
-	db := amz.NewDBConn()
+	db, err := initDB()
+	if err != nil {
+		return nil, fmt.Errorf("initializing db: %w", err)
+	}
 
-	server := &Server{
+	server := &server{
 		cwClient:    cw,
 		webexClient: w,
 		db:          db,
-		Boards:      []boardSetting{},
-		rootUrl:     u,
-		users:       make(map[string]string),
-	}
-
-	if err := server.refreshBoards(); err != nil {
-		return nil, fmt.Errorf("refreshing boards: %w", err)
+		rootUrl:     addr,
 	}
 
 	return server, nil
 }
 
-func (s *Server) refreshBoards() error {
-	var err error
-	s.Boards, err = s.listBoards()
-	if err != nil {
-		return fmt.Errorf("refreshing boards: %w", err)
+func (s *server) newRouter() (*gin.Engine, error) {
+	ctx := context.Background()
+	if err := s.initiateWebhook(ctx); err != nil {
+		return nil, fmt.Errorf("initiating tickets webhook: %w", err)
 	}
 
-	return nil
+	r := gin.Default()
+
+	r.GET("/boards", s.listBoardsEndpoint)
+	r.POST("/boards", s.addOrUpdateBoardEndpoint)
+	r.DELETE("/boards/:board_id", s.deleteBoardEndpoint)
+	r.POST("/tickets", s.handleTicketEndpoint)
+	r.GET("/users", s.listUsersEndpoint)
+	r.POST("/users", s.addOrUpdateUserEndpoint)
+
+	return r, nil
 }

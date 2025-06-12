@@ -1,174 +1,155 @@
 package ticketbot
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"strconv"
-	"tctg-automation/pkg/amz"
+	"github.com/jmoiron/sqlx"
+	_ "modernc.org/sqlite"
 )
-
-const (
-	boardSettingsTableName = "ticketbot-boards"
-)
-
-// /////////////////////////////////////////////////////////////////
-// Board Settings /////////////////////////////////////////////////
-// ///////////////////////////////////////////////////////////////
 
 type boardSetting struct {
-	BoardID         int      `json:"board_id"`
-	BoardName       string   `json:"board_name"`
-	WebexRoomID     string   `json:"webex_room_id"`
-	ExcludedMembers []string `json:"excluded_members"`
-	Enabled         bool     `json:"enabled"`
+	ID          int    `db:"id" json:"-"`
+	BoardID     int    `db:"board_id" json:"board_id"`
+	BoardName   string `db:"board_name" json:"board_name"`
+	WebexRoomID string `db:"webex_room_id" json:"webex_room_id"`
+	Enabled     bool   `db:"enabled" json:"enabled"`
 }
 
-func (s *Server) listBoards() ([]boardSetting, error) {
-	if err := s.createOrAddBoardTable(); err != nil {
-		return nil, fmt.Errorf("ensuring board table exists: %w", err)
-	}
+type user struct {
+	ID           int    `db:"id" json:"-"`
+	CWId         string `db:"cw_id" json:"cw_id"`
+	Email        string `db:"email" json:"email"`
+	Mute         bool   `db:"mute" json:"mute"`
+	IgnoreUpdate bool   `db:"ignore_update" json:"ignore_update"`
+}
 
-	params := &dynamodb.ScanInput{
-		TableName: aws.String(boardSettingsTableName),
-	}
-	result, err := s.db.Scan(params)
+const (
+	boardSettingsTableName = "boards"
+	usersTableName         = "users"
+)
+
+var (
+	boardSettingsSchema = fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
+			id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+			board_id INTEGER NOT NULL,
+			board_name TEXT NOT NULL,
+			webex_room_id TEXT NOT NULL,
+			enabled BOOLEAN NOT NULL DEFAULT 1,
+			UNIQUE (board_id)
+		);`, boardSettingsTableName)
+
+	usersTableSchema = fmt.Sprintf(`
+		CREATE TABLE IF NOT EXISTS %s (
+			id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+			cw_id TEXT NOT NULL,
+			email TEXT NOT NULL,
+			mute BOOLEAN NOT NULL DEFAULT 0,
+			ignore_update BOOLEAN NOT NULL DEFAULT 0,
+			UNIQUE (cw_id, email)
+		);`, usersTableName)
+)
+
+func initDB() (*sqlx.DB, error) {
+	db, err := sqlx.Connect("sqlite", "bot.db")
 	if err != nil {
-		return nil, fmt.Errorf("scanning items: %w", err)
+		return nil, fmt.Errorf("connecting to db: %w", err)
 	}
 
+	db.MustExec(boardSettingsSchema)
+	db.MustExec(usersTableSchema)
+
+	return db, nil
+}
+
+func getAllBoards(db *sqlx.DB) ([]boardSetting, error) {
 	var boards []boardSetting
-	for _, i := range result.Items {
-		idStr := i["BoardId"]
-		if idStr == nil || idStr.N == nil {
-			return nil, fmt.Errorf("board item missing BoardId")
-		}
-
-		boardID, err := strconv.Atoi(*idStr.N)
-		if err != nil {
-			return nil, fmt.Errorf("parsing BoardId: %w", err)
-		}
-
-		enabled := true
-		if enabledAttr := i["Enabled"]; enabledAttr != nil && enabledAttr.BOOL != nil {
-			enabled = *enabledAttr.BOOL
-		}
-
-		var excludedMembers []string
-		if emAttr, ok := i["ExcludedMembers"]; ok && emAttr.L != nil {
-			for _, v := range emAttr.L {
-				if v.S != nil {
-					excludedMembers = append(excludedMembers, *v.S)
-				}
-			}
-		}
-
-		board := boardSetting{
-			BoardID:         boardID,
-			BoardName:       *i["BoardName"].S,
-			WebexRoomID:     *i["WebexRoomId"].S,
-			ExcludedMembers: excludedMembers,
-			Enabled:         enabled,
-		}
-		boards = append(boards, board)
-	}
-
-	return boards, nil
+	err := db.Select(&boards, "SELECT * FROM boards")
+	return boards, err
 }
 
-func (s *Server) createOrAddBoardTable() error {
-	tables, err := amz.ListAllTables(s.db)
+func getBoardByID(db *sqlx.DB, boardID int) (*boardSetting, error) {
+	var board boardSetting
+	err := db.Get(&board, "SELECT * FROM boards WHERE board_id = ?", boardID)
 	if err != nil {
-		return fmt.Errorf("listing tables: %w", err)
-	}
-
-	for _, name := range tables {
-		if name == boardSettingsTableName {
-			return nil
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
 		}
+		return nil, fmt.Errorf("getting board by id: %w", err)
 	}
-
-	return s.createBoardTable()
+	return &board, nil
 }
 
-func (s *Server) createBoardTable() error {
-	if _, err := s.db.CreateTable(createBoardSettingsTableInput()); err != nil {
-		return fmt.Errorf("creating table %s: %w", boardSettingsTableName, err)
+func addOrUpdateBoard(db *sqlx.DB, board *boardSetting) (*boardSetting, error) {
+	_, err := db.NamedExec(`
+			INSERT INTO boards (board_id, board_name, webex_room_id, enabled)
+		   	VALUES(:board_id, :board_name, :webex_room_id, :enabled)
+		   	ON CONFLICT(board_id) DO UPDATE SET
+				board_name = excluded.board_name,
+				webex_room_id = excluded.webex_room_id,
+				enabled = excluded.enabled
+			`, board,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("adding or updating board: %w", err)
 	}
 
-	return nil
+	updatedBoard, err := getBoardByID(db, board.BoardID)
+	if err != nil {
+		return nil, fmt.Errorf("getting updated board by id: %w", err)
+	}
+
+	return updatedBoard, nil
 }
 
-func (s *Server) addBoardSetting(b *boardSetting) error {
-	if _, err := s.db.PutItem(putBoardSettingInput(b)); err != nil {
-		return fmt.Errorf("adding or updating board setting: %w", err)
-	}
-
-	return nil
+func deleteBoard(db *sqlx.DB, boardID int) error {
+	_, err := db.Exec("DELETE FROM boards WHERE board_id = ?", boardID)
+	return err
 }
 
-func (s *Server) deleteBoardSetting(boardID int) error {
-	if _, err := s.db.DeleteItem(deleteBoardSettingInput(boardID)); err != nil {
-		return fmt.Errorf("deleting board setting: %w", err)
-	}
-
-	return nil
+func getAllUsers(db *sqlx.DB) ([]user, error) {
+	var users []user
+	err := db.Select(&users, "SELECT * FROM users")
+	return users, err
 }
 
-func createBoardSettingsTableInput() *dynamodb.CreateTableInput {
-	return &dynamodb.CreateTableInput{
-		TableName: aws.String(boardSettingsTableName),
-		KeySchema: []*dynamodb.KeySchemaElement{
-			{
-				AttributeName: aws.String("BoardId"),
-				KeyType:       aws.String("HASH"), // Partition key
-			},
-		},
-		AttributeDefinitions: []*dynamodb.AttributeDefinition{
-			{
-				AttributeName: aws.String("BoardId"),
-				AttributeType: aws.String("N"),
-			},
-		},
-		BillingMode: aws.String("PAY_PER_REQUEST"),
+func getUserByCwID(db *sqlx.DB, cwId string) (*user, error) {
+	var user user
+	err := db.Get(&user, "SELECT * FROM users WHERE cw_id = ?", cwId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // No user found with the given cw_id
+		}
+		return nil, fmt.Errorf("getting user by cw_id: %w", err)
 	}
+	return &user, nil
 }
 
-func putBoardSettingInput(b *boardSetting) *dynamodb.PutItemInput {
-	excluded := make([]*dynamodb.AttributeValue, len(b.ExcludedMembers))
-	for i, v := range b.ExcludedMembers {
-		excluded[i] = &dynamodb.AttributeValue{S: aws.String(v)}
+func addOrUpdateUser(db *sqlx.DB, user *user) (*user, error) {
+	_, err := db.NamedExec(`
+			INSERT INTO users (cw_id, email, mute, ignore_update)
+			VALUES(:cw_id, :email, :mute, :ignore_update)
+			ON CONFLICT(cw_id, email) DO UPDATE SET
+			    cw_id = excluded.cw_id,
+			    email = excluded.email,
+			    mute = excluded.mute,
+			    ignore_update = excluded.ignore_update
+			`, user,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("adding or updating user: %w", err)
 	}
 
-	return &dynamodb.PutItemInput{
-		TableName: aws.String(boardSettingsTableName),
-		Item: map[string]*dynamodb.AttributeValue{
-			"BoardId": {
-				N: aws.String(fmt.Sprintf("%d", b.BoardID)),
-			},
-			"BoardName": {
-				S: aws.String(b.BoardName),
-			},
-			"WebexRoomId": {
-				S: aws.String(b.WebexRoomID),
-			},
-			"ExcludedMembers": {
-				L: excluded,
-			},
-			"Enabled:": {
-				BOOL: aws.Bool(b.Enabled),
-			},
-		},
+	updatedUser, err := getUserByCwID(db, user.CWId)
+	if err != nil {
+		return nil, fmt.Errorf("getting updated user by cw_id: %w", err)
 	}
+
+	return updatedUser, nil
 }
 
-func deleteBoardSettingInput(boardID int) *dynamodb.DeleteItemInput {
-	return &dynamodb.DeleteItemInput{
-		TableName: aws.String(boardSettingsTableName),
-		Key: map[string]*dynamodb.AttributeValue{
-			"BoardId": {
-				N: aws.String(strconv.Itoa(boardID)),
-			},
-		},
-	}
+func deleteUser(db *sqlx.DB, userCwId string) error {
+	_, err := db.Exec("DELETE FROM users WHERE cw_id = ?", userCwId)
+	return err
 }

@@ -8,7 +8,7 @@ import (
 	"tctg-automation/pkg/connectwise"
 )
 
-func (s *Server) initiateWebhook(ctx context.Context) error {
+func (s *server) initiateWebhook(ctx context.Context) error {
 	currentHooks, err := s.cwClient.ListCallbacks(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("listing callbacks: %w", err)
@@ -47,6 +47,6 @@ func (s *Server) initiateWebhook(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) ticketsWebhookURL() string {
+func (s *server) ticketsWebhookURL() string {
 	return fmt.Sprintf("%s/tickets", s.rootUrl)
 }

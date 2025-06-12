@@ -8,7 +8,7 @@ import (
 	"tctg-automation/pkg/connectwise"
 )
 
-func (s *Server) getAndCacheResourceEmails(ctx context.Context, resourceString string, exclusions []string) ([]string, error) {
+func (s *server) getAndStoreResourceEmails(ctx context.Context, resourceString string, mutedUsers []string) ([]string, error) {
 	ids := splitTicketResources(resourceString)
 	if ids == nil {
 		return nil, nil // No resources to process
@@ -16,35 +16,63 @@ func (s *Server) getAndCacheResourceEmails(ctx context.Context, resourceString s
 
 	var emails []string
 	for _, id := range ids {
+		if isMuted(id, mutedUsers) {
+			slog.Debug("user muted per calling function", "id", id, "mutedUsers", mutedUsers)
+			continue
+		}
+
 		id = strings.TrimSpace(id)
 		if id == "" {
 			slog.Debug("skipping empty resource ID", "id", id)
 			continue // Skip empty IDs
 		}
 
-		if isExcluded(id, exclusions) {
-			slog.Debug("skipping excluded resource", "id", id)
-			continue // Skip excluded IDs
-		}
-
-		if e, exists := s.users[id]; exists {
-			// If the email is already cached, use it
-			slog.Debug("using cached email for resource", "id", id, "email", e)
-			emails = append(emails, e)
+		u, err := getUserByCwID(s.db, id)
+		if err != nil {
+			slog.Error("failed to get user by ConnectWise ID", "id", id, "error", err)
 			continue
 		}
 
-		// Fetch the member's email and cache it
+		if u != nil {
+			if u.Email == "" {
+				slog.Debug("user found in database but has no email", "id", id)
+				continue // Skip users without an email, no need for mute check
+			}
+
+			slog.Debug("found user in database, using cached email", "id", id, "email", u.Email)
+			if u.Mute {
+				slog.Debug("user is marked as muted, skipping", "id", id, "email", u.Email)
+				continue // Skip excluded users
+			}
+
+			emails = append(emails, u.Email)
+			continue // Use cached email if available
+		}
+
+		slog.Debug("user not found in database, fetching email from ConnectWise", "id", id)
 		email, err := s.getMemberEmail(ctx, id)
 		if err != nil {
 			slog.Error("failed to get member email", "id", id, "error", err)
-			return nil, fmt.Errorf("getting member email for id %s: %w", id, err)
+			continue
 		}
 
-		if email != "" {
-			slog.Info("caching member email", "id", id, "email", email)
-			s.users[id] = email
+		if email == "" {
+			slog.Debug("no email found for member", "id", id)
+			continue // Skip if no email is found
 		}
+
+		newUser := &user{
+			CWId:  id,
+			Email: email,
+			Mute:  false, // Default to not excluded
+		}
+
+		if _, err := addOrUpdateUser(s.db, newUser); err != nil {
+			slog.Error("failed to add or update user in database", "id", id, "email", email, "error", err)
+			continue
+		}
+
+		slog.Info("added or updated user in database", "id", id, "email", email)
 
 		emails = append(emails, email)
 	}
@@ -52,7 +80,7 @@ func (s *Server) getAndCacheResourceEmails(ctx context.Context, resourceString s
 	return emails, nil
 }
 
-func (s *Server) getMemberEmail(ctx context.Context, id string) (string, error) {
+func (s *server) getMemberEmail(ctx context.Context, id string) (string, error) {
 	q := &connectwise.QueryParams{
 		Conditions: fmt.Sprintf("Identifier='%s'", id),
 	}
@@ -77,44 +105,6 @@ func (s *Server) getMemberEmail(ctx context.Context, id string) (string, error) 
 	return m[0].PrimaryEmail, nil
 }
 
-func (s *Server) addGlobalMemberExclusion(id string) error {
-	for _, b := range s.Boards {
-		added := false
-		for _, m := range b.ExcludedMembers {
-			if m == id && !added {
-				slog.Debug("member already excluded", "id", id, "boardName", b.BoardName)
-				continue // Skip if already excluded
-			}
-			slog.Info("adding member to excluded members", "id", id, "boardName", b.BoardName)
-			b.ExcludedMembers = append(b.ExcludedMembers, id)
-			if err := s.addBoardSetting(&b); err != nil {
-				return fmt.Errorf("adding member %s to excluded members for board %s: %w", id, b.BoardName, err)
-			}
-			slog.Info("successfully added member to excluded members", "id", id, "boardName", b.BoardName)
-			added = true
-		}
-	}
-	return nil
-}
-
-func (s *Server) removeGlobalMemberExclusion(id string) error {
-	for _, b := range s.Boards {
-		removed := false
-		for i, m := range b.ExcludedMembers {
-			if m == id && !removed {
-				slog.Info("removing member from excluded members", "id", id, "boardName", b.BoardName)
-				b.ExcludedMembers = append(b.ExcludedMembers[:i], b.ExcludedMembers[i+1:]...)
-				if err := s.addBoardSetting(&b); err != nil {
-					return fmt.Errorf("removing member %s from excluded members for board %s: %w", id, b.BoardName, err)
-				}
-				slog.Info("successfully removed member from excluded members", "id", id, "boardName", b.BoardName)
-				removed = true
-			}
-		}
-	}
-	return nil
-}
-
 func splitTicketResources(resourceString string) []string {
 	parts := strings.Split(resourceString, ",")
 	var resources []string
@@ -128,13 +118,4 @@ func splitTicketResources(resourceString string) []string {
 	} else {
 		return resources
 	}
-}
-
-func isExcluded(id string, exclusions []string) bool {
-	for _, e := range exclusions {
-		if e == id {
-			return true
-		}
-	}
-	return false
 }

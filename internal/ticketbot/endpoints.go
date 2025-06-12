@@ -10,57 +10,56 @@ import (
 	"tctg-automation/pkg/util"
 )
 
-func (s *Server) listBoardsEndpoint(c *gin.Context) {
-	b := s.Boards
-	if len(b) == 0 {
-		b = []boardSetting{}
+func (s *server) listBoardsEndpoint(c *gin.Context) {
+	boards, err := getAllBoards(s.db)
+	if err != nil {
+		slog.Error("failed to get boards from database", "error", err)
+		util.ErrorJSON(c, http.StatusInternalServerError, "failed to get boards")
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"boards": b})
+	c.JSON(http.StatusOK, boards)
 }
 
-func (s *Server) addOrUpdateBoardEndpoint(c *gin.Context) {
+func (s *server) addOrUpdateBoardEndpoint(c *gin.Context) {
 	b := &boardSetting{}
 	if err := c.ShouldBindJSON(b); err != nil {
+		slog.Error("failed to bind JSON to boardSetting", "error", err)
 		util.ErrorJSON(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	if err := s.addBoardSetting(b); err != nil {
+	updatedBoard, err := addOrUpdateBoard(s.db, b)
+	if err != nil {
+		slog.Error("failed to add or update board setting", "boardId", b.BoardID, "boardName", b.BoardName, "webexRoomID", b.WebexRoomID, "enabled", b.Enabled, "error", err)
 		util.ErrorJSON(c, http.StatusInternalServerError, "failed to add or update board setting")
 		return
 	}
 
-	if err := s.refreshBoards(); err != nil {
-		util.ErrorJSON(c, http.StatusInternalServerError, "failed to refresh boards")
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Board setting added or updated successfully"})
+	slog.Info("board setting added or updated", "boardId", b.BoardID, "boardName", b.BoardName, "webexRoomID", b.WebexRoomID, "enabled", b.Enabled)
+	c.JSON(http.StatusOK, updatedBoard)
 }
 
-func (s *Server) deleteBoardEndpoint(c *gin.Context) {
+func (s *server) deleteBoardEndpoint(c *gin.Context) {
 	boardIDStr := c.Param("board_id")
 	boardID, err := strconv.Atoi(boardIDStr)
 	if err != nil {
+		slog.Error("invalid board_id parameter", "board_id", boardIDStr, "error", err)
 		util.ErrorJSON(c, http.StatusBadRequest, "board_id must be a valid integer")
 		return
 	}
 
-	if err := s.deleteBoardSetting(boardID); err != nil {
+	if err := deleteBoard(s.db, boardID); err != nil {
+		slog.Error("failed to delete board setting", "boardId", boardID, "error", err)
 		util.ErrorJSON(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
-	if err := s.refreshBoards(); err != nil {
-		util.ErrorJSON(c, http.StatusInternalServerError, "failed to refresh boards")
-		return
-	}
-
+	slog.Info("board setting deleted", "boardId", boardID)
 	c.Status(http.StatusNoContent)
 }
 
-func (s *Server) handleTicketEndpoint(c *gin.Context) {
+func (s *server) handleTicketEndpoint(c *gin.Context) {
 	// Parse webhook payload
 	w := &connectwise.WebhookPayload{}
 	if err := c.ShouldBindJSON(w); err != nil {
@@ -88,8 +87,20 @@ func (s *Server) handleTicketEndpoint(c *gin.Context) {
 		return
 	}
 
-	bs := s.ticketInEnabledBoard(ticket)
+	bs, err := s.getBoard(ticket)
+	if err != nil {
+		slog.Error("error getting board for ticket", "ticketId", ticket.ID, "error", err)
+		util.ErrorJSON(c, http.StatusInternalServerError, "error getting board for ticket")
+		return
+	}
+
 	if bs == nil {
+		slog.Debug("no board setting found for ticket", "ticketId", ticket.ID)
+		c.JSON(http.StatusOK, gin.H{"message": "no board setting found for ticket"})
+		return
+	}
+
+	if !bs.Enabled {
 		slog.Debug("ticket not in enabled board", "ticketId", ticket.ID, "boardId", ticket.Board.ID)
 		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("ticket %d received, but board %d is not an enabled board for notifications", ticket.ID, ticket.Board.ID)})
 		return
@@ -109,6 +120,36 @@ func (s *Server) handleTicketEndpoint(c *gin.Context) {
 	case "updated":
 		s.handleUpdatedTicket(c, ticket, notes, bs, w)
 	}
+}
+
+func (s *server) listUsersEndpoint(c *gin.Context) {
+	users, err := getAllUsers(s.db)
+	if err != nil {
+		slog.Error("failed to get users from database", "error", err)
+		util.ErrorJSON(c, http.StatusInternalServerError, "failed to get users")
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
+}
+
+func (s *server) addOrUpdateUserEndpoint(c *gin.Context) {
+	u := &user{}
+	if err := c.ShouldBindJSON(u); err != nil {
+		slog.Error("failed to bind JSON to user", "error", err)
+		util.ErrorJSON(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	updatedUser, err := addOrUpdateUser(s.db, u)
+	if err != nil {
+		slog.Error("failed to add or update user", "cwId", u.CWId, "email", u.Email, "mute", u.Mute, "ignoreUpdate", u.IgnoreUpdate, "error", err)
+		util.ErrorJSON(c, http.StatusInternalServerError, "failed to add or update user")
+		return
+	}
+
+	slog.Info("user added or updated", "cwId", updatedUser.CWId, "email", updatedUser.Email, "mute", updatedUser.Mute, "ignoreUpdate", updatedUser.IgnoreUpdate)
+	c.JSON(http.StatusOK, updatedUser)
 }
 
 func validAction(action string) bool {
