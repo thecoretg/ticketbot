@@ -9,8 +9,20 @@ import (
 )
 
 const (
-	tableName = "ticketbot-boards"
+	boardSettingsTableName = "ticketbot-boards"
 )
+
+// /////////////////////////////////////////////////////////////////
+// Board Settings /////////////////////////////////////////////////
+// ///////////////////////////////////////////////////////////////
+
+type boardSetting struct {
+	BoardID         int      `json:"board_id"`
+	BoardName       string   `json:"board_name"`
+	WebexRoomID     string   `json:"webex_room_id"`
+	ExcludedMembers []string `json:"excluded_members"`
+	Enabled         bool     `json:"enabled"`
+}
 
 func (s *Server) listBoards() ([]boardSetting, error) {
 	if err := s.createOrAddBoardTable(); err != nil {
@@ -18,7 +30,7 @@ func (s *Server) listBoards() ([]boardSetting, error) {
 	}
 
 	params := &dynamodb.ScanInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(boardSettingsTableName),
 	}
 	result, err := s.db.Scan(params)
 	if err != nil {
@@ -42,11 +54,21 @@ func (s *Server) listBoards() ([]boardSetting, error) {
 			enabled = *enabledAttr.BOOL
 		}
 
+		var excludedMembers []string
+		if emAttr, ok := i["ExcludedMembers"]; ok && emAttr.L != nil {
+			for _, v := range emAttr.L {
+				if v.S != nil {
+					excludedMembers = append(excludedMembers, *v.S)
+				}
+			}
+		}
+
 		board := boardSetting{
-			BoardID:     boardID,
-			BoardName:   *i["BoardName"].S,
-			WebexRoomID: *i["WebexRoomId"].S,
-			Enabled:     enabled,
+			BoardID:         boardID,
+			BoardName:       *i["BoardName"].S,
+			WebexRoomID:     *i["WebexRoomId"].S,
+			ExcludedMembers: excludedMembers,
+			Enabled:         enabled,
 		}
 		boards = append(boards, board)
 	}
@@ -61,7 +83,7 @@ func (s *Server) createOrAddBoardTable() error {
 	}
 
 	for _, name := range tables {
-		if name == tableName {
+		if name == boardSettingsTableName {
 			return nil
 		}
 	}
@@ -70,8 +92,8 @@ func (s *Server) createOrAddBoardTable() error {
 }
 
 func (s *Server) createBoardTable() error {
-	if _, err := s.db.CreateTable(createTableInput()); err != nil {
-		return fmt.Errorf("creating table %s: %w", tableName, err)
+	if _, err := s.db.CreateTable(createBoardSettingsTableInput()); err != nil {
+		return fmt.Errorf("creating table %s: %w", boardSettingsTableName, err)
 	}
 
 	return nil
@@ -93,9 +115,9 @@ func (s *Server) deleteBoardSetting(boardID int) error {
 	return nil
 }
 
-func createTableInput() *dynamodb.CreateTableInput {
+func createBoardSettingsTableInput() *dynamodb.CreateTableInput {
 	return &dynamodb.CreateTableInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(boardSettingsTableName),
 		KeySchema: []*dynamodb.KeySchemaElement{
 			{
 				AttributeName: aws.String("BoardId"),
@@ -113,8 +135,13 @@ func createTableInput() *dynamodb.CreateTableInput {
 }
 
 func putBoardSettingInput(b *boardSetting) *dynamodb.PutItemInput {
+	excluded := make([]*dynamodb.AttributeValue, len(b.ExcludedMembers))
+	for i, v := range b.ExcludedMembers {
+		excluded[i] = &dynamodb.AttributeValue{S: aws.String(v)}
+	}
+
 	return &dynamodb.PutItemInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(boardSettingsTableName),
 		Item: map[string]*dynamodb.AttributeValue{
 			"BoardId": {
 				N: aws.String(fmt.Sprintf("%d", b.BoardID)),
@@ -125,6 +152,9 @@ func putBoardSettingInput(b *boardSetting) *dynamodb.PutItemInput {
 			"WebexRoomId": {
 				S: aws.String(b.WebexRoomID),
 			},
+			"ExcludedMembers": {
+				L: excluded,
+			},
 			"Enabled:": {
 				BOOL: aws.Bool(b.Enabled),
 			},
@@ -134,7 +164,7 @@ func putBoardSettingInput(b *boardSetting) *dynamodb.PutItemInput {
 
 func deleteBoardSettingInput(boardID int) *dynamodb.DeleteItemInput {
 	return &dynamodb.DeleteItemInput{
-		TableName: aws.String(tableName),
+		TableName: aws.String(boardSettingsTableName),
 		Key: map[string]*dynamodb.AttributeValue{
 			"BoardId": {
 				N: aws.String(strconv.Itoa(boardID)),

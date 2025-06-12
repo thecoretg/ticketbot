@@ -77,6 +77,44 @@ func (s *Server) getMemberEmail(ctx context.Context, id string) (string, error) 
 	return m[0].PrimaryEmail, nil
 }
 
+func (s *Server) addGlobalMemberExclusion(id string) error {
+	for _, b := range s.Boards {
+		added := false
+		for _, m := range b.ExcludedMembers {
+			if m == id && !added {
+				slog.Debug("member already excluded", "id", id, "boardName", b.BoardName)
+				continue // Skip if already excluded
+			}
+			slog.Info("adding member to excluded members", "id", id, "boardName", b.BoardName)
+			b.ExcludedMembers = append(b.ExcludedMembers, id)
+			if err := s.addBoardSetting(&b); err != nil {
+				return fmt.Errorf("adding member %s to excluded members for board %s: %w", id, b.BoardName, err)
+			}
+			slog.Info("successfully added member to excluded members", "id", id, "boardName", b.BoardName)
+			added = true
+		}
+	}
+	return nil
+}
+
+func (s *Server) removeGlobalMemberExclusion(id string) error {
+	for _, b := range s.Boards {
+		removed := false
+		for i, m := range b.ExcludedMembers {
+			if m == id && !removed {
+				slog.Info("removing member from excluded members", "id", id, "boardName", b.BoardName)
+				b.ExcludedMembers = append(b.ExcludedMembers[:i], b.ExcludedMembers[i+1:]...)
+				if err := s.addBoardSetting(&b); err != nil {
+					return fmt.Errorf("removing member %s from excluded members for board %s: %w", id, b.BoardName, err)
+				}
+				slog.Info("successfully removed member from excluded members", "id", id, "boardName", b.BoardName)
+				removed = true
+			}
+		}
+	}
+	return nil
+}
+
 func splitTicketResources(resourceString string) []string {
 	parts := strings.Split(resourceString, ",")
 	var resources []string
