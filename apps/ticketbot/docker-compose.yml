@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres
+    container_name: ticketbot-test-db
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_PASSWORD: bot!123
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
