@@ -42,7 +42,7 @@ func (s *server) processTicketPayload(c *gin.Context) {
 	}
 	switch w.Action {
 	case "deleted":
-		if err := s.dbHandler.deleteTicket(w.ID); err != nil {
+		if err := s.dbHandler.DeleteTicket(w.ID); err != nil {
 			slog.Error("deleting ticket", "id", w.ID, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":  fmt.Sprintf("couldn't delete ticket: %v", err),
@@ -89,8 +89,8 @@ func (s *server) processTicketUpdate(ctx context.Context, ticketID int) error {
 		return fmt.Errorf("getting most recent note: %w", err)
 	}
 
-	t := newTicket(ticketID, cwt.Board.ID, cwt.Company.ID, cwt.Contact.ID, n, cwt.Owner.ID, cwt.Summary, cwt.Resources, cwt.Info.DateEntered, cwt.Info.LastUpdated, cwt.ClosedDate, cwt.ClosedFlag)
-	if err := s.dbHandler.upsertTicket(t); err != nil {
+	t := NewTicket(ticketID, cwt.Board.ID, cwt.Company.ID, cwt.Contact.ID, n, cwt.Owner.ID, cwt.Summary, cwt.Resources, cwt.Info.DateEntered, cwt.Info.LastUpdated, cwt.ClosedDate, cwt.ClosedFlag)
+	if err := s.dbHandler.UpsertTicket(t); err != nil {
 		return fmt.Errorf("processing ticket in db: %w", err)
 	}
 

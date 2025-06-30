@@ -90,7 +90,7 @@ func newServer(ctx context.Context, addr string) (*server, error) {
 		return nil, fmt.Errorf("creating webex client via AWS: %w", err)
 	}
 
-	dbHandler, err := initDB(os.Getenv("TICKETBOT_DB_CONN"))
+	dbHandler, err := InitDB(os.Getenv("TICKETBOT_DB_CONN"))
 	if err != nil {
 		return nil, fmt.Errorf("initializing db: %w", err)
 	}
