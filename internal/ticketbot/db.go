@@ -72,15 +72,31 @@ CREATE TABLE IF NOT EXISTS ticket_note (
     created_on TIMESTAMP NOT NULL,
     internal BOOLEAN DEFAULT FALSE
 );
+
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1 FROM pg_constraint
+		WHERE conname = 'fk_latest_note'
+	) THEN
+		ALTER TABLE ticket
+		ADD CONSTRAINT fk_latest_note
+		FOREIGN KEY (latest_note_id) REFERENCES ticket_note(note_id);
+	END IF;
+END $$
 `
 
-type TicketNote struct {
-	ID        int       `db:"note_id"`
-	TicketID  int       `db:"ticket_id"`
-	ContactID *int      `db:"contact_id"`
-	MemberID  *int      `db:"member_id"`
-	CreatedOn time.Time `db:"created_on"`
-	Internal  bool      `db:"internal"`
+func InitDB(connString string) (*DBHandler, error) {
+	db, err := sqlx.Connect("pgx", connString)
+	if err != nil {
+		return nil, fmt.Errorf("connecting to db: %w", err)
+	}
+
+	db.MustExec(tablesStmt)
+
+	return &DBHandler{
+		db: db,
+	}, nil
 }
 
 type Board struct {
@@ -195,17 +211,24 @@ func NewTicket(ticketID, boardID, statusID, companyID, contactID, latestNoteID, 
 	}
 }
 
-func InitDB(connString string) (*DBHandler, error) {
-	db, err := sqlx.Connect("pgx", connString)
-	if err != nil {
-		return nil, fmt.Errorf("connecting to db: %w", err)
+type TicketNote struct {
+	ID        int       `db:"note_id"`
+	TicketID  int       `db:"ticket_id"`
+	ContactID *int      `db:"contact_id"`
+	MemberID  *int      `db:"member_id"`
+	CreatedOn time.Time `db:"created_on"`
+	Internal  bool      `db:"internal"`
+}
+
+func NewTicketNote(ticketID, noteID, contactID, memberID int, createdOn time.Time, internal bool) *TicketNote {
+	return &TicketNote{
+		ID:        noteID,
+		TicketID:  ticketID,
+		ContactID: intToPtr(contactID),
+		MemberID:  intToPtr(memberID),
+		CreatedOn: createdOn,
+		Internal:  internal,
 	}
-
-	db.MustExec(tablesStmt)
-
-	return &DBHandler{
-		db: db,
-	}, nil
 }
 
 func (h *DBHandler) GetTicket(ticketID int) (*Ticket, error) {
@@ -425,6 +448,52 @@ func (h *DBHandler) DeleteMember(memberID int) error {
 	return err
 }
 
+func (h *DBHandler) GetTicketNote(noteID int) (*TicketNote, error) {
+	n := &TicketNote{}
+	if err := h.db.Get(n, "SELECT * FROM ticket_note WHERE note_id = $1", noteID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("getting note by id: %w", err)
+	}
+	return n, nil
+}
+
+func (h *DBHandler) ListAllTicketNotes() ([]TicketNote, error) {
+	var notes []TicketNote
+	if err := h.db.Select(&notes, "SELECT * FROM ticket_note"); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("listing all ticket notes: %w", err)
+	}
+	return notes, nil
+}
+
+func (h *DBHandler) ListTicketNotes(ticketID int) ([]TicketNote, error) {
+	var notes []TicketNote
+	if err := h.db.Select(&notes, "SELECT * FROM ticket_note WHERE ticket_id = $1", ticketID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("listing notes for ticket %d: %w", ticketID, err)
+	}
+	return notes, nil
+}
+
+func (h *DBHandler) UpsertTicketNote(n *TicketNote) error {
+	_, err := h.db.NamedExec(upsertTicketNoteSQL(), n)
+	if err != nil {
+		return fmt.Errorf("inserting ticket note: %w", err)
+	}
+	return nil
+}
+
+func (h *DBHandler) DeleteTicketNote(noteID int) error {
+	_, err := h.db.Exec("DELETE FROM ticket_note WHERE ticket_id = $1", noteID)
+	return err
+}
+
 func upsertMemberSQL() string {
 	return `INSERT INTO member (member_id, identifier, first_name, last_name, email, phone)
 		VALUES (:member_id, :identifier, :first_name, :last_name, :email, :phone)
@@ -461,6 +530,16 @@ func upsertTicketSQL() string {
 			updated_on = EXCLUDED.updated_on,
 			closed_on = EXCLUDED.closed_on,
 			closed = EXCLUDED.closed`
+}
+
+func upsertTicketNoteSQL() string {
+	return `INSERT INTO ticket_note (note_id, ticket_id, contact_id, member_id, created_on)
+		VALUES (:note_id, :ticket_id, :contact_id, :member_id, :created_on)
+		ON CONFLICT (note_id) DO UPDATE SET
+			ticket_id = EXCLUDED.note_id,
+			contact_id = EXCLUDED.contact_id,
+			member_id = EXCLUDED.member_id,
+			created_on = EXCLUDED.created_on`
 }
 
 func upsertBoardSQL() string {
