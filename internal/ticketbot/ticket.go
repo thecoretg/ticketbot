@@ -84,14 +84,41 @@ func (s *server) processTicketUpdate(ctx context.Context, ticketID int) error {
 		}
 	}
 
-	n, err := s.getMostRecentNote(ctx, ticketID)
+	// see if ticket already exists in db
+	ticket, err := s.dbHandler.GetTicket(ticketID)
+	if err != nil {
+		return fmt.Errorf("getting existing ticket from DB: %w", err)
+	}
+
+	noteID, err := s.getMostRecentNote(ctx, ticketID)
 	if err != nil {
 		return fmt.Errorf("getting most recent note: %w", err)
 	}
 
-	t := NewTicket(ticketID, cwt.Board.ID, cwt.Status.ID, cwt.Company.ID, cwt.Contact.ID, n, cwt.Owner.ID, cwt.Summary, cwt.Resources, cwt.Info.DateEntered, cwt.Info.LastUpdated, cwt.ClosedDate, cwt.ClosedFlag)
-	if err := s.dbHandler.UpsertTicket(t); err != nil {
-		return fmt.Errorf("processing ticket in db: %w", err)
+	if ticket == nil {
+		ticket = NewTicket(ticketID, cwt.Board.ID, cwt.Status.ID, cwt.Company.ID, cwt.Contact.ID, 0, cwt.Owner.ID, cwt.Summary, cwt.Resources, cwt.Info.DateEntered, cwt.Info.LastUpdated, cwt.ClosedDate, cwt.ClosedFlag)
+		if err := s.dbHandler.UpsertTicket(ticket); err != nil {
+			return fmt.Errorf("creating new ticket in db: %w", err)
+		}
+	}
+
+	if noteID != 0 {
+		if err := s.ensureTicketNoteExists(ctx, ticketID, noteID); err != nil {
+			return fmt.Errorf("ensuring ticket note exists: %w", err)
+		}
+
+		// re fetch the ticket just in case of race conditions
+		ticket, err = s.dbHandler.GetTicket(ticketID)
+		if err != nil {
+			return fmt.Errorf("getting most recent update of ticket: %w", err)
+		}
+
+		if ticket.LatestNote == nil || *ticket.LatestNote != noteID {
+			ticket.LatestNote = intToPtr(noteID)
+			if err := s.dbHandler.UpsertTicket(ticket); err != nil {
+				return fmt.Errorf("processing ticket in db: %w", err)
+			}
+		}
 	}
 
 	return nil
@@ -139,7 +166,7 @@ func (s *server) ensureStatusExists(ctx context.Context, statusID, boardID int) 
 	if st == nil {
 		r, err := s.cwClient.GetBoardStatus(ctx, boardID, statusID, nil)
 		if err != nil {
-			return fmt.Errorf("getting status from connectwise: %w", err)
+			return checkCWError("getting status", "status", err, statusID)
 		}
 
 		n := NewStatus(statusID, boardID, r.Name, r.ClosedStatus, !r.Inactive)
@@ -161,7 +188,7 @@ func (s *server) ensureContactExists(ctx context.Context, contactID int) error {
 	if c == nil {
 		r, err := s.cwClient.GetContact(ctx, contactID, nil)
 		if err != nil {
-			return fmt.Errorf("getting ticket contact: %w", err)
+			return checkCWError("getting contact", "contact", err, contactID)
 		}
 
 		n := NewContact(contactID, r.FirstName, r.LastName, r.Company.ID)
@@ -186,6 +213,28 @@ func (s *server) ensureCompanyExists(companyID int, name string) error {
 			return fmt.Errorf("inserting new company into db: %w", err)
 		}
 		slog.Info("added board to db", "id", n.ID, "name", n.Name)
+	}
+
+	return nil
+}
+
+func (s *server) ensureTicketNoteExists(ctx context.Context, ticketID, noteID int) error {
+	note, err := s.dbHandler.GetTicketNote(noteID)
+	if err != nil {
+		return fmt.Errorf("querying db for note: %w", err)
+	}
+
+	if note == nil {
+		r, err := s.cwClient.GetServiceTicketNote(ctx, ticketID, noteID, nil)
+		if err != nil {
+			return checkCWError("getting ticket note", "ticket", err, noteID)
+		}
+
+		n := NewTicketNote(ticketID, noteID, r.Contact.ID, r.Member.ID, r.Text, r.DateCreated, r.InternalAnalysisFlag)
+		if err := s.dbHandler.UpsertTicketNote(n); err != nil {
+			return fmt.Errorf("inserting new ticket note into db: %w", err)
+		}
+		slog.Info("added ticket note to db", "ticketID", ticketID, "noteID", noteID, "contactID", r.Contact.ID, "memberID", r.Member.ID, "internal", r.InternalAnalysisFlag)
 	}
 
 	return nil

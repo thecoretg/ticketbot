@@ -16,13 +16,13 @@ type DBHandler struct {
 var tablesStmt = `
 CREATE TABLE IF NOT EXISTS board (
     board_id INT PRIMARY KEY,
-    board_name VARCHAR(50) NOT NULL 
+    board_name VARCHAR(50) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS status (
     status_id INT PRIMARY KEY,
-    status_name VARCHAR(50) NOT NULL UNIQUE,
-    board_id INT NOT NULL REFERENCES board(board_id),
+    status_name VARCHAR(50) NOT NULL,
+    board_id INT NOT NULL REFERENCES board(board_id) ON DELETE SET NULL,
     closed BOOLEAN NOT NULL,
     active BOOLEAN NOT NULL
 );
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS contact (
     contact_id INT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50),
-    company_id INT REFERENCES company(company_id)
+    company_id INT REFERENCES company(company_id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS member (
@@ -53,10 +53,10 @@ CREATE TABLE IF NOT EXISTS ticket (
     board_id INT NOT NULL REFERENCES board(board_id),
     status_id INT NOT NULL REFERENCES status(status_id),
     company_id INT NOT NULL REFERENCES company(company_id),
-    contact_id INT REFERENCES contact(contact_id),
+    contact_id INT REFERENCES contact(contact_id) ON DELETE SET NULL,
     summary VARCHAR(100) NOT NULL,
     latest_note_id INT,
-    owner_id INT REFERENCES member(member_id),
+    owner_id INT REFERENCES member(member_id) ON DELETE SET NULL,
     resources TEXT,
     created_on TIMESTAMP NOT NULL,
     updated_on TIMESTAMP NOT NULL,
@@ -66,9 +66,10 @@ CREATE TABLE IF NOT EXISTS ticket (
 
 CREATE TABLE IF NOT EXISTS ticket_note (
     note_id INT PRIMARY KEY,
-    ticket_id INT NOT NULL REFERENCES ticket(ticket_id),
-    contact_id INT REFERENCES contact(contact_id),
-    member_id INT REFERENCES member(member_id),
+    ticket_id INT NOT NULL REFERENCES ticket(ticket_id) ON DELETE CASCADE,
+    contact_id INT REFERENCES contact(contact_id) ON DELETE SET NULL,
+    member_id INT REFERENCES member(member_id) ON DELETE SET NULL,
+    content TEXT DEFAULT NULL,
     created_on TIMESTAMP NOT NULL,
     internal BOOLEAN DEFAULT FALSE
 );
@@ -216,16 +217,18 @@ type TicketNote struct {
 	TicketID  int       `db:"ticket_id"`
 	ContactID *int      `db:"contact_id"`
 	MemberID  *int      `db:"member_id"`
+	Content   *string   `db:"content"`
 	CreatedOn time.Time `db:"created_on"`
 	Internal  bool      `db:"internal"`
 }
 
-func NewTicketNote(ticketID, noteID, contactID, memberID int, createdOn time.Time, internal bool) *TicketNote {
+func NewTicketNote(ticketID, noteID, contactID, memberID int, content string, createdOn time.Time, internal bool) *TicketNote {
 	return &TicketNote{
 		ID:        noteID,
 		TicketID:  ticketID,
 		ContactID: intToPtr(contactID),
 		MemberID:  intToPtr(memberID),
+		Content:   strToPtr(content),
 		CreatedOn: createdOn,
 		Internal:  internal,
 	}
@@ -533,13 +536,15 @@ func upsertTicketSQL() string {
 }
 
 func upsertTicketNoteSQL() string {
-	return `INSERT INTO ticket_note (note_id, ticket_id, contact_id, member_id, created_on)
-		VALUES (:note_id, :ticket_id, :contact_id, :member_id, :created_on)
+	return `INSERT INTO ticket_note (note_id, ticket_id, contact_id, member_id, content, created_on, internal)
+		VALUES (:note_id, :ticket_id, :contact_id, :member_id,:content, :created_on, :internal)
 		ON CONFLICT (note_id) DO UPDATE SET
-			ticket_id = EXCLUDED.note_id,
+			ticket_id = EXCLUDED.ticket_id,
 			contact_id = EXCLUDED.contact_id,
 			member_id = EXCLUDED.member_id,
-			created_on = EXCLUDED.created_on`
+			content = EXCLUDED.content,
+			created_on = EXCLUDED.created_on,
+			internal = EXCLUDED.internal`
 }
 
 func upsertBoardSQL() string {
