@@ -7,15 +7,23 @@ import (
 )
 
 type Board struct {
-	ID   int    `db:"board_id"`
-	Name string `db:"board_name"`
+	ID            int     `db:"board_id"`
+	Name          string  `db:"board_name"`
+	NotifyEnabled bool    `db:"notify_enabled"`
+	WebexSpace    *string `db:"webex_space_id"`
 }
 
+// NewBoard creates a board, but does not handle notify settings
 func NewBoard(id int, name string) *Board {
 	return &Board{
 		ID:   id,
 		Name: name,
 	}
+}
+
+func (h *Handler) SetNotifySpace(b *Board, spaceID *string, enabled bool) {
+	b.WebexSpace = spaceID
+	b.NotifyEnabled = enabled
 }
 
 func (h *Handler) GetBoard(boardID int) (*Board, error) {
@@ -55,8 +63,10 @@ func (h *Handler) DeleteBoard(boardID int) error {
 }
 
 func UpsertBoardSQL() string {
-	return `INSERT INTO board (board_id, board_name)
-		VALUES (:board_id, :board_name)
+	return `INSERT INTO board (board_id, board_name, notify_enabled, webex_space_id)
+		VALUES (:board_id, :board_name, :notify_enabled, :webex_space_id)
 		ON CONFLICT (board_id) DO UPDATE SET
-			board_name = EXCLUDED.board_name`
+			board_name = EXCLUDED.board_name,
+			notify_enabled = EXCLUDED.notify_enabled,
+			webex_space_id = EXCLUDED.webex_space_id`
 }

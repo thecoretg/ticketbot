@@ -11,9 +11,17 @@ type Handler struct {
 }
 
 var tablesStmt = `
+
+CREATE TABLE IF NOT EXISTS webex_space (
+	space_id TEXT PRIMARY KEY,
+	space_name VARCHAR(50) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS board (
     board_id INT PRIMARY KEY,
-    board_name VARCHAR(50) NOT NULL
+    board_name VARCHAR(50) NOT NULL,
+	notify_enabled BOOLEAN NOT NULL DEFAULT FALSE,	                                 
+	webex_space_id TEXT REFERENCES webex_space(space_id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS status (
@@ -68,7 +76,8 @@ CREATE TABLE IF NOT EXISTS ticket_note (
     member_id INT REFERENCES member(member_id) ON DELETE SET NULL,
     content TEXT DEFAULT NULL,
     created_on TIMESTAMP NOT NULL,
-    internal BOOLEAN DEFAULT FALSE
+    internal BOOLEAN DEFAULT FALSE,
+   	notified BOOLEAN DEFAULT FALSE
 );
 
 DO $$
