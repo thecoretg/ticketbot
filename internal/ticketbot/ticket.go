@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/util"
 )
@@ -96,7 +97,7 @@ func (s *server) processTicketUpdate(ctx context.Context, ticketID int) error {
 	}
 
 	if ticket == nil {
-		ticket = NewTicket(ticketID, cwt.Board.ID, cwt.Status.ID, cwt.Company.ID, cwt.Contact.ID, 0, cwt.Owner.ID, cwt.Summary, cwt.Resources, cwt.Info.DateEntered, cwt.Info.LastUpdated, cwt.ClosedDate, cwt.ClosedFlag)
+		ticket = db.NewTicket(ticketID, cwt.Board.ID, cwt.Status.ID, cwt.Company.ID, cwt.Contact.ID, 0, cwt.Owner.ID, cwt.Summary, cwt.Resources, cwt.Info.DateEntered, cwt.Info.LastUpdated, cwt.ClosedDate, cwt.ClosedFlag)
 		if err := s.dbHandler.UpsertTicket(ticket); err != nil {
 			return fmt.Errorf("creating new ticket in db: %w", err)
 		}
@@ -114,7 +115,7 @@ func (s *server) processTicketUpdate(ctx context.Context, ticketID int) error {
 		}
 
 		if ticket.LatestNote == nil || *ticket.LatestNote != noteID {
-			ticket.LatestNote = intToPtr(noteID)
+			ticket.LatestNote = util.IntToPtr(noteID)
 			if err := s.dbHandler.UpsertTicket(ticket); err != nil {
 				return fmt.Errorf("processing ticket in db: %w", err)
 			}
@@ -147,7 +148,7 @@ func (s *server) ensureBoardExists(boardID int, name string) error {
 	}
 
 	if b == nil {
-		n := NewBoard(boardID, name)
+		n := db.NewBoard(boardID, name)
 		if err := s.dbHandler.UpsertBoard(n); err != nil {
 			return fmt.Errorf("inserting new board into db: %w", err)
 		}
@@ -169,7 +170,7 @@ func (s *server) ensureStatusExists(ctx context.Context, statusID, boardID int) 
 			return checkCWError("getting status", "status", err, statusID)
 		}
 
-		n := NewStatus(statusID, boardID, r.Name, r.ClosedStatus, !r.Inactive)
+		n := db.NewStatus(statusID, boardID, r.Name, r.ClosedStatus, !r.Inactive)
 		if err := s.dbHandler.UpsertStatus(n); err != nil {
 			return fmt.Errorf("inserting new status into db: %w", err)
 		}
@@ -191,7 +192,7 @@ func (s *server) ensureContactExists(ctx context.Context, contactID int) error {
 			return checkCWError("getting contact", "contact", err, contactID)
 		}
 
-		n := NewContact(contactID, r.FirstName, r.LastName, r.Company.ID)
+		n := db.NewContact(contactID, r.FirstName, r.LastName, r.Company.ID)
 		if err := s.dbHandler.UpsertContact(n); err != nil {
 			return fmt.Errorf("inserting new contact into db: %w", err)
 		}
@@ -208,7 +209,7 @@ func (s *server) ensureCompanyExists(companyID int, name string) error {
 	}
 
 	if c == nil {
-		n := NewCompany(companyID, name)
+		n := db.NewCompany(companyID, name)
 		if err := s.dbHandler.UpsertCompany(n); err != nil {
 			return fmt.Errorf("inserting new company into db: %w", err)
 		}
@@ -230,7 +231,7 @@ func (s *server) ensureTicketNoteExists(ctx context.Context, ticketID, noteID in
 			return checkCWError("getting ticket note", "ticket", err, noteID)
 		}
 
-		n := NewTicketNote(ticketID, noteID, r.Contact.ID, r.Member.ID, r.Text, r.DateCreated, r.InternalAnalysisFlag)
+		n := db.NewTicketNote(ticketID, noteID, r.Contact.ID, r.Member.ID, r.Text, r.DateCreated, r.InternalAnalysisFlag)
 		if err := s.dbHandler.UpsertTicketNote(n); err != nil {
 			return fmt.Errorf("inserting new ticket note into db: %w", err)
 		}

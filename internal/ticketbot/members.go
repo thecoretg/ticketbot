@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/util"
 )
@@ -66,7 +67,7 @@ func (s *server) processMemberUpdate(ctx context.Context, memberID int) error {
 		return checkCWError("getting member via CW API", "member", err, memberID)
 	}
 
-	m := NewMember(memberID, cwm.Identifier, cwm.FirstName, cwm.LastName, cwm.PrimaryEmail, cwm.DefaultPhone)
+	m := db.NewMember(memberID, cwm.Identifier, cwm.FirstName, cwm.LastName, cwm.PrimaryEmail, cwm.DefaultPhone)
 	if err := s.dbHandler.UpsertMember(m); err != nil {
 		return fmt.Errorf("processing contact in db: %w", err)
 	}

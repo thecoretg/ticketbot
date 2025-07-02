@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 )
 
@@ -40,18 +41,18 @@ func (s *server) loadInitialBoards(ctx context.Context) error {
 	}
 
 	slog.Debug("got boards from connectwise", "total", len(boards))
-	var dbBoards []Board
+	var dbBoards []db.Board
 	for _, b := range boards {
-		d := NewBoard(b.ID, b.Name)
+		d := db.NewBoard(b.ID, b.Name)
 		dbBoards = append(dbBoards, *d)
 	}
 
-	tx, err := s.dbHandler.db.Beginx()
+	tx, err := s.dbHandler.DB.Beginx()
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 
-	stmt, err := tx.PrepareNamed(upsertBoardSQL())
+	stmt, err := tx.PrepareNamed(db.UpsertBoardSQL())
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("preparing upsert statement: %w", err)
@@ -84,18 +85,18 @@ func (s *server) loadInitialMembers(ctx context.Context) error {
 	}
 	slog.Debug("got members from connectwise", "total", len(members))
 
-	var dbMembers []Member
+	var dbMembers []db.Member
 	for _, b := range members {
-		d := NewMember(b.ID, b.Identifier, b.FirstName, b.LastName, b.PrimaryEmail, b.DefaultPhone)
+		d := db.NewMember(b.ID, b.Identifier, b.FirstName, b.LastName, b.PrimaryEmail, b.DefaultPhone)
 		dbMembers = append(dbMembers, *d)
 	}
 
-	tx, err := s.dbHandler.db.Beginx()
+	tx, err := s.dbHandler.DB.Beginx()
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 
-	stmt, err := tx.PrepareNamed(upsertMemberSQL())
+	stmt, err := tx.PrepareNamed(db.UpsertMemberSQL())
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("preparing upsert statement: %w", err)

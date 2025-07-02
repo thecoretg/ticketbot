@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/util"
 )
@@ -66,7 +67,7 @@ func (s *server) processContactUpdate(ctx context.Context, contactID int) error 
 		return checkCWError("getting contact via CW API", "contact", err, contactID)
 	}
 
-	c := NewContact(contactID, cwc.FirstName, cwc.LastName, cwc.Company.ID)
+	c := db.NewContact(contactID, cwc.FirstName, cwc.LastName, cwc.Company.ID)
 	if err := s.dbHandler.UpsertContact(c); err != nil {
 		return fmt.Errorf("processing contact in db: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/util"
 )
@@ -65,7 +66,7 @@ func (s *server) processCompanyUpdate(ctx context.Context, companyID int) error 
 		return checkCWError("getting company via CW API", "company", err, companyID)
 	}
 
-	c := NewCompany(companyID, cwc.Name)
+	c := db.NewCompany(companyID, cwc.Name)
 	if err := s.dbHandler.UpsertCompany(c); err != nil {
 		return fmt.Errorf("processing company in db: %w", err)
 	}

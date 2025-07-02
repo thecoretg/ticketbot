@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/webex"
 )
@@ -23,7 +24,7 @@ const (
 type server struct {
 	cwClient    *connectwise.Client
 	webexClient *webex.Client
-	dbHandler   *DBHandler
+	dbHandler   *db.Handler
 
 	rootUrl string
 }
@@ -94,7 +95,7 @@ func newServer(ctx context.Context, addr string) (*server, error) {
 		return nil, fmt.Errorf("creating webex client via AWS: %w", err)
 	}
 
-	dbHandler, err := InitDB(os.Getenv("TICKETBOT_DB_CONN"))
+	dbHandler, err := db.InitDB(os.Getenv("TICKETBOT_DB_CONN"))
 	if err != nil {
 		return nil, fmt.Errorf("initializing db: %w", err)
 	}
