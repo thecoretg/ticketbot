@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"tctg-automation/pkg/util"
 	"time"
 )
@@ -69,12 +70,17 @@ func (h *Handler) UpsertTicketNote(n *TicketNote) error {
 	if err != nil {
 		return fmt.Errorf("inserting ticket note: %w", err)
 	}
+	slog.Info("ticket note added or updated", "note_id", n.ID, "ticket_id", n.TicketID)
 	return nil
 }
 
 func (h *Handler) DeleteTicketNote(noteID int) error {
 	_, err := h.DB.Exec("DELETE FROM ticket_note WHERE ticket_id = $1", noteID)
-	return err
+	if err != nil {
+		return err
+	}
+	slog.Info("ticket note deleted", "note_id", noteID)
+	return nil
 }
 
 func UpsertTicketNoteSQL() string {

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 )
 
 type Board struct {
@@ -24,6 +25,7 @@ func NewBoard(id int, name string) *Board {
 func (h *Handler) SetNotifySpace(b *Board, spaceID *string, enabled bool) {
 	b.WebexSpace = spaceID
 	b.NotifyEnabled = enabled
+	slog.Info("notify space set for board", "board_id", b.ID, "board_name", b.Name, "space_id", spaceID, "enabled", enabled)
 }
 
 func (h *Handler) GetBoard(boardID int) (*Board, error) {
@@ -54,12 +56,17 @@ func (h *Handler) UpsertBoard(b *Board) error {
 	if err != nil {
 		return fmt.Errorf("inserting board: %w", err)
 	}
+	slog.Info("board added or updated", "board_id", b.ID, "board_name", b.Name)
 	return nil
 }
 
 func (h *Handler) DeleteBoard(boardID int) error {
 	_, err := h.DB.Exec("DELETE FROM board WHERE board_id = $1", boardID)
-	return err
+	if err != nil {
+		return fmt.Errorf("deleting board: %w", err)
+	}
+	slog.Info("board deleted", "board_id", boardID, "board_name", boardID)
+	return nil
 }
 
 func UpsertBoardSQL() string {

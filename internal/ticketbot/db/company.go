@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 )
 
 type Company struct {
@@ -45,12 +46,17 @@ func (h *Handler) UpsertCompany(c *Company) error {
 	if err != nil {
 		return fmt.Errorf("inserting company: %w", err)
 	}
+	slog.Info("company added or updated", "company_id", c.ID, "company_name", c.Name)
 	return nil
 }
 
 func (h *Handler) DeleteCompany(companyID int) error {
 	_, err := h.DB.Exec("DELETE FROM company WHERE company_id = $1", companyID)
-	return err
+	if err != nil {
+		return err
+	}
+	slog.Info("company deleted", "company_id", companyID)
+	return nil
 }
 
 func UpsertCompanySQL() string {

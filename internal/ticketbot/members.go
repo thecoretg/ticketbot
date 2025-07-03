@@ -29,14 +29,17 @@ func (s *server) processMemberPayload(c *gin.Context) {
 			return
 		}
 
-		slog.Debug("member deleted", "id", w.ID)
 		c.Status(http.StatusNoContent)
 		return
 	default:
 		if err := s.processMemberUpdate(c.Request.Context(), w.ID); err != nil {
 			var deletedErr ErrWasDeleted
 			if errors.As(err, &deletedErr) {
-				slog.Debug("member was deleted externally", "id", w.ID)
+				slog.Info("member was deleted externally", "id", w.ID)
+				if err := s.dbHandler.DeleteMember(w.ID); err != nil {
+					c.Error(fmt.Errorf("deleting member %d after external deletion: %w", w.ID, err))
+					return
+				}
 				c.Status(http.StatusNoContent)
 				return
 			}
@@ -45,7 +48,6 @@ func (s *server) processMemberPayload(c *gin.Context) {
 			return
 		}
 
-		slog.Debug("member processed", "id", w.ID, "action", w.Action)
 		c.Status(http.StatusNoContent)
 		return
 	}

@@ -29,14 +29,17 @@ func (s *server) processContactPayload(c *gin.Context) {
 			return
 		}
 
-		slog.Debug("contact deleted", "id", w.ID)
 		c.Status(http.StatusNoContent)
 		return
 	default:
 		if err := s.processContactUpdate(c.Request.Context(), w.ID); err != nil {
 			var deletedErr ErrWasDeleted
 			if errors.As(err, &deletedErr) {
-				slog.Debug("contact was deleted externally", "id", w.ID)
+				slog.Info("contact was deleted externally", "id", w.ID)
+				if err := s.dbHandler.DeleteContact(w.ID); err != nil {
+					c.Error(fmt.Errorf("deleting contact %d after external deletion: %w", w.ID, err))
+					return
+				}
 				c.Status(http.StatusNoContent)
 				return
 			}
@@ -45,7 +48,6 @@ func (s *server) processContactPayload(c *gin.Context) {
 			return
 		}
 
-		slog.Debug("contact processed", "id", w.ID, "action", w.Action)
 		c.Status(http.StatusNoContent)
 		return
 	}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"tctg-automation/pkg/util"
 )
 
@@ -50,12 +51,17 @@ func (h *Handler) UpsertContact(c *Contact) error {
 	if err != nil {
 		return fmt.Errorf("inserting contact: %w", err)
 	}
+	slog.Info("contact added or updated", "contact_id", c.ID, "first_name", c.FirstName, "last_name", c.LastName)
 	return nil
 }
 
 func (h *Handler) DeleteContact(contactID int) error {
 	_, err := h.DB.Exec("DELETE FROM contact WHERE contact_id = $1", contactID)
-	return err
+	if err != nil {
+		return err
+	}
+	slog.Info("contact deleted", "contact_id", contactID)
+	return nil
 }
 
 func UpsertContactSQL() string {

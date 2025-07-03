@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 )
 
 type Status struct {
@@ -51,12 +52,17 @@ func (h *Handler) UpsertStatus(s *Status) error {
 	if err != nil {
 		return fmt.Errorf("inserting status: %w", err)
 	}
+	slog.Info("status added or updated", "status_id", s.ID, "status_name", s.Name)
 	return nil
 }
 
 func (h *Handler) DeleteStatus(statusID int) error {
 	_, err := h.DB.Exec("DELETE FROM status WHERE status_id = $1", statusID)
-	return err
+	if err != nil {
+		return err
+	}
+	slog.Info("status deleted", "status_id", statusID)
+	return nil
 }
 
 func UpsertStatusSQL() string {

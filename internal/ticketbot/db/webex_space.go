@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 )
 
 type WebexSpace struct {
@@ -46,12 +47,17 @@ func (h *Handler) UpsertWebexSpace(s *WebexSpace) error {
 	if err != nil {
 		return fmt.Errorf("inserting webex space: %w", err)
 	}
+	slog.Info("webex space added or updated", "space_id", s.ID, "space_name", s.Name)
 	return nil
 }
 
 func (h *Handler) DeleteWebexSpace(spaceID string) error {
 	_, err := h.DB.Exec("DELETE FROM board WHERE board_id = $1", spaceID)
-	return err
+	if err != nil {
+		return err
+	}
+	slog.Info("webex space deleted", "space_id", spaceID)
+	return nil
 }
 
 func UpsertWebexSpaceSQL() string {

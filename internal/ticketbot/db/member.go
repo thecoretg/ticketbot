@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"tctg-automation/pkg/util"
 )
 
@@ -54,12 +55,17 @@ func (h *Handler) UpsertMember(m *Member) error {
 	if err != nil {
 		return fmt.Errorf("inserting member: %w", err)
 	}
+	slog.Info("member added or updated", "member_id", m.ID, "identifier", m.Identifier)
 	return nil
 }
 
 func (h *Handler) DeleteMember(memberID int) error {
 	_, err := h.DB.Exec("DELETE FROM member WHERE member_id = $1", memberID)
-	return err
+	if err != nil {
+		return err
+	}
+	slog.Info("member deleted", "member_id", memberID)
+	return nil
 }
 
 func UpsertMemberSQL() string {

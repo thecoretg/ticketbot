@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"tctg-automation/pkg/util"
 	"time"
 )
@@ -71,6 +72,7 @@ func (h *Handler) UpsertTicket(t *Ticket) error {
 	if err != nil {
 		return fmt.Errorf("inserting ticket: %w", err)
 	}
+	slog.Info("ticket added or updated", "ticket_id", t.ID, "summary", t.Summary)
 	return nil
 }
 
@@ -79,7 +81,7 @@ func (h *Handler) DeleteTicket(ticketID int) error {
 	if err != nil {
 		return err
 	}
-
+	slog.Info("ticket deleted", "ticket_id", ticketID)
 	return nil
 }
 
