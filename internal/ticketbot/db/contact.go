@@ -51,7 +51,13 @@ func (h *Handler) UpsertContact(c *Contact) error {
 	if err != nil {
 		return fmt.Errorf("inserting contact: %w", err)
 	}
-	slog.Info("contact added or updated", "contact_id", c.ID, "first_name", c.FirstName, "last_name", c.LastName)
+
+	ln := ""
+	if c.LastName != nil {
+		ln = *c.LastName
+	}
+
+	slog.Info("contact added or updated", "contact_id", c.ID, "first_name", c.FirstName, "last_name", ln)
 	return nil
 }
 

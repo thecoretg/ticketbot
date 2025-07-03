@@ -25,7 +25,6 @@ func checkCWError(msg, itemType string, err error, itemID int) error {
 
 	switch {
 	case errors.As(err, &notFoundErr):
-		slog.Info("item was deleted externally", "id", itemID)
 		return ErrWasDeleted{
 			ItemType: itemType,
 			ItemID:   itemID,

@@ -23,6 +23,8 @@ func (s *server) processTicketPayload(c *gin.Context) {
 		c.Error(errors.New("ticket ID cannot be 0"))
 		return
 	}
+
+	slog.Info("received ticket webhook", "id", w.ID, "action", w.Action)
 	switch w.Action {
 	case "deleted":
 		if err := s.dbHandler.DeleteTicket(w.ID); err != nil {
@@ -119,7 +121,7 @@ func (s *server) processTicketUpdate(ctx context.Context, ticketID int) error {
 }
 
 func (s *server) getMostRecentNote(ctx context.Context, ticketID int) (int, error) {
-	p := &connectwise.QueryParams{OrderBy: "_info/dateEntered desc"}
+	p := &connectwise.QueryParams{OrderBy: "_info/dateEntered desc", PageSize: 1000}
 	n, err := s.cwClient.ListServiceTicketNotes(ctx, ticketID, p)
 	if err != nil {
 		return 0, checkCWError("listing ticket notes", "ticket", err, ticketID)
