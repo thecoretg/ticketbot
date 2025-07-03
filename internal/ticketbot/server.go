@@ -34,7 +34,9 @@ func Run() error {
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("no .env file present, defaulting to environment")
 	}
-	setLogger(os.Getenv("TICKETBOT_DEBUG"))
+	if err := setLogger(os.Getenv("TICKETBOT_DEBUG"), os.Getenv("TICKETBOT_LOG_TO_FILE") == "1"); err != nil {
+		return fmt.Errorf("error setting logger: %w", err)
+	}
 
 	ctx := context.Background()
 	s, err := newServer(ctx, os.Getenv("TICKETBOT_ROOT_URL"))
@@ -52,22 +54,6 @@ func Run() error {
 	}
 
 	return nil
-}
-
-func setLogger(e string) {
-	level := slog.LevelInfo
-	if e == "1" || e == "true" {
-		level = slog.LevelDebug
-	}
-
-	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
-	})
-
-	// this only shows if debug is enabled
-	// you can tell by the way that it is
-	slog.Debug("debug enabled")
-	slog.SetDefault(slog.New(handler))
 }
 
 func newServer(ctx context.Context, addr string) (*server, error) {
