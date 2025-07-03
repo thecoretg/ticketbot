@@ -62,7 +62,7 @@ func (s *server) processTicketUpdate(ctx context.Context, ticketID int) error {
 		return fmt.Errorf("ensuring board exists: %w", err)
 	}
 
-	if err := s.ensureStatusExists(ctx, cwt.Status.ID, cwt.Board.ID); err != nil {
+	if err := s.ensureStatusExists(ctx, cwt.Status.ID, cwt.Board.ID, cwt.Board.Name); err != nil {
 		return fmt.Errorf("ensuring status exists: %w", err)
 	}
 
@@ -149,13 +149,20 @@ func (s *server) ensureBoardExists(boardID int, name string) error {
 	return nil
 }
 
-func (s *server) ensureStatusExists(ctx context.Context, statusID, boardID int) error {
+func (s *server) ensureStatusExists(ctx context.Context, statusID, boardID int, boardName string) error {
 	st, err := s.dbHandler.GetStatus(statusID)
 	if err != nil {
 		return fmt.Errorf("querying db for status: %w", err)
 	}
 
 	if st == nil {
+
+		if boardID == 0 {
+			if err := s.ensureBoardExists(boardID, boardName); err != nil {
+				return fmt.Errorf("ensuring board exists for status: %w", err)
+			}
+		}
+
 		r, err := s.cwClient.GetBoardStatus(ctx, boardID, statusID, nil)
 		if err != nil {
 			return checkCWError("getting status", "status", err, statusID)
@@ -181,6 +188,12 @@ func (s *server) ensureContactExists(ctx context.Context, contactID int) error {
 		r, err := s.cwClient.GetContact(ctx, contactID, nil)
 		if err != nil {
 			return checkCWError("getting contact", "contact", err, contactID)
+		}
+
+		if r.Company.ID != 0 {
+			if err := s.ensureCompanyExists(r.Company.ID, r.Company.Name); err != nil {
+				return fmt.Errorf("ensuring company exists for contact: %w", err)
+			}
 		}
 
 		n := db.NewContact(contactID, r.FirstName, r.LastName, r.Company.ID)
@@ -222,6 +235,14 @@ func (s *server) ensureTicketNoteExists(ctx context.Context, ticketID, noteID in
 			return checkCWError("getting ticket note", "ticket", err, noteID)
 		}
 
+		if r.Contact.ID != 0 {
+			if err := s.ensureContactExists(ctx, r.Contact.ID); err != nil {
+				return fmt.Errorf("ensuring contact exists for ticket note: %w", err)
+			}
+		}
+
+		// TODO: check if member exists, if not, create it
+		
 		n := db.NewTicketNote(ticketID, noteID, r.Contact.ID, r.Member.ID, r.Text, r.DateCreated, r.InternalAnalysisFlag)
 		if err := s.dbHandler.UpsertTicketNote(n); err != nil {
 			return fmt.Errorf("inserting new ticket note into db: %w", err)
