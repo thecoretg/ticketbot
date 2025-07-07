@@ -110,6 +110,8 @@ func (s *server) newRouter(exitOnError bool) (*gin.Engine, error) {
 	r.Use(requireValidCWSignature())
 	r.Use(ErrorHandler(exitOnError))
 
+	r.GET("/boards/:board_id", s.getBoard)
+	r.PUT("/boards/:board_id/notify", s.processBoardSettingsPayload)
 	r.POST("/tickets", s.processTicketPayload)
 	r.POST("/companies", s.processCompanyPayload)
 	r.POST("/contacts", s.processContactPayload)

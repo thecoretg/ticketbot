@@ -8,10 +8,10 @@ import (
 )
 
 type Board struct {
-	ID            int     `db:"board_id"`
-	Name          string  `db:"board_name"`
-	NotifyEnabled bool    `db:"notify_enabled"`
-	WebexSpace    *string `db:"webex_space_id"`
+	ID            int     `db:"board_id" json:"id"`
+	Name          string  `db:"board_name" json:"name"`
+	NotifyEnabled bool    `db:"notify_enabled" json:"notify_enabled"`
+	WebexSpace    *string `db:"webex_space_id" json:"webex_space"`
 }
 
 // NewBoard creates a board, but does not handle notify settings
@@ -70,10 +70,17 @@ func (h *Handler) DeleteBoard(boardID int) error {
 }
 
 func UpsertBoardSQL() string {
-	return `INSERT INTO board (board_id, board_name, notify_enabled, webex_space_id)
-		VALUES (:board_id, :board_name, :notify_enabled, :webex_space_id)
+	return `INSERT INTO board (board_id, board_name)
+		VALUES (:board_id, :board_name)
 		ON CONFLICT (board_id) DO UPDATE SET
-			board_name = EXCLUDED.board_name,
-			notify_enabled = EXCLUDED.notify_enabled,
-			webex_space_id = EXCLUDED.webex_space_id`
+			board_name = EXCLUDED.board_name`
+}
+
+func (h *Handler) UpdateBoardNotifySettings(boardID int, notifyEnabled bool, spaceID *string) error {
+	_, err := h.DB.Exec("UPDATE board SET notify_enabled = $1, webex_space_id = $2 WHERE board_id = $3", notifyEnabled, spaceID, boardID)
+	if err != nil {
+		return fmt.Errorf("updating notify settings: %w", err)
+	}
+	slog.Info("notify settings updated", "board_id", boardID, "notify_enabled", notifyEnabled, "space_id", spaceID)
+	return nil
 }

@@ -8,15 +8,15 @@ import (
 
 const maxNoteLen = 300
 
-func (s *server) notifyNewTicket(noteID int) error {
-	note, err := s.dbHandler.GetTicketNote(noteID)
-	if err != nil {
-		return fmt.Errorf("getting ticket note: %w", err)
-	}
-
-	contactName, companyName := s.getNoteSenderNameAndCompany(note.ContactID, note.MemberID)
-
-}
+//func (s *server) notifyNewTicket(noteID int) error {
+//	note, err := s.dbHandler.GetTicketNote(noteID)
+//	if err != nil {
+//		return fmt.Errorf("getting ticket note: %w", err)
+//	}
+//
+//	contactName, companyName := s.getNoteSenderNameAndCompany(note.ContactID, note.MemberID)
+//
+//}
 
 func (s *server) getNoteSenderNameAndCompany(contactID, memberID *int) (string, string) {
 	var contactName, companyName string
