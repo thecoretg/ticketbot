@@ -1,11 +1,13 @@
 package ticketbot
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/webex"
 )
 
@@ -60,6 +62,36 @@ func (s *server) processMessageSent(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 	return
+}
+
+func (s *server) processWebexRoomUpdate(ctx context.Context, roomID string) error {
+	wr, err := s.webexClient.GetRoom(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("getting room from webex: %w", err)
+	}
+
+	r := db.NewWebexRoom(wr.Id, wr.Title)
+	if err := s.dbHandler.UpsertWebexRoom(r); err != nil {
+		return fmt.Errorf("inserting or updating webex room in db: %w", err)
+	}
+
+	return nil
+}
+
+func (s *server) ensureWebexRoomExists(roomID string, name string) error {
+	c, err := s.dbHandler.GetWebexRoom(roomID)
+	if err != nil {
+		return fmt.Errorf("querying db for webex room: %w", err)
+	}
+
+	if c == nil {
+		r := db.NewWebexRoom(roomID, name)
+		if err := s.dbHandler.UpsertWebexRoom(r); err != nil {
+			return fmt.Errorf("inserting new webex room into db: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *server) makeBoardsListMsg() string {

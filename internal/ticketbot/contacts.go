@@ -66,3 +66,30 @@ func (s *server) processContactUpdate(ctx context.Context, contactID int) error 
 
 	return nil
 }
+
+func (s *server) ensureContactExists(ctx context.Context, contactID int) error {
+	c, err := s.dbHandler.GetContact(contactID)
+	if err != nil {
+		return fmt.Errorf("querying db for contact: %w", err)
+	}
+
+	if c == nil {
+		r, err := s.cwClient.GetContact(ctx, contactID, nil)
+		if err != nil {
+			return checkCWError("getting contact", "contact", err, contactID)
+		}
+
+		if r.Company.ID != 0 {
+			if err := s.ensureCompanyExists(r.Company.ID, r.Company.Name); err != nil {
+				return fmt.Errorf("ensuring company exists for contact: %w", err)
+			}
+		}
+
+		n := db.NewContact(contactID, r.FirstName, r.LastName, r.Company.ID)
+		if err := s.dbHandler.UpsertContact(n); err != nil {
+			return fmt.Errorf("inserting new contact into db: %w", err)
+		}
+	}
+
+	return nil
+}

@@ -133,3 +133,47 @@ func (s *server) processBoardUpdate(ctx context.Context, boardID int) error {
 
 	return nil
 }
+
+func (s *server) ensureBoardExists(boardID int, name string) error {
+	b, err := s.dbHandler.GetBoard(boardID)
+	if err != nil {
+		return fmt.Errorf("querying db for board: %w", err)
+	}
+
+	if b == nil {
+		n := db.NewBoard(boardID, name)
+		if err := s.dbHandler.UpsertBoard(n); err != nil {
+			return fmt.Errorf("inserting new board into db: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *server) ensureStatusExists(ctx context.Context, statusID, boardID int, boardName string) error {
+	st, err := s.dbHandler.GetStatus(statusID)
+	if err != nil {
+		return fmt.Errorf("querying db for status: %w", err)
+	}
+
+	if st == nil {
+
+		if boardID == 0 {
+			if err := s.ensureBoardExists(boardID, boardName); err != nil {
+				return fmt.Errorf("ensuring board exists for status: %w", err)
+			}
+		}
+
+		r, err := s.cwClient.GetBoardStatus(ctx, boardID, statusID, nil)
+		if err != nil {
+			return checkCWError("getting status", "status", err, statusID)
+		}
+
+		n := db.NewStatus(statusID, boardID, r.Name, r.ClosedStatus, !r.Inactive)
+		if err := s.dbHandler.UpsertStatus(n); err != nil {
+			return fmt.Errorf("inserting new status into db: %w", err)
+		}
+	}
+
+	return nil
+}

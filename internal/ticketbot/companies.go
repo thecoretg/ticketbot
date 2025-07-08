@@ -66,3 +66,19 @@ func (s *server) processCompanyUpdate(ctx context.Context, companyID int) error 
 
 	return nil
 }
+
+func (s *server) ensureCompanyExists(companyID int, name string) error {
+	c, err := s.dbHandler.GetCompany(companyID)
+	if err != nil {
+		return fmt.Errorf("querying db for company: %w", err)
+	}
+
+	if c == nil {
+		n := db.NewCompany(companyID, name)
+		if err := s.dbHandler.UpsertCompany(n); err != nil {
+			return fmt.Errorf("inserting new company into db: %w", err)
+		}
+	}
+
+	return nil
+}
