@@ -1,10 +1,21 @@
 package store
 
-import "tctg-automation/internal/ticketbot/types"
+import (
+	"fmt"
+	"tctg-automation/internal/ticketbot/types"
+)
 
 type Store interface {
-	AddTicket(ticket *types.Ticket) error
-	UpdateTicket(ticket *types.Ticket) error
+	UpsertTicket(ticket *types.Ticket) error
 	GetTicket(ticketID int) (*types.Ticket, error)
 	ListTickets() ([]types.Ticket, error)
+}
+
+type ErrStore struct {
+	StatusCode int
+	Err        string
+}
+
+func (e *ErrStore) Error() string {
+	return fmt.Sprintf("Status %d: %v", e.StatusCode, e.Err)
 }

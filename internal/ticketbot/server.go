@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"tctg-automation/internal/ticketbot/store"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/webex"
 )
@@ -24,6 +25,7 @@ const (
 type server struct {
 	cwClient    *connectwise.Client
 	webexClient *webex.Client
+	dataStore   store.Store
 
 	webexSecret       string
 	webexBotEmail     string
@@ -95,9 +97,11 @@ func newServer(ctx context.Context, addr string) (*server, error) {
 	}
 
 	exitOnError := os.Getenv("TICKETBOT_EXIT_ON_ERROR") == "1"
+	dataStore := store.NewInMemoryStore()
 	return &server{
 		cwClient:    cw,
 		webexClient: w,
+		dataStore:   dataStore,
 
 		webexSecret:   webexSecret,
 		webexBotEmail: webexBotEmail,
@@ -107,6 +111,11 @@ func newServer(ctx context.Context, addr string) (*server, error) {
 }
 
 func (s *server) newRouter() (*gin.Engine, error) {
+	if err := s.initiateCWHooks(); err != nil {
+		return nil, fmt.Errorf("initiating connectwise hooks: %w", err)
+	}
+
 	r := gin.Default()
+	s.addTicketGroup(r)
 	return r, nil
 }

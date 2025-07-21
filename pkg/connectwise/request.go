@@ -23,16 +23,16 @@ func GetOne[T any](c *Client, endpoint string, params map[string]string) (*T, er
 
 func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, error) {
 	var target []T
-	res, err := c.restClient.R().
+	_, err := c.restClient.R().
 		SetQueryParams(params).
-		SetResult(target).
+		SetResult(&target).
 		Get(fullURL(baseUrl, endpoint))
 
 	if err != nil {
 		return nil, err
 	}
 
-	return res.Result().([]T), nil
+	return target, nil
 }
 
 func Post[T any](c *Client, endpoint string, body any) (*T, error) {

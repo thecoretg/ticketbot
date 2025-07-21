@@ -12,7 +12,7 @@ import (
 )
 
 func (s *server) initiateAllHooks(ctx context.Context) error {
-	if err := s.initiateCWHooks(ctx); err != nil {
+	if err := s.initiateCWHooks(); err != nil {
 		return fmt.Errorf("initiating connectwise hooks: %w", err)
 	}
 
@@ -23,25 +23,13 @@ func (s *server) initiateAllHooks(ctx context.Context) error {
 	return nil
 }
 
-func (s *server) initiateCWHooks(ctx context.Context) error {
-	cwHooks, err := s.cwClient.ListCallbacks(ctx, nil)
+func (s *server) initiateCWHooks() error {
+	cwHooks, err := s.cwClient.ListCallbacks(nil)
 	if err != nil {
 		return fmt.Errorf("listing callbacks: %w", err)
 	}
 
-	if err := s.processCwHook(ctx, s.ticketsWebhookURL(), "ticket", "owner", 1, cwHooks); err != nil {
-		return fmt.Errorf("processing tickets hook: %w", err)
-	}
-
-	if err := s.processCwHook(ctx, s.contactsWebhookURL(), "contact", "owner", 1, cwHooks); err != nil {
-		return fmt.Errorf("processing tickets hook: %w", err)
-	}
-
-	if err := s.processCwHook(ctx, s.companiesWebhookURL(), "company", "owner", 1, cwHooks); err != nil {
-		return fmt.Errorf("processing tickets hook: %w", err)
-	}
-
-	if err := s.processCwHook(ctx, s.membersWebhookURL(), "member", "owner", 1, cwHooks); err != nil {
+	if err := s.processCwHook(s.ticketsWebhookURL(), "ticket", "owner", 1, cwHooks); err != nil {
 		return fmt.Errorf("processing tickets hook: %w", err)
 	}
 
@@ -61,7 +49,7 @@ func (s *server) initiateWebexHooks(ctx context.Context) error {
 
 	return nil
 }
-func (s *server) processCwHook(ctx context.Context, url, entity, level string, objectID int, currentHooks []connectwise.Callback) error {
+func (s *server) processCwHook(url, entity, level string, objectID int, currentHooks []connectwise.Callback) error {
 	hook := &connectwise.Callback{
 		URL:      url,
 		Type:     entity,
@@ -77,7 +65,7 @@ func (s *server) processCwHook(ctx context.Context, url, entity, level string, o
 				found = true
 				continue
 			} else {
-				if err := s.cwClient.DeleteCallback(ctx, c.ID); err != nil {
+				if err := s.cwClient.DeleteCallback(c.ID); err != nil {
 					return fmt.Errorf("deleting webhook %d: %w", c.ID, err)
 				}
 				slog.Debug("deleted unused connectwise webhook", "id", c.ID, "url", c.URL)
@@ -86,7 +74,7 @@ func (s *server) processCwHook(ctx context.Context, url, entity, level string, o
 	}
 
 	if !found {
-		if _, err := s.cwClient.PostCallback(ctx, hook); err != nil {
+		if _, err := s.cwClient.PostCallback(hook); err != nil {
 			return fmt.Errorf("posting webhook: %w", err)
 		}
 		slog.Info("added new connectwise hook", "url", url, "entity", entity, "level", level, "objectID", objectID)

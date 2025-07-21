@@ -1,8 +1,8 @@
 package store
 
 import (
-	"errors"
 	"fmt"
+	"net/http"
 	"tctg-automation/internal/ticketbot/types"
 )
 
@@ -17,28 +17,7 @@ func NewInMemoryStore() *InMemoryStore {
 	}
 }
 
-func (m *InMemoryStore) AddTicket(ticket *types.Ticket) error {
-	if ticket == nil {
-		return errors.New("ticket cannot be nil")
-	}
-
-	if _, exists := m.store[ticket.ID]; exists {
-		return fmt.Errorf("ticket with ID %d already exists", ticket.ID)
-	}
-
-	m.store[ticket.ID] = ticket
-	return nil
-}
-
-func (m *InMemoryStore) UpdateTicket(ticket *types.Ticket) error {
-	if ticket == nil {
-		return errors.New("ticket cannot be nil")
-	}
-
-	if _, exists := m.store[ticket.ID]; !exists {
-		return fmt.Errorf("ticket with ID %d does not exist", ticket.ID)
-	}
-
+func (m *InMemoryStore) UpsertTicket(ticket *types.Ticket) error {
 	m.store[ticket.ID] = ticket
 	return nil
 }
@@ -47,7 +26,10 @@ func (m *InMemoryStore) GetTicket(ticketID int) (*types.Ticket, error) {
 	if ticket, exists := m.store[ticketID]; exists {
 		return ticket, nil
 	}
-	return nil, fmt.Errorf("ticket with ID %d not found", ticketID)
+	return nil, &ErrStore{
+		StatusCode: http.StatusNotFound,
+		Err:        fmt.Sprintf("ticket %d not found in store", ticketID),
+	}
 }
 
 func (m *InMemoryStore) ListTickets() ([]types.Ticket, error) {
