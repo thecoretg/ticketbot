@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+const (
+	ticketLinkBase = "https://na.myconnectwise.net/v4_6_release/services/system_io/Service/fv_sr100_request.rails?service_recid="
+)
+
 func ticketIdEndpoint(ticketId int) string {
 	return fmt.Sprintf("service/tickets/%d", ticketId)
 }
@@ -72,4 +76,35 @@ func (c *Client) PatchServiceTicketNote(noteID int, patchOps []PatchOp, ticketID
 
 func (c *Client) DeleteServiceTicketNote(noteID int, ticketID int) error {
 	return Delete(c, ticketIdNoteIdEndpoint(ticketID, noteID))
+}
+
+func (c *Client) GetMostRecentTicketNote(ticketID int) (*ServiceTicketNote, error) {
+	p := map[string]string{
+		"orderBy":  "id desc",
+		"pageSize": "1",
+	}
+
+	notes, err := c.ListServiceTicketNotesAll(p, ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("listing service notes: %w", err)
+	}
+
+	if len(notes) != 1 {
+		return nil, nil
+	}
+
+	note, err := c.GetServiceTicketNote(notes[0].ID, nil, ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("getting details for note: %w", err)
+	}
+
+	return note, nil
+}
+
+func MarkdownInternalTicketLink(ticketID int, companyID string) string {
+	return fmt.Sprintf("[%d](%s)", ticketID, InternalTicketLink(ticketID, companyID))
+}
+
+func InternalTicketLink(ticketID int, companyID string) string {
+	return fmt.Sprintf("%s%d&companyName=%s", ticketLinkBase, ticketID, companyID)
 }

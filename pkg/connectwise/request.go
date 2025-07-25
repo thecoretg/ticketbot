@@ -2,6 +2,7 @@ package connectwise
 
 import (
 	"fmt"
+	"log/slog"
 )
 
 const (
@@ -18,18 +19,29 @@ func GetOne[T any](c *Client, endpoint string, params map[string]string) (*T, er
 	if err != nil {
 		return nil, err
 	}
+
+	if res.IsError() {
+		return nil, fmt.Errorf("error response from ConnectWise API: %s", res.String())
+	}
+
 	return res.Result().(*T), nil
 }
 
 func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, error) {
 	var target []T
-	_, err := c.restClient.R().
-		SetQueryParams(params).
-		SetResult(&target).
-		Get(fullURL(baseUrl, endpoint))
 
+	req := c.restClient.R().
+		SetQueryParams(params).
+		SetResult(&target)
+
+	slog.Debug("making request to connectwise", "url", req)
+	res, err := req.Get(fullURL(baseUrl, endpoint))
 	if err != nil {
 		return nil, err
+	}
+
+	if res.IsError() {
+		return nil, fmt.Errorf("error response from ConnectWise API: %s", res.String())
 	}
 
 	return target, nil
@@ -46,6 +58,10 @@ func Post[T any](c *Client, endpoint string, body any) (*T, error) {
 		return nil, err
 	}
 
+	if res.IsError() {
+		return nil, fmt.Errorf("error response from ConnectWise API: %s", res.String())
+	}
+
 	return res.Result().(*T), nil
 }
 
@@ -58,6 +74,10 @@ func Put[T any](c *Client, endpoint string, body any) (*T, error) {
 
 	if err != nil {
 		return nil, err
+	}
+
+	if res.IsError() {
+		return nil, fmt.Errorf("error response from ConnectWise API: %s", res.String())
 	}
 
 	return res.Result().(*T), nil
@@ -74,15 +94,23 @@ func Patch[T any](c *Client, endpoint string, patchOps []PatchOp) (*T, error) {
 		return nil, err
 	}
 
+	if res.IsError() {
+		return nil, fmt.Errorf("error response from ConnectWise API: %s", res.String())
+	}
+
 	return res.Result().(*T), nil
 }
 
 func Delete(c *Client, endpoint string) error {
-	_, err := c.restClient.R().
+	res, err := c.restClient.R().
 		Delete(endpoint)
 
 	if err != nil {
-		return nil
+		return err
+	}
+
+	if res.IsError() {
+		return fmt.Errorf("error response from ConnectWise API: %s", res.String())
 	}
 
 	return nil

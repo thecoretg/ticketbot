@@ -11,10 +11,14 @@ import (
 )
 
 func (s *server) initiateCWHooks() error {
-	cwHooks, err := s.cwClient.ListCallbacks(nil)
+	params := map[string]string{
+		"pageSize": "1000",
+	}
+	cwHooks, err := s.cwClient.ListCallbacks(params)
 	if err != nil {
 		return fmt.Errorf("listing callbacks: %w", err)
 	}
+	slog.Debug("got existing webhooks", "total", len(cwHooks))
 
 	if err := s.processCwHook(s.ticketsWebhookURL(), "ticket", "owner", 1, cwHooks); err != nil {
 		return fmt.Errorf("processing tickets hook: %w", err)
@@ -31,9 +35,12 @@ func (s *server) processCwHook(url, entity, level string, objectID int, currentH
 		ObjectId: objectID,
 	}
 
+	slog.Debug("expected connectwise webhook", "url", url, "entity", entity, "level", level, "objectID", objectID)
 	found := false
 	for _, c := range currentHooks {
+		slog.Debug("checking connectwise webhook", "id", c.ID, "url", c.URL, "type", c.Type, "level", c.Level, "inactiveFlag", c.InactiveFlag)
 		if c.URL == hook.URL {
+			slog.Debug("found matching url for webhook")
 			if c.Type == hook.Type && c.Level == hook.Level && c.InactiveFlag == hook.InactiveFlag && !found {
 				slog.Debug("found existing connectwise webhook", "id", c.ID, "entity", entity, "level", level, "url", url)
 				found = true
@@ -48,13 +55,15 @@ func (s *server) processCwHook(url, entity, level string, objectID int, currentH
 	}
 
 	if !found {
-		if _, err := s.cwClient.PostCallback(hook); err != nil {
+		newHook, err := s.cwClient.PostCallback(hook)
+		if err != nil {
 			return fmt.Errorf("posting webhook: %w", err)
 		}
-		slog.Info("added new connectwise hook", "url", url, "entity", entity, "level", level, "objectID", objectID)
+		slog.Info("added new connectwise hook", "id", newHook.ID, "url", url, "entity", entity, "level", level, "objectID", objectID)
 	}
 	return nil
 }
+
 func (s *server) ticketsWebhookURL() string {
 	return fmt.Sprintf("%s/hooks/cw/tickets", s.config.RootURL)
 }

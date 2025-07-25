@@ -10,8 +10,8 @@ import (
 	"net/http"
 )
 
-func callbackIdEndpoint(boardId int) string {
-	return fmt.Sprintf("system/callbacks/%d", boardId)
+func callbackIdEndpoint(callbackID int) string {
+	return fmt.Sprintf("system/callbacks/%d", callbackID)
 }
 
 func (c *Client) PostCallback(typeArg *Callback) (*Callback, error) {

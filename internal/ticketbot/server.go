@@ -2,6 +2,7 @@ package ticketbot
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"tctg-automation/internal/ticketbot/cfg"
 	"tctg-automation/internal/ticketbot/store"
@@ -27,6 +28,8 @@ func Run() error {
 	if err := setLogger(config.Debug, config.LogToFile); err != nil {
 		return fmt.Errorf("error setting logger: %w", err)
 	}
+
+	slog.Debug("DEBUG ON")
 
 	s := &server{
 		config:      config,

@@ -1,8 +1,6 @@
 package store
 
 import (
-	"fmt"
-	"net/http"
 	"tctg-automation/internal/ticketbot/types"
 )
 
@@ -26,10 +24,7 @@ func (m *InMemoryStore) GetTicket(ticketID int) (*types.Ticket, error) {
 	if ticket, exists := m.store[ticketID]; exists {
 		return ticket, nil
 	}
-	return nil, &ErrStore{
-		StatusCode: http.StatusNotFound,
-		Err:        fmt.Sprintf("ticket %d not found in store", ticketID),
-	}
+	return nil, nil
 }
 
 func (m *InMemoryStore) ListTickets() ([]types.Ticket, error) {

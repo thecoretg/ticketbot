@@ -17,6 +17,9 @@ type Cfg struct {
 	CWCreds        connectwise.Creds `json:"cw_creds,omitempty" mapstructure:"cw_creds"`
 	WebexBotEmail  string            `json:"webex_bot_email,omitempty" mapstructure:"webex_bot_email"`
 	WebexBotSecret string            `json:"webex_bot_secret,omitempty" mapstructure:"webex_bot_secret"`
+
+	MaxMsgLength      int      `json:"max_msg_length,omitempty" mapstructure:"max_msg_length"`
+	ExcludedCWMembers []string `json:"excluded_cw_members" mapstructure:"excluded_cw_members"`
 }
 
 func InitCfg() (*Cfg, error) {
@@ -27,6 +30,7 @@ func InitCfg() (*Cfg, error) {
 		return nil, fmt.Errorf("reading in config: %w", err)
 	}
 
+	setConfigDefaults()
 	cfg := &Cfg{}
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
@@ -62,6 +66,10 @@ func checkEmptyFields(vals map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func setConfigDefaults() {
+	viper.SetDefault("max_msg_length", 300)
 }
 
 func isEmpty(s string) bool {
