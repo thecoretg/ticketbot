@@ -2,7 +2,6 @@ package connectwise
 
 import (
 	"fmt"
-	"log/slog"
 )
 
 const (
@@ -34,7 +33,6 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 		SetQueryParams(params).
 		SetResult(&target)
 
-	slog.Debug("making request to connectwise", "url", req)
 	res, err := req.Get(fullURL(baseUrl, endpoint))
 	if err != nil {
 		return nil, err

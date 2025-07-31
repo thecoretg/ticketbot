@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"tctg-automation/internal/ticketbot/cfg"
 	"tctg-automation/internal/ticketbot/store"
 	"tctg-automation/pkg/connectwise"
@@ -17,6 +18,7 @@ type server struct {
 	dataStore   store.Store
 	cwClient    *connectwise.Client
 	webexClient *webex.Client
+	ticketLocks sync.Map
 }
 
 func Run() error {
@@ -43,7 +45,9 @@ func Run() error {
 	}
 
 	r := gin.Default()
-	s.addTicketGroup(r)
+	s.addHooksGroup(r)
+	s.addTicketsGroup(r)
+	s.addBoardsGroup(r)
 
 	if err := r.Run(":80"); err != nil {
 		return fmt.Errorf("error running server: %w", err)

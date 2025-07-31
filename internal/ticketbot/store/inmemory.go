@@ -5,23 +5,26 @@ import (
 )
 
 type InMemoryStore struct {
-	store map[int]*types.Ticket
+	tickets map[int]*types.Ticket
+	boards  map[int]*types.Board
 }
 
 func NewInMemoryStore() *InMemoryStore {
-	s := make(map[int]*types.Ticket)
+	t := make(map[int]*types.Ticket)
+	b := make(map[int]*types.Board)
 	return &InMemoryStore{
-		store: s,
+		tickets: t,
+		boards:  b,
 	}
 }
 
 func (m *InMemoryStore) UpsertTicket(ticket *types.Ticket) error {
-	m.store[ticket.ID] = ticket
+	m.tickets[ticket.ID] = ticket
 	return nil
 }
 
 func (m *InMemoryStore) GetTicket(ticketID int) (*types.Ticket, error) {
-	if ticket, exists := m.store[ticketID]; exists {
+	if ticket, exists := m.tickets[ticketID]; exists {
 		return ticket, nil
 	}
 	return nil, nil
@@ -29,8 +32,38 @@ func (m *InMemoryStore) GetTicket(ticketID int) (*types.Ticket, error) {
 
 func (m *InMemoryStore) ListTickets() ([]types.Ticket, error) {
 	var tickets []types.Ticket
-	for _, ticket := range m.store {
+	for _, ticket := range m.tickets {
 		tickets = append(tickets, *ticket)
 	}
+
+	if tickets == nil {
+		tickets = []types.Ticket{}
+	}
+
 	return tickets, nil
+}
+
+func (m *InMemoryStore) UpsertBoard(board *types.Board) error {
+	m.boards[board.ID] = board
+	return nil
+}
+
+func (m *InMemoryStore) GetBoard(boardID int) (*types.Board, error) {
+	if board, exists := m.boards[boardID]; exists {
+		return board, nil
+	}
+	return nil, nil
+}
+
+func (m *InMemoryStore) ListBoards() ([]types.Board, error) {
+	var boards []types.Board
+	for _, board := range m.boards {
+		boards = append(boards, *board)
+	}
+
+	if boards == nil {
+		boards = []types.Board{}
+	}
+
+	return boards, nil
 }

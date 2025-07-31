@@ -1,13 +1,14 @@
 package ticketbot
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"tctg-automation/internal/ticketbot/types"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/webex"
@@ -16,9 +17,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (s *server) addTicketGroup(r *gin.Engine) {
-	tickets := r.Group("/hooks")
-	cw := tickets.Group("/cw", requireValidCWSignature(), ErrorHandler(s.config.ExitOnError))
+func (s *server) addHooksGroup(r *gin.Engine) {
+	hooks := r.Group("/hooks")
+	cw := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.config.ExitOnError))
 	cw.POST("/tickets", s.handleTickets)
 }
 
@@ -50,7 +51,7 @@ func (s *server) handleTickets(c *gin.Context) {
 			return
 		}
 
-		if err := s.addOrUpdateTicket(c.Request.Context(), storeTicket, cwTicket); err != nil {
+		if err := s.addOrUpdateTicket(storeTicket, cwTicket); err != nil {
 			c.Error(fmt.Errorf("adding or updating the ticket into data storage: %w", err))
 			return
 		}
@@ -59,40 +60,137 @@ func (s *server) handleTickets(c *gin.Context) {
 	}
 }
 
-func (s *server) addOrUpdateTicket(ctx context.Context, storeTicket *types.Ticket, cwTicket *connectwise.Ticket) error {
-	var t *types.Ticket
-	if storeTicket != nil {
-		t = storeTicket
-	} else {
-		t = &types.Ticket{
-			ID:      cwTicket.ID,
-			Summary: cwTicket.Summary,
-			TimeDetails: types.TimeDetails{
-				UpdatedAt: time.Now(),
-			},
-		}
+func (s *server) getTicketLock(ticketID int) *sync.Mutex {
+	lockIface, _ := s.ticketLocks.LoadOrStore(ticketID, &sync.Mutex{})
+	return lockIface.(*sync.Mutex)
+}
+
+func (s *server) addOrUpdateTicket(storeTicket *types.Ticket, cwTicket *connectwise.Ticket) error {
+	lock := s.getTicketLock(cwTicket.ID)
+	if !lock.TryLock() {
+		slog.Debug("waiting for ticket lock to resolve", "ticket_id", cwTicket.ID)
+		lock.Lock()
 	}
 
-	lastNote, err := s.cwClient.GetMostRecentTicketNote(cwTicket.ID)
+	slog.Debug("locked ticket", "ticket_id", cwTicket.ID)
+	defer func() {
+		lock.Unlock()
+		slog.Debug("unlocked ticket", "ticket_id", cwTicket.ID)
+	}()
+
+	board, err := s.dataStore.GetBoard(cwTicket.Board.ID)
+	if err != nil {
+		return fmt.Errorf("getting board from storage: %w", err)
+	}
+
+	if board == nil {
+		slog.Debug("no board found in store", "board_id", cwTicket.Board.ID)
+		board, err = s.addBoard(cwTicket.Board.ID)
+		if err != nil {
+			return err
+		}
+		slog.Info("added board to store", "board_id", board.ID, "name", board.Name)
+	} else {
+		slog.Debug("found board in store", "board_id", board.ID, "name", board.Name)
+	}
+
+	lastNote, err := s.getLatestNote(cwTicket.ID)
 	if err != nil {
 		return fmt.Errorf("getting most recent note: %w", err)
 	}
 
-	if t.LatestNoteID != lastNote.ID {
-		// update store early in case of multiple requests for the same ticket
-		t.LatestNoteID = lastNote.ID
-		t.UpdatedAt = time.Now()
-		if err := s.dataStore.UpsertTicket(t); err != nil {
+	newTicket := cwTicketToStoreTicket(cwTicket, lastNote)
+	if storeTicket != nil {
+		slog.Debug("got ticket from store", "ticket_id", storeTicket.ID, "summary", storeTicket.Summary, "latest_note_id", storeTicket.LatestNoteID)
+		newTicket.AddedToStore = storeTicket.AddedToStore
+	} else {
+		slog.Debug("no ticket found in store", "ticket_id", cwTicket.ID)
+		newTicket.AddedToStore = time.Now()
+	}
+
+	ticketChanged := !reflect.DeepEqual(storeTicket, newTicket)
+	noteChanged := false
+	if storeTicket != nil && storeTicket.LatestNoteID != lastNote.ID {
+		noteChanged = true
+	}
+
+	if ticketChanged {
+		slog.Debug("found changes for ticket", "ticket_id", newTicket.ID)
+		if err := s.dataStore.UpsertTicket(newTicket); err != nil {
 			return fmt.Errorf("upserting ticket to store: %w", err)
 		}
+		slog.Debug("upserted ticket to storage", "ticket_id", newTicket.ID, "summary", newTicket.Summary, "latest_note_id", newTicket.LatestNoteID)
+	} else {
+		slog.Debug("no changes found for ticket", "ticket_id", newTicket.ID)
+		return nil
+	}
 
-		//msg := makeWebexMsg(action, s.config.CWCreds.CompanyId, sendTo, cwTicket, lastNote, s.config.MaxMsgLength)
-		//if err := s.webexClient.SendMessage(ctx, msg); err != nil {
-		//	return fmt.Errorf("sending webex message: %w", err)
-		//}
+	// if latest note changed, proceed with notification
+	if noteChanged {
+		slog.Debug("found note change", "ticket_id", newTicket.ID, "old_note", newTicket.LatestNoteID, "new_note", lastNote.ID)
+		if board.NotifyEnabled {
+			slog.Debug("note changed, running notifier", "ticket_id", newTicket.ID, "note_id", newTicket.LatestNoteID, "board_id", board.ID)
+			// this will do stuff once implemented
+			//msg := makeWebexMsg(action, s.config.CWCreds.CompanyId, sendTo, cwTicket, lastNote, s.config.MaxMsgLength)
+			//if err := s.webexClient.SendMessage(ctx, msg); err != nil {
+			//	return fmt.Errorf("sending webex message: %w", err)
+			//}
+		} else {
+			slog.Debug("note changed, but board notify not enabled", "ticket_id", newTicket.ID, "board_id", board.ID)
+		}
+	} else {
+		slog.Debug("note did not change", "ticket_id", newTicket.ID, "old_note", newTicket.LatestNoteID, "new_note", lastNote.ID)
 	}
 
 	return nil
+}
+
+func (s *server) getLatestNote(ticketID int) (*connectwise.ServiceTicketNote, error) {
+	note, err := s.cwClient.GetMostRecentTicketNote(ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("getting most recent note from connectwise: %w", err)
+	}
+
+	if note == nil {
+		note = &connectwise.ServiceTicketNote{}
+	}
+
+	return note, nil
+}
+
+func (s *server) addBoard(boardID int) (*types.Board, error) {
+	cwBoard, err := s.cwClient.GetBoard(boardID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getting board from connectwise: %w", err)
+	}
+
+	storeBoard := &types.Board{
+		ID:            cwBoard.ID,
+		Name:          cwBoard.Name,
+		NotifyEnabled: false,
+		WebexRoomIDs:  nil,
+	}
+
+	if err := s.dataStore.UpsertBoard(storeBoard); err != nil {
+		return nil, fmt.Errorf("adding board to store: %w", err)
+	}
+
+	return storeBoard, nil
+}
+
+func cwTicketToStoreTicket(cwTicket *connectwise.Ticket, latestNote *connectwise.ServiceTicketNote) *types.Ticket {
+	return &types.Ticket{
+		ID:           cwTicket.ID,
+		Summary:      cwTicket.Summary,
+		BoardID:      cwTicket.Board.ID,
+		LatestNoteID: latestNote.ID,
+		OwnerID:      cwTicket.Owner.ID,
+		Resources:    cwTicket.Resources,
+		UpdatedBy:    cwTicket.Info.UpdatedBy,
+		TimeDetails: types.TimeDetails{
+			UpdatedAt: cwTicket.Info.LastUpdated,
+		},
+	}
 }
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
