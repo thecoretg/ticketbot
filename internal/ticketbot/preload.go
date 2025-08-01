@@ -40,22 +40,28 @@ func (s *server) preloadBoards() error {
 	sem := make(chan struct{}, maxConcurrentPreload)
 	var wg sync.WaitGroup
 	for _, board := range boards {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(board connectwise.Board) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			b := &types.Board{
-				ID:            board.ID,
-				Name:          board.Name,
-				NotifyEnabled: false,
-				WebexRoomIDs:  nil,
-			}
-			if err := s.dataStore.UpsertBoard(b); err != nil {
-				slog.Warn("error preloading board", "board_id", board.ID, "error", err)
-			}
-			slog.Info("preloaded board", "board_id", board.ID, "board_name", board.Name)
-		}(board)
+		storeBoard, _ := s.dataStore.GetBoard(board.ID)
+		if storeBoard == nil {
+			slog.Info("board not found in data store - adding", "board_id", board.ID, "board_name", board.Name)
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(board connectwise.Board) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				b := &types.Board{
+					ID:            board.ID,
+					Name:          board.Name,
+					NotifyEnabled: false,
+					WebexRoomIDs:  nil,
+				}
+				if err := s.dataStore.UpsertBoard(b); err != nil {
+					slog.Warn("error preloading board", "board_id", board.ID, "error", err)
+				}
+				slog.Info("preloaded board", "board_id", board.ID, "board_name", board.Name)
+			}(board)
+		} else {
+			slog.Info("board is already in data store", "board_id", board.ID, "board_name", board.Name)
+		}
 	}
 
 	wg.Wait()
@@ -83,7 +89,8 @@ func (s *server) preloadOpenTickets() error {
 		go func(ticket connectwise.Ticket) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			if err := s.addOrUpdateTicket(nil, &ticket, false); err != nil {
+			storeTicket, _ := s.dataStore.GetTicket(ticket.ID)
+			if err := s.addOrUpdateTicket(storeTicket, &ticket, false); err != nil {
 				slog.Warn("error preloading open ticket", "ticket_id", ticket.ID, "error", err)
 			}
 		}(ticket)

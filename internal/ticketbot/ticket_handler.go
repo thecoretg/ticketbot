@@ -44,6 +44,11 @@ func (s *server) handleTickets(c *gin.Context) {
 			c.Error(fmt.Errorf("getting ticket from storage: %w", err))
 			return
 		}
+		if storeTicket == nil {
+			slog.Debug("ticket not in store", "ticket_id", w.ID)
+		} else {
+			slog.Debug("ticket found in store", "ticket_id", storeTicket.ID, "ticket_summary", storeTicket.Summary)
+		}
 
 		cwTicket, err := s.cwClient.GetTicket(w.ID, nil)
 		if err != nil {
