@@ -17,8 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (s *server) addHooksGroup(r *gin.Engine) {
-	hooks := r.Group("/hooks")
+func (s *server) addHooksGroup() {
+	hooks := s.ginEngine.Group("/hooks")
 	cw := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.config.ExitOnError))
 	cw.POST("/tickets", s.handleTickets)
 }
@@ -51,7 +51,7 @@ func (s *server) handleTickets(c *gin.Context) {
 			return
 		}
 
-		if err := s.addOrUpdateTicket(storeTicket, cwTicket); err != nil {
+		if err := s.addOrUpdateTicket(storeTicket, cwTicket, true); err != nil {
 			c.Error(fmt.Errorf("adding or updating the ticket into data storage: %w", err))
 			return
 		}
@@ -65,7 +65,7 @@ func (s *server) getTicketLock(ticketID int) *sync.Mutex {
 	return lockIface.(*sync.Mutex)
 }
 
-func (s *server) addOrUpdateTicket(storeTicket *types.Ticket, cwTicket *connectwise.Ticket) error {
+func (s *server) addOrUpdateTicket(storeTicket *types.Ticket, cwTicket *connectwise.Ticket, attemptNotify bool) error {
 	lock := s.getTicketLock(cwTicket.ID)
 	if !lock.TryLock() {
 		slog.Debug("waiting for ticket lock to resolve", "ticket_id", cwTicket.ID)
@@ -119,14 +119,14 @@ func (s *server) addOrUpdateTicket(storeTicket *types.Ticket, cwTicket *connectw
 		if err := s.dataStore.UpsertTicket(newTicket); err != nil {
 			return fmt.Errorf("upserting ticket to store: %w", err)
 		}
-		slog.Debug("upserted ticket to storage", "ticket_id", newTicket.ID, "summary", newTicket.Summary, "latest_note_id", newTicket.LatestNoteID)
+		slog.Info("upserted ticket to storage", "ticket_id", newTicket.ID, "summary", newTicket.Summary, "latest_note_id", newTicket.LatestNoteID)
 	} else {
 		slog.Debug("no changes found for ticket", "ticket_id", newTicket.ID)
 		return nil
 	}
 
 	// if latest note changed, proceed with notification
-	if noteChanged {
+	if noteChanged && attemptNotify {
 		slog.Debug("found note change", "ticket_id", newTicket.ID, "old_note", newTicket.LatestNoteID, "new_note", lastNote.ID)
 		if board.NotifyEnabled {
 			slog.Debug("note changed, running notifier", "ticket_id", newTicket.ID, "note_id", newTicket.LatestNoteID, "board_id", board.ID)

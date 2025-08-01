@@ -7,13 +7,13 @@ import (
 	"net/http"
 )
 
-func (s *server) addTicketsGroup(r *gin.Engine) {
-	tickets := r.Group("/tickets")
+func (s *server) addTicketsGroup() {
+	tickets := s.ginEngine.Group("/tickets")
 	tickets.GET("", s.getTickets)
 }
 
-func (s *server) addBoardsGroup(r *gin.Engine) {
-	boards := r.Group("/boards")
+func (s *server) addBoardsGroup() {
+	boards := s.ginEngine.Group("/boards")
 	boards.GET("", s.getBoards)
 }
 

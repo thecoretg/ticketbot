@@ -52,3 +52,30 @@ func TestClient_GetMostRecentTicketNote(t *testing.T) {
 
 	t.Logf("got note: %s", r.Text)
 }
+
+func TestClient_ListTickets(t *testing.T) {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		t.Fatalf("creating aws config: %v", err)
+	}
+
+	c, err := NewClientFromAWS(ctx, ssm.NewFromConfig(cfg), "/connectwise/creds/ticketbot", true)
+	if err != nil {
+		t.Fatalf("creating connectwise client from aws: %v", err)
+	}
+	t.Logf("Got CW creds from AWS - client ID: %s", c.creds.ClientId)
+	t.Logf("resty client: %v", c.restClient)
+
+	params := map[string]string{
+		"pagesize":   "100",
+		"conditions": "closedDate >= [2025-07-30]",
+	}
+	r, err := c.ListTickets(params)
+	if err != nil {
+		t.Fatalf("getting tickets: %v", err)
+	}
+
+	t.Logf("Total Tickets: %d", len(r))
+}

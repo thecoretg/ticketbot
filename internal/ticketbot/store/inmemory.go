@@ -1,12 +1,14 @@
 package store
 
 import (
+	"sync"
 	"tctg-automation/internal/ticketbot/types"
 )
 
 type InMemoryStore struct {
 	tickets map[int]*types.Ticket
 	boards  map[int]*types.Board
+	mu      sync.RWMutex
 }
 
 func NewInMemoryStore() *InMemoryStore {
@@ -19,11 +21,15 @@ func NewInMemoryStore() *InMemoryStore {
 }
 
 func (m *InMemoryStore) UpsertTicket(ticket *types.Ticket) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.tickets[ticket.ID] = ticket
 	return nil
 }
 
 func (m *InMemoryStore) GetTicket(ticketID int) (*types.Ticket, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if ticket, exists := m.tickets[ticketID]; exists {
 		return ticket, nil
 	}
@@ -31,6 +37,8 @@ func (m *InMemoryStore) GetTicket(ticketID int) (*types.Ticket, error) {
 }
 
 func (m *InMemoryStore) ListTickets() ([]types.Ticket, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var tickets []types.Ticket
 	for _, ticket := range m.tickets {
 		tickets = append(tickets, *ticket)
@@ -44,11 +52,15 @@ func (m *InMemoryStore) ListTickets() ([]types.Ticket, error) {
 }
 
 func (m *InMemoryStore) UpsertBoard(board *types.Board) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.boards[board.ID] = board
 	return nil
 }
 
 func (m *InMemoryStore) GetBoard(boardID int) (*types.Board, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if board, exists := m.boards[boardID]; exists {
 		return board, nil
 	}
@@ -56,6 +68,8 @@ func (m *InMemoryStore) GetBoard(boardID int) (*types.Board, error) {
 }
 
 func (m *InMemoryStore) ListBoards() ([]types.Board, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var boards []types.Board
 	for _, board := range m.boards {
 		boards = append(boards, *board)

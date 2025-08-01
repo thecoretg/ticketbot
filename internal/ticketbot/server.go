@@ -19,6 +19,7 @@ type server struct {
 	cwClient    *connectwise.Client
 	webexClient *webex.Client
 	ticketLocks sync.Map
+	ginEngine   *gin.Engine
 }
 
 func Run() error {
@@ -27,31 +28,51 @@ func Run() error {
 		return fmt.Errorf("initializing config: %w", err)
 	}
 
-	if err := setLogger(config.Debug, config.LogToFile); err != nil {
+	if err := setLogger(config.Debug, config.LogToFile, config.LogFilePath); err != nil {
 		return fmt.Errorf("error setting logger: %w", err)
 	}
 
-	slog.Debug("DEBUG ON")
+	slog.Debug("DEBUG ON") // only prints if debug is on...so clever
 
-	s := &server{
-		config:      config,
-		cwClient:    connectwise.NewClient(&config.CWCreds),
-		webexClient: webex.NewClient(http.DefaultClient, config.WebexBotSecret),
-		dataStore:   store.NewInMemoryStore(),
+	s := newServer(config, store.NewInMemoryStore())
+	if err := s.prep(true); err != nil {
+		return fmt.Errorf("preparing server: %w", err)
 	}
 
-	if err := s.initiateCWHooks(); err != nil {
-		return fmt.Errorf("initiating connectwise hooks: %w", err)
-	}
+	s.addAllRoutes()
 
-	r := gin.Default()
-	s.addHooksGroup(r)
-	s.addTicketsGroup(r)
-	s.addBoardsGroup(r)
-
-	if err := r.Run(":80"); err != nil {
+	if err := s.ginEngine.Run(":80"); err != nil {
 		return fmt.Errorf("error running server: %w", err)
+	}
+	return nil
+}
+
+func (s *server) prep(preloadOpenTickets bool) error {
+	if err := s.initiateCWHooks(); err != nil {
+		return fmt.Errorf("initiating connectwise webhooks: %w", err)
+	}
+
+	if preloadOpenTickets {
+		if err := s.preloadOpenTickets(); err != nil {
+			return fmt.Errorf("preloading existing open tickets: %w", err)
+		}
 	}
 
 	return nil
+}
+
+func (s *server) addAllRoutes() {
+	s.addHooksGroup()
+	s.addTicketsGroup()
+	s.addBoardsGroup()
+}
+
+func newServer(cfg *cfg.Cfg, store store.Store) *server {
+	return &server{
+		config:      cfg,
+		cwClient:    connectwise.NewClient(&cfg.CWCreds),
+		webexClient: webex.NewClient(http.DefaultClient, cfg.WebexBotSecret),
+		dataStore:   store,
+		ginEngine:   gin.Default(),
+	}
 }

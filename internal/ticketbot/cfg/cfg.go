@@ -2,6 +2,7 @@ package cfg
 
 import (
 	"fmt"
+	"os"
 	"tctg-automation/pkg/connectwise"
 
 	"github.com/spf13/viper"
@@ -11,6 +12,7 @@ type Cfg struct {
 	Debug       bool   `json:"debug,omitempty" mapstructure:"debug"`
 	ExitOnError bool   `json:"exit_on_error,omitempty" mapstructure:"exit_on_error"`
 	LogToFile   bool   `json:"log_to_file,omitempty" mapstructure:"log_to_file"`
+	LogFilePath string `json:"log_file_path,omitempty" mapstructure:"log_file_path"`
 	RootURL     string `json:"root_url,omitempty" mapstructure:"root_url"`
 	DBConn      string `json:"db_conn,omitempty" mapstructure:"db_conn"`
 
@@ -25,6 +27,7 @@ type Cfg struct {
 func InitCfg() (*Cfg, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("json")
+	viper.AddConfigPath(os.Getenv("TICKETBOT_CONFIG_DIRECTORY"))
 	viper.AddConfigPath(".")
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading in config: %w", err)

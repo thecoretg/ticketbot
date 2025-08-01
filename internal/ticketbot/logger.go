@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func setLogger(debug, toFile bool) error {
+func setLogger(debug, toFile bool, logFilePath string) error {
 	level := slog.LevelInfo
 	if debug {
 		level = slog.LevelDebug
@@ -15,7 +15,11 @@ func setLogger(debug, toFile bool) error {
 	var err error
 	handler := newStdoutHandler(level)
 	if toFile {
-		handler, err = newFileHandler("ticketbot.log", level)
+		if logFilePath == "" {
+			logFilePath = "ticketbot.log"
+		}
+	
+		handler, err = newFileHandler(logFilePath, level)
 		if err != nil {
 			return fmt.Errorf("creating file handler: %w", err)
 		}
