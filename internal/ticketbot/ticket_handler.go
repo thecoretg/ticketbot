@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -36,17 +35,10 @@ func (s *server) handleTickets(c *gin.Context) {
 
 	slog.Info("received ticket webhook", "id", w.ID, "action", w.Action)
 	if w.Action == "added" || w.Action == "updated" {
-		// check if ticket already exists in store
-
 		storeTicket, err := s.dataStore.GetTicket(w.ID)
 		if err != nil {
 			c.Error(fmt.Errorf("getting ticket from storage: %w", err))
 			return
-		}
-		if storeTicket == nil {
-			slog.Debug("ticket not in store", "ticket_id", w.ID)
-		} else {
-			slog.Debug("ticket found in store", "ticket_id", storeTicket.ID, "ticket_summary", storeTicket.Summary)
 		}
 
 		cwTicket, err := s.cwClient.GetTicket(w.ID, nil)
@@ -55,7 +47,7 @@ func (s *server) handleTickets(c *gin.Context) {
 			return
 		}
 
-		if err := s.addOrUpdateTicket(storeTicket, cwTicket, true); err != nil {
+		if err := s.addOrUpdateTicket(w.Action, storeTicket, cwTicket, true); err != nil {
 			c.Error(fmt.Errorf("adding or updating the ticket into data storage: %w", err))
 			return
 		}
@@ -69,17 +61,14 @@ func (s *server) getTicketLock(ticketID int) *sync.Mutex {
 	return lockIface.(*sync.Mutex)
 }
 
-func (s *server) addOrUpdateTicket(storeTicket *Ticket, cwTicket *connectwise.Ticket, attemptNotify bool) error {
+func (s *server) addOrUpdateTicket(action string, storeTicket *Ticket, cwTicket *connectwise.Ticket, attemptNotify bool) error {
 	lock := s.getTicketLock(cwTicket.ID)
 	if !lock.TryLock() {
-		slog.Debug("waiting for ticket lock to resolve", "ticket_id", cwTicket.ID)
 		lock.Lock()
 	}
 
-	slog.Debug("locked ticket", "ticket_id", cwTicket.ID)
 	defer func() {
 		lock.Unlock()
-		slog.Debug("unlocked ticket", "ticket_id", cwTicket.ID)
 	}()
 
 	board, err := s.dataStore.GetBoard(cwTicket.Board.ID)
@@ -88,14 +77,11 @@ func (s *server) addOrUpdateTicket(storeTicket *Ticket, cwTicket *connectwise.Ti
 	}
 
 	if board == nil {
-		slog.Debug("no board found in store", "board_id", cwTicket.Board.ID)
 		board, err = s.addBoard(cwTicket.Board.ID)
 		if err != nil {
 			return err
 		}
 		slog.Info("added board to store", "board_id", board.ID, "name", board.Name)
-	} else {
-		slog.Debug("found board in store", "board_id", board.ID, "name", board.Name)
 	}
 
 	lastNote, err := s.getLatestNote(cwTicket.ID)
@@ -105,45 +91,39 @@ func (s *server) addOrUpdateTicket(storeTicket *Ticket, cwTicket *connectwise.Ti
 
 	newTicket := cwTicketToStoreTicket(cwTicket, lastNote)
 	if storeTicket != nil {
-		slog.Debug("got ticket from store", "ticket_id", storeTicket.ID, "summary", storeTicket.Summary, "latest_note_id", storeTicket.LatestNoteID)
 		newTicket.AddedToStore = storeTicket.AddedToStore
 	} else {
-		slog.Debug("no ticket found in store", "ticket_id", cwTicket.ID)
 		newTicket.AddedToStore = time.Now()
 	}
 
-	ticketChanged := !reflect.DeepEqual(storeTicket, newTicket)
+	ticketChanged, changeList := findChanges(storeTicket, newTicket)
 	noteChanged := false
 	if storeTicket != nil && storeTicket.LatestNoteID != lastNote.ID {
 		noteChanged = true
+		if storeTicket.LatestNoteID > lastNote.ID {
+			slog.Warn("latest note id in store is greater than latest from connectwise -  the note was likely deleted", "ticket_id", newTicket.ID, "store_note_id", storeTicket.LatestNoteID, "latest_note_id", lastNote.ID)
+			noteChanged = false // dont notify about a note they probably already got notified for
+		}
 	}
 
+	slog.Debug(
+		"ticket checked for changes", "action", action, "ticket_id", newTicket.ID, "changes_found", changeList,
+		"note_changed", noteChanged, "latest_note_id", newTicket.LatestNoteID, "attempt_notify", attemptNotify, "board_notify_enabled", board.NotifyEnabled,
+	)
+
 	if ticketChanged {
-		slog.Debug("found changes for ticket", "ticket_id", newTicket.ID)
 		if err := s.dataStore.UpsertTicket(newTicket); err != nil {
 			return fmt.Errorf("upserting ticket to store: %w", err)
 		}
-		slog.Info("upserted ticket to storage", "ticket_id", newTicket.ID, "summary", newTicket.Summary, "latest_note_id", newTicket.LatestNoteID)
-	} else {
-		slog.Debug("no changes found for ticket", "ticket_id", newTicket.ID)
-		return nil
 	}
 
 	// if latest note changed, proceed with notification
-	if noteChanged && attemptNotify {
-		slog.Debug("found note change", "ticket_id", newTicket.ID, "old_note", newTicket.LatestNoteID, "new_note", lastNote.ID)
-		if board.NotifyEnabled {
-			slog.Debug("note changed, running notifier", "ticket_id", newTicket.ID, "note_id", newTicket.LatestNoteID, "board_id", board.ID)
-			// this will do stuff once implemented
-			//msg := makeWebexMsg(action, s.config.CWCreds.CompanyId, sendTo, cwTicket, lastNote, s.config.MaxMsgLength)
-			//if err := s.webexClient.SendMessage(ctx, msg); err != nil {
-			//	return fmt.Errorf("sending webex message: %w", err)
-			//}
-		} else {
-			slog.Debug("note changed, but board notify not enabled", "ticket_id", newTicket.ID, "board_id", board.ID)
-		}
-	} else {
-		slog.Debug("note did not change", "ticket_id", newTicket.ID, "old_note", newTicket.LatestNoteID, "new_note", lastNote.ID)
+	if noteChanged && attemptNotify && board.NotifyEnabled {
+		// this will do stuff once implemented
+		//msg := makeWebexMsg(action, s.config.CWCreds.CompanyId, sendTo, cwTicket, lastNote, s.config.MaxMsgLength)
+		//if err := s.webexClient.SendMessage(ctx, msg); err != nil {
+		//	return fmt.Errorf("sending webex message: %w", err)
+		//}
 	}
 
 	return nil
@@ -191,9 +171,6 @@ func cwTicketToStoreTicket(cwTicket *connectwise.Ticket, latestNote *connectwise
 		OwnerID:      cwTicket.Owner.ID,
 		Resources:    cwTicket.Resources,
 		UpdatedBy:    cwTicket.Info.UpdatedBy,
-		TimeDetails: TimeDetails{
-			UpdatedAt: cwTicket.Info.LastUpdated,
-		},
 	}
 }
 
@@ -305,4 +282,45 @@ func blockQuoteText(text string) string {
 	}
 
 	return strings.Join(parts, "\n")
+}
+
+func findChanges(a, b *Ticket) (bool, string) {
+	if a == nil || b == nil {
+		return a != b, "one of the tickets is nil"
+	}
+
+	var changedValues []string
+	if a.ID != b.ID {
+		changedValues = append(changedValues, "ID")
+	}
+
+	if a.Summary != b.Summary {
+		changedValues = append(changedValues, "Summary")
+	}
+
+	if a.BoardID != b.BoardID {
+		changedValues = append(changedValues, "BoardID")
+	}
+
+	if a.LatestNoteID != b.LatestNoteID {
+		changedValues = append(changedValues, "LatestNoteID")
+	}
+
+	if a.OwnerID != b.OwnerID {
+		changedValues = append(changedValues, "OwnerID")
+	}
+
+	if a.UpdatedBy != b.UpdatedBy {
+		changedValues = append(changedValues, "UpdatedBy")
+	}
+
+	if a.Resources != b.Resources {
+		changedValues = append(changedValues, "Resources")
+	}
+
+	changeStr := "none"
+	if len(changedValues) > 0 {
+		changeStr = strings.Join(changedValues, ", ")
+	}
+	return len(changedValues) > 0, changeStr
 }

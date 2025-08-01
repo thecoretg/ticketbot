@@ -89,7 +89,7 @@ func (s *server) preloadOpenTickets() error {
 			defer wg.Done()
 			defer func() { <-sem }()
 			storeTicket, _ := s.dataStore.GetTicket(ticket.ID)
-			if err := s.addOrUpdateTicket(storeTicket, &ticket, false); err != nil {
+			if err := s.addOrUpdateTicket("preload", storeTicket, &ticket, false); err != nil {
 				slog.Warn("error preloading open ticket", "ticket_id", ticket.ID, "error", err)
 			}
 		}(ticket)

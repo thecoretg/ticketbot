@@ -12,7 +12,6 @@ type Store interface {
 }
 
 type TimeDetails struct {
-	UpdatedAt    time.Time `json:"updated_at"`
 	AddedToStore time.Time `json:"added_to_store"`
 }
 
@@ -28,13 +27,13 @@ type Ticket struct {
 }
 
 type Board struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	NotifyEnabled bool   `json:"notify_enabled"`
-	// WebexRooms    []WebexRoom `json:"webex_room_ids"`
+	ID            int         `json:"id"`
+	Name          string      `json:"name"`
+	NotifyEnabled bool        `json:"notify_enabled"`
+	WebexRooms    []WebexRoom `json:"webex_room_ids"`
 }
 
-//type WebexRoom struct {
-//	ID      string `json:"id"`
-//	BoardID int
-//}
+type WebexRoom struct {
+	ID      string `json:"id"`
+	BoardID int
+}

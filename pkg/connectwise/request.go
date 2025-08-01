@@ -2,7 +2,6 @@ package connectwise
 
 import (
 	"fmt"
-	"log/slog"
 	"strings"
 )
 
@@ -34,7 +33,6 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 
 	endpoint = fullURL(baseUrl, endpoint)
 	for endpoint != "" {
-		slog.Debug("running GetMany", "endpoint", endpoint)
 		var target []T
 		req := c.restClient.R().
 			SetQueryParams(params).
@@ -49,7 +47,6 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 			return nil, fmt.Errorf("error response from ConnectWise API: %s", res.String())
 		}
 
-		slog.Debug("GetMany", "total_items", len(target))
 		for _, item := range target {
 			allItems = append(allItems, item)
 		}

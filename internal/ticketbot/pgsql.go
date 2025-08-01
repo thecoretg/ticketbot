@@ -67,7 +67,7 @@ func (p *PostgresStore) GetTicket(ticketID int) (*Ticket, error) {
 
 func (p *PostgresStore) ListTickets() ([]Ticket, error) {
 	var tickets []Ticket
-	if err := p.db.Find(tickets).Error; err != nil {
+	if err := p.db.Find(&tickets).Error; err != nil {
 		return nil, err
 	}
 
@@ -102,7 +102,7 @@ func (p *PostgresStore) GetBoard(boardID int) (*Board, error) {
 
 func (p *PostgresStore) ListBoards() ([]Board, error) {
 	var boards []Board
-	if err := p.db.Find(boards).Error; err != nil {
+	if err := p.db.Find(&boards).Error; err != nil {
 		return nil, err
 	}
 
