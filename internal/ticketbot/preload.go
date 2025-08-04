@@ -1,6 +1,7 @@
 package ticketbot
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -9,7 +10,7 @@ import (
 
 const maxConcurrentPreload = 10
 
-func (s *server) preloadFromConnectwise(preloadBoards, preloadTickets bool) error {
+func (s *server) preloadFromConnectwise(ctx context.Context, preloadBoards, preloadTickets bool) error {
 	if preloadBoards {
 		if err := s.preloadBoards(); err != nil {
 			return fmt.Errorf("preloading active boards: %w", err)
@@ -17,7 +18,7 @@ func (s *server) preloadFromConnectwise(preloadBoards, preloadTickets bool) erro
 	}
 
 	if preloadTickets {
-		if err := s.preloadOpenTickets(); err != nil {
+		if err := s.preloadOpenTickets(ctx); err != nil {
 			return fmt.Errorf("preloading open tickets: %w", err)
 		}
 	}
@@ -67,7 +68,7 @@ func (s *server) preloadBoards() error {
 	return nil
 }
 
-func (s *server) preloadOpenTickets() error {
+func (s *server) preloadOpenTickets(ctx context.Context) error {
 	params := map[string]string{
 		"pageSize":   "100",
 		"conditions": "closedFlag = false and board/id = 34",
@@ -81,6 +82,7 @@ func (s *server) preloadOpenTickets() error {
 	slog.Info("got open tickets", "total_tickets", len(openTickets))
 	sem := make(chan struct{}, maxConcurrentPreload)
 	var wg sync.WaitGroup
+	errCh := make(chan error, len(openTickets))
 
 	for _, ticket := range openTickets {
 		sem <- struct{}{}
@@ -88,13 +90,22 @@ func (s *server) preloadOpenTickets() error {
 		go func(ticket connectwise.Ticket) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			storeTicket, _ := s.dataStore.GetTicket(ticket.ID)
-			if err := s.addOrUpdateTicket("preload", storeTicket, &ticket, false); err != nil {
-				slog.Warn("error preloading open ticket", "ticket_id", ticket.ID, "error", err)
+			if err := s.addOrUpdateTicket(ctx, ticket.ID, "preload", false); err != nil {
+				errCh <- fmt.Errorf("error preloading ticket %d: %w", ticket.ID, err)
+			} else {
+				errCh <- nil
 			}
 		}(ticket)
 	}
 
 	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			slog.Error("preloading ticket", "error", err)
+			return err
+		}
+	}
 	return nil
 }

@@ -85,7 +85,7 @@ func (c *Client) DeleteServiceTicketNote(noteID int, ticketID int) error {
 func (c *Client) GetMostRecentTicketNote(ticketID int) (*ServiceTicketNote, error) {
 	p := map[string]string{
 		"orderBy":  "id desc",
-		"pageSize": "100",
+		"pageSize": "1000",
 	}
 
 	notes, err := c.ListServiceTicketNotesAll(p, ticketID)

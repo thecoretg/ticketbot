@@ -35,11 +35,6 @@ func createTables(db *gorm.DB) error {
 	if err := db.AutoMigrate(&Board{}); err != nil {
 		return fmt.Errorf("automigrate board table: %w", err)
 	}
-
-	//if err := db.AutoMigrate(&WebexRoom{}); err != nil {
-	//	return fmt.Errorf("automigrate webex room table: %w", err)
-	//}
-
 	return nil
 }
 

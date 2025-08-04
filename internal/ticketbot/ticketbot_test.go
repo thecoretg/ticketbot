@@ -1,10 +1,12 @@
 package ticketbot
 
 import (
+	"context"
 	"testing"
 )
 
 func TestPrepServer(t *testing.T) {
+	ctx := context.Background()
 	config, err := InitCfg()
 	if err != nil {
 		t.Fatalf("initializing config: %v", err)
@@ -15,7 +17,7 @@ func TestPrepServer(t *testing.T) {
 	}
 
 	s := newServer(config, NewInMemoryStore())
-	if err := s.prep(true, false); err != nil {
+	if err := s.prep(ctx, true, false); err != nil {
 		t.Fatalf("preparing server: %v", err)
 	}
 }

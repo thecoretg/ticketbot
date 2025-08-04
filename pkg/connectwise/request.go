@@ -114,7 +114,7 @@ func Patch[T any](c *Client, endpoint string, patchOps []PatchOp) (*T, error) {
 
 func Delete(c *Client, endpoint string) error {
 	res, err := c.restClient.R().
-		Delete(endpoint)
+		Delete(fullURL(baseUrl, endpoint))
 
 	if err != nil {
 		return err

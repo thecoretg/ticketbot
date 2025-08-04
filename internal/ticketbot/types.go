@@ -27,13 +27,8 @@ type Ticket struct {
 }
 
 type Board struct {
-	ID            int         `json:"id"`
-	Name          string      `json:"name"`
-	NotifyEnabled bool        `json:"notify_enabled"`
-	WebexRooms    []WebexRoom `json:"webex_room_ids"`
-}
-
-type WebexRoom struct {
-	ID      string `json:"id"`
-	BoardID int
+	ID            int    `json:"id"`
+	Name          string `json:"name"`
+	NotifyEnabled bool   `json:"notify_enabled"`
+	WebexRoomID   string `json:"webex_room_id"`
 }

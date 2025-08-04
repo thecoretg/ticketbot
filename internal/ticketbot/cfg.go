@@ -19,7 +19,6 @@ type Cfg struct {
 	DSN     string `json:"dsn,omitempty" mapstructure:"dsn"`
 
 	CWCreds        connectwise.Creds `json:"cw_creds,omitempty" mapstructure:"cw_creds"`
-	WebexBotEmail  string            `json:"webex_bot_email,omitempty" mapstructure:"webex_bot_email"`
 	WebexBotSecret string            `json:"webex_bot_secret,omitempty" mapstructure:"webex_bot_secret"`
 
 	MaxMsgLength      int      `json:"max_msg_length,omitempty" mapstructure:"max_msg_length"`
@@ -55,6 +54,7 @@ func (cfg *Cfg) validateFields() error {
 		"cw_creds.private_key": cfg.CWCreds.PrivateKey,
 		"cw_creds.client_id":   cfg.CWCreds.ClientId,
 		"cw_creds.company_id":  cfg.CWCreds.CompanyId,
+		"webex_bot_secret":     cfg.WebexBotSecret,
 	}
 
 	if err := checkEmptyFields(vals); err != nil {

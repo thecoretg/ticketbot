@@ -1,6 +1,7 @@
 package ticketbot
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,7 @@ type server struct {
 }
 
 func Run() error {
+	ctx := context.Background()
 	config, err := InitCfg()
 	if err != nil {
 		return fmt.Errorf("initializing config: %w", err)
@@ -38,7 +40,7 @@ func Run() error {
 	}
 
 	s := newServer(config, store)
-	if err := s.prep(true, true); err != nil {
+	if err := s.prep(ctx, true, true); err != nil {
 		return fmt.Errorf("preparing server: %w", err)
 	}
 
@@ -50,13 +52,13 @@ func Run() error {
 	return nil
 }
 
-func (s *server) prep(preloadBoards, preloadTickets bool) error {
+func (s *server) prep(ctx context.Context, preloadBoards, preloadTickets bool) error {
 	if err := s.initiateCWHooks(); err != nil {
 		return fmt.Errorf("initiating connectwise webhooks: %w", err)
 	}
 
 	if preloadBoards || preloadTickets {
-		if err := s.preloadFromConnectwise(preloadBoards, preloadTickets); err != nil {
+		if err := s.preloadFromConnectwise(ctx, preloadBoards, preloadTickets); err != nil {
 			return fmt.Errorf("preloading from connectwise: %w", err)
 		}
 	}
