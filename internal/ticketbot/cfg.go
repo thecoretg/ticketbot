@@ -30,15 +30,21 @@ type Cfg struct {
 }
 
 func InitCfg() (*Cfg, error) {
-	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
 	setConfigDefaults()
-	cfg := &Cfg{}
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("reading in config: %w", err)
-	}
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("unmarshaling config: %w", err)
+	cfg := &Cfg{
+		Debug:          viper.GetBool("DEBUG"),
+		ExitOnError:    viper.GetBool("EXIT_ON_ERROR"),
+		LogToFile:      viper.GetBool("LOG_TO_FILE"),
+		LogFilePath:    viper.GetString("LOG_FILE_PATH"),
+		RootURL:        viper.GetString("ROOT_URL"),
+		PostgresDSN:    viper.GetString("POSTGRES_DSN"),
+		CWPublicKey:    viper.GetString("CW_PUBLIC_KEY"),
+		CWPrivateKey:   viper.GetString("CW_PRIVATE_KEY"),
+		CWClientID:     viper.GetString("CW_CLIENT_ID"),
+		CWCompanyID:    viper.GetString("CW_COMPANY_ID"),
+		WebexBotSecret: viper.GetString("WEBEX_SECRET"),
+		MaxMsgLength:   viper.GetInt("MAX_MSG_LENGTH"),
 	}
 
 	if err := cfg.validateFields(); err != nil {

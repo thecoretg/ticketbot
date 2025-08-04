@@ -45,7 +45,7 @@ func Run() error {
 
 	s.addAllRoutes()
 
-	if err := s.ginEngine.Run(":80"); err != nil {
+	if err := s.ginEngine.Run(":8080"); err != nil {
 		return fmt.Errorf("error running server: %w", err)
 	}
 	return nil
