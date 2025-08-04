@@ -8,6 +8,8 @@ import (
 	"tctg-automation/pkg/webex"
 )
 
+// makeWebexMsgs constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
+// the message should be sent to.
 func (s *server) makeWebexMsgs(action, updatedBy string, board *Board, ticket *connectwise.Ticket, note *connectwise.ServiceTicketNote) ([]webex.MessagePostBody, error) {
 	var body string
 	body += s.messageHeader(action, ticket)
@@ -91,7 +93,7 @@ func (s *server) messageHeader(action string, ticket *connectwise.Ticket) string
 	}
 
 	// add clickable ticket ID with link to ticket, with ticket title
-	header += fmt.Sprintf("%s %s", connectwise.MarkdownInternalTicketLink(ticket.ID, s.config.CWCreds.CompanyId), ticket.Summary)
+	header += fmt.Sprintf("%s %s", connectwise.MarkdownInternalTicketLink(ticket.ID, s.config.CWCompanyID), ticket.Summary)
 	return header
 }
 
@@ -110,6 +112,7 @@ func (s *server) messageText(note *connectwise.ServiceTicketNote) string {
 	return body
 }
 
+// getSenderName determines the name of the sender of a note. It checks for members in Connectwise and external contacts from companies.
 func getSenderName(note *connectwise.ServiceTicketNote) *string {
 	if note.Member.Name != "" {
 		return &note.Member.Name

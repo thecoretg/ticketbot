@@ -2,7 +2,6 @@ package ticketbot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -73,26 +72,31 @@ func (s *server) addAllRoutes() {
 }
 
 func newServer(cfg *Cfg, store Store) *server {
+	cwCreds := &connectwise.Creds{
+		PublicKey:  cfg.CWPublicKey,
+		PrivateKey: cfg.CWPrivateKey,
+		ClientId:   cfg.CWClientID,
+		CompanyId:  cfg.CWCompanyID,
+	}
+
 	return &server{
 		config:      cfg,
-		cwClient:    connectwise.NewClient(&cfg.CWCreds),
+		cwClient:    connectwise.NewClient(cwCreds),
 		webexClient: webex.NewClient(http.DefaultClient, cfg.WebexBotSecret),
 		dataStore:   store,
 		ginEngine:   gin.Default(),
 	}
 }
 
+// createStore creates an in-memory store, or attempts to connect to a Postgres store if in the config.
 func createStore(cfg *Cfg) (Store, error) {
 	var store Store
 	store = NewInMemoryStore()
-	if cfg.UseDB {
-		slog.Debug("use db set to true in config")
-		if cfg.DSN == "" {
-			return nil, errors.New("no DSN provided for database connection")
-		}
+	if cfg.PostgresDSN != "" {
+		slog.Debug("database connection string provided in config")
 
 		var err error
-		store, err = NewPostgresStore(cfg.DSN)
+		store, err = NewPostgresStore(cfg.PostgresDSN)
 		if err != nil {
 			return nil, fmt.Errorf("creating postgres store: %w", err)
 		}

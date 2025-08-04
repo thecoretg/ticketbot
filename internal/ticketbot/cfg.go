@@ -2,9 +2,6 @@ package ticketbot
 
 import (
 	"fmt"
-	"os"
-	"tctg-automation/pkg/connectwise"
-
 	"github.com/spf13/viper"
 )
 
@@ -14,28 +11,32 @@ type Cfg struct {
 	LogToFile   bool   `json:"log_to_file,omitempty" mapstructure:"log_to_file"`
 	LogFilePath string `json:"log_file_path,omitempty" mapstructure:"log_file_path"`
 
-	RootURL string `json:"root_url,omitempty" mapstructure:"root_url"`
-	UseDB   bool   `json:"use_db" mapstructure:"use_db"`
-	DSN     string `json:"dsn,omitempty" mapstructure:"dsn"`
+	RootURL     string `json:"root_url,omitempty" mapstructure:"root_url"`
+	PostgresDSN string `json:"postgres_dsn,omitempty" mapstructure:"postgres_dsn"`
 
-	CWCreds        connectwise.Creds `json:"cw_creds,omitempty" mapstructure:"cw_creds"`
-	WebexBotSecret string            `json:"webex_bot_secret,omitempty" mapstructure:"webex_bot_secret"`
+	CWPublicKey    string `json:"cw_public_key" mapstructure:"cw_public_key"`
+	CWPrivateKey   string `json:"cw_private_key" mapstructure:"cw_private_key"`
+	CWClientID     string `json:"cw_client_id" mapstructure:"cw_client_id"`
+	CWCompanyID    string `json:"cw_company_id" mapstructure:"cw_company_id"`
+	WebexBotSecret string `json:"webex_secret,omitempty" mapstructure:"webex_secret"`
 
-	MaxMsgLength      int      `json:"max_msg_length,omitempty" mapstructure:"max_msg_length"`
+	// Max message length before ticket notifications get a "..." at the end instead of the whole message.
+	MaxMsgLength int `json:"max_msg_length,omitempty" mapstructure:"max_msg_length"`
+
+	// Members who we don't want to receive Webex messages.
 	ExcludedCWMembers []string `json:"excluded_cw_members" mapstructure:"excluded_cw_members"`
+
+	StopIfUpdatedBy []string `json:"stop_if_updated_by" mapstructure:"stop_if_updated_by"`
 }
 
 func InitCfg() (*Cfg, error) {
-	viper.SetConfigName("config")
-	viper.SetConfigType("json")
-	viper.AddConfigPath(os.Getenv("TICKETBOT_CONFIG_DIRECTORY"))
-	viper.AddConfigPath(".")
+	viper.SetConfigFile(".env")
+	viper.AutomaticEnv()
+	setConfigDefaults()
+	cfg := &Cfg{}
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("reading in config: %w", err)
 	}
-
-	setConfigDefaults()
-	cfg := &Cfg{}
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
@@ -49,12 +50,12 @@ func InitCfg() (*Cfg, error) {
 
 func (cfg *Cfg) validateFields() error {
 	vals := map[string]string{
-		"root_url":             cfg.RootURL,
-		"cw_creds.public_key":  cfg.CWCreds.PublicKey,
-		"cw_creds.private_key": cfg.CWCreds.PrivateKey,
-		"cw_creds.client_id":   cfg.CWCreds.ClientId,
-		"cw_creds.company_id":  cfg.CWCreds.CompanyId,
-		"webex_bot_secret":     cfg.WebexBotSecret,
+		"root_url":       cfg.RootURL,
+		"cw_public_key":  cfg.CWPublicKey,
+		"cw_private_key": cfg.CWPrivateKey,
+		"cw_client_id":   cfg.CWClientID,
+		"cw_company_id":  cfg.CWCompanyID,
+		"webex_secret":   cfg.WebexBotSecret,
 	}
 
 	if err := checkEmptyFields(vals); err != nil {
