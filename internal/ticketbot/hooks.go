@@ -29,7 +29,7 @@ func (s *server) initiateCWHooks() error {
 
 func (s *server) processCwHook(url, entity, level string, objectID int, currentHooks []connectwise.Callback) error {
 	hook := &connectwise.Callback{
-		URL:      url,
+		URL:      fmt.Sprintf("https://%s", url),
 		Type:     entity,
 		Level:    level,
 		ObjectId: objectID,

@@ -6,18 +6,23 @@ import (
 	"log/slog"
 	"sync"
 	"tctg-automation/pkg/connectwise"
+	"time"
 )
 
 const maxConcurrentPreload = 10
 
 func (s *server) preloadFromConnectwise(ctx context.Context, preloadBoards, preloadTickets bool) error {
 	if preloadBoards {
+		slog.Debug("preload boards enabled")
+		time.Sleep(2 * time.Second)
 		if err := s.preloadBoards(); err != nil {
 			return fmt.Errorf("preloading active boards: %w", err)
 		}
 	}
 
 	if preloadTickets {
+		slog.Debug("preload tickets enabled")
+		time.Sleep(2 * time.Second)
 		if err := s.preloadOpenTickets(ctx); err != nil {
 			return fmt.Errorf("preloading open tickets: %w", err)
 		}

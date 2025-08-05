@@ -3,6 +3,7 @@ package ticketbot
 import (
 	"context"
 	"fmt"
+	"github.com/gin-gonic/autotls"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -16,12 +17,13 @@ type server struct {
 	config      *Cfg
 	dataStore   Store
 	cwClient    *connectwise.Client
+	cwCompanyID string
 	webexClient *webex.Client
 	ticketLocks sync.Map
 	ginEngine   *gin.Engine
 }
 
-func Run() error {
+func RunServer() error {
 	ctx := context.Background()
 	config, err := InitCfg()
 	if err != nil {
@@ -33,22 +35,42 @@ func Run() error {
 	}
 	slog.Debug("DEBUG ON") // only prints if debug is on...so clever
 
-	store, err := createStore(config)
+	opClient, err := new1PasswordClient(ctx, config.OPSvcToken)
+	if err != nil {
+		return fmt.Errorf("creating 1password client: %w", err)
+	}
+
+	allCreds, err := getCreds(ctx, opClient)
+	if err != nil {
+		return fmt.Errorf("getting credentials from 1password")
+	}
+
+	store, err := createStore(allCreds.postgresDSN)
 	if err != nil {
 		return fmt.Errorf("creating store: %w", err)
 	}
 
-	s := newServer(config, store)
-	if err := s.prep(ctx, true, true); err != nil {
+	s, err := newServer(allCreds, config, store)
+	if err != nil {
+		return fmt.Errorf("creating server: %w", err)
+	}
+
+	if err := s.prep(ctx, s.config.PreloadBoards, s.config.PreloadTickets); err != nil {
 		return fmt.Errorf("preparing server: %w", err)
 	}
 
 	s.addAllRoutes()
 
-	if err := s.ginEngine.Run(":8080"); err != nil {
-		return fmt.Errorf("error running server: %w", err)
+	return s.run()
+}
+
+func (s *server) run() error {
+	if s.config.UseAutocert {
+		slog.Info("running server with auto TLS", "url", s.config.RootURL)
+		return autotls.Run(s.ginEngine, s.config.RootURL)
 	}
-	return nil
+
+	return s.ginEngine.Run()
 }
 
 func (s *server) prep(ctx context.Context, preloadBoards, preloadTickets bool) error {
@@ -71,32 +93,34 @@ func (s *server) addAllRoutes() {
 	s.addBoardsGroup()
 }
 
-func newServer(cfg *Cfg, store Store) *server {
+func newServer(creds *creds, cfg *Cfg, store Store) (*server, error) {
+
 	cwCreds := &connectwise.Creds{
-		PublicKey:  cfg.CWPublicKey,
-		PrivateKey: cfg.CWPrivateKey,
-		ClientId:   cfg.CWClientID,
-		CompanyId:  cfg.CWCompanyID,
+		PublicKey:  creds.cwPubKey,
+		PrivateKey: creds.cwPrivKey,
+		ClientId:   creds.cwClientID,
+		CompanyId:  creds.cwCompanyID,
 	}
 
 	return &server{
 		config:      cfg,
 		cwClient:    connectwise.NewClient(cwCreds),
-		webexClient: webex.NewClient(http.DefaultClient, cfg.WebexBotSecret),
+		cwCompanyID: creds.cwCompanyID,
+		webexClient: webex.NewClient(http.DefaultClient, creds.webexSecret),
 		dataStore:   store,
 		ginEngine:   gin.Default(),
-	}
+	}, nil
 }
 
 // createStore creates an in-memory store, or attempts to connect to a Postgres store if in the config.
-func createStore(cfg *Cfg) (Store, error) {
+func createStore(dsn string) (Store, error) {
 	var store Store
 	store = NewInMemoryStore()
-	if cfg.PostgresDSN != "" {
+	if dsn != "" {
 		slog.Debug("database connection string provided in config")
 
 		var err error
-		store, err = NewPostgresStore(cfg.PostgresDSN)
+		store, err = NewPostgresStore(dsn)
 		if err != nil {
 			return nil, fmt.Errorf("creating postgres store: %w", err)
 		}

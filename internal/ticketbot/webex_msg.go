@@ -93,7 +93,7 @@ func (s *server) messageHeader(action string, ticket *connectwise.Ticket) string
 	}
 
 	// add clickable ticket ID with link to ticket, with ticket title
-	header += fmt.Sprintf("%s %s", connectwise.MarkdownInternalTicketLink(ticket.ID, s.config.CWCompanyID), ticket.Summary)
+	header += fmt.Sprintf("%s %s", connectwise.MarkdownInternalTicketLink(ticket.ID, s.cwCompanyID), ticket.Summary)
 	return header
 }
 

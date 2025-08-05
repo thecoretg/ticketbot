@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	if err := ticketbot.Run(); err != nil {
+	if err := ticketbot.RunServer(); err != nil {
 		log.Fatal(err)
 	}
 }
