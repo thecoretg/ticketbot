@@ -79,8 +79,6 @@ func (s *server) prep(ctx context.Context, preloadBoards, preloadTickets bool) e
 
 func (s *server) addAllRoutes() {
 	s.addHooksGroup()
-	s.addTicketsGroup()
-	s.addBoardsGroup()
 }
 
 func newServer(cfg *Cfg, store Store) (*server, error) {
