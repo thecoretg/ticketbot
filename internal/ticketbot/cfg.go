@@ -26,8 +26,6 @@ type Cfg struct {
 
 	// Members who we don't want to receive Webex messages.
 	ExcludedCWMembers []string `json:"excluded_cw_members" mapstructure:"excluded_cw_members"`
-	PreloadBoards     bool     `json:"preload_boards" mapstructure:"preload_boards"`
-	PreloadTickets    bool     `json:"preload_tickets" mapstructure:"preload_tickets"`
 }
 
 func InitCfg(ctx context.Context) (*Cfg, error) {
@@ -117,8 +115,6 @@ func setConfigDefaults() {
 	viper.SetDefault("excluded_cw_members", []string{})
 	viper.SetDefault("op_svc_token", "")
 	viper.SetDefault("creds", &creds{})
-	viper.SetDefault("preload_boards", true)
-	viper.SetDefault("preload_tickets", true)
 }
 
 func isEmpty(s string) bool {

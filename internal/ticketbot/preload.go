@@ -76,7 +76,7 @@ func (s *Server) preloadBoards() error {
 func (s *Server) preloadOpenTickets(ctx context.Context) error {
 	params := map[string]string{
 		"pageSize":   "100",
-		"conditions": "closedFlag = false and board/id = 34",
+		"conditions": "closedFlag = false",
 	}
 
 	slog.Info("loading existing open tickets")
