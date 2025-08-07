@@ -3,7 +3,6 @@ package ticketbot
 import (
 	"context"
 	"fmt"
-	"github.com/gin-gonic/autotls"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -23,44 +22,32 @@ type server struct {
 	ginEngine   *gin.Engine
 }
 
-func RunServer() error {
+func GetGinEngine() (*gin.Engine, error) {
 	ctx := context.Background()
 	config, err := InitCfg(ctx)
 	if err != nil {
-		return fmt.Errorf("initializing config: %w", err)
+		return nil, fmt.Errorf("initializing config: %w", err)
 	}
 
-	if err := setLogger(config.Debug, config.LogToFile, config.LogFilePath); err != nil {
-		return fmt.Errorf("error setting logger: %w", err)
-	}
 	slog.Debug("DEBUG ON") // only prints if debug is on...so clever
 
 	store, err := createStore(config.Creds.PostgresDSN)
 	if err != nil {
-		return fmt.Errorf("creating store: %w", err)
+		return nil, fmt.Errorf("creating store: %w", err)
 	}
 
 	s, err := newServer(config, store)
 	if err != nil {
-		return fmt.Errorf("creating server: %w", err)
+		return nil, fmt.Errorf("creating server: %w", err)
 	}
 
 	if err := s.prep(ctx, s.config.PreloadBoards, s.config.PreloadTickets); err != nil {
-		return fmt.Errorf("preparing server: %w", err)
+		return nil, fmt.Errorf("preparing server: %w", err)
 	}
 
 	s.addAllRoutes()
 
-	return s.run()
-}
-
-func (s *server) run() error {
-	if s.config.UseAutocert {
-		slog.Info("running server with auto TLS", "url", s.config.RootURL)
-		return autotls.Run(s.ginEngine, s.config.RootURL)
-	}
-
-	return s.ginEngine.Run()
+	return s.ginEngine, nil
 }
 
 func (s *server) prep(ctx context.Context, preloadBoards, preloadTickets bool) error {
@@ -79,6 +66,7 @@ func (s *server) prep(ctx context.Context, preloadBoards, preloadTickets bool) e
 
 func (s *server) addAllRoutes() {
 	s.addHooksGroup()
+	s.addBoardsGroup()
 }
 
 func newServer(cfg *Cfg, store Store) (*server, error) {

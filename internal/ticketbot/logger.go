@@ -18,7 +18,7 @@ func setLogger(debug, toFile bool, logFilePath string) error {
 		if logFilePath == "" {
 			logFilePath = "ticketbot.log"
 		}
-	
+
 		handler, err = newFileHandler(logFilePath, level)
 		if err != nil {
 			return fmt.Errorf("creating file handler: %w", err)
@@ -32,19 +32,19 @@ func setLogger(debug, toFile bool, logFilePath string) error {
 	return nil
 }
 
-func newFileHandler(filePath string, level slog.Level) (*slog.TextHandler, error) {
+func newFileHandler(filePath string, level slog.Level) (*slog.JSONHandler, error) {
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		return nil, fmt.Errorf("opening log file %s: %w", filePath, err)
 	}
 
-	return slog.NewTextHandler(file, &slog.HandlerOptions{
+	return slog.NewJSONHandler(file, &slog.HandlerOptions{
 		Level: level,
 	}), nil
 }
 
-func newStdoutHandler(level slog.Level) *slog.TextHandler {
-	return slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+func newStdoutHandler(level slog.Level) *slog.JSONHandler {
+	return slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})
 }

@@ -35,23 +35,35 @@ func InitCfg(ctx context.Context) (*Cfg, error) {
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("TICKETBOT")
 
+	debug := viper.GetBool("DEBUG")
+	ltf := viper.GetBool("LOG_TO_FILE")
+	lfp := viper.GetString("LOG_FILE_PATH")
+	if err := setLogger(debug, ltf, lfp); err != nil {
+		return nil, fmt.Errorf("error setting logger: %w", err)
+	}
+	slog.Info("logger set", "debug", debug, "log_to_file", ltf, "log_file_path", lfp)
+
 	var c Cfg
 	if err := viper.Unmarshal(&c); err != nil {
+		slog.Error("unmarshaling config to struct", "error", err)
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
 
 	if c.OPSvcToken == "" {
+		slog.Error("1password service account token is empty")
 		return nil, errors.New("1Password service account token is empty, please go to config and fill out the op_svc_token field")
 	}
 
 	opClient, err := new1PasswordClient(ctx, c.OPSvcToken)
 	if err != nil {
+		slog.Error("creating 1password client", "error", err)
 		return nil, fmt.Errorf("creating 1password client: %w", err)
 	}
 	slog.Debug("1Password client created successfully")
 
 	creds, err := getCreds(ctx, opClient)
 	if err != nil {
+		slog.Error("getting creds from 1password", "error", err)
 		return nil, fmt.Errorf("getting credentials from 1password: %w", err)
 	}
 	slog.Debug("credentials fetched from 1Password successfully")
@@ -87,6 +99,7 @@ func (cfg *Cfg) validateFields() bool {
 func checkEmptyFields(vals map[string]string) error {
 	for k, v := range vals {
 		if isEmpty(v) {
+			slog.Error("required field is empty", "key", k)
 			return fmt.Errorf("required field is empty: %s, please go to config.json and fill out required fields", k)
 		}
 	}

@@ -109,7 +109,10 @@ func (s *server) preloadOpenTickets(ctx context.Context) error {
 	for err := range errCh {
 		if err != nil {
 			slog.Error("preloading ticket", "error", err)
-			return err
+			if s.config.ExitOnError {
+				slog.Info("exiting because EXIT_ON_ERROR is enabled")
+				return err
+			}
 		}
 	}
 	return nil
