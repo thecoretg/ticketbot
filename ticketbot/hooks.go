@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/thecoretg/ticketbot/connectwise"
 	"io"
 	"log/slog"
-	connectwise2 "tctg-automation/connectwise"
 )
 
 func (s *Server) initiateCWHooks() error {
@@ -26,8 +26,8 @@ func (s *Server) initiateCWHooks() error {
 	return nil
 }
 
-func (s *Server) processCwHook(url, entity, level string, objectID int, currentHooks []connectwise2.Callback) error {
-	hook := &connectwise2.Callback{
+func (s *Server) processCwHook(url, entity, level string, objectID int, currentHooks []connectwise.Callback) error {
+	hook := &connectwise.Callback{
 		URL:      fmt.Sprintf("https://%s", url),
 		Type:     entity,
 		Level:    level,
@@ -79,7 +79,7 @@ func requireValidCWSignature() gin.HandlerFunc {
 
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		valid, err := connectwise2.ValidateWebhook(c.Request)
+		valid, err := connectwise.ValidateWebhook(c.Request)
 		if err != nil || !valid {
 			c.Error(fmt.Errorf("invalid ConnectWise webhook signature: %w", err))
 			c.Next()

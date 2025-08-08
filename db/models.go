@@ -5,28 +5,28 @@
 package db
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 type Board struct {
-	ID            int
-	Name          string
-	NotifyEnabled bool
-	WebexRoomID   pgtype.Text
+	ID            int     `json:"id"`
+	Name          string  `json:"name"`
+	NotifyEnabled bool    `json:"notify_enabled"`
+	WebexRoomID   *string `json:"webex_room_id"`
 }
 
 type Ticket struct {
-	ID           int
-	Summary      string
-	BoardID      int
-	OwnerID      pgtype.Int4
-	Resources    pgtype.Text
-	UpdatedBy    pgtype.Text
-	AddedToStore pgtype.Timestamp
+	ID           int       `json:"id"`
+	Summary      string    `json:"summary"`
+	BoardID      int       `json:"board_id"`
+	OwnerID      *int32    `json:"owner_id"`
+	Resources    *string   `json:"resources"`
+	UpdatedBy    *string   `json:"updated_by"`
+	AddedToStore time.Time `json:"added_to_store"`
 }
 
 type TicketNote struct {
-	ID       int
-	TicketID int
-	Notified bool
+	ID       int  `json:"id"`
+	TicketID int  `json:"ticket_id"`
+	Notified bool `json:"notified"`
 }

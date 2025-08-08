@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/db"
+	"github.com/thecoretg/ticketbot/webex"
 	"log/slog"
-	"net/http"
 	"sync"
-	"tctg-automation/connectwise"
-	"tctg-automation/db"
-	"tctg-automation/webex"
 
 	"github.com/gin-gonic/gin"
 )
@@ -73,7 +72,7 @@ func NewServer(ctx context.Context, cfg *Cfg) (*Server, error) {
 	return &Server{
 		config:      cfg,
 		cwClient:    connectwise.NewClient(cwCreds),
-		webexClient: webex.NewClient(http.DefaultClient, cfg.Creds.WebexSecret),
+		webexClient: webex.NewClient(cfg.Creds.WebexSecret),
 		queries:     q,
 	}, nil
 }

@@ -3,11 +3,11 @@ package ticketbot
 import (
 	"context"
 	"fmt"
+	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/webex"
 	"log/slog"
 	"slices"
 	"strings"
-	"tctg-automation/connectwise"
-	webex2 "tctg-automation/webex"
 )
 
 func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData *cwData, storedData *storedData) error {
@@ -36,7 +36,7 @@ func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData
 
 // makeWebexMsgs constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
 // the message should be sent to.
-func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *storedData) ([]webex2.MessagePostBody, error) {
+func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *storedData) ([]webex.Message, error) {
 	var body string
 	body += s.messageHeader(action, cwData)
 
@@ -57,9 +57,9 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 	// Divider line for easily distinguishable breaks in notifications
 	body += fmt.Sprintf("\n\n---")
 
-	var messages []webex2.MessagePostBody
+	var messages []webex.Message
 	if action == "added" {
-		messages = append(messages, webex2.NewMessageToRoom(storedData.board.WebexRoomID, body))
+		messages = append(messages, webex.NewMessageToRoom(storedData.board.WebexRoomID, body))
 	} else if action == "updated" {
 		sendTo, err := s.getSendTo(storedData)
 		if err != nil {
@@ -67,7 +67,7 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 		}
 
 		for _, email := range sendTo {
-			messages = append(messages, webex2.NewMessageToPerson(email, body))
+			messages = append(messages, webex.NewMessageToPerson(email, body))
 		}
 	}
 
@@ -82,7 +82,7 @@ func (s *Server) getSendTo(storedData *storedData) ([]string, error) {
 		excludedMembers = append(excludedMembers, m)
 	}
 
-	if storedData.ticket.UpdatedBy != "" {
+	if storedData.ticket.UpdatedBy != nil {
 		excludedMembers = append(excludedMembers, storedData.ticket.UpdatedBy)
 	}
 

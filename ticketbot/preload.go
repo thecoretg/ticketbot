@@ -2,10 +2,13 @@ package ticketbot
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/db"
 	"log/slog"
 	"sync"
-	"tctg-automation/connectwise"
 	"time"
 )
 
@@ -13,7 +16,7 @@ func (s *Server) PreloadData(ctx context.Context, preloadBoards, preloadTickets 
 	if preloadBoards {
 		slog.Debug("preload boards enabled")
 		time.Sleep(2 * time.Second)
-		if err := s.preloadBoards(maxConcurrent); err != nil {
+		if err := s.preloadBoards(ctx, maxConcurrent); err != nil {
 			return fmt.Errorf("preloading active boards: %w", err)
 		}
 	}
@@ -29,7 +32,7 @@ func (s *Server) PreloadData(ctx context.Context, preloadBoards, preloadTickets 
 	return nil
 }
 
-func (s *Server) preloadBoards(maxConcurrent int) error {
+func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	params := map[string]string{
 		"conditions": "inactiveFlag = false",
 	}
@@ -43,25 +46,29 @@ func (s *Server) preloadBoards(maxConcurrent int) error {
 	sem := make(chan struct{}, maxConcurrent)
 	var wg sync.WaitGroup
 	for _, board := range boards {
-		storeBoard, _ := s.dataStore.GetBoard(board.ID)
-		if storeBoard == nil {
-			slog.Info("board not found in data store - adding", "board_id", board.ID, "board_name", board.Name)
-			sem <- struct{}{}
-			wg.Add(1)
-			go func(board connectwise.Board) {
-				defer wg.Done()
-				defer func() { <-sem }()
-				b := &Board{
-					ID:            board.ID,
-					Name:          board.Name,
-					NotifyEnabled: false,
-					//WebexRooms:    []WebexRoom{},
-				}
-				if err := s.dataStore.UpsertBoard(b); err != nil {
-					slog.Warn("error preloading board", "board_id", board.ID, "error", err)
-				}
-				slog.Info("preloaded board", "board_id", board.ID, "board_name", board.Name)
-			}(board)
+		_, err := s.queries.GetBoard(ctx, board.ID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				slog.Info("board not found in data store - adding", "board_id", board.ID, "board_name", board.Name)
+				sem <- struct{}{}
+				wg.Add(1)
+				go func(board connectwise.Board) {
+					defer wg.Done()
+					defer func() { <-sem }()
+					p := db.InsertBoardParams{
+						ID:            board.ID,
+						Name:          board.Name,
+						NotifyEnabled: false,
+						WebexRoomID:   nil,
+					}
+					if _, err := s.queries.InsertBoard(ctx, p); err != nil {
+						slog.Warn("error preloading board", "board_id", board.ID, "error", err)
+					}
+					slog.Info("preloaded board", "board_id", board.ID, "board_name", board.Name)
+				}(board)
+			} else {
+				slog.Warn("an error occured trying to check if a board exists", "board_id", board.ID, "board_name", board.Name, "error", err)
+			}
 		} else {
 			slog.Info("board is already in data store", "board_id", board.ID, "board_name", board.Name)
 		}

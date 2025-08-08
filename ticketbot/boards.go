@@ -1,11 +1,14 @@
 package ticketbot
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
-	"tctg-automation"
+	"tctg-automation/db"
 )
 
 func (s *Server) addBoardsGroup() {
@@ -20,42 +23,36 @@ func (s *Server) putBoard(c *gin.Context) {
 		return
 	}
 
-	storeBoard, err := s.dataStore.GetBoard(boardID)
+	storeBoard, err := s.queries.GetBoard(c.Request.Context(), boardID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("board %d not found", boardID)))
+		}
 		c.Error(fmt.Errorf("getting board: %w", err))
 		return
 	}
 
-	if storeBoard == nil {
-		c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("board with id %d not found", boardID)))
-		return
-	}
-
-	updatedBoard := &Board{}
-	if err := c.ShouldBindJSON(updatedBoard); err != nil {
+	board := &db.Board{}
+	if err := c.ShouldBindJSON(board); err != nil {
 		c.Error(fmt.Errorf("unmarshaling board data: %w", err))
 		return
 	}
 
-	if err := s.dataStore.UpsertBoard(updatedBoard); err != nil {
-		c.Error(fmt.Errorf("upserting board: %w", err))
-		return
-	}
+	updatedBoard, err := s.queries.UpdateBoard(c.Request.Context(), db.UpdateBoardParams{
+		ID:            board.ID,
+		Name:          board.Name,
+		NotifyEnabled: board.NotifyEnabled,
+		WebexRoomID:   board.WebexRoomID,
+	})
 
 	c.JSON(http.StatusOK, updatedBoard)
 }
 
-func (s *Server) ensureBoardInStore(cwData *tctg_automation.cwData) (*Board, error) {
-	board, err := s.dataStore.GetBoard(cwData.ticket.Board.ID)
+func (s *Server) ensureBoardInStore(ctx context.Context, cwData *cwData) (*Board, error) {
+	board, err := s.queries.GetBoard(ctx, cwData.ticket.Board.ID)
 	if err != nil {
-		return nil, fmt.Errorf("getting board from storage: %w", err)
-	}
 
-	if board == nil {
-		board, err = s.addBoard(cwData.ticket.Board.ID)
-		if err != nil {
-			return nil, fmt.Errorf("inserting board into store: %w", err)
-		}
+		return nil, fmt.Errorf("getting board from storage: %w", err)
 	}
 
 	return board, nil
@@ -75,7 +72,7 @@ func (s *Server) addBoard(boardID int) (*Board, error) {
 		NotifyEnabled: false,
 	}
 
-	if err := s.dataStore.UpsertBoard(storeBoard); err != nil {
+	if err := s.queries.UpsertBoard(storeBoard); err != nil {
 		return nil, fmt.Errorf("adding board to store: %w", err)
 	}
 

@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/db"
 	"log/slog"
 	"net/http"
 	"sync"
-	"tctg-automation/connectwise"
-	db2 "tctg-automation/db"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,9 +21,9 @@ type cwData struct {
 }
 
 type storedData struct {
-	ticket db2.Ticket
-	note   db2.TicketNote
-	board  db2.Board
+	ticket db.Ticket
+	note   db.TicketNote
+	board  db.Board
 }
 
 func (s *Server) addHooksGroup() {
@@ -83,15 +83,24 @@ func (s *Server) addOrUpdateTicket(ctx context.Context, ticketID int, action str
 		return fmt.Errorf("getting data from connectwise: %w", err)
 	}
 
-	storedData, err := s.getStoredData(cwData, assumeNotify)
+	storedData, err := s.getStoredData(ctx, cwData, assumeNotify)
 	if err != nil {
 		return fmt.Errorf("getting or creating stored data: %w", err)
 	}
 
-	storedData.ticket = cwTicketToStoreTicket(cwData)
 	// Insert or update the ticket into the store if it didn't exist or if there were changes.
-	if err := s.dataStore.UpsertTicket(storedData.ticket); err != nil {
-		return fmt.Errorf("upserting ticket to store: %w", err)
+	p := db.UpdateTicketParams{
+		ID:           cwData.ticket.ID,
+		Summary:      cwData.ticket.Summary,
+		BoardID:      cwData.ticket.Board.ID,
+		OwnerID:      intToInt32Ptr(cwData.ticket.Owner.ID),
+		Resources:    &cwData.ticket.Resources,
+		UpdatedBy:    &cwData.ticket.Info.UpdatedBy,
+		AddedToStore: storedData.ticket.AddedToStore,
+	}
+
+	storedData.ticket, err = s.queries.UpdateTicket(ctx,p)
+		return fmt.Errorf("updating ticket in store: %w", err)
 	}
 
 	// Use the action from the CW hook, whether the note is considered new, and if the board
@@ -149,7 +158,7 @@ func (s *Server) getStoredData(ctx context.Context, cwData *cwData, assumeNotifi
 		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
-	note := &db2.TicketNote{}
+	note := &db.TicketNote{}
 	if cwData.note.ID != 0 {
 		note, err = s.ensureNoteInStore(cwData, assumeNotified)
 		if err != nil {
@@ -169,40 +178,28 @@ func (s *Server) getStoredData(ctx context.Context, cwData *cwData, assumeNotifi
 	}, nil
 }
 
-func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db2.Ticket, error) {
+func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Ticket, error) {
 	ticket, err := s.queries.GetTicket(ctx, cwData.ticket.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			ticket, err = s.queries.InsertTicket(ctx, db2.InsertTicketParams{
+			owner := int32(cwData.ticket.Owner.ID)
+			ticket, err = s.queries.InsertTicket(ctx, db.InsertTicketParams{
 				ID:           cwData.ticket.ID,
 				Summary:      cwData.ticket.Summary,
 				BoardID:      cwData.ticket.Board.ID,
-				OwnerID:      intToPgInt4(cwData.ticket.Owner.ID, true),
-				Resources:    stringToPgText(cwData.ticket.Resources),
-				UpdatedBy:    stringToPgText(cwData.ticket.Info.UpdatedBy),
-				AddedToStore: timeToPgTimeStamp(time.Now(), true),
+				OwnerID:      &owner,
+				Resources:    &cwData.ticket.Resources,
+				UpdatedBy:    &cwData.ticket.Info.UpdatedBy,
+				AddedToStore: time.Now(),
 			})
 			if err != nil {
-				return db2.Ticket{}, fmt.Errorf("inserting ticket into db: %w", err)
+				return db.Ticket{}, fmt.Errorf("inserting ticket into db: %w", err)
 			}
 		}
-		return db2.Ticket{}, fmt.Errorf("getting ticket from storage: %w", err)
+		return db.Ticket{}, fmt.Errorf("getting ticket from storage: %w", err)
 	}
 
 	return ticket, nil
-}
-
-// cwTicketToStoreTicket takes a Connectwise ticket info API response and converts it to a
-// struct compatible with our data store.
-func cwTicketToStoreTicket(cwData *cwData) db2.Ticket {
-	return db2.Ticket{
-		ID:        cwData.ticket.ID,
-		Summary:   cwData.ticket.Summary,
-		BoardID:   cwData.ticket.Board.ID,
-		OwnerID:   intToPgInt4(cwData.ticket.Owner.ID, true),
-		Resources: stringToPgText(cwData.ticket.Resources),
-		UpdatedBy: stringToPgText(cwData.ticket.Info.UpdatedBy),
-	}
 }
 
 // meetsMessageCriteria checks if a message would be allowed to send a notification,
@@ -218,3 +215,4 @@ func meetsMessageCriteria(action string, storedData *storedData) bool {
 
 	return false
 }
+

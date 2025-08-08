@@ -12,7 +12,7 @@ INSERT INTO boards
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
--- name: UpdateBoard :exec
+-- name: UpdateBoard :one
 UPDATE boards
 SET
     name = $2,
@@ -39,7 +39,7 @@ INSERT INTO tickets
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
--- name: UpdateTicket :exec
+-- name: UpdateTicket :one
 UPDATE tickets
 SET
     summary = $2,
@@ -74,7 +74,7 @@ INSERT INTO ticket_notes
 VALUES ($1, $2, $3)
 RETURNING *;
 
--- name: UpdateTicketNote :exec
+-- name: UpdateTicketNote :one
 UPDATE ticket_notes
 SET
     ticket_id = $2,

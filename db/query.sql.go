@@ -7,8 +7,7 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 const deleteBoard = `-- name: DeleteBoard :exec
@@ -98,10 +97,10 @@ RETURNING id, name, notify_enabled, webex_room_id
 `
 
 type InsertBoardParams struct {
-	ID            int
-	Name          string
-	NotifyEnabled bool
-	WebexRoomID   pgtype.Text
+	ID            int     `json:"id"`
+	Name          string  `json:"name"`
+	NotifyEnabled bool    `json:"notify_enabled"`
+	WebexRoomID   *string `json:"webex_room_id"`
 }
 
 func (q *Queries) InsertBoard(ctx context.Context, arg InsertBoardParams) (Board, error) {
@@ -129,13 +128,13 @@ RETURNING id, summary, board_id, owner_id, resources, updated_by, added_to_store
 `
 
 type InsertTicketParams struct {
-	ID           int
-	Summary      string
-	BoardID      int
-	OwnerID      pgtype.Int4
-	Resources    pgtype.Text
-	UpdatedBy    pgtype.Text
-	AddedToStore pgtype.Timestamp
+	ID           int       `json:"id"`
+	Summary      string    `json:"summary"`
+	BoardID      int       `json:"board_id"`
+	OwnerID      *int32    `json:"owner_id"`
+	Resources    *string   `json:"resources"`
+	UpdatedBy    *string   `json:"updated_by"`
+	AddedToStore time.Time `json:"added_to_store"`
 }
 
 func (q *Queries) InsertTicket(ctx context.Context, arg InsertTicketParams) (Ticket, error) {
@@ -169,9 +168,9 @@ RETURNING id, ticket_id, notified
 `
 
 type InsertTicketNoteParams struct {
-	ID       int
-	TicketID int
-	Notified bool
+	ID       int  `json:"id"`
+	TicketID int  `json:"ticket_id"`
+	Notified bool `json:"notified"`
 }
 
 func (q *Queries) InsertTicketNote(ctx context.Context, arg InsertTicketNoteParams) (TicketNote, error) {
@@ -304,8 +303,8 @@ RETURNING id, ticket_id, notified
 `
 
 type SetNoteNotifiedParams struct {
-	ID       int
-	Notified bool
+	ID       int  `json:"id"`
+	Notified bool `json:"notified"`
 }
 
 func (q *Queries) SetNoteNotified(ctx context.Context, arg SetNoteNotifiedParams) (TicketNote, error) {
@@ -315,7 +314,7 @@ func (q *Queries) SetNoteNotified(ctx context.Context, arg SetNoteNotifiedParams
 	return i, err
 }
 
-const updateBoard = `-- name: UpdateBoard :exec
+const updateBoard = `-- name: UpdateBoard :one
 UPDATE boards
 SET
     name = $2,
@@ -326,23 +325,30 @@ RETURNING id, name, notify_enabled, webex_room_id
 `
 
 type UpdateBoardParams struct {
-	ID            int
-	Name          string
-	NotifyEnabled bool
-	WebexRoomID   pgtype.Text
+	ID            int     `json:"id"`
+	Name          string  `json:"name"`
+	NotifyEnabled bool    `json:"notify_enabled"`
+	WebexRoomID   *string `json:"webex_room_id"`
 }
 
-func (q *Queries) UpdateBoard(ctx context.Context, arg UpdateBoardParams) error {
-	_, err := q.db.Exec(ctx, updateBoard,
+func (q *Queries) UpdateBoard(ctx context.Context, arg UpdateBoardParams) (Board, error) {
+	row := q.db.QueryRow(ctx, updateBoard,
 		arg.ID,
 		arg.Name,
 		arg.NotifyEnabled,
 		arg.WebexRoomID,
 	)
-	return err
+	var i Board
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.NotifyEnabled,
+		&i.WebexRoomID,
+	)
+	return i, err
 }
 
-const updateTicket = `-- name: UpdateTicket :exec
+const updateTicket = `-- name: UpdateTicket :one
 UPDATE tickets
 SET
     summary = $2,
@@ -356,17 +362,17 @@ RETURNING id, summary, board_id, owner_id, resources, updated_by, added_to_store
 `
 
 type UpdateTicketParams struct {
-	ID           int
-	Summary      string
-	BoardID      int
-	OwnerID      pgtype.Int4
-	Resources    pgtype.Text
-	UpdatedBy    pgtype.Text
-	AddedToStore pgtype.Timestamp
+	ID           int       `json:"id"`
+	Summary      string    `json:"summary"`
+	BoardID      int       `json:"board_id"`
+	OwnerID      *int32    `json:"owner_id"`
+	Resources    *string   `json:"resources"`
+	UpdatedBy    *string   `json:"updated_by"`
+	AddedToStore time.Time `json:"added_to_store"`
 }
 
-func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) error {
-	_, err := q.db.Exec(ctx, updateTicket,
+func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (Ticket, error) {
+	row := q.db.QueryRow(ctx, updateTicket,
 		arg.ID,
 		arg.Summary,
 		arg.BoardID,
@@ -375,10 +381,20 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) erro
 		arg.UpdatedBy,
 		arg.AddedToStore,
 	)
-	return err
+	var i Ticket
+	err := row.Scan(
+		&i.ID,
+		&i.Summary,
+		&i.BoardID,
+		&i.OwnerID,
+		&i.Resources,
+		&i.UpdatedBy,
+		&i.AddedToStore,
+	)
+	return i, err
 }
 
-const updateTicketNote = `-- name: UpdateTicketNote :exec
+const updateTicketNote = `-- name: UpdateTicketNote :one
 UPDATE ticket_notes
 SET
     ticket_id = $2,
@@ -388,12 +404,14 @@ RETURNING id, ticket_id, notified
 `
 
 type UpdateTicketNoteParams struct {
-	ID       int
-	TicketID int
-	Notified bool
+	ID       int  `json:"id"`
+	TicketID int  `json:"ticket_id"`
+	Notified bool `json:"notified"`
 }
 
-func (q *Queries) UpdateTicketNote(ctx context.Context, arg UpdateTicketNoteParams) error {
-	_, err := q.db.Exec(ctx, updateTicketNote, arg.ID, arg.TicketID, arg.Notified)
-	return err
+func (q *Queries) UpdateTicketNote(ctx context.Context, arg UpdateTicketNoteParams) (TicketNote, error) {
+	row := q.db.QueryRow(ctx, updateTicketNote, arg.ID, arg.TicketID, arg.Notified)
+	var i TicketNote
+	err := row.Scan(&i.ID, &i.TicketID, &i.Notified)
+	return i, err
 }

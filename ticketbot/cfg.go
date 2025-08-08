@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/spf13/viper"
 	"log/slog"
-	"tctg-automation"
 )
 
 type Cfg struct {
@@ -37,7 +36,7 @@ func InitCfg(ctx context.Context) (*Cfg, error) {
 	debug := viper.GetBool("DEBUG")
 	ltf := viper.GetBool("LOG_TO_FILE")
 	lfp := viper.GetString("LOG_FILE_PATH")
-	if err := tctg_automation.setLogger(debug, ltf, lfp); err != nil {
+	if err := setLogger(debug, ltf, lfp); err != nil {
 		return nil, fmt.Errorf("error setting logger: %w", err)
 	}
 	slog.Info("logger set", "debug", debug, "log_to_file", ltf, "log_file_path", lfp)
