@@ -1,45 +1,37 @@
 package ticketbot
 
-import "time"
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+	"time"
+)
 
-type Store interface {
-	UpsertTicket(ticket *Ticket) error
-	GetTicket(ticketID int) (*Ticket, error)
-	ListTickets() ([]Ticket, error)
-
-	UpsertTicketNote(ticketNote *TicketNote) error
-	GetTicketNote(ticketNoteID int) (*TicketNote, error)
-	ListTicketNotes(ticketID int) ([]TicketNote, error)
-
-	UpsertBoard(board *Board) error
-	GetBoard(boardID int) (*Board, error)
-	ListBoards() ([]Board, error)
+func intToPgInt4(i int, zeroIsNull bool) pgtype.Int4 {
+	valid := true
+	if zeroIsNull && i == 0 {
+		valid = false
+	}
+	return pgtype.Int4{
+		Int32: int32(i),
+		Valid: valid,
+	}
 }
 
-type TimeDetails struct {
-	AddedToStore time.Time `json:"added_to_store"`
+func stringToPgText(s string) pgtype.Text {
+	return pgtype.Text{
+		String: s,
+		Valid:  s != "",
+	}
 }
 
-type Ticket struct {
-	ID          int          `json:"id"`
-	Summary     string       `json:"summary"`
-	BoardID     int          `json:"board_id"`
-	TicketNotes []TicketNote `json:"ticket_notes"`
-	OwnerID     int          `json:"owner_id"`
-	Resources   string       `json:"resources"`
-	UpdatedBy   string       `json:"updated_by"`
-	TimeDetails
-}
+func timeToPgTimeStamp(t time.Time, zeroIsNull bool) pgtype.Timestamp {
+	valid := true
+	if zeroIsNull && t.IsZero() {
+		valid = false
+	}
 
-type TicketNote struct {
-	ID       int  `json:"id"`
-	TicketID int  `json:"ticket_id"`
-	Notified bool `json:"notified"`
-}
-
-type Board struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	NotifyEnabled bool   `json:"notify_enabled"`
-	WebexRoomID   string `json:"webex_room_id"`
+	return pgtype.Timestamp{
+		Time:             t,
+		InfinityModifier: pgtype.Finite,
+		Valid:            valid,
+	}
 }

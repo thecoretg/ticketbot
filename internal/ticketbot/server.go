@@ -3,9 +3,11 @@ package ticketbot
 import (
 	"context"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"log/slog"
 	"net/http"
 	"sync"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 	"tctg-automation/pkg/webex"
 
@@ -14,7 +16,7 @@ import (
 
 type Server struct {
 	config      *Cfg
-	dataStore   Store
+	queries     *db.Queries
 	cwClient    *connectwise.Client
 	cwCompanyID string
 	webexClient *webex.Client
@@ -31,7 +33,7 @@ func GetGinEngine() (*gin.Engine, error) {
 
 	slog.Debug("DEBUG ON") // only prints if debug is on...so clever
 
-	s, err := NewServer(config)
+	s, err := NewServer(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("creating Server: %w", err)
 	}
@@ -54,12 +56,13 @@ func (s *Server) addAllRoutes() {
 	s.addBoardsGroup()
 }
 
-func NewServer(cfg *Cfg) (*Server, error) {
-	store, err := createStore(cfg.Creds.PostgresDSN)
+func NewServer(ctx context.Context, cfg *Cfg) (*Server, error) {
+	dbConn, err := pgx.Connect(ctx, cfg.Creds.PostgresDSN)
 	if err != nil {
-		return nil, fmt.Errorf("setting up postgres connection: %w", err)
+		return nil, fmt.Errorf("connecting to database: %w", err)
 	}
 
+	q := db.New(dbConn)
 	cwCreds := &connectwise.Creds{
 		PublicKey:  cfg.Creds.CwPubKey,
 		PrivateKey: cfg.Creds.CwPrivKey,
@@ -71,23 +74,6 @@ func NewServer(cfg *Cfg) (*Server, error) {
 		config:      cfg,
 		cwClient:    connectwise.NewClient(cwCreds),
 		webexClient: webex.NewClient(http.DefaultClient, cfg.Creds.WebexSecret),
-		dataStore:   store,
+		queries:     q,
 	}, nil
-}
-
-// createStore creates an in-memory store, or attempts to connect to a Postgres store if in the config.
-func createStore(dsn string) (Store, error) {
-	var store Store
-	//store = NewInMemoryStore()
-	if dsn != "" {
-		slog.Debug("database connection string provided in config")
-
-		var err error
-		store, err = NewPostgresStore(dsn)
-		if err != nil {
-			return nil, fmt.Errorf("creating postgres store: %w", err)
-		}
-	}
-
-	return store, nil
 }

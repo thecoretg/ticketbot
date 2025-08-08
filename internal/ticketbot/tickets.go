@@ -2,11 +2,14 @@ package ticketbot
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgtype"
 	"log/slog"
 	"net/http"
 	"sync"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 	"time"
 
@@ -19,9 +22,9 @@ type cwData struct {
 }
 
 type storedData struct {
-	ticket *Ticket
-	note   *TicketNote
-	board  *Board
+	ticket db.Ticket
+	note   db.TicketNote
+	board  db.Board
 }
 
 func (s *Server) addHooksGroup() {
@@ -140,14 +143,14 @@ func (s *Server) getCwData(ticketID int) (*cwData, error) {
 	}, nil
 }
 
-func (s *Server) getStoredData(cwData *cwData, assumeNotified bool) (*storedData, error) {
+func (s *Server) getStoredData(ctx context.Context, cwData *cwData, assumeNotified bool) (*storedData, error) {
 	// Get existing ticket from store - will be nil if it doesn't already exist.
-	ticket, err := s.ensureTicketInStore(cwData)
+	ticket, err := s.ensureTicketInStore(ctx, cwData)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
-	note := &TicketNote{}
+	note := &db.TicketNote{}
 	if cwData.note.ID != 0 {
 		note, err = s.ensureNoteInStore(cwData, assumeNotified)
 		if err != nil {
@@ -167,18 +170,24 @@ func (s *Server) getStoredData(cwData *cwData, assumeNotified bool) (*storedData
 	}, nil
 }
 
-func (s *Server) ensureTicketInStore(cwData *cwData) (*Ticket, error) {
-	ticket, err := s.dataStore.GetTicket(cwData.ticket.ID)
+func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Ticket, error) {
+	ticket, err := s.queries.GetTicket(ctx, cwData.ticket.ID)
 	if err != nil {
-		return nil, fmt.Errorf("getting ticket from storage: %w", err)
-	}
-
-	if ticket == nil {
-		ticket = cwTicketToStoreTicket(cwData)
-		ticket.AddedToStore = time.Now()
-		if err := s.dataStore.UpsertTicket(ticket); err != nil {
-			return nil, fmt.Errorf("inserting ticket into store: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			ticket, err = s.queries.InsertTicket(ctx, db.InsertTicketParams{
+				ID:           cwData.ticket.ID,
+				Summary:      cwData.ticket.Summary,
+				BoardID:      cwData.ticket.Board.ID,
+				OwnerID:      intToPgInt4(cwData.ticket.Owner.ID, true),
+				Resources:    stringToPgText(cwData.ticket.Resources),
+				UpdatedBy:    stringToPgText(cwData.ticket.Info.UpdatedBy),
+				AddedToStore: timeToPgTimeStamp(time.Now(), true),
+			})
+			if err != nil {
+				return db.Ticket{}, fmt.Errorf("inserting ticket into db: %w", err)
+			}
 		}
+		return db.Ticket{}, fmt.Errorf("getting ticket from storage: %w", err)
 	}
 
 	return ticket, nil
@@ -186,14 +195,14 @@ func (s *Server) ensureTicketInStore(cwData *cwData) (*Ticket, error) {
 
 // cwTicketToStoreTicket takes a Connectwise ticket info API response and converts it to a
 // struct compatible with our data store.
-func cwTicketToStoreTicket(cwData *cwData) *Ticket {
-	return &Ticket{
+func cwTicketToStoreTicket(cwData *cwData) db.Ticket {
+	return db.Ticket{
 		ID:        cwData.ticket.ID,
 		Summary:   cwData.ticket.Summary,
 		BoardID:   cwData.ticket.Board.ID,
-		OwnerID:   cwData.ticket.Owner.ID,
-		Resources: cwData.ticket.Resources,
-		UpdatedBy: cwData.ticket.Info.UpdatedBy,
+		OwnerID:   intToPgInt4(cwData.ticket.Owner.ID, true),
+		Resources: stringToPgText(cwData.ticket.Resources),
+		UpdatedBy: stringToPgText(cwData.ticket.Info.UpdatedBy),
 	}
 }
 

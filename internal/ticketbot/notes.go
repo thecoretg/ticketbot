@@ -1,7 +1,11 @@
 package ticketbot
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"tctg-automation/internal/ticketbot/db"
 	"tctg-automation/pkg/connectwise"
 )
 
@@ -18,42 +22,37 @@ func (s *Server) getLatestNoteFromCW(ticketID int) (*connectwise.ServiceTicketNo
 	return note, nil
 }
 
-func (s *Server) ensureNoteInStore(cwData *cwData, assumeNotified bool) (*TicketNote, error) {
-	note, err := s.dataStore.GetTicketNote(cwData.note.ID)
+func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, assumeNotified bool) (db.TicketNote, error) {
+	note, err := s.queries.GetTicketNote(ctx, cwData.note.ID)
 	if err != nil {
-		return nil, fmt.Errorf("getting note from store: %w", err)
-	}
+		if errors.Is(err, sql.ErrNoRows) {
+			note, err = s.queries.InsertTicketNote(ctx, db.InsertTicketNoteParams{
+				ID:       note.ID,
+				TicketID: note.TicketID,
+				Notified: false,
+			})
 
-	if note == nil {
-		note, err = s.addNote(cwData.ticket.ID, cwData.note.ID, assumeNotified)
-		if err != nil {
-			return nil, fmt.Errorf("adding note to store: %w", err)
+			if err != nil {
+				return db.TicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)
+			}
+
+		} else {
+			return db.TicketNote{}, fmt.Errorf("getting note from store: %w", err)
 		}
 	}
 
 	return note, nil
 }
 
-func (s *Server) setNotified(note *TicketNote, notified bool) error {
-	note.Notified = notified
-	if err := s.dataStore.UpsertTicketNote(note); err != nil {
-		return fmt.Errorf("upserting note: %w", err)
+func (s *Server) setNotified(ctx context.Context, noteID int, notified bool) error {
+	_, err := s.queries.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
+		ID:       noteID,
+		Notified: notified,
+	})
+
+	if err != nil {
+		return err
 	}
 
 	return nil
-}
-
-// addNote adds a ticket note to the data store
-func (s *Server) addNote(ticketID, noteID int, notified bool) (*TicketNote, error) {
-	note := &TicketNote{
-		ID:       noteID,
-		TicketID: ticketID,
-		Notified: notified,
-	}
-
-	if err := s.dataStore.UpsertTicketNote(note); err != nil {
-		return nil, err
-	}
-
-	return note, nil
 }
