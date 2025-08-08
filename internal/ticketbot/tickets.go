@@ -98,6 +98,7 @@ func (s *Server) addOrUpdateTicket(ctx context.Context, ticketID int, action str
 		if err := s.makeAndSendWebexMsgs(ctx, action, cwData, storedData); err != nil {
 			return fmt.Errorf("processing webex messages: %w", err)
 		}
+		storedData.note.Notified = true
 	}
 
 	// Log the result
