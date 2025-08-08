@@ -20,8 +20,15 @@ func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData
 		if err := s.webexClient.SendMessage(ctx, msg); err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
-			slog.Warn("error sending webex message", "ticket_id", storedData.ticket.ID, "room_id", msg.RoomId, "person", msg.Person, "error", err)
+			slog.Warn("error sending webex message", "action", action, "ticket_id", storedData.ticket.ID, "room_id", msg.RoomId, "person", msg.Person, "error", err)
 		}
+
+		sentTo := "webex room"
+		if msg.Person != "" {
+			sentTo = msg.Person
+		}
+
+		slog.Info("notification sent", "action", action, "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "sent_to", sentTo)
 	}
 
 	return nil
@@ -46,6 +53,9 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 	if cwData.note.Text != "" {
 		body += s.messageText(cwData)
 	}
+
+	// Divider line for easily distinguishable breaks in notifications
+	body += fmt.Sprintf("\n\n---")
 
 	var messages []webex.MessagePostBody
 	if action == "added" {

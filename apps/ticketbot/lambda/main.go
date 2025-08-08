@@ -6,12 +6,14 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	"log"
+	"log/slog"
 	"tctg-automation/internal/ticketbot"
 )
 
 var ginLambda *ginadapter.GinLambda
 
 func init() {
+	slog.Info("lambda cold start")
 	g, err := ticketbot.GetGinEngine()
 	if err != nil {
 		log.Fatalf(err.Error())
