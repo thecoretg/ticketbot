@@ -1,7 +1,6 @@
 package ticketbot
 
 import (
-	"context"
 	"fmt"
 	"github.com/thecoretg/ticketbot/connectwise"
 	"github.com/thecoretg/ticketbot/webex"
@@ -10,22 +9,23 @@ import (
 	"strings"
 )
 
-func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData *cwData, storedData *storedData) error {
+func (s *Server) makeAndSendWebexMsgs(action string, cwData *cwData, storedData *storedData) error {
 	messages, err := s.makeWebexMsgs(action, cwData, storedData)
 	if err != nil {
 		return fmt.Errorf("creating webex messages: %w", err)
 	}
 
 	for _, msg := range messages {
-		if err := s.webexClient.PostMessage(ctx, msg); err != nil {
+		_, err := s.webexClient.PostMessage(msg)
+		if err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
-			slog.Warn("error sending webex message", "action", action, "ticket_id", storedData.ticket.ID, "room_id", msg.RoomId, "person", msg.Person, "error", err)
+			slog.Warn("error sending webex message", "action", action, "ticket_id", storedData.ticket.ID, "room_id", msg.RoomId, "person", msg.ToPersonEmail, "error", err)
 		}
 
 		sentTo := "webex room"
-		if msg.Person != "" {
-			sentTo = msg.Person
+		if msg.ToPersonEmail != "" {
+			sentTo = msg.ToPersonEmail
 		}
 
 		slog.Info("notification sent", "action", action, "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "sent_to", sentTo)
@@ -59,7 +59,7 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 
 	var messages []webex.Message
 	if action == "added" {
-		messages = append(messages, webex.NewMessageToRoom(storedData.board.WebexRoomID, body))
+		messages = append(messages, webex.NewMessageToRoom(*storedData.board.WebexRoomID, body))
 	} else if action == "updated" {
 		sendTo, err := s.getSendTo(storedData)
 		if err != nil {
@@ -83,10 +83,10 @@ func (s *Server) getSendTo(storedData *storedData) ([]string, error) {
 	}
 
 	if storedData.ticket.UpdatedBy != nil {
-		excludedMembers = append(excludedMembers, storedData.ticket.UpdatedBy)
+		excludedMembers = append(excludedMembers, *storedData.ticket.UpdatedBy)
 	}
 
-	identifiers := filterOutExcluded(excludedMembers, storedData.ticket.Resources)
+	identifiers := filterOutExcluded(excludedMembers, *storedData.ticket.Resources)
 	if identifiers == "" {
 		return nil, nil
 	}

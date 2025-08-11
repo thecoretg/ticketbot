@@ -2,9 +2,9 @@ package ticketbot
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/connectwise"
 	"github.com/thecoretg/ticketbot/db"
 	"log/slog"
@@ -48,7 +48,7 @@ func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	for _, board := range boards {
 		_, err := s.queries.GetBoard(ctx, board.ID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
+			if errors.Is(err, pgx.ErrNoRows) {
 				slog.Info("board not found in data store - adding", "board_id", board.ID, "board_name", board.Name)
 				sem <- struct{}{}
 				wg.Add(1)

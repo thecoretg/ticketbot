@@ -2,9 +2,9 @@ package ticketbot
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/connectwise"
 	"github.com/thecoretg/ticketbot/db"
 	"log/slog"
@@ -99,14 +99,15 @@ func (s *Server) addOrUpdateTicket(ctx context.Context, ticketID int, action str
 		AddedToStore: storedData.ticket.AddedToStore,
 	}
 
-	storedData.ticket, err = s.queries.UpdateTicket(ctx,p)
+	storedData.ticket, err = s.queries.UpdateTicket(ctx, p)
+	if err != nil {
 		return fmt.Errorf("updating ticket in store: %w", err)
 	}
 
 	// Use the action from the CW hook, whether the note is considered new, and if the board
 	// has notifications enabled to determine what type of notification will be sent, if any.
 	if meetsMessageCriteria(action, storedData) {
-		if err := s.makeAndSendWebexMsgs(ctx, action, cwData, storedData); err != nil {
+		if err := s.makeAndSendWebexMsgs(action, cwData, storedData); err != nil {
 			return fmt.Errorf("processing webex messages: %w", err)
 		}
 	}
@@ -122,7 +123,7 @@ func (s *Server) addOrUpdateTicket(ctx context.Context, ticketID int, action str
 
 	// Always set notified to true if there is a note
 	if storedData.note.ID != 0 {
-		if err := s.setNotified(storedData.note, true); err != nil {
+		if err := s.setNotified(ctx, storedData.note.ID, true); err != nil {
 			return fmt.Errorf("setting notified to true: %w", err)
 		}
 	}
@@ -158,15 +159,15 @@ func (s *Server) getStoredData(ctx context.Context, cwData *cwData, assumeNotifi
 		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
-	note := &db.TicketNote{}
+	note := db.TicketNote{}
 	if cwData.note.ID != 0 {
-		note, err = s.ensureNoteInStore(cwData, assumeNotified)
+		note, err = s.ensureNoteInStore(ctx, cwData)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring note in store: %w", err)
 		}
 	}
 
-	board, err := s.ensureBoardInStore(cwData)
+	board, err := s.ensureBoardInStore(ctx, cwData)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring board in store: %w", err)
 	}
@@ -181,7 +182,7 @@ func (s *Server) getStoredData(ctx context.Context, cwData *cwData, assumeNotifi
 func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Ticket, error) {
 	ticket, err := s.queries.GetTicket(ctx, cwData.ticket.ID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			owner := int32(cwData.ticket.Owner.ID)
 			ticket, err = s.queries.InsertTicket(ctx, db.InsertTicketParams{
 				ID:           cwData.ticket.ID,
@@ -195,9 +196,13 @@ func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Ti
 			if err != nil {
 				return db.Ticket{}, fmt.Errorf("inserting ticket into db: %w", err)
 			}
+			slog.Debug("inserted ticket into db", "ticket_id", ticket.ID, "summary", ticket.Summary)
+			return ticket, nil
+		} else {
+			return db.Ticket{}, fmt.Errorf("getting ticket from storage: %w", err)
 		}
-		return db.Ticket{}, fmt.Errorf("getting ticket from storage: %w", err)
 	}
+	slog.Debug("got existing ticket from store", "ticket_id", ticket.ID, "summary", ticket.Summary)
 
 	return ticket, nil
 }
@@ -215,4 +220,3 @@ func meetsMessageCriteria(action string, storedData *storedData) bool {
 
 	return false
 }
-

@@ -2,13 +2,14 @@ package ticketbot
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/thecoretg/ticketbot/db"
+	"log/slog"
 	"net/http"
 	"strconv"
-	"tctg-automation/db"
 )
 
 func (s *Server) addBoardsGroup() {
@@ -23,17 +24,17 @@ func (s *Server) putBoard(c *gin.Context) {
 		return
 	}
 
-	storeBoard, err := s.queries.GetBoard(c.Request.Context(), boardID)
+	board, err := s.queries.GetBoard(c.Request.Context(), boardID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("board %d not found", boardID)))
 		}
 		c.Error(fmt.Errorf("getting board: %w", err))
 		return
 	}
 
-	board := &db.Board{}
-	if err := c.ShouldBindJSON(board); err != nil {
+	j := &board
+	if err := c.ShouldBindJSON(j); err != nil {
 		c.Error(fmt.Errorf("unmarshaling board data: %w", err))
 		return
 	}
@@ -48,33 +49,27 @@ func (s *Server) putBoard(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedBoard)
 }
 
-func (s *Server) ensureBoardInStore(ctx context.Context, cwData *cwData) (*Board, error) {
+func (s *Server) ensureBoardInStore(ctx context.Context, cwData *cwData) (db.Board, error) {
 	board, err := s.queries.GetBoard(ctx, cwData.ticket.Board.ID)
 	if err != nil {
-
-		return nil, fmt.Errorf("getting board from storage: %w", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			p := db.InsertBoardParams{
+				ID:            cwData.ticket.Board.ID,
+				Name:          cwData.ticket.Board.Name,
+				NotifyEnabled: false,
+				WebexRoomID:   nil,
+			}
+			board, err = s.queries.InsertBoard(ctx, p)
+			if err != nil {
+				return db.Board{}, fmt.Errorf("inserting board into db: %w", err)
+			}
+			slog.Debug("inserted board into store", "board_id", board.ID, "name", board.Name)
+			return board, nil
+		} else {
+			return db.Board{}, fmt.Errorf("getting board from storage: %w", err)
+		}
 	}
 
+	slog.Debug("got existing board from store", "board_id", board.ID, "name", board.Name)
 	return board, nil
-}
-
-// addBoard adds Connecwise boards to the data store, with a default of
-// notifications not enabled.
-func (s *Server) addBoard(boardID int) (*Board, error) {
-	cwBoard, err := s.cwClient.GetBoard(boardID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("getting board from connectwise: %w", err)
-	}
-
-	storeBoard := &Board{
-		ID:            cwBoard.ID,
-		Name:          cwBoard.Name,
-		NotifyEnabled: false,
-	}
-
-	if err := s.queries.UpsertBoard(storeBoard); err != nil {
-		return nil, fmt.Errorf("adding board to store: %w", err)
-	}
-
-	return storeBoard, nil
 }

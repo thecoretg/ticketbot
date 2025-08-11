@@ -2,9 +2,9 @@ package ticketbot
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/connectwise"
 	"github.com/thecoretg/ticketbot/db"
 )
@@ -25,7 +25,7 @@ func (s *Server) getLatestNoteFromCW(ticketID int) (*connectwise.ServiceTicketNo
 func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.TicketNote, error) {
 	note, err := s.queries.GetTicketNote(ctx, cwData.note.ID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) {
 			note, err = s.queries.InsertTicketNote(ctx, db.InsertTicketNoteParams{
 				ID:       note.ID,
 				TicketID: note.TicketID,

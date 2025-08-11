@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/thecoretg/ticketbot/amazon"
 	"io"
 	"net/http"
 	"resty.dev/v3"
-	"tctg-automation/amazon"
 )
 
 type Client struct {

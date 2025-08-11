@@ -1,7 +1,6 @@
 package ticketbot
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/spf13/viper"
@@ -17,9 +16,13 @@ type Cfg struct {
 	RootURL     string `json:"root_url" mapstructure:"root_url"`
 	UseAutocert bool   `json:"use_autocert" mapstructure:"use_autocert"`
 
-	// OP is used to fetch creds from 1Password but the creds are then saved into the config
-	OPSvcToken string `json:"op_svc_token" mapstructure:"op_svc_token"`
-	Creds      *creds `json:"creds" mapstructur:"creds"`
+	Creds       *creds
+	WebexSecret string `json:"webex_secret" mapstructure:"webex_secret"`
+	CwPubKey    string `json:"cw_pub_key" mapstructure:"cw_pub_key"`
+	CwPrivKey   string `json:"cw_priv_key" mapstructure:"cw_priv_key"`
+	CwClientID  string `json:"cw_client_id" mapstructure:"cw_client_id"`
+	CwCompanyID string `json:"cw_company_id" mapstructure:"cw_company_id"`
+	PostgresDSN string `json:"postgres_dsn" mapstructure:"postgres_dsn"`
 
 	// Max message length before ticket notifications get a "..." at the end instead of the whole message.
 	MaxMsgLength int `json:"max_msg_length" mapstructure:"max_msg_length"`
@@ -28,7 +31,7 @@ type Cfg struct {
 	ExcludedCWMembers []string `json:"excluded_cw_members" mapstructure:"excluded_cw_members"`
 }
 
-func InitCfg(ctx context.Context) (*Cfg, error) {
+func InitCfg() (*Cfg, error) {
 	setConfigDefaults()
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("TICKETBOT")
@@ -47,26 +50,15 @@ func InitCfg(ctx context.Context) (*Cfg, error) {
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
 
-	if c.OPSvcToken == "" {
-		slog.Error("1password service account token is empty")
-		return nil, errors.New("1Password service account token is empty, please go to config and fill out the op_svc_token field")
+	c.Creds = &creds{
+		WebexSecret: viper.GetString("webex_secret"),
+		CwPubKey:    viper.GetString("cw_pub_key"),
+		CwPrivKey:   viper.GetString("cw_priv_key"),
+		CwClientID:  viper.GetString("cw_client_id"),
+		CwCompanyID: viper.GetString("cw_company_id"),
+		PostgresDSN: viper.GetString("postgres_dsn"),
 	}
 
-	opClient, err := new1PasswordClient(ctx, c.OPSvcToken)
-	if err != nil {
-		slog.Error("creating 1password client", "error", err)
-		return nil, fmt.Errorf("creating 1password client: %w", err)
-	}
-	slog.Debug("1Password client created successfully")
-
-	creds, err := getCreds(ctx, opClient)
-	if err != nil {
-		slog.Error("getting creds from 1password", "error", err)
-		return nil, fmt.Errorf("getting credentials from 1password: %w", err)
-	}
-	slog.Debug("credentials fetched from 1Password successfully")
-
-	c.Creds = creds
 	if !c.validateFields() {
 		return nil, errors.New("config is still missing required fields after fetching from 1Password, please check config.json")
 	}
