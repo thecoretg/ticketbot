@@ -100,7 +100,7 @@ func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 		go func(ticket connectwise.Ticket) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			if err := s.addOrUpdateTicket(ctx, ticket.ID, "preload", true, false); err != nil {
+			if err := s.processTicketPayload(ctx, ticket.ID, "preload", true, false); err != nil {
 				errCh <- fmt.Errorf("error preloading ticket %d: %w", ticket.ID, err)
 			} else {
 				errCh <- nil

@@ -44,15 +44,21 @@ func (s *Server) handleTickets(c *gin.Context) {
 		return
 	}
 
-	slog.Info("received ticket webhook", "id", w.ID, "action", w.Action)
-	if w.Action == "added" || w.Action == "updated" {
-		if err := s.addOrUpdateTicket(c.Request.Context(), w.ID, w.Action, false, s.config.AttemptNotify); err != nil {
+	switch w.Action {
+	case "added", "updated":
+		if err := s.processTicketPayload(c.Request.Context(), w.ID, w.Action, false, s.config.AttemptNotify); err != nil {
 			c.Error(fmt.Errorf("adding or updating the ticket into data storage: %w", err))
 			return
 		}
 
 		c.Status(http.StatusNoContent)
-	} else {
+
+	case "deleted":
+		if err := s.deleteTicketAndNotes(c.Request.Context(), w.ID); err != nil {
+			c.Error(fmt.Errorf("deleting ticket and its notes: %w", err))
+			return
+		}
+
 		c.Status(http.StatusNoContent)
 	}
 }
@@ -62,9 +68,32 @@ func (s *Server) getTicketLock(ticketID int) *sync.Mutex {
 	return lockIface.(*sync.Mutex)
 }
 
-// addOrUpdateTicket serves as the primary handler for updating the data store with ticket data. It also will handle
+func (s *Server) deleteTicketAndNotes(ctx context.Context, ticketID int) error {
+	notes, err := s.queries.ListTicketNotesByTicket(ctx, ticketID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("found no notes for ticket deletion", "ticket_id", ticketID)
+			notes = []db.TicketNote{}
+		}
+		return fmt.Errorf("getting list of notes for ticket: %w", err)
+	}
+
+	for _, n := range notes {
+		if err := s.queries.DeleteTicketNote(ctx, n.ID); err != nil {
+			return fmt.Errorf("deleting ticket note %d for ticket %d: %w", n.ID, ticketID, err)
+		}
+	}
+
+	if err := s.queries.DeleteTicket(ctx, ticketID); err != nil {
+		return fmt.Errorf("deleting ticket: %w", err)
+	}
+
+	return nil
+}
+
+// processTicketPayload serves as the primary handler for updating the data store with ticket data. It also will handle
 // extra functionality such as ticket notifications.
-func (s *Server) addOrUpdateTicket(ctx context.Context, ticketID int, action string, overrideNotify, attemptNotify bool) error {
+func (s *Server) processTicketPayload(ctx context.Context, ticketID int, action string, overrideNotify, attemptNotify bool) error {
 	// Lock the ticket so that extra calls don't interfere. Due to the nature of Connectwise updates will often
 	// result in other hooks and actions taking place, which means a ticket rarely only sends one webhook payload.
 	lock := s.getTicketLock(ticketID)
@@ -89,16 +118,7 @@ func (s *Server) addOrUpdateTicket(ctx context.Context, ticketID int, action str
 	}
 
 	// Insert or update the ticket into the store if it didn't exist or if there were changes.
-	p := db.UpdateTicketParams{
-		ID:           cwData.ticket.ID,
-		Summary:      cwData.ticket.Summary,
-		BoardID:      cwData.ticket.Board.ID,
-		OwnerID:      intToInt32Ptr(cwData.ticket.Owner.ID),
-		Resources:    &cwData.ticket.Resources,
-		UpdatedBy:    &cwData.ticket.Info.UpdatedBy,
-		AddedToStore: storedData.ticket.AddedToStore,
-	}
-
+	p := cwDataToUpdateTicketParams(cwData, storedData)
 	storedData.ticket, err = s.queries.UpdateTicket(ctx, p)
 	if err != nil {
 		return fmt.Errorf("updating ticket in store: %w", err)
@@ -110,14 +130,7 @@ func (s *Server) addOrUpdateTicket(ctx context.Context, ticketID int, action str
 		}
 	}
 
-	// Log the result
-	if s.config.Debug {
-		slog.Debug("ticket processed", "ticket_id", storedData.ticket.ID, "action", action, "latest_note_id", storedData.note.ID, "assume_notify", overrideNotify,
-			"notified", storedData.note.Notified, "board_notify_enbabled", storedData.board.NotifyEnabled, "meets_message_criteria", meetsMessageCriteria(action, storedData),
-		)
-	} else {
-		slog.Info("ticket processed", "ticket_id", storedData.ticket.ID, "action", action, "notified", storedData.note.Notified)
-	}
+	s.logTicketResult(action, storedData)
 
 	// Always set notified to true if there is a note
 	if storedData.note.ID != 0 {
@@ -166,13 +179,10 @@ func (s *Server) getStoredData(ctx context.Context, cwData *cwData, overrideNoti
 	// start with empty note, use existing or created note if there is a note in the ticket
 	note := db.TicketNote{}
 	if cwData.note.ID != 0 {
-		slog.Debug("ticket note id exists - checking or updating store", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
 		note, err = s.ensureNoteInStore(ctx, cwData, overrideNotify)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring note in store: %w", err)
 		}
-	} else {
-		slog.Debug("no note found", "ticket_id", cwData.ticket.ID)
 	}
 
 	return &storedData{
@@ -210,6 +220,16 @@ func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Ti
 	return ticket, nil
 }
 
+func (s *Server) logTicketResult(action string, storedData *storedData) {
+	if s.config.Debug {
+		slog.Debug("ticket processed", "ticket_id", storedData.ticket.ID, "action", action, "latest_note_id", storedData.note.ID,
+			"notified", storedData.note.Notified, "board_notify_enbabled", storedData.board.NotifyEnabled, "meets_message_criteria", meetsMessageCriteria(action, storedData),
+		)
+	} else {
+		slog.Info("ticket processed", "ticket_id", storedData.ticket.ID, "action", action, "notified", storedData.note.Notified)
+	}
+}
+
 // meetsMessageCriteria checks if a message would be allowed to send a notification,
 // depending on if it was added or updated, if the note changed, and the board's notification settings.
 func meetsMessageCriteria(action string, storedData *storedData) bool {
@@ -222,4 +242,16 @@ func meetsMessageCriteria(action string, storedData *storedData) bool {
 	}
 
 	return false
+}
+
+func cwDataToUpdateTicketParams(cwData *cwData, storedData *storedData) db.UpdateTicketParams {
+	return db.UpdateTicketParams{
+		ID:           cwData.ticket.ID,
+		Summary:      cwData.ticket.Summary,
+		BoardID:      cwData.ticket.Board.ID,
+		OwnerID:      intToInt32Ptr(cwData.ticket.Owner.ID),
+		Resources:    &cwData.ticket.Resources,
+		UpdatedBy:    &cwData.ticket.Info.UpdatedBy,
+		AddedToStore: storedData.ticket.AddedToStore,
+	}
 }
