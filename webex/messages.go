@@ -16,6 +16,6 @@ func (c *Client) GetMessage(messageID string, params map[string]string) (*Messag
 	return GetOne[Message](c, fmt.Sprintf("messages/%s", messageID), params)
 }
 
-func (c *Client) PostMessage(message Message) (*Message, error) {
+func (c *Client) PostMessage(message *Message) (*Message, error) {
 	return Post[Message](c, "messages", message)
 }

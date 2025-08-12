@@ -15,8 +15,9 @@ func (s *Server) makeAndSendWebexMsgs(action string, cwData *cwData, storedData 
 		return fmt.Errorf("creating webex messages: %w", err)
 	}
 
+	slog.Debug("created webex messages", "action", action, "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "total_messages", len(messages))
 	for _, msg := range messages {
-		_, err := s.webexClient.PostMessage(msg)
+		_, err := s.webexClient.PostMessage(&msg)
 		if err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
@@ -59,6 +60,8 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 
 	var messages []webex.Message
 	if action == "added" {
+		slog.Debug("creating message for new ticket", "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "webex_room_id", storedData.board.WebexRoomID)
+		slog.Debug("message body", "body", body)
 		messages = append(messages, webex.NewMessageToRoom(*storedData.board.WebexRoomID, body))
 	} else if action == "updated" {
 		sendTo, err := s.getSendTo(storedData)

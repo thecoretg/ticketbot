@@ -46,10 +46,9 @@ type Message struct {
 
 	// Use ToPersonEmail for posts. PersonEmail (no to) is returned in gets.
 	// I don't make the rules. Thanks Webex <3
-	ToPersonEmail string    `json:"toPersonEmail,omitempty"`
-	PersonEmail   string    `json:"personEmail,omitempty"`
-	PersonId      string    `json:"personId,omitempty"`
-	Created       time.Time `json:"created,omitempty"`
+	ToPersonEmail string `json:"toPersonEmail,omitempty"`
+	PersonEmail   string `json:"personEmail,omitempty"`
+	PersonId      string `json:"personId,omitempty"`
 }
 
 type Room struct {

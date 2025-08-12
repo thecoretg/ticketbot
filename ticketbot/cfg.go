@@ -33,7 +33,7 @@ type Cfg struct {
 
 func InitCfg() (*Cfg, error) {
 	if err := godotenv.Load(); err != nil {
-		return nil, fmt.Errorf("loading dotenv: %w", err)
+		slog.Warn(".env not found (this is probably fine!)")
 	}
 
 	setConfigDefaults()
@@ -64,6 +64,11 @@ func InitCfg() (*Cfg, error) {
 		MaxMsgLength:      viper.GetInt("max_msg_length"),
 		ExcludedCWMembers: viper.GetStringSlice("excluded_cw_members"),
 	}
+	slog.Info("config initialized", "debug", c.Debug, "exit_on_error", c.ExitOnError,
+		"log_to_file", c.LogToFile, "log_file_path", c.LogFilePath,
+		"root_url", c.RootURL, "max_msg_length", c.MaxMsgLength,
+		"excluded_cw_members", c.ExcludedCWMembers,
+		"attempt_notify", c.AttemptNotify)
 
 	if !c.validateFields() {
 		return nil, errors.New("config is missing required fields, please verify env variables")
