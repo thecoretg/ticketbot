@@ -1,5 +1,0 @@
-DROP TABLE IF EXISTS boards;
-
-DROP TABLE IF EXISTS tickets;
-
-DROP TABLE IF EXISTS ticket_notes;

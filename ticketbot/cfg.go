@@ -3,6 +3,7 @@ package ticketbot
 import (
 	"errors"
 	"fmt"
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	"log/slog"
 )
@@ -31,6 +32,10 @@ type Cfg struct {
 }
 
 func InitCfg() (*Cfg, error) {
+	if err := godotenv.Load(); err != nil {
+		return nil, fmt.Errorf("loading dotenv: %w", err)
+	}
+
 	setConfigDefaults()
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("TICKETBOT")

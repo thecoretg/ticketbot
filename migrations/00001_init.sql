@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS boards (
     id INT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -20,3 +22,11 @@ CREATE TABLE IF NOT EXISTS ticket_notes (
     ticket_id INT REFERENCES tickets(id) NOT NULL,
     notified BOOLEAN NOT NULL DEFAULT FALSE
 );
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE IF EXISTS ticket_notes;
+DROP TABLE IF EXISTS tickets;
+DROP TABLE IF EXISTS boards;
+-- +goose StatementEnd
