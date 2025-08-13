@@ -26,7 +26,8 @@ type Ticket struct {
 }
 
 type TicketNote struct {
-	ID       int  `json:"id"`
-	TicketID int  `json:"ticket_id"`
-	Notified bool `json:"notified"`
+	ID       int     `json:"id"`
+	TicketID int     `json:"ticket_id"`
+	Notified bool    `json:"notified"`
+	Member   *string `json:"member"`
 }

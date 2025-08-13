@@ -78,14 +78,19 @@ func (q *Queries) GetTicket(ctx context.Context, id int) (Ticket, error) {
 }
 
 const getTicketNote = `-- name: GetTicketNote :one
-SELECT id, ticket_id, notified FROM ticket_notes
+SELECT id, ticket_id, notified, member FROM ticket_notes
 WHERE id = $1
 `
 
 func (q *Queries) GetTicketNote(ctx context.Context, id int) (TicketNote, error) {
 	row := q.db.QueryRow(ctx, getTicketNote, id)
 	var i TicketNote
-	err := row.Scan(&i.ID, &i.TicketID, &i.Notified)
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Notified,
+		&i.Member,
+	)
 	return i, err
 }
 
@@ -162,26 +167,37 @@ func (q *Queries) InsertTicket(ctx context.Context, arg InsertTicketParams) (Tic
 
 const insertTicketNote = `-- name: InsertTicketNote :one
 INSERT INTO ticket_notes
-(id, ticket_id, notified)
-VALUES ($1, $2, $3)
-RETURNING id, ticket_id, notified
+(id, ticket_id, notified, member)
+VALUES ($1, $2, $3, $4)
+RETURNING id, ticket_id, notified, member
 `
 
 type InsertTicketNoteParams struct {
-	ID       int  `json:"id"`
-	TicketID int  `json:"ticket_id"`
-	Notified bool `json:"notified"`
+	ID       int     `json:"id"`
+	TicketID int     `json:"ticket_id"`
+	Notified bool    `json:"notified"`
+	Member   *string `json:"member"`
 }
 
 func (q *Queries) InsertTicketNote(ctx context.Context, arg InsertTicketNoteParams) (TicketNote, error) {
-	row := q.db.QueryRow(ctx, insertTicketNote, arg.ID, arg.TicketID, arg.Notified)
+	row := q.db.QueryRow(ctx, insertTicketNote,
+		arg.ID,
+		arg.TicketID,
+		arg.Notified,
+		arg.Member,
+	)
 	var i TicketNote
-	err := row.Scan(&i.ID, &i.TicketID, &i.Notified)
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Notified,
+		&i.Member,
+	)
 	return i, err
 }
 
 const listAllTicketNotes = `-- name: ListAllTicketNotes :many
-SELECT id, ticket_id, notified FROM ticket_notes
+SELECT id, ticket_id, notified, member FROM ticket_notes
 ORDER BY id
 `
 
@@ -194,7 +210,12 @@ func (q *Queries) ListAllTicketNotes(ctx context.Context) ([]TicketNote, error) 
 	var items []TicketNote
 	for rows.Next() {
 		var i TicketNote
-		if err := rows.Scan(&i.ID, &i.TicketID, &i.Notified); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Notified,
+			&i.Member,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -236,7 +257,7 @@ func (q *Queries) ListBoards(ctx context.Context) ([]Board, error) {
 }
 
 const listTicketNotesByTicket = `-- name: ListTicketNotesByTicket :many
-SELECT id, ticket_id, notified FROM ticket_notes
+SELECT id, ticket_id, notified, member FROM ticket_notes
 WHERE ticket_id = $1
 ORDER BY id
 `
@@ -250,7 +271,12 @@ func (q *Queries) ListTicketNotesByTicket(ctx context.Context, ticketID int) ([]
 	var items []TicketNote
 	for rows.Next() {
 		var i TicketNote
-		if err := rows.Scan(&i.ID, &i.TicketID, &i.Notified); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Notified,
+			&i.Member,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -299,7 +325,7 @@ UPDATE ticket_notes
 SET
     notified = $2
 WHERE id = $1
-RETURNING id, ticket_id, notified
+RETURNING id, ticket_id, notified, member
 `
 
 type SetNoteNotifiedParams struct {
@@ -310,7 +336,12 @@ type SetNoteNotifiedParams struct {
 func (q *Queries) SetNoteNotified(ctx context.Context, arg SetNoteNotifiedParams) (TicketNote, error) {
 	row := q.db.QueryRow(ctx, setNoteNotified, arg.ID, arg.Notified)
 	var i TicketNote
-	err := row.Scan(&i.ID, &i.TicketID, &i.Notified)
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Notified,
+		&i.Member,
+	)
 	return i, err
 }
 
@@ -398,20 +429,32 @@ const updateTicketNote = `-- name: UpdateTicketNote :one
 UPDATE ticket_notes
 SET
     ticket_id = $2,
-    notified = $3
+    notified = $3,
+    member = $4
 WHERE id = $1
-RETURNING id, ticket_id, notified
+RETURNING id, ticket_id, notified, member
 `
 
 type UpdateTicketNoteParams struct {
-	ID       int  `json:"id"`
-	TicketID int  `json:"ticket_id"`
-	Notified bool `json:"notified"`
+	ID       int     `json:"id"`
+	TicketID int     `json:"ticket_id"`
+	Notified bool    `json:"notified"`
+	Member   *string `json:"member"`
 }
 
 func (q *Queries) UpdateTicketNote(ctx context.Context, arg UpdateTicketNoteParams) (TicketNote, error) {
-	row := q.db.QueryRow(ctx, updateTicketNote, arg.ID, arg.TicketID, arg.Notified)
+	row := q.db.QueryRow(ctx, updateTicketNote,
+		arg.ID,
+		arg.TicketID,
+		arg.Notified,
+		arg.Member,
+	)
 	var i TicketNote
-	err := row.Scan(&i.ID, &i.TicketID, &i.Notified)
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Notified,
+		&i.Member,
+	)
 	return i, err
 }

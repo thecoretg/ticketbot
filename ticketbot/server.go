@@ -13,17 +13,18 @@ import (
 )
 
 type Server struct {
-	config      *Cfg
-	queries     *db.Queries
-	cwClient    *connectwise.Client
-	cwCompanyID string
-	webexClient *webex.Client
-	ticketLocks sync.Map
+	Queries     *db.Queries
 	GinEngine   *gin.Engine
+	Config      *Cfg
+	CWClient    *connectwise.Client
+	WebexClient *webex.Client
+
+	cwCompanyID string
+	ticketLocks sync.Map
 }
 
 func (s *Server) Run() error {
-	if !s.config.Debug {
+	if !s.Config.Debug {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -49,10 +50,10 @@ func NewServer(ctx context.Context, cfg *Cfg, initHooks bool) (*Server, error) {
 	}
 
 	s := &Server{
-		config:      cfg,
-		cwClient:    connectwise.NewClient(cwCreds),
-		webexClient: webex.NewClient(cfg.WebexSecret),
-		queries:     db.New(dbConn),
+		Config:      cfg,
+		CWClient:    connectwise.NewClient(cwCreds),
+		WebexClient: webex.NewClient(cfg.WebexSecret),
+		Queries:     db.New(dbConn),
 		GinEngine:   gin.Default(),
 	}
 

@@ -17,7 +17,7 @@ func (s *Server) makeAndSendWebexMsgs(action string, cwData *cwData, storedData 
 
 	slog.Debug("created webex messages", "action", action, "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "total_messages", len(messages))
 	for _, msg := range messages {
-		_, err := s.webexClient.PostMessage(&msg)
+		_, err := s.WebexClient.PostMessage(&msg)
 		if err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
@@ -78,18 +78,18 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 }
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
-// recent update and any other exclusions passed in by the config.
+// recent update and any other exclusions passed in by the Config.
 func (s *Server) getSendTo(storedData *storedData) ([]string, error) {
 	var excludedMembers []string
-	for _, m := range s.config.ExcludedCWMembers {
+	for _, m := range s.Config.ExcludedCWMembers {
 		excludedMembers = append(excludedMembers, m)
 	}
 
-	if storedData.ticket.UpdatedBy != nil {
-		excludedMembers = append(excludedMembers, *storedData.ticket.UpdatedBy)
+	if storedData.note.Member != nil {
+		excludedMembers = append(excludedMembers, *storedData.note.Member)
 	}
 
-	identifiers := filterOutExcluded(excludedMembers, *storedData.ticket.Resources)
+	identifiers := filterOutExcluded(excludedMembers, *storedData.ticket.Resources, storedData)
 	if identifiers == "" {
 		return nil, nil
 	}
@@ -101,7 +101,7 @@ func (s *Server) getSendTo(storedData *storedData) ([]string, error) {
 	}
 
 	// get members from connectwise and then create a list of emails
-	members, err := s.cwClient.ListMembers(params)
+	members, err := s.CWClient.ListMembers(params)
 	if err != nil {
 		return nil, fmt.Errorf("getting members from connectwise: %w", err)
 	}
@@ -137,30 +137,18 @@ func (s *Server) messageText(cwData *cwData) string {
 	}
 
 	text := cwData.note.Text
-	if len(text) > s.config.MaxMsgLength {
-		text = text[:s.config.MaxMsgLength] + "..."
+	if len(text) > s.Config.MaxMsgLength {
+		text = text[:s.Config.MaxMsgLength] + "..."
 	}
 	body += fmt.Sprintf("\n%s", blockQuoteText(text))
 	return body
 }
 
-// getSenderName determines the name of the sender of a note. It checks for members in Connectwise and external contacts from companies.
-func getSenderName(cwData *cwData) *string {
-	if cwData.note.Member.Name != "" {
-		return &cwData.note.Member.Name
-	} else if cwData.note.CreatedBy != "" {
-		return &cwData.note.CreatedBy
-	} else if cwData.note.Contact.Name != "" {
-		return &cwData.note.Contact.Name
-	}
-
-	return nil
-}
-
-func filterOutExcluded(excluded []string, identifiers string) string {
+func filterOutExcluded(excluded []string, identifiers string, storedData *storedData) string {
 	var parts []string
 	for _, i := range strings.Split(identifiers, ",") {
 		if !slices.Contains(excluded, i) {
+			slog.Debug("filterOutExcluded: excluding member from notifications", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID)
 			parts = append(parts, i)
 		}
 	}
@@ -176,4 +164,17 @@ func blockQuoteText(text string) string {
 	}
 
 	return strings.Join(parts, "\n")
+}
+
+// getSenderName determines the name of the sender of a note. It checks for members in Connectwise and external contacts from companies.
+func getSenderName(cwData *cwData) *string {
+	if cwData.note.Member.Name != "" {
+		return &cwData.note.Member.Name
+	} else if cwData.note.CreatedBy != "" {
+		return &cwData.note.CreatedBy
+	} else if cwData.note.Contact.Name != "" {
+		return &cwData.note.Contact.Name
+	}
+
+	return nil
 }

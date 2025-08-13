@@ -38,7 +38,7 @@ func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	}
 
 	slog.Info("loading existing boards")
-	boards, err := s.cwClient.ListBoards(params)
+	boards, err := s.CWClient.ListBoards(params)
 	if err != nil {
 		return fmt.Errorf("getting boards from CW: %w", err)
 	}
@@ -46,7 +46,7 @@ func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	sem := make(chan struct{}, maxConcurrent)
 	var wg sync.WaitGroup
 	for _, board := range boards {
-		_, err := s.queries.GetBoard(ctx, board.ID)
+		_, err := s.Queries.GetBoard(ctx, board.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				slog.Info("board not found in data store - adding", "board_id", board.ID, "board_name", board.Name)
@@ -61,7 +61,7 @@ func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 						NotifyEnabled: false,
 						WebexRoomID:   nil,
 					}
-					if _, err := s.queries.InsertBoard(ctx, p); err != nil {
+					if _, err := s.Queries.InsertBoard(ctx, p); err != nil {
 						slog.Warn("error preloading board", "board_id", board.ID, "error", err)
 					}
 					slog.Info("preloaded board", "board_id", board.ID, "board_name", board.Name)
@@ -85,7 +85,7 @@ func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 	}
 
 	slog.Info("loading existing open tickets")
-	openTickets, err := s.cwClient.ListTickets(params)
+	openTickets, err := s.CWClient.ListTickets(params)
 	if err != nil {
 		return fmt.Errorf("getting open tickets from CW: %w", err)
 	}
@@ -114,7 +114,7 @@ func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 	for err := range errCh {
 		if err != nil {
 			slog.Error("preloading ticket", "error", err)
-			if s.config.ExitOnError {
+			if s.Config.ExitOnError {
 				slog.Info("exiting because EXIT_ON_ERROR is enabled")
 				return err
 			}

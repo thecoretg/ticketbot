@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) getLatestNoteFromCW(ticketID int) (*connectwise.ServiceTicketNote, error) {
-	note, err := s.cwClient.GetMostRecentTicketNote(ticketID)
+	note, err := s.CWClient.GetMostRecentTicketNote(ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("getting most recent note from connectwise: %w", err)
 	}
@@ -24,14 +24,15 @@ func (s *Server) getLatestNoteFromCW(ticketID int) (*connectwise.ServiceTicketNo
 }
 
 func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, overrideNotify bool) (db.TicketNote, error) {
-	note, err := s.queries.GetTicketNote(ctx, cwData.note.ID)
+	note, err := s.Queries.GetTicketNote(ctx, cwData.note.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("note not found in store, attempting insert", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
-			note, err = s.queries.InsertTicketNote(ctx, db.InsertTicketNoteParams{
+			note, err = s.Queries.InsertTicketNote(ctx, db.InsertTicketNoteParams{
 				ID:       cwData.note.ID,
 				TicketID: cwData.note.TicketId,
 				Notified: overrideNotify,
+				Member:   getMemberIdentifier(cwData),
 			})
 
 			if err != nil {
@@ -50,13 +51,21 @@ func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, override
 }
 
 func (s *Server) setNotified(ctx context.Context, noteID int, notified bool) error {
-	_, err := s.queries.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
+	_, err := s.Queries.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
 		ID:       noteID,
 		Notified: notified,
 	})
 
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func getMemberIdentifier(cwData *cwData) *string {
+	if cwData.note.Member.Identifier != "" {
+		return &cwData.note.Member.Identifier
 	}
 
 	return nil

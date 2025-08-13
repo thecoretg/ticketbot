@@ -18,7 +18,7 @@ func (s *Server) initiateCWHooks() error {
 	params := map[string]string{
 		"pageSize": "1000",
 	}
-	cwHooks, err := s.cwClient.ListCallbacks(params)
+	cwHooks, err := s.CWClient.ListCallbacks(params)
 	if err != nil {
 		return fmt.Errorf("listing callbacks: %w", err)
 	}
@@ -50,7 +50,7 @@ func (s *Server) processCwHook(url, entity, level string, objectID int, currentH
 				found = true
 				continue
 			} else {
-				if err := s.cwClient.DeleteCallback(c.ID); err != nil {
+				if err := s.CWClient.DeleteCallback(c.ID); err != nil {
 					return fmt.Errorf("deleting webhook %d: %w", c.ID, err)
 				}
 				slog.Info("deleted unused connectwise webhook", "id", c.ID, "url", c.URL)
@@ -59,7 +59,7 @@ func (s *Server) processCwHook(url, entity, level string, objectID int, currentH
 	}
 
 	if !found {
-		newHook, err := s.cwClient.PostCallback(hook)
+		newHook, err := s.CWClient.PostCallback(hook)
 		if err != nil {
 			return fmt.Errorf("posting webhook: %w", err)
 		}
@@ -69,7 +69,7 @@ func (s *Server) processCwHook(url, entity, level string, objectID int, currentH
 }
 
 func (s *Server) ticketsWebhookURL() string {
-	return fmt.Sprintf("%s/hooks/cw/tickets", s.config.RootURL)
+	return fmt.Sprintf("%s/hooks/cw/tickets", s.Config.RootURL)
 }
 
 func requireValidCWSignature() gin.HandlerFunc {

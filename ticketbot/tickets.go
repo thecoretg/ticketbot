@@ -28,7 +28,7 @@ type storedData struct {
 
 func (s *Server) addHooksGroup() {
 	hooks := s.GinEngine.Group("/hooks")
-	cw := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.config.ExitOnError))
+	cw := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.Config.ExitOnError))
 	cw.POST("/tickets", s.handleTickets)
 }
 
@@ -46,7 +46,7 @@ func (s *Server) handleTickets(c *gin.Context) {
 
 	switch w.Action {
 	case "added", "updated":
-		if err := s.processTicketPayload(c.Request.Context(), w.ID, w.Action, false, s.config.AttemptNotify); err != nil {
+		if err := s.processTicketPayload(c.Request.Context(), w.ID, w.Action, false, s.Config.AttemptNotify); err != nil {
 			c.Error(fmt.Errorf("ticket %d: adding or updating the ticket into data storage: %w", w.ID, err))
 			return
 		}
@@ -96,7 +96,7 @@ func (s *Server) processTicketPayload(ctx context.Context, ticketID int, action 
 
 	// Insert or update the ticket into the store if it didn't exist or if there were changes.
 	p := cwDataToUpdateTicketParams(cwData, storedData)
-	storedData.ticket, err = s.queries.UpdateTicket(ctx, p)
+	storedData.ticket, err = s.Queries.UpdateTicket(ctx, p)
 	if err != nil {
 		return fmt.Errorf("updating ticket in store: %w", err)
 	}
@@ -120,7 +120,7 @@ func (s *Server) processTicketPayload(ctx context.Context, ticketID int, action 
 }
 
 func (s *Server) deleteTicketAndNotes(ctx context.Context, ticketID int) error {
-	notes, err := s.queries.ListTicketNotesByTicket(ctx, ticketID)
+	notes, err := s.Queries.ListTicketNotesByTicket(ctx, ticketID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			notes = []db.TicketNote{}
@@ -129,12 +129,12 @@ func (s *Server) deleteTicketAndNotes(ctx context.Context, ticketID int) error {
 	}
 
 	for _, n := range notes {
-		if err := s.queries.DeleteTicketNote(ctx, n.ID); err != nil {
+		if err := s.Queries.DeleteTicketNote(ctx, n.ID); err != nil {
 			return fmt.Errorf("deleting ticket note %d for ticket %d: %w", n.ID, ticketID, err)
 		}
 	}
 
-	if err := s.queries.DeleteTicket(ctx, ticketID); err != nil {
+	if err := s.Queries.DeleteTicket(ctx, ticketID); err != nil {
 		return fmt.Errorf("deleting ticket: %w", err)
 	}
 
@@ -142,12 +142,12 @@ func (s *Server) deleteTicketAndNotes(ctx context.Context, ticketID int) error {
 }
 
 func (s *Server) getCwData(ticketID int) (*cwData, error) {
-	ticket, err := s.cwClient.GetTicket(ticketID, nil)
+	ticket, err := s.CWClient.GetTicket(ticketID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting ticket: %w", err)
 	}
 
-	note, err := s.cwClient.GetMostRecentTicketNote(ticketID)
+	note, err := s.CWClient.GetMostRecentTicketNote(ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("getting most recent note: %w", err)
 	}
@@ -192,11 +192,11 @@ func (s *Server) getStoredData(ctx context.Context, cwData *cwData, overrideNoti
 }
 
 func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Ticket, error) {
-	ticket, err := s.queries.GetTicket(ctx, cwData.ticket.ID)
+	ticket, err := s.Queries.GetTicket(ctx, cwData.ticket.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			owner := int32(cwData.ticket.Owner.ID)
-			ticket, err = s.queries.InsertTicket(ctx, db.InsertTicketParams{
+			ticket, err = s.Queries.InsertTicket(ctx, db.InsertTicketParams{
 				ID:           cwData.ticket.ID,
 				Summary:      cwData.ticket.Summary,
 				BoardID:      cwData.ticket.Board.ID,

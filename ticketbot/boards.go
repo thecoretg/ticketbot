@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Server) addBoardsGroup() {
-	boards := s.GinEngine.Group("/boards", ErrorHandler(s.config.ExitOnError))
+	boards := s.GinEngine.Group("/boards", ErrorHandler(s.Config.ExitOnError))
 	boards.PUT("/:board_id", s.putBoard)
 }
 
@@ -24,7 +24,7 @@ func (s *Server) putBoard(c *gin.Context) {
 		return
 	}
 
-	board, err := s.queries.GetBoard(c.Request.Context(), boardID)
+	board, err := s.Queries.GetBoard(c.Request.Context(), boardID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("board %d not found", boardID)))
@@ -39,7 +39,7 @@ func (s *Server) putBoard(c *gin.Context) {
 		return
 	}
 
-	updatedBoard, err := s.queries.UpdateBoard(c.Request.Context(), db.UpdateBoardParams{
+	updatedBoard, err := s.Queries.UpdateBoard(c.Request.Context(), db.UpdateBoardParams{
 		ID:            board.ID,
 		Name:          board.Name,
 		NotifyEnabled: board.NotifyEnabled,
@@ -50,7 +50,7 @@ func (s *Server) putBoard(c *gin.Context) {
 }
 
 func (s *Server) ensureBoardInStore(ctx context.Context, cwData *cwData) (db.Board, error) {
-	board, err := s.queries.GetBoard(ctx, cwData.ticket.Board.ID)
+	board, err := s.Queries.GetBoard(ctx, cwData.ticket.Board.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("board not in store, attempting insert", "board_id", cwData.ticket.Board.ID)
@@ -60,7 +60,7 @@ func (s *Server) ensureBoardInStore(ctx context.Context, cwData *cwData) (db.Boa
 				NotifyEnabled: false,
 				WebexRoomID:   nil,
 			}
-			board, err = s.queries.InsertBoard(ctx, p)
+			board, err = s.Queries.InsertBoard(ctx, p)
 			if err != nil {
 				return db.Board{}, fmt.Errorf("inserting board into db: %w", err)
 			}

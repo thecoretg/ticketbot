@@ -53,6 +53,26 @@ var (
 			return server.Run()
 		},
 	}
+
+	listBoardsCmd = &cobra.Command{
+		Use: "list-boards",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			boards, err := server.Queries.ListBoards(ctx)
+			if err != nil {
+				return fmt.Errorf("retrieving boards from database: %w", err)
+			}
+
+			if len(boards) > 0 {
+				for _, b := range boards {
+					fmt.Printf("%s ID:%d, Notify Enabled:%v\n", b.Name, b.ID, b.NotifyEnabled)
+				}
+			} else {
+				fmt.Println("No boards were found in databas")
+			}
+
+			return nil
+		},
+	}
 )
 
 func Execute() error {
