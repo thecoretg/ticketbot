@@ -9,10 +9,11 @@ import (
 )
 
 type Cfg struct {
-	Debug       bool   `json:"debug" mapstructure:"debug"`
-	ExitOnError bool   `json:"exit_on_error" mapstructure:"exit_on_error"`
-	LogToFile   bool   `json:"log_to_file" mapstructure:"log_to_file"`
-	LogFilePath string `json:"log_file_path" mapstructure:"log_file_path"`
+	VerboseLogging bool   `json:"verbose" mapstructure:"verbose"`
+	Debug          bool   `json:"debug" mapstructure:"debug"`
+	ExitOnError    bool   `json:"exit_on_error" mapstructure:"exit_on_error"`
+	LogToFile      bool   `json:"log_to_file" mapstructure:"log_to_file"`
+	LogFilePath    string `json:"log_file_path" mapstructure:"log_file_path"`
 
 	RootURL string `json:"root_url" mapstructure:"root_url"`
 
@@ -32,18 +33,17 @@ type Cfg struct {
 }
 
 func InitCfg() (*Cfg, error) {
-	if err := godotenv.Load(); err != nil {
-		slog.Warn(".env not found (this is probably fine!)")
-	}
+	_ = godotenv.Load()
 
 	setConfigDefaults()
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("TICKETBOT")
 
+	verbose := viper.GetBool("VERBOSE")
 	debug := viper.GetBool("DEBUG")
 	ltf := viper.GetBool("LOG_TO_FILE")
 	lfp := viper.GetString("LOG_FILE_PATH")
-	if err := setLogger(debug, ltf, lfp); err != nil {
+	if err := setLogger(verbose, debug, ltf, lfp); err != nil {
 		return nil, fmt.Errorf("error setting logger: %w", err)
 	}
 	slog.Info("logger set", "debug", debug, "log_to_file", ltf, "log_file_path", lfp)
@@ -108,6 +108,7 @@ func checkEmptyFields(vals map[string]string) error {
 }
 
 func setConfigDefaults() {
+	viper.SetDefault("verbose", false)
 	viper.SetDefault("debug", false)
 	viper.SetDefault("exit_on_error", false)
 	viper.SetDefault("log_to_file", false)

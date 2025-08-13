@@ -6,10 +6,13 @@ import (
 	"os"
 )
 
-func setLogger(debug, toFile bool, logFilePath string) error {
-	level := slog.LevelInfo
-	if debug {
-		level = slog.LevelDebug
+func setLogger(verbose, debug, toFile bool, logFilePath string) error {
+	level := slog.Level(1000)
+	if verbose || debug {
+		level = slog.LevelInfo
+		if debug {
+			level = slog.LevelDebug
+		}
 	}
 
 	var err error
