@@ -33,12 +33,23 @@ func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, override
 				TicketID: cwData.note.TicketId,
 				Notified: overrideNotify,
 				Member:   getMemberIdentifier(cwData),
+				Contact:  getContactName(cwData),
 			})
 
 			if err != nil {
 				return db.TicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)
 			}
-			slog.Info("inserted note into store", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
+
+			sender := ""
+			if note.Member != nil {
+				sender = fmt.Sprintf("%s (member)", *note.Member)
+			}
+
+			if note.Contact != nil {
+				sender = fmt.Sprintf("%s (contact)", *note.Contact)
+			}
+
+			slog.Info("inserted note into store", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID, "sender", sender)
 			return note, nil
 
 		} else {
@@ -66,6 +77,14 @@ func (s *Server) setNotified(ctx context.Context, noteID int, notified bool) err
 func getMemberIdentifier(cwData *cwData) *string {
 	if cwData.note.Member.Identifier != "" {
 		return &cwData.note.Member.Identifier
+	}
+
+	return nil
+}
+
+func getContactName(cwData *cwData) *string {
+	if cwData.note.Contact.Name != "" {
+		return &cwData.note.Contact.Name
 	}
 
 	return nil

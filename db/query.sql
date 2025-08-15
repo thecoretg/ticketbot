@@ -70,8 +70,8 @@ ORDER BY id;
 
 -- name: InsertTicketNote :one
 INSERT INTO ticket_notes
-(id, ticket_id, notified, member)
-VALUES ($1, $2, $3, $4)
+(id, ticket_id, notified, member, contact)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateTicketNote :one
@@ -79,7 +79,8 @@ UPDATE ticket_notes
 SET
     ticket_id = $2,
     notified = $3,
-    member = $4
+    member = $4,
+    contact = $5
 WHERE id = $1
 RETURNING *;
 

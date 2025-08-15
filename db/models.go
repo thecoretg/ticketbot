@@ -30,4 +30,5 @@ type TicketNote struct {
 	TicketID int     `json:"ticket_id"`
 	Notified bool    `json:"notified"`
 	Member   *string `json:"member"`
+	Contact  *string `json:"contact"`
 }
