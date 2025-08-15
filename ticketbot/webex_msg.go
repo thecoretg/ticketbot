@@ -162,8 +162,9 @@ func filterOutExcluded(excluded []string, identifiers string, storedData *stored
 	var parts []string
 	for _, i := range strings.Split(identifiers, ",") {
 		if !slices.Contains(excluded, i) {
-			slog.Debug("filterOutExcluded: excluding member from notifications", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID, "excluded_member", i)
 			parts = append(parts, i)
+		} else {
+			slog.Debug("filterOutExcluded: excluding member from notifications", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID, "excluded_member", i)
 		}
 	}
 
