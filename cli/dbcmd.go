@@ -41,7 +41,7 @@ var (
 					fmt.Printf("%s ID:%d, Notify Enabled:%v\n", b.Name, b.ID, b.NotifyEnabled)
 				}
 			} else {
-				fmt.Println("No boards were found in databas")
+				fmt.Println("No boards were found in database")
 			}
 
 			return nil
