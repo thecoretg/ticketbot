@@ -39,8 +39,10 @@ func init() {
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(dbCmd)
+	rootCmd.AddCommand(webexCmd)
 	serverCmd.AddCommand(preloadCmd)
 	serverCmd.AddCommand(initHooksCmd)
 	serverCmd.AddCommand(runCmd)
 	dbCmd.AddCommand(listBoardsCmd)
+	webexCmd.AddCommand(listRoomsCmd)
 }

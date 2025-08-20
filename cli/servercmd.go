@@ -16,10 +16,6 @@ var (
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			if err := rootCmd.PersistentPreRunE(cmd, args); err != nil {
-				return err
-			}
-
 			server, err = ticketbot.NewServer(ctx, cfg, initWebhooks)
 			if err != nil {
 				return fmt.Errorf("starting server: %w", err)

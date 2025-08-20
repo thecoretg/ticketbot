@@ -51,6 +51,10 @@ type Message struct {
 	PersonId      string `json:"personId,omitempty"`
 }
 
+type ListRoomsResp struct {
+	Items []Room `json:"items"`
+}
+
 type Room struct {
 	Id           string    `json:"id"`
 	Title        string    `json:"title"`
