@@ -1,16 +1,17 @@
 package ticketbot
 
 import (
+	"context"
 	"fmt"
 	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/db"
 	"github.com/thecoretg/ticketbot/webex"
 	"log/slog"
-	"slices"
 	"strings"
 )
 
-func (s *Server) makeAndSendWebexMsgs(action string, cwData *cwData, storedData *storedData) error {
-	messages, err := s.makeWebexMsgs(action, cwData, storedData)
+func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData *cwData, storedData *storedData) error {
+	messages, err := s.makeWebexMsgs(ctx, action, cwData, storedData)
 	if err != nil {
 		return fmt.Errorf("creating webex messages: %w", err)
 	}
@@ -42,7 +43,7 @@ func (s *Server) makeAndSendWebexMsgs(action string, cwData *cwData, storedData 
 
 // makeWebexMsgs constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
 // the message should be sent to.
-func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *storedData) ([]webex.Message, error) {
+func (s *Server) makeWebexMsgs(ctx context.Context, action string, cwData *cwData, storedData *storedData) ([]webex.Message, error) {
 	var body string
 	body += s.messageHeader(action, cwData)
 
@@ -68,7 +69,7 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 		slog.Debug("creating message for new ticket", "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "webex_room_id", storedData.board.WebexRoomID)
 		messages = append(messages, webex.NewMessageToRoom(*storedData.board.WebexRoomID, body))
 	} else if action == "updated" {
-		sendTo, err := s.getSendTo(storedData)
+		sendTo, err := s.getSendTo(ctx, storedData)
 		if len(sendTo) > 0 {
 			slog.Debug("got send-to list", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID, "send_to", sendTo)
 		} else {
@@ -90,37 +91,32 @@ func (s *Server) makeWebexMsgs(action string, cwData *cwData, storedData *stored
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
 // recent update and any other exclusions passed in by the Config.
-func (s *Server) getSendTo(storedData *storedData) ([]string, error) {
-	var excludedMembers []int
-	for _, m := range s.Config.ExcludedCWMembers {
-		excludedMembers = append(excludedMembers, m)
-	}
+func (s *Server) getSendTo(ctx context.Context, storedData *storedData) ([]string, error) {
+	var (
+		excludedMembers []int
+		sendToMembers   []db.CwMember
+	)
 
+	// if the sender of the note is a member, exclude them from messages since they don't need a notification for their own note
 	if storedData.note.MemberID != nil {
 		excludedMembers = append(excludedMembers, *storedData.note.MemberID)
 	}
 
-	identifiers := filterOutExcluded(excludedMembers, *storedData.ticket.Resources, storedData)
-	if identifiers == "" {
-		slog.Debug("no members to notify", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID)
-		return nil, nil
-	}
+	resources := strings.Split(*storedData.ticket.Resources, ",")
+	for _, r := range resources {
+		m, err := s.Queries.GetMemberByIdentifier(ctx, r)
+		if err != nil {
+			slog.Warn("getSendTo: couldn't get member data", "resource", r, "error", err)
+			continue
+		}
 
-	condition := fmt.Sprintf("identifier in (%s)", identifiers)
-	slog.Debug("created members condition query param", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID, "query_param", condition)
-
-	params := map[string]string{
-		"conditions": condition,
-	}
-
-	// get members from connectwise and then create a list of emails
-	members, err := s.CWClient.ListMembers(params)
-	if err != nil {
-		return nil, fmt.Errorf("getting members from connectwise: %w", err)
+		if m.ID != 0 && !intSliceContains(excludedMembers, m.ID) {
+			sendToMembers = append(sendToMembers, m)
+		}
 	}
 
 	var emails []string
-	for _, m := range members {
+	for _, m := range sendToMembers {
 		if m.PrimaryEmail != "" {
 			emails = append(emails, m.PrimaryEmail)
 		}
@@ -155,19 +151,6 @@ func (s *Server) messageText(cwData *cwData) string {
 	}
 	body += fmt.Sprintf("\n%s", blockQuoteText(text))
 	return body
-}
-
-func filterOutExcluded(excludedIDs []int, identifiers string, storedData *storedData) string {
-	var parts []string
-	for _, i := range strings.Split(identifiers, ",") {
-		if !slices.Contains(excludedIDs, i) {
-			parts = append(parts, i)
-		} else {
-			slog.Debug("filterOutExcluded: excluding member from notifications", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID, "excluded_member", i)
-		}
-	}
-
-	return strings.Join(parts, ",")
 }
 
 // blockQuoteText creates a markdown block quote from a string, also respects line breaks

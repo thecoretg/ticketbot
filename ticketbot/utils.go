@@ -15,3 +15,13 @@ func strToPtr(s string) *string {
 	val := s
 	return &val
 }
+
+func intSliceContains(s []int, i int) bool {
+	for _, x := range s {
+		if x == i {
+			return true
+		}
+	}
+
+	return false
+}

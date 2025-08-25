@@ -155,6 +155,27 @@ func (q *Queries) GetMember(ctx context.Context, id int) (CwMember, error) {
 	return i, err
 }
 
+const getMemberByIdentifier = `-- name: GetMemberByIdentifier :one
+SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted FROM cw_member
+WHERE identifier = $1 LIMIT 1
+`
+
+func (q *Queries) GetMemberByIdentifier(ctx context.Context, identifier string) (CwMember, error) {
+	row := q.db.QueryRow(ctx, getMemberByIdentifier, identifier)
+	var i CwMember
+	err := row.Scan(
+		&i.ID,
+		&i.Identifier,
+		&i.FirstName,
+		&i.LastName,
+		&i.PrimaryEmail,
+		&i.UpdatedOn,
+		&i.AddedOn,
+		&i.Deleted,
+	)
+	return i, err
+}
+
 const getTicket = `-- name: GetTicket :one
 SELECT id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted FROM cw_ticket
 WHERE id = $1 LIMIT 1

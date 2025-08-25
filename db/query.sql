@@ -180,6 +180,10 @@ WHERE id = $1;
 SELECT * FROM cw_member
 WHERE id = $1 LIMIT 1;
 
+-- name: GetMemberByIdentifier :one
+SELECT * FROM cw_member
+WHERE identifier = $1 LIMIT 1;
+
 -- name: ListMembers :many
 SELECT * FROM cw_member
 ORDER BY id;
