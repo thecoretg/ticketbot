@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/thecoretg/ticketbot/connectwise"
-	"github.com/thecoretg/ticketbot/db"
 	"log/slog"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/db"
 
 	"github.com/gin-gonic/gin"
 )
@@ -102,13 +103,13 @@ func (s *Server) processTicketPayload(ctx context.Context, ticketID int, action 
 		return fmt.Errorf("updating ticket in store: %w", err)
 	}
 
+	notified := false
 	if meetsMessageCriteria(action, storedData) && attemptNotify {
 		if err := s.makeAndSendWebexMsgs(action, cwData, storedData); err != nil {
 			return fmt.Errorf("processing webex messages: %w", err)
 		}
+		notified = true
 	}
-
-	s.logTicketResult(action, storedData)
 
 	// Always set notified to true if there is a note
 	if storedData.note.ID != 0 {
@@ -116,6 +117,8 @@ func (s *Server) processTicketPayload(ctx context.Context, ticketID int, action 
 			return fmt.Errorf("setting notified to true: %w", err)
 		}
 	}
+
+	s.logTicketResult(action, storedData, notified)
 
 	return nil
 }
@@ -207,8 +210,8 @@ func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Ti
 	return ticket, nil
 }
 
-func (s *Server) logTicketResult(action string, storedData *storedData) {
-	slog.Info("ticket processed", "ticket_id", storedData.ticket.ID, "action", action, "notified", storedData.note.Notified)
+func (s *Server) logTicketResult(action string, storedData *storedData, notified bool) {
+	slog.Info("ticket processed", "ticket_id", storedData.ticket.ID, "action", action, "notified", notified)
 }
 
 // meetsMessageCriteria checks if a message would be allowed to send a notification,

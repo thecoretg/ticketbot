@@ -2,11 +2,12 @@ package ticketbot
 
 import (
 	"fmt"
-	"github.com/thecoretg/ticketbot/connectwise"
-	"github.com/thecoretg/ticketbot/webex"
 	"log/slog"
 	"slices"
 	"strings"
+
+	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/webex"
 )
 
 func (s *Server) makeAndSendWebexMsgs(action string, cwData *cwData, storedData *storedData) error {
@@ -97,7 +98,10 @@ func (s *Server) getSendTo(storedData *storedData) ([]string, error) {
 	}
 
 	if storedData.note.Member != nil {
+		slog.Debug("added sender (member)  to exclusions", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID, "member", storedData.note.Member)
 		excludedMembers = append(excludedMembers, *storedData.note.Member)
+	} else {
+		slog.Debug("note member is empty, not adding exclusion", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID)
 	}
 
 	identifiers := filterOutExcluded(excludedMembers, *storedData.ticket.Resources, storedData)
