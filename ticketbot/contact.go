@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/db"
-	"log/slog"
 )
 
 func (s *Server) ensureContactInStore(ctx context.Context, id int) (db.CwContact, error) {
@@ -19,6 +20,12 @@ func (s *Server) ensureContactInStore(ctx context.Context, id int) (db.CwContact
 				return db.CwContact{}, fmt.Errorf("getting contact from cw: %w", err)
 			}
 
+			if cwContact.Company.ID != 0 {
+				if _, err := s.ensureCompanyInStore(ctx, cwContact.Company.ID); err != nil {
+					return db.CwContact{}, fmt.Errorf("ensuring contact's company in store: %w", err)
+				}
+			}
+		
 			p := db.InsertContactParams{
 				ID:        cwContact.ID,
 				FirstName: cwContact.FirstName,

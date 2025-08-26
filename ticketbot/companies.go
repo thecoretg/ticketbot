@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/db"
-	"log/slog"
 )
 
 func (s *Server) ensureCompanyInStore(ctx context.Context, id int) (db.CwCompany, error) {

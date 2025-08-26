@@ -3,10 +3,11 @@ package ticketbot
 import (
 	"bytes"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/connectwise"
 	"io"
 	"log/slog"
+
+	"github.com/gin-gonic/gin"
+	"github.com/thecoretg/ticketbot/connectwise"
 )
 
 func (s *Server) InitAllHooks() error {

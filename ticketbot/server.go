@@ -3,12 +3,13 @@ package ticketbot
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"sync"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/connectwise"
 	"github.com/thecoretg/ticketbot/db"
 	"github.com/thecoretg/ticketbot/webex"
-	"log/slog"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 )

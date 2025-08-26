@@ -36,7 +36,12 @@ func ValidateWebhook(r *http.Request, secret string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("error closing request body: %v", err)
+		}
+	}(r.Body)
 
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)

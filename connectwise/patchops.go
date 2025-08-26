@@ -7,9 +7,3 @@ type PatchOp struct {
 }
 
 type Op string
-
-const (
-	AddOp     Op = "add"
-	ReplaceOp Op = "replace"
-	RemoveOp  Op = "Remove"
-)

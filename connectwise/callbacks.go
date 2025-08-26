@@ -43,7 +43,12 @@ func ValidateWebhook(r *http.Request) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("reading request body: %w", err)
 	}
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("error closing request body: %v", err)
+		}
+	}(r.Body)
 
 	var meta struct {
 		Metadata struct {
@@ -58,7 +63,12 @@ func ValidateWebhook(r *http.Request) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("getting shared secret key from %s: %w", meta.Metadata.KeyURL, err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("error closing shared secret key response body: %v", err)
+		}
+	}(resp.Body)
 
 	var keyResp struct {
 		SigningKey string `json:"signing_key"`

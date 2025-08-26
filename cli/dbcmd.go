@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 	"github.com/thecoretg/ticketbot/db"

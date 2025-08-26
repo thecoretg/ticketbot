@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/connectwise"
 	"github.com/thecoretg/ticketbot/db"
-	"log/slog"
 )
 
 func (s *Server) getLatestNoteFromCW(ticketID int) (*connectwise.ServiceTicketNote, error) {
@@ -53,7 +54,7 @@ func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, override
 				return db.CwTicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)
 			}
 
-			slog.Info("inserted note into store", "ticket_id", cwData.ticket.ID, "note_id")
+			slog.Info("inserted note into store", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
 			return note, nil
 
 		} else {
@@ -78,7 +79,7 @@ func (s *Server) setNotified(ctx context.Context, noteID int, notified bool) err
 	return nil
 }
 
-func (s *Server) getMemberID(ctx context.Context, cwData *cwData) (*int, error) {
+func (s *Server) getContactID(ctx context.Context, cwData *cwData) (*int, error) {
 	if cwData.note.Contact.ID != 0 {
 		c, err := s.ensureContactInStore(ctx, cwData.note.Contact.ID)
 		if err != nil {
@@ -92,7 +93,7 @@ func (s *Server) getMemberID(ctx context.Context, cwData *cwData) (*int, error) 
 
 }
 
-func (s *Server) getContactID(ctx context.Context, cwData *cwData) (*int, error) {
+func (s *Server) getMemberID(ctx context.Context, cwData *cwData) (*int, error) {
 	if cwData.note.Member.ID != 0 {
 		m, err := s.ensureMemberInStore(ctx, cwData.note.Member.ID)
 		if err != nil {

@@ -3,10 +3,11 @@ package ticketbot
 import (
 	"errors"
 	"fmt"
-	"github.com/thecoretg/ticketbot/connectwise"
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/thecoretg/ticketbot/connectwise"
 
 	"github.com/gin-gonic/gin"
 )

@@ -3,9 +3,10 @@ package ticketbot
 import (
 	"errors"
 	"fmt"
+	"log/slog"
+
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
-	"log/slog"
 )
 
 type Cfg struct {

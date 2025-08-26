@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
-	"github.com/thecoretg/ticketbot/amazon"
 	"io"
 	"net/http"
+
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/thecoretg/ticketbot/amazon"
 	"resty.dev/v3"
 )
 
@@ -66,7 +67,12 @@ func (c *Client) request(ctx context.Context, method, endpoint string, payload i
 		return fmt.Errorf("sending the request: %w", err)
 	}
 
-	defer res.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("error closing response body: %v", err)
+		}
+	}(res.Body)
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		data, err := io.ReadAll(res.Body)
 		if err != nil {

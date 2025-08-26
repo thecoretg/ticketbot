@@ -3,11 +3,12 @@ package ticketbot
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
+
 	"github.com/thecoretg/ticketbot/connectwise"
 	"github.com/thecoretg/ticketbot/db"
 	"github.com/thecoretg/ticketbot/webex"
-	"log/slog"
-	"strings"
 )
 
 func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData *cwData, storedData *storedData) error {

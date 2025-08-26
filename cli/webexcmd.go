@@ -2,10 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/thecoretg/ticketbot/ticketbot"
 	"os"
 	"slices"
+
+	"github.com/spf13/cobra"
+	"github.com/thecoretg/ticketbot/ticketbot"
 )
 
 var (

@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/thecoretg/ticketbot/connectwise"
-	"github.com/thecoretg/ticketbot/db"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/thecoretg/ticketbot/connectwise"
+	"github.com/thecoretg/ticketbot/db"
 )
 
 func (s *Server) PreloadData(ctx context.Context, preloadBoards, preloadTickets bool, maxConcurrent int) error {

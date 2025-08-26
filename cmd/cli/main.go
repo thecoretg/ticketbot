@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/thecoretg/ticketbot/cli"
 	"os"
+
+	"github.com/thecoretg/ticketbot/cli"
 )
 
 func main() {
