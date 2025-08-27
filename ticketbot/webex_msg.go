@@ -164,6 +164,7 @@ func (s *Server) messageText(cwData *cwData) string {
 func filterOutExcluded(excluded []string, identifiers string, storedData *storedData) string {
 	var parts []string
 	for _, i := range strings.Split(identifiers, ",") {
+		i = strings.TrimSpace(i)
 		if !slices.Contains(excluded, i) {
 			parts = append(parts, i)
 		} else {
