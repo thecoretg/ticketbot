@@ -25,13 +25,41 @@ type Server struct {
 	ticketLocks sync.Map
 }
 
-func (s *Server) Run() error {
-	if !s.Config.Debug {
-		gin.SetMode(gin.ReleaseMode)
+// InitAndRun initializes/verifies the config, bootstraps the initial admin/API key, checks and/or initializes webhooks, and runs the server.
+func InitAndRun(ctx context.Context) error {
+	cfg, err := InitCfg()
+	if err != nil {
+		return fmt.Errorf("initializing config: %w", err)
 	}
+
+	dbConn, err := ConnectToDB(ctx, cfg.PostgresDSN)
+	if err != nil {
+		return fmt.Errorf("connecting to db: %w", err)
+	}
+
+	s := NewServer(cfg, dbConn)
 
 	if err := s.BootstrapAdmin(context.Background()); err != nil {
 		return fmt.Errorf("boostrapping admin: %w", err)
+	}
+
+	slog.Info("initializing webhooks")
+	if err := s.InitAllHooks(); err != nil {
+		return fmt.Errorf("initiating webhooks: %w", err)
+	}
+
+	if err := s.Run(); err != nil {
+		return fmt.Errorf("running server: %w", err)
+	}
+
+	return nil
+}
+
+// Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
+// restart it
+func (s *Server) Run() error {
+	if !s.Config.Debug {
+		gin.SetMode(gin.ReleaseMode)
 	}
 
 	return s.GinEngine.Run()
@@ -42,13 +70,16 @@ func (s *Server) addAllRoutes() {
 	s.addBoardsGroup()
 }
 
-func NewServer(ctx context.Context, cfg *Cfg, initHooks bool) (*Server, error) {
-	slog.Info("beginning server initialization")
-	dbConn, err := pgxpool.New(ctx, cfg.PostgresDSN)
+func ConnectToDB(ctx context.Context, dsn string) (*db.Queries, error) {
+	dbConn, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("connecting to database: %w", err)
+		return nil, fmt.Errorf("connecting to db: %w", err)
 	}
 
+	return db.New(dbConn), nil
+}
+
+func NewServer(cfg *Cfg, dbConn *db.Queries) *Server {
 	cwCreds := &connectwise.Creds{
 		PublicKey:  cfg.CwPubKey,
 		PrivateKey: cfg.CwPrivKey,
@@ -60,18 +91,11 @@ func NewServer(ctx context.Context, cfg *Cfg, initHooks bool) (*Server, error) {
 		Config:      cfg,
 		CWClient:    connectwise.NewClient(cwCreds),
 		WebexClient: webex.NewClient(cfg.WebexSecret),
-		Queries:     db.New(dbConn),
+		Queries:     dbConn,
 		GinEngine:   gin.Default(),
-	}
-
-	if initHooks {
-		slog.Info("initializing webhooks")
-		if err := s.InitAllHooks(); err != nil {
-			return nil, fmt.Errorf("initiating webhooks: %w", err)
-		}
 	}
 
 	s.addAllRoutes()
 
-	return s, nil
+	return s
 }

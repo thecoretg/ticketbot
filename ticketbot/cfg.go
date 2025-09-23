@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
@@ -37,36 +39,43 @@ type Cfg struct {
 func InitCfg() (*Cfg, error) {
 	_ = godotenv.Load()
 
-	setConfigDefaults()
-	viper.AutomaticEnv()
-	viper.SetEnvPrefix("TICKETBOT")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("getting user home directory: %w", err)
+	}
 
-	verbose := viper.GetBool("VERBOSE")
-	debug := viper.GetBool("DEBUG")
-	ltf := viper.GetBool("LOG_TO_FILE")
-	lfp := viper.GetString("LOG_FILE_PATH")
-	if err := setLogger(verbose, debug, ltf, lfp); err != nil {
+	cfgDir := filepath.Join(home, ".config", "ticketbot")
+	// TODO: right permissions?
+	if err := os.MkdirAll(cfgDir, 0700); err != nil {
+		return nil, fmt.Errorf("creating config directory: %w", err)
+	}
+
+	setConfigDefaults()
+	viper.SetConfigName("config")
+	viper.SetConfigType("json")
+	viper.AddConfigPath(cfgDir)
+	if err := viper.ReadInConfig(); err != nil {
+		if errors.Is(err, viper.ConfigFileNotFoundError{}); err != nil {
+			slog.Info("config file not found, creating now", "file_path", filepath.Join(cfgDir, "config.json"))
+			if err := viper.SafeWriteConfig(); err != nil {
+				return nil, fmt.Errorf("creating config file: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("error reading config file: %w", err)
+		}
+	}
+
+	var c Cfg
+	if err := viper.Unmarshal(&c); err != nil {
+		return nil, fmt.Errorf("unmarshaling config to json: %w", err)
+	}
+
+	if err := setLogger(c.VerboseLogging, c.Debug, c.LogToFile, c.LogFilePath); err != nil {
 		return nil, fmt.Errorf("error setting logger: %w", err)
 	}
-	slog.Info("logger set", "debug", debug, "log_to_file", ltf, "log_file_path", lfp)
 
-	c := &Cfg{
-		Debug:             viper.GetBool("debug"),
-		ExitOnError:       viper.GetBool("exit_on_error"),
-		LogToFile:         viper.GetBool("log_to_file"),
-		LogFilePath:       viper.GetString("log_file_path"),
-		InitialAdminEmail: viper.GetString("initial_admin_email"),
-		RootURL:           viper.GetString("root_url"),
-		WebexSecret:       viper.GetString("webex_secret"),
-		CwPubKey:          viper.GetString("cw_pub_key"),
-		CwPrivKey:         viper.GetString("cw_priv_key"),
-		CwClientID:        viper.GetString("cw_client_id"),
-		CwCompanyID:       viper.GetString("cw_company_id"),
-		PostgresDSN:       viper.GetString("postgres_dsn"),
-		AttemptNotify:     viper.GetBool("attempt_notify"),
-		MaxMsgLength:      viper.GetInt("max_msg_length"),
-		ExcludedCWMembers: viper.GetStringSlice("excluded_cw_members"),
-	}
+	slog.Info("logger set", "debug", c.Debug, "log_to_file", c.LogToFile, "log_file_path", c.LogFilePath)
+
 	slog.Info("config initialized", "debug", c.Debug, "exit_on_error", c.ExitOnError,
 		"log_to_file", c.LogToFile, "log_file_path", c.LogFilePath,
 		"root_url", c.RootURL, "max_msg_length", c.MaxMsgLength,
@@ -78,7 +87,7 @@ func InitCfg() (*Cfg, error) {
 	}
 	slog.Info("config fields validated successfully")
 
-	return c, nil
+	return &c, nil
 }
 
 func (cfg *Cfg) validateFields() bool {
@@ -117,7 +126,15 @@ func setConfigDefaults() {
 	viper.SetDefault("exit_on_error", false)
 	viper.SetDefault("log_to_file", false)
 	viper.SetDefault("log_file_path", "ticketbot.log")
+	viper.SetDefault("initial_admin_email", "")
 	viper.SetDefault("root_url", "")
+	viper.SetDefault("cw_pub_key", "")
+	viper.SetDefault("cw_priv_key", "")
+	viper.SetDefault("cw_client_id", "")
+	viper.SetDefault("cw_company_id", "")
+	viper.SetDefault("webex_secret", "")
+	viper.SetDefault("postgres_dsn", "")
+	viper.SetDefault("attempt_notify", false)
 	viper.SetDefault("max_msg_length", 300)
 	viper.SetDefault("excluded_cw_members", []string{})
 }

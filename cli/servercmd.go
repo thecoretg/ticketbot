@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -10,39 +11,35 @@ import (
 var (
 	serverCmd = &cobra.Command{
 		Use: "server",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			cfg, err = ticketbot.InitCfg()
-			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
-			}
-
-			server, err = ticketbot.NewServer(ctx, cfg, initWebhooks)
-			if err != nil {
-				return fmt.Errorf("starting server: %w", err)
-			}
-			return nil
-		},
-	}
-
-	initHooksCmd = &cobra.Command{
-		Use: "init-hooks",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return server.InitAllHooks()
-		},
-	}
-
-	preloadCmd = &cobra.Command{
-		Use: "preload",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return server.PreloadData(ctx, preloadBoards, preloadTickets, maxConcurrent)
-		},
 	}
 
 	runCmd = &cobra.Command{
 		Use: "run",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return server.Run()
+			if initAndRun {
+				return ticketbot.InitAndRun(ctx)
+			}
+
+			s, err := initConfigAndServer(ctx)
+			if err != nil {
+				return fmt.Errorf("initializing server: %w", err)
+			}
+
+			return s.Run()
 		},
 	}
 )
+
+func initConfigAndServer(ctx context.Context) (*ticketbot.Server, error) {
+	cfg, err := ticketbot.InitCfg()
+	if err != nil {
+		return nil, fmt.Errorf("initializing config: %w", err)
+	}
+
+	dbConn, err := ticketbot.ConnectToDB(ctx, cfg.PostgresDSN)
+	if err != nil {
+		return nil, fmt.Errorf("connecting to db: %w", err)
+	}
+
+	return ticketbot.NewServer(cfg, dbConn), nil
+}
