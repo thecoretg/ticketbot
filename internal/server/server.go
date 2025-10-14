@@ -25,36 +25,6 @@ type Server struct {
 	ticketLocks sync.Map
 }
 
-// InitAndRun initializes/verifies the config, bootstraps the initial admin/API key, checks and/or initializes webhooks, and runs the server.
-func InitAndRun(ctx context.Context) error {
-	c, err := cfg.InitCfg()
-	if err != nil {
-		return fmt.Errorf("initializing config: %w", err)
-	}
-
-	dbConn, err := ConnectToDB(ctx, c.Creds.PostgresDSN)
-	if err != nil {
-		return fmt.Errorf("connecting to db: %w", err)
-	}
-
-	s := NewServer(c, dbConn)
-
-	if err := s.BootstrapAdmin(context.Background()); err != nil {
-		return fmt.Errorf("boostrapping admin: %w", err)
-	}
-
-	slog.Info("initializing webhooks")
-	if err := s.InitAllHooks(); err != nil {
-		return fmt.Errorf("initiating webhooks: %w", err)
-	}
-
-	if err := s.Run(); err != nil {
-		return fmt.Errorf("running server: %w", err)
-	}
-
-	return nil
-}
-
 // Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
 // restart it
 func (s *Server) Run() error {
@@ -62,6 +32,8 @@ func (s *Server) Run() error {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	s.GinEngine = gin.Default()
+	s.addAllRoutes()
 	return s.GinEngine.Run()
 }
 
@@ -71,6 +43,7 @@ func (s *Server) addAllRoutes() {
 }
 
 func ConnectToDB(ctx context.Context, dsn string) (*db.Queries, error) {
+	slog.Info("connecting to postgres server")
 	dbConn, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to db: %w", err)
@@ -80,6 +53,7 @@ func ConnectToDB(ctx context.Context, dsn string) (*db.Queries, error) {
 }
 
 func NewServer(cfg *cfg.Cfg, dbConn *db.Queries) *Server {
+	slog.Info("initializing server client")
 	cwCreds := &psa.Creds{
 		PublicKey:  cfg.Creds.CW.PubKey,
 		PrivateKey: cfg.Creds.CW.PrivKey,
@@ -92,10 +66,7 @@ func NewServer(cfg *cfg.Cfg, dbConn *db.Queries) *Server {
 		CWClient:    psa.NewClient(cwCreds),
 		WebexClient: webex.NewClient(cfg.Creds.WebexSecret),
 		Queries:     dbConn,
-		GinEngine:   gin.Default(),
 	}
-
-	s.addAllRoutes()
 
 	return s
 }

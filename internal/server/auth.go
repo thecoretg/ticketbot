@@ -89,6 +89,7 @@ func (s *Server) CreateAPIKeyHandler(c *gin.Context) {
 }
 
 func (s *Server) BootstrapAdmin(ctx context.Context) error {
+	slog.Info("checking initial admin value")
 	email := s.Config.General.InitialAdminEmail
 	if email == "" {
 		return errors.New("initial admin config field must not be blank")
@@ -97,6 +98,7 @@ func (s *Server) BootstrapAdmin(ctx context.Context) error {
 	u, err := s.Queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Info("initial admin not found in db - creating now", "email", email)
 			u, err = s.Queries.InsertUser(ctx, email)
 			if err != nil {
 				return fmt.Errorf("creating admin user: %w", err)
@@ -104,6 +106,8 @@ func (s *Server) BootstrapAdmin(ctx context.Context) error {
 		} else {
 			return err
 		}
+	} else {
+		slog.Info("initial admin found in db", "email", email)
 	}
 
 	keys, err := s.Queries.ListAPIKeys(ctx)
