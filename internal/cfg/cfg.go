@@ -21,6 +21,7 @@ type Cfg struct {
 
 type GeneralCfg struct {
 	RootURL           string `json:"root_url" mapstructure:"root_url"`
+	UseAutoTLS        bool   `json:"use_auto_tls" mapstructure:"use_auto_tls"`
 	InitialAdminEmail string `json:"initial_admin_email" mapstructure:"initial_admin_email"`
 	ExitOnError       bool   `json:"exit_on_error" mapstructure:"exit_on_error"`
 }
@@ -144,6 +145,7 @@ func setConfigDefaults() {
 	viper.SetDefault("general.exit_on_error", false)
 	viper.SetDefault("general.initial_admin_email", "")
 	viper.SetDefault("general.root_url", "")
+	viper.SetDefault("general.use_auto_tls", false)
 	viper.SetDefault("logging.log_to_file", false)
 	viper.SetDefault("logging.log_file_path", "ticketbot.log")
 	viper.SetDefault("logging.verbose", false)

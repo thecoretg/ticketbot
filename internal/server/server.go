@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/gin-gonic/autotls"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/cfg"
@@ -34,6 +35,12 @@ func (s *Server) Run() error {
 
 	s.GinEngine = gin.Default()
 	s.addAllRoutes()
+
+	slog.Info("running server", "auto_tls", s.Config.General.UseAutoTLS)
+	if s.Config.General.UseAutoTLS {
+		return autotls.Run(s.GinEngine, s.Config.General.RootURL)
+	}
+
 	return s.GinEngine.Run()
 }
 
