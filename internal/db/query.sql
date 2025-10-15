@@ -151,8 +151,8 @@ ORDER BY id;
 
 -- name: InsertTicketNote :one
 INSERT INTO cw_ticket_note
-(id, ticket_id, member_id, contact_id, notified)
-VALUES ($1, $2, $3, $4, $5)
+(id, ticket_id, member_id, contact_id, notified, skipped_notify)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: UpdateTicketNote :one
@@ -162,6 +162,7 @@ SET
     member_id = $3,
     contact_id = $4,
     notified = $5,
+    skipped_notify = $6,
     updated_on = NOW()
 WHERE id = $1
 RETURNING *;
@@ -170,6 +171,13 @@ RETURNING *;
 UPDATE cw_ticket_note
 SET
     notified = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: SetNoteSkippedNotify :one
+UPDATE cw_ticket_note
+SET
+    skipped_notify = $2
 WHERE id = $1
 RETURNING *;
 

@@ -25,7 +25,7 @@ func (s *Server) getLatestNoteFromCW(ticketID int) (*psa.ServiceTicketNote, erro
 	return note, nil
 }
 
-func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, overrideNotify bool) (db.CwTicketNote, error) {
+func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, skipNotify bool) (db.CwTicketNote, error) {
 	memberID, err := s.getMemberID(ctx, cwData)
 	if err != nil {
 		return db.CwTicketNote{}, fmt.Errorf("getting member data: %w", err)
@@ -41,12 +41,13 @@ func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, override
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("note not found in store, attempting insert", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
 			p := db.InsertTicketNoteParams{
-				ID:        cwData.note.ID,
-				TicketID:  cwData.note.TicketId,
-				MemberID:  memberID,
-				ContactID: contactID,
-				Notified:  overrideNotify,
+				ID:            cwData.note.ID,
+				TicketID:      cwData.note.TicketId,
+				MemberID:      memberID,
+				ContactID:     contactID,
+				SkippedNotify: skipNotify,
 			}
+
 			slog.Debug("created insert note params", "id", p.ID, "ticket_id", p.TicketID, "member_id", p.MemberID, "contact_id", p.ContactID, "notified", p.Notified)
 			note, err = s.Queries.InsertTicketNote(ctx, p)
 
@@ -70,6 +71,19 @@ func (s *Server) setNotified(ctx context.Context, noteID int, notified bool) err
 	_, err := s.Queries.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
 		ID:       noteID,
 		Notified: notified,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Server) setSkippedNotify(ctx context.Context, noteID int, skip bool) error {
+	_, err := s.Queries.SetNoteSkippedNotify(ctx, db.SetNoteSkippedNotifyParams{
+		ID:            noteID,
+		SkippedNotify: skip,
 	})
 
 	if err != nil {

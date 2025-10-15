@@ -124,6 +124,9 @@ func (s *Server) preloadMembers(ctx context.Context, maxConcurrent int) error {
 	return nil
 }
 
+// PreloadOpenTickets finds all open tickets in Connectwise and loads them into the DB if they don't
+// already exist. It does not attempt to notify since that would result in tons of notifications
+// for already existing tickets.
 func (s *Server) PreloadOpenTickets(ctx context.Context, maxConcurrent int) error {
 	slog.Info("beginning preloading tickets")
 	params := map[string]string{
@@ -147,7 +150,7 @@ func (s *Server) PreloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 		go func(ticket psa.Ticket) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			if err := s.processTicketPayload(ctx, ticket.ID, "preload", true, false); err != nil {
+			if err := s.processTicket(ctx, ticket.ID, "preload", false); err != nil {
 				errCh <- fmt.Errorf("error preloading ticket %d: %w", ticket.ID, err)
 			} else {
 				errCh <- nil
