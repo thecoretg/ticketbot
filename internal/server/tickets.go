@@ -106,36 +106,41 @@ func (s *Server) processTicket(ctx context.Context, ticketID int, action string,
 
 	// If a note exists, run the ticket notification action, which checks if it meets message
 	// criteria and then notifies if valid
+	notifyAction := "none"
 	if storedData.note.ID != 0 {
-		if err := s.runNotificationAction(ctx, action, cwData, storedData, attemptNotify); err != nil {
+		if notifyAction, err = s.runNotificationAction(ctx, action, cwData, storedData, attemptNotify); err != nil {
 			return fmt.Errorf("running notification action: %w", err)
 		}
 	}
 
 	// Log the ticket result regardless of what happened
-	s.logTicketResult(action, storedData)
+	s.logTicketResult(action, notifyAction, storedData)
 	return nil
 }
 
-func (s *Server) runNotificationAction(ctx context.Context, action string, cwData *cwData, storedData *storedData, attemptNotify bool) error {
-	if attemptNotify {
-		if meetsMessageCriteria(action, storedData) {
-			// set notified first in case message fails - don't want to send duplicates regardless
-			if err := s.setNotified(ctx, storedData.note.ID, true); err != nil {
-				return fmt.Errorf("setting notified to true: %w", err)
-			}
-
-			if err := s.makeAndSendWebexMsgs(ctx, action, cwData, storedData); err != nil {
-				return fmt.Errorf("processing webex messages: %w", err)
-			}
-		}
-	} else {
+func (s *Server) runNotificationAction(ctx context.Context, action string, cwData *cwData, storedData *storedData, attemptNotify bool) (string, error) {
+	na := "skipped"
+	if !attemptNotify {
 		if err := s.setSkippedNotify(ctx, storedData.note.ID, true); err != nil {
-			return fmt.Errorf("setting notify skipped: %w", err)
+			return na, fmt.Errorf("setting notify skipped: %w", err)
 		}
+
+		return na, nil
 	}
 
-	return nil
+	na = "doesnt_meet_criteria"
+	if meetsMessageCriteria(action, storedData) {
+		// set notified first in case message fails - don't want to send duplicates regardless
+		if err := s.setNotified(ctx, storedData.note.ID, true); err != nil {
+			return "error_set_notified", fmt.Errorf("setting notified to true: %w", err)
+		}
+
+		if err := s.makeAndSendWebexMsgs(ctx, action, cwData, storedData); err != nil {
+			return "error_send_webex_msg", fmt.Errorf("processing webex messages: %w", err)
+		}
+		na = "notified"
+	}
+	return na, nil
 }
 
 func (s *Server) softDeleteTicket(ctx context.Context, ticketID int) error {
@@ -254,13 +259,11 @@ func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Cw
 	return ticket, nil
 }
 
-func (s *Server) logTicketResult(action string, storedData *storedData) {
+func (s *Server) logTicketResult(action, notifyAction string, storedData *storedData) {
 	slog.Info("ticket processed",
 		"ticket_id", storedData.ticket.ID,
 		"action", action,
-		"attempt_notify", s.Config.Messages.AttemptNotify,
-		"notified", storedData.note.Notified,
-		"skipped_notify", storedData.note.SkippedNotify)
+		"notified", notifyAction)
 }
 
 // meetsMessageCriteria checks if a message would be allowed to send a notification,
