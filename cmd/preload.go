@@ -12,18 +12,32 @@ var (
 	}
 
 	preloadBoardsCmd = &cobra.Command{
-		Use:  "boards",
-		RunE: preloadBoards,
+		Use: "boards",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return srv.PreloadBoards(ctx, maxPreloads)
+		},
 	}
 
 	preloadTicketsCmd = &cobra.Command{
-		Use:  "tickets",
-		RunE: preloadTickets,
+		Use: "tickets",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return srv.PreloadOpenTickets(ctx, maxPreloads)
+		},
 	}
 
 	preloadAllCmd = &cobra.Command{
-		Use:  "all",
-		RunE: preloadAll,
+		Use: "all",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := srv.PreloadBoards(ctx, maxPreloads); err != nil {
+				return fmt.Errorf("preloading boards: %w", err)
+			}
+
+			if err := srv.PreloadOpenTickets(ctx, maxPreloads); err != nil {
+				return fmt.Errorf("preloading tickets: %w", err)
+			}
+
+			return nil
+		},
 	}
 )
 
@@ -32,32 +46,4 @@ func addPreloadCmd() {
 	preloadCmd.AddCommand(preloadBoardsCmd, preloadTicketsCmd, preloadAllCmd)
 
 	preloadCmd.PersistentFlags().IntVarP(&maxPreloads, "max-concurrent", "m", 5, "max simultaneous connectwise preloads")
-}
-
-func preloadBoards(cmd *cobra.Command, args []string) error {
-	if err := srv.PreloadBoards(ctx, maxPreloads); err != nil {
-		return fmt.Errorf("preloading boards: %w", err)
-	}
-
-	return nil
-}
-
-func preloadTickets(cmd *cobra.Command, args []string) error {
-	if err := srv.PreloadOpenTickets(ctx, maxPreloads); err != nil {
-		return fmt.Errorf("preloading tickets: %w", err)
-	}
-
-	return nil
-}
-
-func preloadAll(cmd *cobra.Command, args []string) error {
-	if err := srv.PreloadBoards(ctx, maxPreloads); err != nil {
-		return fmt.Errorf("preloading boards: %w", err)
-	}
-
-	if err := srv.PreloadOpenTickets(ctx, maxPreloads); err != nil {
-		return fmt.Errorf("preloading tickets: %w", err)
-	}
-
-	return nil
 }

@@ -16,20 +16,38 @@ var (
 	configPath  string
 	maxPreloads int
 	rootCmd     = &cobra.Command{
-		Use:               "tbot",
-		PersistentPreRunE: rootPreRun,
+		Use: "tbot",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			config, err = cfg.InitCfg(configPath)
+			if err != nil {
+				return fmt.Errorf("initializing config: %w", err)
+			}
+
+			d, err := server.ConnectToDB(ctx, config.Creds.PostgresDSN)
+			if err != nil {
+				return fmt.Errorf("connecting to database: %w", err)
+			}
+
+			srv = server.NewServer(config, d)
+			return nil
+		},
 	}
 
 	hooksCmd = &cobra.Command{
 		Use:   "hooks",
 		Short: "Initialize webhooks for the TicketBot server in Connectwise PSA",
-		RunE:  initHooks,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return srv.InitAllHooks()
+		},
 	}
 
 	runCmd = &cobra.Command{
 		Use:   "run",
 		Short: "Run the server",
-		RunE:  runServer,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return srv.Run(ctx)
+		},
 	}
 )
 
@@ -43,33 +61,6 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	addServiceCmd()
 	addPreloadCmd()
+
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "specify a config file path, otherwise defaults to $HOME/.config/ticketbot")
-}
-
-func rootPreRun(cmd *cobra.Command, args []string) error {
-	var err error
-	config, err = cfg.InitCfg(configPath)
-	if err != nil {
-		return fmt.Errorf("initializing config: %w", err)
-	}
-
-	d, err := server.ConnectToDB(ctx, config.Creds.PostgresDSN)
-	if err != nil {
-		return fmt.Errorf("connecting to database: %w", err)
-	}
-
-	srv = server.NewServer(config, d)
-	return nil
-}
-
-func initHooks(cmd *cobra.Command, args []string) error {
-	if err := srv.InitAllHooks(); err != nil {
-		return fmt.Errorf("initializing webhooks: %w", err)
-	}
-
-	return nil
-}
-
-func runServer(cmd *cobra.Command, args []string) error {
-	return srv.Run(ctx)
 }

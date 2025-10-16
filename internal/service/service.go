@@ -15,6 +15,10 @@ const (
 	appName = "tbot"
 )
 
+var (
+	svcName = fmt.Sprintf("%s.service", appName)
+)
+
 func Install(configPath string) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("detected OS of %s - service is only supported on Linux", runtime.GOOS)
@@ -100,15 +104,14 @@ func installService(username, appName, configPath string) error {
 		return err
 	}
 
-	cmds := [][]string{
-		{"systemctl", "daemon-reload"},
-		{"systemctl", "enable", appName},
-		{"systemctl", "restart", appName},
+	cmds := []*exec.Cmd{
+		DaemonReload(),
+		Enable(),
+		Restart(),
 	}
 
 	for _, cmd := range cmds {
-		c := exec.Command("sudo", cmd...)
-		if err := c.Run(); err != nil {
+		if err := cmd.Run(); err != nil {
 			return err
 		}
 	}
