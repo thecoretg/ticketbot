@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	"github.com/thecoretg/ticketbot/internal/logger"
 )
@@ -57,9 +56,7 @@ type MessageCfg struct {
 	ExcludedCWMembers []string `json:"excluded_cw_members" mapstructure:"excluded_cw_members"`
 }
 
-func InitCfg() (*Cfg, error) {
-	_ = godotenv.Load()
-
+func InitCfg(configPath string) (*Cfg, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("getting user config directory: %w", err)
@@ -72,14 +69,25 @@ func InitCfg() (*Cfg, error) {
 	}
 
 	setConfigDefaults()
-	viper.SetConfigName("config")
-	viper.SetConfigType("json")
-	viper.AddConfigPath(cfgDir)
+	if configPath != "" {
+		viper.SetConfigFile(configPath)
+	} else {
+		viper.SetConfigName("config")
+		viper.SetConfigType("json")
+		viper.AddConfigPath(cfgDir)
+	}
+
 	if err := viper.ReadInConfig(); err != nil {
 		if errors.Is(err, viper.ConfigFileNotFoundError{}); err != nil {
-			slog.Info("config file not found, creating now", "file_path", filepath.Join(cfgDir, "config.json"))
-			if err := viper.SafeWriteConfig(); err != nil {
-				return nil, fmt.Errorf("creating config file: %w", err)
+			slog.Info("config file not found, creating now")
+			if configPath != "" {
+				if err := viper.WriteConfigAs(configPath); err != nil {
+					return nil, fmt.Errorf("creating config file at %s: %w", configPath, err)
+				}
+			} else {
+				if err := viper.SafeWriteConfig(); err != nil {
+					return nil, fmt.Errorf("creating config file: %w", err)
+				}
 			}
 		} else {
 			return nil, fmt.Errorf("error reading config file: %w", err)
@@ -103,7 +111,7 @@ func InitCfg() (*Cfg, error) {
 		"excluded_cw_members", c.Messages.ExcludedCWMembers,
 		"attempt_notify", c.Messages.AttemptNotify)
 
-	if !c.fieldsAreValid() {
+	if !c.isValid() {
 		return nil, errors.New("config is missing required fields, please verify env variables")
 	}
 	slog.Info("config fields validated successfully")
@@ -111,7 +119,7 @@ func InitCfg() (*Cfg, error) {
 	return &c, nil
 }
 
-func (cfg *Cfg) fieldsAreValid() bool {
+func (cfg *Cfg) isValid() bool {
 	vals := map[string]string{
 		"root_url":            cfg.General.RootURL,
 		"initial_admin_email": cfg.General.InitialAdminEmail,

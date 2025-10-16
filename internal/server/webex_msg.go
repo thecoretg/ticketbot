@@ -11,24 +11,24 @@ import (
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
-func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData *cwData, storedData *storedData) error {
-	messages, err := s.makeWebexMsgs(ctx, action, cwData, storedData)
+func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) error {
+	messages, err := s.makeWebexMsgs(ctx, action, cd, sd)
 	if err != nil {
 		return fmt.Errorf("creating webex messages: %w", err)
 	}
 
 	if messages == nil {
-		slog.Debug("no messages to send", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID)
+		slog.Debug("no messages to send", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID)
 		return nil
 	}
 
-	slog.Debug("created webex messages", "action", action, "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "total_messages", len(messages))
+	slog.Debug("created webex messages", "action", action, "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "total_messages", len(messages))
 	for _, msg := range messages {
 		_, err := s.WebexClient.PostMessage(&msg)
 		if err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
-			slog.Warn("error sending webex message", "action", action, "ticket_id", storedData.ticket.ID, "room_id", msg.RoomId, "person", msg.ToPersonEmail, "error", err)
+			slog.Warn("error sending webex message", "action", action, "ticket_id", sd.ticket.ID, "room_id", msg.RoomId, "person", msg.ToPersonEmail, "error", err)
 		}
 
 		sentTo := "webex room"
@@ -36,7 +36,7 @@ func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData
 			sentTo = msg.ToPersonEmail
 		}
 
-		slog.Info("notification sent", "action", action, "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "sent_to", sentTo)
+		slog.Info("notification sent", "action", action, "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "sent_to", sentTo)
 	}
 
 	return nil
@@ -44,22 +44,22 @@ func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cwData
 
 // makeWebexMsgs constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
 // the message should be sent to.
-func (s *Server) makeWebexMsgs(ctx context.Context, action string, cwData *cwData, storedData *storedData) ([]webex.Message, error) {
+func (s *Server) makeWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) ([]webex.Message, error) {
 	var body string
-	body += s.messageHeader(action, cwData)
+	body += s.messageHeader(action, cd)
 
 	// add company name if present (even Catchall is considered a company, so this will always exist)
-	if cwData.ticket.Company.Name != "" {
-		body += fmt.Sprintf("\n**Company:** %s", cwData.ticket.Company.Name)
+	if cd.ticket.Company.Name != "" {
+		body += fmt.Sprintf("\n**Company:** %s", cd.ticket.Company.Name)
 	}
 
 	// add ticket contact name if exists (not always true)
-	if cwData.ticket.Contact.Name != "" {
-		body += fmt.Sprintf("\n**Ticket Contact:** %s", cwData.ticket.Contact.Name)
+	if cd.ticket.Contact.Name != "" {
+		body += fmt.Sprintf("\n**Ticket Contact:** %s", cd.ticket.Contact.Name)
 	}
 
-	if cwData.note.Text != "" {
-		body += s.messageText(cwData)
+	if cd.note.Text != "" {
+		body += s.messageText(cd)
 	}
 
 	// Divider line for easily distinguishable breaks in notifications
@@ -67,14 +67,14 @@ func (s *Server) makeWebexMsgs(ctx context.Context, action string, cwData *cwDat
 
 	var messages []webex.Message
 	if action == "added" {
-		slog.Debug("creating message for new ticket", "ticket_id", storedData.ticket.ID, "board_name", storedData.board.Name, "webex_room_id", storedData.board.WebexRoomID)
-		messages = append(messages, webex.NewMessageToRoom(*storedData.board.WebexRoomID, body))
+		slog.Debug("creating message for new ticket", "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "webex_room_id", sd.board.WebexRoomID)
+		messages = append(messages, webex.NewMessageToRoom(*sd.board.WebexRoomID, body))
 	} else if action == "updated" {
-		sendTo, err := s.getSendTo(ctx, storedData)
+		sendTo, err := s.getSendTo(ctx, sd)
 		if len(sendTo) > 0 {
-			slog.Debug("got send-to list", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID, "send_to", sendTo)
+			slog.Debug("got send-to list", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID, "send_to", sendTo)
 		} else {
-			slog.Debug("send-to list is empty", "ticket_id", storedData.ticket.ID, "note_id", storedData.note.ID)
+			slog.Debug("send-to list is empty", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID)
 			return nil, nil
 		}
 
@@ -92,19 +92,19 @@ func (s *Server) makeWebexMsgs(ctx context.Context, action string, cwData *cwDat
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
 // recent update and any other exclusions passed in by the Config.
-func (s *Server) getSendTo(ctx context.Context, storedData *storedData) ([]string, error) {
+func (s *Server) getSendTo(ctx context.Context, sd *storedData) ([]string, error) {
 	var (
 		excludedMembers []int
 		sendToMembers   []db.CwMember
 	)
 
 	// if the sender of the note is a member, exclude them from messages since they don't need a notification for their own note
-	if storedData.note.MemberID != nil {
-		excludedMembers = append(excludedMembers, *storedData.note.MemberID)
+	if sd.note.MemberID != nil {
+		excludedMembers = append(excludedMembers, *sd.note.MemberID)
 	}
 
 	// if there are multiple resources in the string, there are spaces after commas - trim those out
-	resources := strings.Split(*storedData.ticket.Resources, ",")
+	resources := strings.Split(*sd.ticket.Resources, ",")
 	for i, r := range resources {
 		resources[i] = strings.TrimSpace(r)
 	}
@@ -131,7 +131,7 @@ func (s *Server) getSendTo(ctx context.Context, storedData *storedData) ([]strin
 	return emails, nil
 }
 
-func (s *Server) messageHeader(action string, cwData *cwData) string {
+func (s *Server) messageHeader(action string, cd *cwData) string {
 	var header string
 	if action == "added" {
 		header += "**New Ticket:** "
@@ -140,18 +140,18 @@ func (s *Server) messageHeader(action string, cwData *cwData) string {
 	}
 
 	// add clickable ticket ID with link to ticket, with ticket title
-	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cwData.ticket.ID, s.cwCompanyID), cwData.ticket.Summary)
+	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cd.ticket.ID, s.cwCompanyID), cd.ticket.Summary)
 	return header
 }
 
-func (s *Server) messageText(cwData *cwData) string {
+func (s *Server) messageText(cd *cwData) string {
 	var body string
-	sender := getSenderName(cwData)
+	sender := getSenderName(cd)
 	if sender != nil {
 		body += fmt.Sprintf("\n**Latest Note Sent By:** %s", *sender)
 	}
 
-	text := cwData.note.Text
+	text := cd.note.Text
 	if len(text) > s.Config.Messages.MaxMsgLength {
 		text = text[:s.Config.Messages.MaxMsgLength] + "..."
 	}
@@ -170,13 +170,13 @@ func blockQuoteText(text string) string {
 }
 
 // getSenderName determines the name of the sender of a note. It checks for members in Connectwise and external contacts from companies.
-func getSenderName(cwData *cwData) *string {
-	if cwData.note.Member.Name != "" {
-		return &cwData.note.Member.Name
-	} else if cwData.note.CreatedBy != "" {
-		return &cwData.note.CreatedBy
-	} else if cwData.note.Contact.Name != "" {
-		return &cwData.note.Contact.Name
+func getSenderName(cd *cwData) *string {
+	if cd.note.Member.Name != "" {
+		return &cd.note.Member.Name
+	} else if cd.note.CreatedBy != "" {
+		return &cd.note.CreatedBy
+	} else if cd.note.Contact.Name != "" {
+		return &cd.note.Contact.Name
 	}
 
 	return nil

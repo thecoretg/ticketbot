@@ -49,7 +49,7 @@ func (s *Server) handleTickets(c *gin.Context) {
 	slog.Info("received payload from connectwise", "ticket_id", w.ID, "action", w.Action)
 	switch w.Action {
 	case "added", "updated":
-		if err := s.processTicket(c.Request.Context(), w.ID, w.Action, s.Config.Messages.AttemptNotify); err != nil {
+		if err := s.processTicket(c.Request.Context(), w.ID, w.Action); err != nil {
 			c.Error(fmt.Errorf("ticket %d: adding or updating the ticket into data storage: %w", w.ID, err))
 			return
 		}
@@ -73,7 +73,7 @@ func (s *Server) getTicketLock(ticketID int) *sync.Mutex {
 
 // processTicket serves as the primary handler for updating the data store with ticket data. It also will handle
 // extra functionality such as ticket notifications.
-func (s *Server) processTicket(ctx context.Context, ticketID int, action string, attemptNotify bool) error {
+func (s *Server) processTicket(ctx context.Context, ticketID int, action string) error {
 	// Lock the ticket so that extra calls don't interfere. Due to the nature of Connectwise updates will often
 	// result in other hooks and actions taking place, which means a ticket rarely only sends one webhook payload.
 	lock := s.getTicketLock(ticketID)
@@ -87,60 +87,52 @@ func (s *Server) processTicket(ctx context.Context, ticketID int, action string,
 
 	// Get the current data for the ticket via the Connectwise API.
 	// This will be used to compare for changes with the store ticket.
-	cwData, err := s.getCwData(ticketID)
+	cd, err := s.getCwData(ticketID)
 	if err != nil {
 		return fmt.Errorf("getting data from connectwise: %w", err)
 	}
 
-	storedData, err := s.getStoredData(ctx, cwData, attemptNotify)
+	sd, err := s.getStoredData(ctx, cd)
 	if err != nil {
 		return fmt.Errorf("getting or creating stored data: %w", err)
 	}
 
 	// Insert or update the ticket into the store if it didn't exist or if there were changes.
-	p := cwDataToUpdateTicketParams(cwData)
-	storedData.ticket, err = s.Queries.UpdateTicket(ctx, p)
+	p := cwDataToUpdateTicketParams(cd)
+	sd.ticket, err = s.Queries.UpdateTicket(ctx, p)
 	if err != nil {
 		return fmt.Errorf("updating ticket in store: %w", err)
 	}
 
-	// If a note exists, run the ticket notification action, which checks if it meets message
-	// criteria and then notifies if valid
-	notifyAction := "none"
-	if storedData.note.ID != 0 {
-		if notifyAction, err = s.runNotificationAction(ctx, action, cwData, storedData, attemptNotify); err != nil {
-			return fmt.Errorf("running notification action: %w", err)
+	// If a note exists and notifications are on, run the ticket notification action,
+	// which checks if it meets message criteria and then notifies if valid
+	notified := false
+	if s.Config.Messages.AttemptNotify && sd.note.ID != 0 {
+		notified, err = s.runNotificationAction(ctx, action, cd, sd)
+		if err != nil {
+			return fmt.Errorf("running notifier: %w", err)
 		}
 	}
 
 	// Log the ticket result regardless of what happened
-	s.logTicketResult(action, notifyAction, storedData)
+	s.logTicketResult(action, notified, sd)
 	return nil
 }
 
-func (s *Server) runNotificationAction(ctx context.Context, action string, cwData *cwData, storedData *storedData, attemptNotify bool) (string, error) {
-	na := "skipped"
-	if !attemptNotify {
-		if err := s.setSkippedNotify(ctx, storedData.note.ID, true); err != nil {
-			return na, fmt.Errorf("setting notify skipped: %w", err)
-		}
-
-		return na, nil
-	}
-
-	na = "doesnt_meet_criteria"
-	if meetsMessageCriteria(action, storedData) {
+func (s *Server) runNotificationAction(ctx context.Context, action string, cd *cwData, sd *storedData) (bool, error) {
+	notified := false
+	if meetsMessageCriteria(action, sd) {
 		// set notified first in case message fails - don't want to send duplicates regardless
-		if err := s.setNotified(ctx, storedData.note.ID, true); err != nil {
-			return "error_set_notified", fmt.Errorf("setting notified to true: %w", err)
+		if err := s.setNotified(ctx, sd.note.ID, true); err != nil {
+			return false, fmt.Errorf("setting notified to true: %w", err)
 		}
 
-		if err := s.makeAndSendWebexMsgs(ctx, action, cwData, storedData); err != nil {
-			return "error_send_webex_msg", fmt.Errorf("processing webex messages: %w", err)
+		if err := s.makeAndSendWebexMsgs(ctx, action, cd, sd); err != nil {
+			return false, fmt.Errorf("processing webex messages: %w", err)
 		}
-		na = "notified"
+		notified = true
 	}
-	return na, nil
+	return notified, nil
 }
 
 func (s *Server) softDeleteTicket(ctx context.Context, ticketID int) error {
@@ -173,44 +165,44 @@ func (s *Server) getCwData(ticketID int) (*cwData, error) {
 	}, nil
 }
 
-func (s *Server) getStoredData(ctx context.Context, cwData *cwData, skipNotify bool) (*storedData, error) {
+func (s *Server) getStoredData(ctx context.Context, cd *cwData) (*storedData, error) {
 	// first check for or create board since it needs to exist before the ticket
-	board, err := s.ensureBoardInStore(ctx, cwData)
+	board, err := s.ensureBoardInStore(ctx, cd)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring board in store: %w", err)
 	}
 
-	company, err := s.ensureCompanyInStore(ctx, cwData.ticket.Company.ID)
+	company, err := s.ensureCompanyInStore(ctx, cd.ticket.Company.ID)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring company in store: %w", err)
 	}
 
 	contact := db.CwContact{}
-	if cwData.ticket.Contact.ID != 0 {
-		contact, err = s.ensureContactInStore(ctx, cwData.ticket.Contact.ID)
+	if cd.ticket.Contact.ID != 0 {
+		contact, err = s.ensureContactInStore(ctx, cd.ticket.Contact.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring contact in store: %w", err)
 		}
 	}
 
 	owner := db.CwMember{}
-	if cwData.ticket.Owner.ID != 0 {
-		owner, err = s.ensureMemberInStore(ctx, cwData.ticket.Owner.ID)
+	if cd.ticket.Owner.ID != 0 {
+		owner, err = s.ensureMemberInStore(ctx, cd.ticket.Owner.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring owner in store: %w", err)
 		}
 	}
 
 	// check for, or create ticket
-	ticket, err := s.ensureTicketInStore(ctx, cwData)
+	ticket, err := s.ensureTicketInStore(ctx, cd)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
 	// start with empty note, use existing or created note if there is a note in the ticket
 	note := db.CwTicketNote{}
-	if cwData.note.ID != 0 {
-		note, err = s.ensureNoteInStore(ctx, cwData, skipNotify)
+	if cd.note.ID != 0 {
+		note, err = s.ensureNoteInStore(ctx, cd)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring note in store: %w", err)
 		}
@@ -226,19 +218,19 @@ func (s *Server) getStoredData(ctx context.Context, cwData *cwData, skipNotify b
 	}, nil
 }
 
-func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.CwTicket, error) {
-	ticket, err := s.Queries.GetTicket(ctx, cwData.ticket.ID)
+func (s *Server) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTicket, error) {
+	ticket, err := s.Queries.GetTicket(ctx, cd.ticket.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			p := db.InsertTicketParams{
-				ID:        cwData.ticket.ID,
-				Summary:   cwData.ticket.Summary,
-				BoardID:   cwData.ticket.Board.ID,
-				OwnerID:   intToPtr(cwData.ticket.Owner.ID),
-				CompanyID: cwData.ticket.Company.ID,
-				ContactID: intToPtr(cwData.ticket.Contact.ID),
-				Resources: &cwData.ticket.Resources,
-				UpdatedBy: &cwData.ticket.Info.UpdatedBy,
+				ID:        cd.ticket.ID,
+				Summary:   cd.ticket.Summary,
+				BoardID:   cd.ticket.Board.ID,
+				OwnerID:   intToPtr(cd.ticket.Owner.ID),
+				CompanyID: cd.ticket.Company.ID,
+				ContactID: intToPtr(cd.ticket.Contact.ID),
+				Resources: &cd.ticket.Resources,
+				UpdatedBy: &cd.ticket.Info.UpdatedBy,
 			}
 
 			slog.Debug("created insert ticket params", "id", p.ID, "summary", p.Summary, "board_id", p.BoardID, "owner_id", p.OwnerID, "company_id", p.CompanyID, "contact_id", p.ContactID, "resources", p.Resources, "updated_by", p.UpdatedBy)
@@ -259,36 +251,39 @@ func (s *Server) ensureTicketInStore(ctx context.Context, cwData *cwData) (db.Cw
 	return ticket, nil
 }
 
-func (s *Server) logTicketResult(action, notifyAction string, storedData *storedData) {
+func (s *Server) logTicketResult(action string, notified bool, sd *storedData) {
 	slog.Info("ticket processed",
-		"ticket_id", storedData.ticket.ID,
+		"ticket_id", sd.ticket.ID,
 		"action", action,
-		"notified", notifyAction)
+		"notified", notified)
 }
 
 // meetsMessageCriteria checks if a message would be allowed to send a notification,
 // depending on if it was added or updated, if the note changed, and the board's notification settings.
-func meetsMessageCriteria(action string, storedData *storedData) bool {
+func meetsMessageCriteria(action string, sd *storedData) bool {
+	slog.Debug("checking message conditions", "action", action, "ticket_id", sd.ticket.ID, "note_id", sd.note.ID,
+		"board_id", sd.board.ID, "board_notify_enabled", sd.board.NotifyEnabled, "already_notified", sd.note.Notified)
+	meetsCrit := false
 	if action == "added" {
-		return storedData.board.NotifyEnabled
+		meetsCrit = sd.board.NotifyEnabled
 	}
 
 	if action == "updated" {
-		return !storedData.note.Notified && storedData.board.NotifyEnabled
+		meetsCrit = !sd.note.Notified && sd.board.NotifyEnabled
 	}
 
-	return false
+	return meetsCrit
 }
 
-func cwDataToUpdateTicketParams(cwData *cwData) db.UpdateTicketParams {
+func cwDataToUpdateTicketParams(cd *cwData) db.UpdateTicketParams {
 	return db.UpdateTicketParams{
-		ID:        cwData.ticket.ID,
-		Summary:   cwData.ticket.Summary,
-		BoardID:   cwData.ticket.Board.ID,
-		OwnerID:   intToPtr(cwData.ticket.Owner.ID),
-		CompanyID: cwData.ticket.Company.ID,
-		ContactID: intToPtr(cwData.ticket.Contact.ID),
-		Resources: strToPtr(cwData.ticket.Resources),
-		UpdatedBy: strToPtr(cwData.ticket.Info.UpdatedBy),
+		ID:        cd.ticket.ID,
+		Summary:   cd.ticket.Summary,
+		BoardID:   cd.ticket.Board.ID,
+		OwnerID:   intToPtr(cd.ticket.Owner.ID),
+		CompanyID: cd.ticket.Company.ID,
+		ContactID: intToPtr(cd.ticket.Contact.ID),
+		Resources: strToPtr(cd.ticket.Resources),
+		UpdatedBy: strToPtr(cd.ticket.Info.UpdatedBy),
 	}
 }

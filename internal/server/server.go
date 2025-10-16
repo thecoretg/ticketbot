@@ -28,13 +28,17 @@ type Server struct {
 
 // Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
 // restart it
-func (s *Server) Run() error {
+func (s *Server) Run(ctx context.Context) error {
 	if !s.Config.Logging.Debug {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	s.GinEngine = gin.Default()
 	s.addAllRoutes()
+
+	if err := s.BootstrapAdmin(ctx); err != nil {
+		return fmt.Errorf("bootstrapping admin: %w", err)
+	}
 
 	if s.Config.General.UseAutoTLS {
 		slog.Info("running server with auto tls", "url", s.Config.General.RootURL)

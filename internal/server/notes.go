@@ -25,7 +25,7 @@ func (s *Server) getLatestNoteFromCW(ticketID int) (*psa.ServiceTicketNote, erro
 	return note, nil
 }
 
-func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, skipNotify bool) (db.CwTicketNote, error) {
+func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwTicketNote, error) {
 	memberID, err := s.getMemberID(ctx, cwData)
 	if err != nil {
 		return db.CwTicketNote{}, fmt.Errorf("getting member data: %w", err)
@@ -41,11 +41,10 @@ func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData, skipNoti
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("note not found in store, attempting insert", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
 			p := db.InsertTicketNoteParams{
-				ID:            cwData.note.ID,
-				TicketID:      cwData.note.TicketId,
-				MemberID:      memberID,
-				ContactID:     contactID,
-				SkippedNotify: skipNotify,
+				ID:        cwData.note.ID,
+				TicketID:  cwData.note.TicketId,
+				MemberID:  memberID,
+				ContactID: contactID,
 			}
 
 			slog.Debug("created insert note params", "id", p.ID, "ticket_id", p.TicketID, "member_id", p.MemberID, "contact_id", p.ContactID, "notified", p.Notified)

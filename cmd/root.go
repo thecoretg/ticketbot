@@ -2,22 +2,32 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 	"github.com/thecoretg/ticketbot/internal/cfg"
 	"github.com/thecoretg/ticketbot/internal/server"
+	"github.com/thecoretg/ticketbot/internal/service"
 )
 
 var (
-	ctx                                              = context.Background()
-	run, preloadBoards, preloadTickets, initWebhooks bool
-	maxPreloads                                      int
-	rootCmd                                          = &cobra.Command{
-		Use: "ticketbot",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return parseRootFlags(ctx)
-		},
+	ctx                                                = context.Background()
+	configPath                                         string
+	serve, preloadBoards, preloadTickets, initWebhooks bool
+	maxPreloads                                        int
+	rootCmd                                            = &cobra.Command{
+		Use: "tbot",
+	}
+
+	runCmd = &cobra.Command{
+		Use:  "run",
+		RunE: runServer,
+	}
+
+	installServiceCmd = &cobra.Command{
+		Use:  "install-service",
+		RunE: runInstallService,
 	}
 )
 
@@ -26,15 +36,18 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(installServiceCmd)
 	rootCmd.PersistentFlags().BoolVarP(&preloadBoards, "preload-boards", "b", false, "preload boards from connectwise")
 	rootCmd.PersistentFlags().BoolVarP(&preloadTickets, "preload-tickets", "t", false, "preload open tickets from connectwise")
 	rootCmd.PersistentFlags().IntVarP(&maxPreloads, "max-preloads", "m", 5, "max simultaneous connectwise preloads")
 	rootCmd.PersistentFlags().BoolVarP(&initWebhooks, "init-webhooks", "w", false, "initialize webhooks")
-	rootCmd.PersistentFlags().BoolVarP(&run, "run", "r", false, "run the server")
+	rootCmd.PersistentFlags().BoolVarP(&serve, "serve", "s", false, "run the server")
+	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "specify a config file path, otherwise defaults to $HOME/.config/ticketbot")
 }
 
-func parseRootFlags(ctx context.Context) error {
-	c, err := cfg.InitCfg()
+func runServer(cmd *cobra.Command, args []string) error {
+	c, err := cfg.InitCfg(configPath)
 	if err != nil {
 		return fmt.Errorf("initializing config: %w", err)
 	}
@@ -45,10 +58,6 @@ func parseRootFlags(ctx context.Context) error {
 	}
 
 	s := server.NewServer(c, d)
-
-	if err := s.BootstrapAdmin(ctx); err != nil {
-		return fmt.Errorf("bootstrapping admin: %w", err)
-	}
 
 	if preloadBoards {
 		if err := s.PreloadBoards(ctx, maxPreloads); err != nil {
@@ -68,9 +77,23 @@ func parseRootFlags(ctx context.Context) error {
 		}
 	}
 
-	if run {
-		return s.Run()
+	if serve {
+		return s.Run(ctx)
 	}
 
 	return nil
+}
+
+func runInstallService(cmd *cobra.Command, args []string) error {
+	if configPath == "" {
+		return errors.New("config path is empty, please specify with --config or -c")
+	}
+
+	// initialize the config to just to validate it
+	_, err := cfg.InitCfg(configPath)
+	if err != nil {
+		return fmt.Errorf("checking config: %w", err)
+	}
+
+	return service.Install(configPath)
 }
