@@ -117,5 +117,5 @@ RestartSec=5
 User=%s
 
 [Install]
-WantedBy=multi-user.target`, username, configPath)
+WantedBy=multi-user.target`, configPath, username)
 }
