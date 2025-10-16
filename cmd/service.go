@@ -22,7 +22,7 @@ var (
 	serviceInstallCmd = &cobra.Command{
 		Use: "install",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return service.Install(configPath)
+			return service.Install()
 		},
 	}
 

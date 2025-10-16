@@ -21,7 +21,7 @@ var (
 		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			var err error
-			config, err = cfg.InitCfg(configPath)
+			config, err = cfg.InitCfg()
 			if err != nil {
 				return fmt.Errorf("initializing config: %w", err)
 			}
