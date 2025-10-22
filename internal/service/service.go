@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	appName = "tbot"
+	appName = "tbot-server"
 )
 
 var (
@@ -122,11 +122,11 @@ Description=TicketBot Server
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/tbot run 
+ExecStart=/usr/local/bin/%s run 
 Restart=always
 RestartSec=5
 User=%s
 
 [Install]
-WantedBy=multi-user.target`, username)
+WantedBy=multi-user.target`, appName, username)
 }

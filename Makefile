@@ -1,5 +1,11 @@
-build:
-	go build -o bin/tbot main.go && sudo cp bin/tbot /usr/local/bin/tbot
+create-bin-dir:
+	mkdir -p bin
+
+build-server: create-bin-dir
+	go build -o bin/server ./cmd/server && sudo cp bin/server /usr/local/bin/tbot-server
+
+build-admin-cli: create-bin-dir
+	go build -o bin/cli ./cmd/admincli && sudo cp bin/admincli /usr/local/bin/tbot-cli
 
 gensql:
 	sqlc generate -f internal/db/sqlc.yaml
