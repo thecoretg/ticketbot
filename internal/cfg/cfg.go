@@ -4,73 +4,107 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
+	"os"
+	"path/filepath"
 
-	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 	"github.com/thecoretg/ticketbot/internal/logger"
 )
 
 type Cfg struct {
-	General  GeneralCfg `mapstructure:"general"`
-	Logging  LoggingCfg `mapstructure:"logging"`
-	Creds    CredsCfg   `mapstructure:"creds"`
-	Messages MessageCfg `mapstructure:"messages"`
+	General  GeneralCfg `json:"general" mapstructure:"general"`
+	Logging  LoggingCfg `json:"logging" mapstructure:"logging"`
+	Creds    CredsCfg   `json:"creds" mapstucture:"creds"`
+	Messages MessageCfg `json:"messages" mapstructure:"messages"`
 }
 
 type GeneralCfg struct {
-	RootURL           string `mapstructure:"root_url"`
-	UseAutoTLS        bool   `mapstructure:"use_auto_tls"`
-	InitialAdminEmail string `mapstructure:"initial_admin_email"`
-	ExitOnError       bool   `mapstructure:"exit_on_error"`
+	RootURL           string `json:"root_url" mapstructure:"root_url"`
+	UseAutoTLS        bool   `json:"use_auto_tls" mapstructure:"use_auto_tls"`
+	InitialAdminEmail string `json:"initial_admin_email" mapstructure:"initial_admin_email"`
+	ExitOnError       bool   `json:"exit_on_error" mapstructure:"exit_on_error"`
 }
 
 type LoggingCfg struct {
-	VerboseLogging bool `mapstructure:"verbose"`
-	Debug          bool `mapstructure:"debug"`
+	VerboseLogging bool `json:"verbose" mapstructure:"verbose"`
+	Debug          bool `json:"debug" mapstructure:"debug"`
 
-	LogToFile   bool   `mapstructure:"log_to_file"`
-	LogFilePath string `mapstructure:"log_file_path"`
+	LogToFile   bool   `json:"log_to_file" mapstructure:"log_to_file"`
+	LogFilePath string `json:"log_file_path" mapstructure:"log_file_path"`
 }
 
 type CredsCfg struct {
-	CW          CWCreds `mapstructure:"connectwise"`
-	WebexSecret string  `mapstructure:"webex_secret"`
-	PostgresDSN string  `mapstructure:"postgres_dsn"`
+	CW          CWCreds `json:"connectwise" mapstructure:"connectwise"`
+	WebexSecret string  `json:"webex_secret" mapstructure:"webex_secret"`
+	PostgresDSN string  `json:"postgres_dsn" mapstructure:"postgres_dsn"`
 }
 
 type CWCreds struct {
-	PubKey    string `mapstructure:"pub_key"`
-	PrivKey   string `mapstructure:"priv_key"`
-	ClientID  string `mapstructure:"client_id"`
-	CompanyID string `mapstructure:"company_id"`
+	PubKey    string `json:"pub_key" mapstructure:"pub_key"`
+	PrivKey   string `json:"priv_key" mapstructure:"priv_key"`
+	ClientID  string `json:"client_id" mapstructure:"client_id"`
+	CompanyID string `json:"company_id" mapstructure:"company_id"`
 }
 
 type MessageCfg struct {
-	AttemptNotify bool `mapstructure:"attempt_notify"`
+	AttemptNotify bool `json:"attempt_notify" mapstructure:"attempt_notify"`
 
 	// Max message length before ticket notifications get a "..." at the end instead of the whole message.
-	MaxMsgLength int `mapstructure:"max_msg_length"`
+	MaxMsgLength int `json:"max_msg_length" mapstructure:"max_msg_length"`
 
 	// Members who we don't want to receive Webex messages.
-	ExcludedCWMembers []string `mapstructure:"excluded_cw_members"`
+	ExcludedCWMembers []string `json:"excluded_cw_members" mapstructure:"excluded_cw_members"`
 }
 
-func InitCfg() (*Cfg, error) {
-	godotenv.Load()
-	viper.SetEnvPrefix("TBOT")
-	viper.AutomaticEnv()
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+func InitCfg(configPath string) (*Cfg, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("getting user config directory: %w", err)
+	}
+
+	cfgDir := filepath.Join(home, ".config", "ticketbot")
+	// TODO: right permissions?
+	if err := os.MkdirAll(cfgDir, 0700); err != nil {
+		return nil, fmt.Errorf("creating config directory: %w", err)
+	}
+
 	setConfigDefaults()
+	if configPath != "" {
+		viper.SetConfigFile(configPath)
+	} else {
+		viper.SetConfigName("config")
+		viper.SetConfigType("json")
+		viper.AddConfigPath(cfgDir)
+	}
+
+	if err := viper.ReadInConfig(); err != nil {
+		if errors.Is(err, viper.ConfigFileNotFoundError{}); err != nil {
+			fmt.Println("Config file not found, creating one now")
+			if configPath != "" {
+				if err := viper.WriteConfigAs(configPath); err != nil {
+					return nil, fmt.Errorf("creating config file at %s: %w", configPath, err)
+				}
+			} else {
+				if err := viper.SafeWriteConfig(); err != nil {
+					return nil, fmt.Errorf("creating config file: %w", err)
+				}
+				fmt.Println("Config file created, please fill empty variables")
+				return nil, nil
+			}
+		} else {
+			return nil, fmt.Errorf("error reading config file: %w", err)
+		}
+	}
 
 	var c Cfg
 	if err := viper.Unmarshal(&c); err != nil {
-		return nil, fmt.Errorf("unmarshaling config: %w", err)
+		return nil, fmt.Errorf("unmarshaling config to json: %w", err)
 	}
 
 	if err := logger.SetLogger(c.Logging.VerboseLogging, c.Logging.Debug, c.Logging.LogToFile, c.Logging.LogFilePath); err != nil {
 		return nil, fmt.Errorf("error setting logger: %w", err)
 	}
+
 	slog.Debug("logger set", "debug", c.Logging.Debug, "log_to_file", c.Logging.LogToFile, "log_file_path", c.Logging.LogFilePath)
 
 	slog.Debug("config initialized", "debug", c.Logging.Debug, "exit_on_error", c.General.ExitOnError,
@@ -80,7 +114,7 @@ func InitCfg() (*Cfg, error) {
 		"attempt_notify", c.Messages.AttemptNotify)
 
 	if !c.isValid() {
-		return nil, errors.New("config is missing required fields, please set the missing environment variables")
+		return nil, errors.New("config is missing required fields, please open file and fill any empty fields")
 	}
 	slog.Debug("config fields validated successfully")
 
@@ -89,14 +123,14 @@ func InitCfg() (*Cfg, error) {
 
 func (cfg *Cfg) isValid() bool {
 	vals := map[string]string{
-		"TBOT_GENERAL_ROOT_URL":             cfg.General.RootURL,
-		"TBOT_GENERAL_INITIAL_ADMIN_EMAIL":  cfg.General.InitialAdminEmail,
-		"TBOT_CREDS_CONNECTWISE_PUB_KEY":    cfg.Creds.CW.PubKey,
-		"TBOT_CREDS_CONNECTWISE_PRIV_KEY":   cfg.Creds.CW.PrivKey,
-		"TBOT_CREDS_CONNECTWISE_CLIENT_ID":  cfg.Creds.CW.ClientID,
-		"TBOT_CREDS_CONNECTWISE_COMPANY_ID": cfg.Creds.CW.CompanyID,
-		"TBOT_CREDS_POSTGRES_DSN":           cfg.Creds.PostgresDSN,
-		"TBOT_CREDS_WEBEX_SECRET":           cfg.Creds.WebexSecret,
+		"root_url":            cfg.General.RootURL,
+		"initial_admin_email": cfg.General.InitialAdminEmail,
+		"cw_pub_key":          cfg.Creds.CW.PubKey,
+		"cw_priv_key":         cfg.Creds.CW.PrivKey,
+		"cw_client_id":        cfg.Creds.CW.ClientID,
+		"cw_company_id":       cfg.Creds.CW.CompanyID,
+		"postgres_dsn":        cfg.Creds.PostgresDSN,
+		"webex_secret":        cfg.Creds.WebexSecret,
 	}
 
 	var empty []string

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,16 +12,20 @@ import (
 )
 
 const (
-	appName = "tbot-server"
+	appName = "tbot"
 )
 
 var (
 	svcName = fmt.Sprintf("%s.service", appName)
 )
 
-func Install() error {
+func Install(configPath string) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("detected OS of %s - service is only supported on Linux", runtime.GOOS)
+	}
+
+	if configPath == "" {
+		return errors.New("config path required")
 	}
 
 	destPath := filepath.Join("/usr/local/bin", appName)
@@ -40,7 +45,7 @@ func Install() error {
 		return err
 	}
 
-	if err := installService(username, appName); err != nil {
+	if err := installService(username, appName, configPath); err != nil {
 		return fmt.Errorf("installing service: %w", err)
 	}
 
@@ -93,9 +98,9 @@ func ensureBinary(src, dst string) error {
 	return nil
 }
 
-func installService(username, appName string) error {
+func installService(username, appName, configPath string) error {
 	path := fmt.Sprintf("/etc/systemd/system/%s.service", appName)
-	if err := os.WriteFile(path, []byte(service(username)), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(service(username, configPath)), 0644); err != nil {
 		return err
 	}
 
@@ -115,18 +120,18 @@ func installService(username, appName string) error {
 	return nil
 }
 
-func service(username string) string {
+func service(username, configPath string) string {
 	return fmt.Sprintf(`
 [Unit]
 Description=TicketBot Server
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/%s run 
+ExecStart=/usr/local/bin/tbot run --config %s
 Restart=always
 RestartSec=5
 User=%s
 
 [Install]
-WantedBy=multi-user.target`, appName, username)
+WantedBy=multi-user.target`, configPath, username)
 }
