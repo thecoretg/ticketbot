@@ -7,7 +7,9 @@ import (
 )
 
 var (
-	keyDir       string
+	keyDir  string
+	showKey bool
+
 	bootstrapCmd = &cobra.Command{
 		Use: "bootstrap",
 	}
@@ -15,12 +17,15 @@ var (
 	bootstrapCreateCmd = &cobra.Command{
 		Use: "create",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := srv.BootstrapAdmin(ctx, keyDir)
+			res, err := srv.BootstrapAdmin(ctx, keyDir)
 			if err != nil {
 				return err
 			}
 
-			fmt.Printf("Bootstrap key created and is stored at %s\n", path)
+			fmt.Printf("Bootstrap key created and is stored at %s\n", res.FilePath)
+			if showKey {
+				fmt.Printf("\nKey: %s\n", res.Key)
+			}
 			return nil
 		},
 	}
@@ -30,4 +35,5 @@ func addBootstrapCmd() {
 	rootCmd.AddCommand(bootstrapCmd)
 	bootstrapCmd.AddCommand(bootstrapCreateCmd)
 	bootstrapCreateCmd.Flags().StringVarP(&keyDir, "key-directory", "k", "", "directory to put the bootstrap key in")
+	bootstrapCreateCmd.Flags().BoolVarP(&showKey, "show-key", "s", false, "show the key after it is created")
 }
