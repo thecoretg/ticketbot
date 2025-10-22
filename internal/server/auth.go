@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -128,8 +129,21 @@ func (s *Server) BootstrapAdmin(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("creating bootstrap key: %w", err)
 		}
-		path := "boostrap.key"
-		if err := os.WriteFile(path, []byte(key), 0600); err != nil {
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("getting user home directory: %w", err)
+		}
+
+		path := filepath.Join(home, "bootstrap.key")
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+		if err != nil {
+			return fmt.Errorf("writing key file: %w", err)
+		}
+
+		defer f.Close()
+
+		if _, err := f.WriteString(key); err != nil {
 			return fmt.Errorf("writing key file: %w", err)
 		}
 		slog.Debug("bootstrap key saved")
