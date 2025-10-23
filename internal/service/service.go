@@ -1,9 +1,11 @@
 package service
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"os/user"
@@ -66,33 +68,59 @@ func ShowLogs() error {
 }
 
 func ensureBinary(src, dst string) error {
-	_, err := os.Stat(dst)
-	if err == nil {
-		return nil // already exists
-	}
+	if _, err := os.Stat(dst); err == nil {
+		slog.Debug("destination binary already exists, checking hash", "path", dst)
+		match, err := filesEqual(src, dst)
+		if err != nil {
+			return fmt.Errorf("comparing binaries: %w", err)
+		}
 
-	if !os.IsNotExist(err) {
+		if match {
+			slog.Debug("file hashes match, no action needed")
+			return nil
+		}
+	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("checking if binary is in /usr/local/bin: %w", err)
 	}
+
+	dir := filepath.Dir(dst)
+	tmp := filepath.Join(dir, filepath.Base(dst)+".tmp")
 
 	in, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("opening source binary: %w", err)
 	}
+	slog.Debug("opened source binary", "path", src)
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	out, err := os.Create(tmp)
 	if err != nil {
-		return fmt.Errorf("creating new binary: %w", err)
+		return fmt.Errorf("creating temporary binary: %w", err)
 	}
-	defer out.Close()
+	slog.Debug("created destination binary", "path", dst)
 
 	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(tmp)
 		return fmt.Errorf("copying binary to %s: %w", dst, err)
 	}
+	slog.Debug("copied binary", "src", src, "dst", dst)
 
-	if err := os.Chmod(dst, 0755); err != nil {
-		return fmt.Errorf("granting proper permissions to binary: %w", err)
+	if err := out.Close(); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("closing temp binary: %w", err)
+	}
+
+	perm := os.FileMode(0755)
+	if err := os.Chmod(tmp, perm); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("chmod temp binary: %w", err)
+	}
+	slog.Debug("binary permissions changed", "path", dst, "permissions", perm)
+
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("installing binary: %w", err)
 	}
 
 	return nil
@@ -134,4 +162,36 @@ User=%s
 
 [Install]
 WantedBy=multi-user.target`, configPath, username)
+}
+
+func filesEqual(a, b string) (bool, error) {
+	ha, err := fileHash(a)
+	if err != nil {
+		return false, err
+	}
+
+	hb, err := fileHash(b)
+	if err != nil {
+		return false, err
+	}
+
+	return ha == hb, nil
+}
+
+func fileHash(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", fmt.Errorf("failed to copy file content to hash: %w", err)
+	}
+
+	hasbBytes := hash.Sum(nil)
+	hashStr := fmt.Sprintf("%x", hasbBytes)
+
+	return hashStr, nil
 }
