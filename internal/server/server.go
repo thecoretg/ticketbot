@@ -46,6 +46,7 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) addAllRoutes() {
+	s.addPingGroup()
 	s.addHooksGroup()
 	s.addBoardsGroup()
 }

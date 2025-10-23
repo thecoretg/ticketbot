@@ -5,7 +5,7 @@ build-server: create-bin-dir
 	go build -o bin/server ./cmd/server && sudo cp bin/server /usr/local/bin/tbot-server
 
 build-admin-cli: create-bin-dir
-	go build -o bin/cli ./cmd/admincli && sudo cp bin/admincli /usr/local/bin/tbot-cli
+	go build -o bin/cli ./cmd/admincli && sudo cp bin/cli /usr/local/bin/tbot-cli
 
 gensql:
 	sqlc generate -f internal/db/sqlc.yaml
