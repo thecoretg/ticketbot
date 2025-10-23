@@ -73,21 +73,3 @@ func NewServer(cfg *cfg.Cfg, dbConn *db.Queries) *Server {
 
 	return s
 }
-
-func (s *Server) addRoutes() {
-	ping := s.GinEngine.Group("/ping", ErrorHandler(s.Config.General.ExitOnError), s.APIKeyAuth())
-	ping.GET("/", s.ping)
-
-	boards := s.GinEngine.Group("/boards", ErrorHandler(s.Config.General.ExitOnError), s.APIKeyAuth())
-	boards.GET("/:board_id", s.getBoard)
-	boards.GET("/", s.listBoards)
-	boards.PUT("/:board_id", s.putBoard)
-	boards.DELETE("/:board_id", s.deleteBoard)
-
-	rooms := s.GinEngine.Group("/rooms", ErrorHandler(s.Config.General.ExitOnError), s.APIKeyAuth())
-	rooms.GET("/", s.listWebexRooms)
-
-	hooks := s.GinEngine.Group("/hooks")
-	cwHooks := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.Config.General.ExitOnError))
-	cwHooks.POST("/tickets", s.handleTickets)
-}

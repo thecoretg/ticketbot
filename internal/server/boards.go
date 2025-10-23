@@ -13,7 +13,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (s *Server) getBoard(c *gin.Context) {
+func (s *Server) handleGetBoard(c *gin.Context) {
 	boardID, err := strconv.Atoi(c.Param("board_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorOutput("board id must be a valid integer"))
@@ -33,7 +33,7 @@ func (s *Server) getBoard(c *gin.Context) {
 	c.JSON(http.StatusOK, board)
 }
 
-func (s *Server) listBoards(c *gin.Context) {
+func (s *Server) handleListBoards(c *gin.Context) {
 	boards, err := s.Queries.ListBoards(c.Request.Context())
 	if err != nil {
 		c.Error(fmt.Errorf("listing boards: %w", err))
@@ -47,7 +47,7 @@ func (s *Server) listBoards(c *gin.Context) {
 	c.JSON(http.StatusOK, boards)
 }
 
-func (s *Server) putBoard(c *gin.Context) {
+func (s *Server) handlePutBoard(c *gin.Context) {
 	boardID, err := strconv.Atoi(c.Param("board_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorOutput("board id must be a valid integer"))
@@ -79,7 +79,7 @@ func (s *Server) putBoard(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedBoard)
 }
 
-func (s *Server) deleteBoard(c *gin.Context) {
+func (s *Server) handleDeleteBoard(c *gin.Context) {
 	boardID, err := strconv.Atoi(c.Param("board_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorOutput("board id must be a valid integer"))
