@@ -13,14 +13,6 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (s *Server) addBoardsGroup() {
-	boards := s.GinEngine.Group("/boards", ErrorHandler(s.Config.General.ExitOnError), s.APIKeyAuth())
-	boards.GET("/:board_id", s.getBoard)
-	boards.GET("/", s.listBoards)
-	boards.PUT("/:board_id", s.putBoard)
-	boards.DELETE("/:board_id", s.deleteBoard)
-}
-
 func (s *Server) getBoard(c *gin.Context) {
 	boardID, err := strconv.Atoi(c.Param("board_id"))
 	if err != nil {

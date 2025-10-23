@@ -4,12 +4,29 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/db"
 	"github.com/thecoretg/ticketbot/internal/psa"
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
+
+func (s *Server) listWebexRooms(c *gin.Context) {
+	// TODO: query params?
+	rooms, err := s.WebexClient.ListRooms(nil)
+	if err != nil {
+		c.Error(fmt.Errorf("listing rooms: %w", err))
+		return
+	}
+
+	if rooms == nil {
+		rooms = []webex.Room{}
+	}
+
+	c.JSON(http.StatusOK, rooms)
+}
 
 func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) error {
 	messages, err := s.makeWebexMsgs(ctx, action, cd, sd)

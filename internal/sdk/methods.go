@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/thecoretg/ticketbot/internal/db"
+	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
 func (c *Client) boardIDEndpoint(boardID int) string {
@@ -24,4 +25,8 @@ func (c *Client) PutBoard(boardID int, board *db.CwBoard) (*db.CwBoard, error) {
 
 func (c *Client) DeleteBoard(boardID int) error {
 	return Delete(c, c.boardIDEndpoint(boardID))
+}
+
+func (c *Client) ListRooms(params map[string]string) ([]webex.Room, error) {
+	return GetMany[webex.Room](c, "rooms", params)
 }

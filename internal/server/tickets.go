@@ -28,12 +28,6 @@ type storedData struct {
 	board   db.CwBoard
 }
 
-func (s *Server) addHooksGroup() {
-	hooks := s.GinEngine.Group("/hooks")
-	cw := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.Config.General.ExitOnError))
-	cw.POST("/tickets", s.handleTickets)
-}
-
 func (s *Server) handleTickets(c *gin.Context) {
 	w := &psa.WebhookPayload{}
 	if err := c.ShouldBindJSON(w); err != nil {
