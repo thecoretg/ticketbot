@@ -2,24 +2,13 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/thecoretg/ticketbot/internal/db"
-)
-
-const (
-	initStatusKey = "init_done"
 )
 
 func (s *Server) checkAndRunInit(ctx context.Context) error {
-	done, err := s.getInitStatus(ctx)
-	if err != nil {
-		return fmt.Errorf("getting init status: %w", err)
-	}
+	done := s.getInit(ctx)
 
 	if !done {
 		if err := s.runInitialDeployment(ctx); err != nil {
@@ -35,44 +24,6 @@ func (s *Server) checkAndRunInit(ctx context.Context) error {
 	}
 
 	slog.Info("server initialization has already been done")
-	return nil
-}
-
-func (s *Server) getInitStatus(ctx context.Context) (bool, error) {
-	status, err := s.Queries.GetAppState(ctx, initStatusKey)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
-		return false, fmt.Errorf("checking initialization status: %w", err)
-	}
-
-	switch status {
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	default:
-		slog.Warn("got unexpected init status value", "value", status)
-		return false, nil
-	}
-}
-
-func (s *Server) setInit(ctx context.Context, done bool) error {
-	val := "false"
-	if done {
-		val = "true"
-	}
-
-	p := db.SetAppStateParams{
-		Key:   initStatusKey,
-		Value: val,
-	}
-
-	if err := s.Queries.SetAppState(ctx, p); err != nil {
-		return fmt.Errorf("setting init status to %s: %w", val, err)
-	}
-
 	return nil
 }
 
@@ -95,4 +46,17 @@ func (s *Server) runInitialDeployment(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *Server) getInit(ctx context.Context) bool {
+	r := s.getBoolState(ctx, initStatusKey)
+	if r.err != nil {
+		slog.Warn("error getting init status", "error", r.err)
+	}
+
+	return r.value
+}
+
+func (s *Server) setInit(ctx context.Context, done bool) error {
+	return s.setBoolState(ctx, initStatusKey, done)
 }

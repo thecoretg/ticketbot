@@ -4,6 +4,9 @@ func (s *Server) addRoutes() {
 	s.GinEngine.GET("/", s.ping)
 	s.GinEngine.POST("/preload", s.handlePreload, ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
 
+	settings := s.GinEngine.Group("/settings", ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
+	settings.POST("/attempt_notify", s.handleSetAttemptNotify)
+
 	keys := s.GinEngine.Group("/keys", ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
 	keys.POST("/", s.handleCreateAPIKey)
 
@@ -14,7 +17,7 @@ func (s *Server) addRoutes() {
 	boards.DELETE("/:board_id", s.handleDeleteBoard)
 
 	rooms := s.GinEngine.Group("/rooms", ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
-	rooms.GET("/", s.listWebexRooms)
+	rooms.GET("/", s.handleListWebexRooms)
 
 	hooks := s.GinEngine.Group("/hooks")
 	cwHooks := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.Config.ExitOnError))

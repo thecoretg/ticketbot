@@ -18,7 +18,7 @@ func (s *Server) handlePreload(c *gin.Context) {
 	c.Status(http.StatusOK)
 
 	go func() {
-		if err := s.preloadConnectwiseData(c.Request.Context()); err != nil {
+		if err := s.preloadConnectwiseData(context.Background()); err != nil {
 			slog.Error("preloading data", "error", err)
 		}
 	}()

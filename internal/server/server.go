@@ -23,6 +23,7 @@ type Server struct {
 	CWClient    *psa.Client
 	WebexClient *webex.Client
 
+	State       *appState
 	cwCompanyID string
 	ticketLocks sync.Map
 }
@@ -44,6 +45,10 @@ func Run(embeddedMigrations embed.FS) error {
 	}
 
 	s := NewServer(c, pool)
+
+	if err := s.populateAppState(ctx); err != nil {
+		return fmt.Errorf("checking app state values: %w", err)
+	}
 
 	if err := s.checkAndRunInit(ctx); err != nil {
 		return fmt.Errorf("running initialization: %w", err)

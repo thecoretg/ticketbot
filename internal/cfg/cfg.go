@@ -28,8 +28,6 @@ type Cfg struct {
 	LogToFile      bool   `mapstructure:"log_to_file"`
 	LogFilePath    string `mapstructure:"log_file_path"`
 
-	AttemptNotify bool `mapstructure:"attempt_notify"`
-
 	// Max message length before ticket notifications get a "..." at the end instead of the whole message.
 	MaxMsgLength int `mapstructure:"max_msg_length"`
 
@@ -55,8 +53,7 @@ func InitCfg() (*Cfg, error) {
 	slog.Debug("config initialized", "debug", c.Debug, "exit_on_error", c.ExitOnError,
 		"log_to_file", c.LogToFile, "log_file_path", c.LogFilePath,
 		"root_url", c.RootURL, "max_msg_length", c.MaxMsgLength,
-		"excluded_cw_members", c.ExcludedCWMembers,
-		"attempt_notify", c.AttemptNotify)
+		"excluded_cw_members", c.ExcludedCWMembers)
 
 	if !c.isValid() {
 		return nil, errors.New("config is missing required fields, please open file and fill any empty fields")
