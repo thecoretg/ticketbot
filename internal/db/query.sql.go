@@ -133,6 +133,17 @@ func (q *Queries) GetAPILKey(ctx context.Context, id int) (ApiKey, error) {
 	return i, err
 }
 
+const getAppState = `-- name: GetAppState :one
+SELECT value FROM app_state WHERE key = $1 LIMIT 1
+`
+
+func (q *Queries) GetAppState(ctx context.Context, key string) (string, error) {
+	row := q.db.QueryRow(ctx, getAppState, key)
+	var value string
+	err := row.Scan(&value)
+	return value, err
+}
+
 const getBoard = `-- name: GetBoard :one
 SELECT id, name, updated_on, added_on, deleted FROM cw_board
 WHERE id = $1 LIMIT 1
@@ -1082,6 +1093,22 @@ func (q *Queries) ListWebexRooms(ctx context.Context) ([]WebexRoom, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setAppState = `-- name: SetAppState :exec
+INSERT INTO app_state(key, value)
+VALUES($1, $2)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+`
+
+type SetAppStateParams struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (q *Queries) SetAppState(ctx context.Context, arg SetAppStateParams) error {
+	_, err := q.db.Exec(ctx, setAppState, arg.Key, arg.Value)
+	return err
 }
 
 const setNoteNotified = `-- name: SetNoteNotified :one

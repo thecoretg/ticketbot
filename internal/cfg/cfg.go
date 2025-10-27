@@ -4,114 +4,59 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/viper"
 	"github.com/thecoretg/ticketbot/internal/logger"
 )
 
 type Cfg struct {
-	General  GeneralCfg `json:"general" mapstructure:"general"`
-	Logging  LoggingCfg `json:"logging" mapstructure:"logging"`
-	Creds    CredsCfg   `json:"creds" mapstucture:"creds"`
-	Messages MessageCfg `json:"messages" mapstructure:"messages"`
-}
+	CWPubKey    string `mapstructure:"cw_pub_key"`
+	CWPrivKey   string `mapstructure:"cw_priv_key"`
+	CWClientID  string `mapstructure:"cw_client_id"`
+	CWCompanyID string `mapstructure:"cw_company_id"`
+	RootURL     string `mapstructure:"root_url"`
+	WebexSecret string `mapstructure:"webex_secret"`
+	PostgresDSN string `mapstructure:"postgres_dsn"`
 
-type GeneralCfg struct {
-	RootURL           string `json:"root_url" mapstructure:"root_url"`
-	UseAutoTLS        bool   `json:"use_auto_tls" mapstructure:"use_auto_tls"`
-	InitialAdminEmail string `json:"initial_admin_email" mapstructure:"initial_admin_email"`
-	ExitOnError       bool   `json:"exit_on_error" mapstructure:"exit_on_error"`
-}
+	MaxConcurrentPreloads int    `mapstructure:"max_concurrent_preloads"`
+	UseAutoTLS            bool   `mapstructure:"use_auto_tls"`
+	InitialAdminEmail     string `mapstructure:"initial_admin_email"`
+	ExitOnError           bool   `mapstructure:"exit_on_error"`
 
-type LoggingCfg struct {
-	VerboseLogging bool `json:"verbose" mapstructure:"verbose"`
-	Debug          bool `json:"debug" mapstructure:"debug"`
+	VerboseLogging bool   `mapstructure:"verbose"`
+	Debug          bool   `mapstructure:"debug"`
+	LogToFile      bool   `mapstructure:"log_to_file"`
+	LogFilePath    string `mapstructure:"log_file_path"`
 
-	LogToFile   bool   `json:"log_to_file" mapstructure:"log_to_file"`
-	LogFilePath string `json:"log_file_path" mapstructure:"log_file_path"`
-}
-
-type CredsCfg struct {
-	CW          CWCreds `json:"connectwise" mapstructure:"connectwise"`
-	WebexSecret string  `json:"webex_secret" mapstructure:"webex_secret"`
-	PostgresDSN string  `json:"postgres_dsn" mapstructure:"postgres_dsn"`
-}
-
-type CWCreds struct {
-	PubKey    string `json:"pub_key" mapstructure:"pub_key"`
-	PrivKey   string `json:"priv_key" mapstructure:"priv_key"`
-	ClientID  string `json:"client_id" mapstructure:"client_id"`
-	CompanyID string `json:"company_id" mapstructure:"company_id"`
-}
-
-type MessageCfg struct {
-	AttemptNotify bool `json:"attempt_notify" mapstructure:"attempt_notify"`
+	AttemptNotify bool `mapstructure:"attempt_notify"`
 
 	// Max message length before ticket notifications get a "..." at the end instead of the whole message.
-	MaxMsgLength int `json:"max_msg_length" mapstructure:"max_msg_length"`
+	MaxMsgLength int `mapstructure:"max_msg_length"`
 
-	// Members who we don't want to receive Webex messages.
-	ExcludedCWMembers []string `json:"excluded_cw_members" mapstructure:"excluded_cw_members"`
+	// Members who we don't want to receive Webex
+	ExcludedCWMembers []string `mapstructure:"excluded_cw_members"`
 }
 
-func InitCfg(configPath string) (*Cfg, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("getting user config directory: %w", err)
-	}
-
-	cfgDir := filepath.Join(home, ".config", "ticketbot")
-	// TODO: right permissions?
-	if err := os.MkdirAll(cfgDir, 0700); err != nil {
-		return nil, fmt.Errorf("creating config directory: %w", err)
-	}
-
+func InitCfg() (*Cfg, error) {
 	setConfigDefaults()
-	if configPath != "" {
-		viper.SetConfigFile(configPath)
-	} else {
-		viper.SetConfigName("config")
-		viper.SetConfigType("json")
-		viper.AddConfigPath(cfgDir)
-	}
-
-	if err := viper.ReadInConfig(); err != nil {
-		if errors.Is(err, viper.ConfigFileNotFoundError{}); err != nil {
-			fmt.Println("Config file not found, creating one now")
-			if configPath != "" {
-				if err := viper.WriteConfigAs(configPath); err != nil {
-					return nil, fmt.Errorf("creating config file at %s: %w", configPath, err)
-				}
-			} else {
-				if err := viper.SafeWriteConfig(); err != nil {
-					return nil, fmt.Errorf("creating config file: %w", err)
-				}
-				fmt.Println("Config file created, please fill empty variables")
-				return nil, nil
-			}
-		} else {
-			return nil, fmt.Errorf("error reading config file: %w", err)
-		}
-	}
+	viper.AutomaticEnv()
 
 	var c Cfg
 	if err := viper.Unmarshal(&c); err != nil {
 		return nil, fmt.Errorf("unmarshaling config to json: %w", err)
 	}
 
-	if err := logger.SetLogger(c.Logging.VerboseLogging, c.Logging.Debug, c.Logging.LogToFile, c.Logging.LogFilePath); err != nil {
+	if err := logger.SetLogger(c.VerboseLogging, c.Debug, c.LogToFile, c.LogFilePath); err != nil {
 		return nil, fmt.Errorf("error setting logger: %w", err)
 	}
 
-	slog.Debug("logger set", "debug", c.Logging.Debug, "log_to_file", c.Logging.LogToFile, "log_file_path", c.Logging.LogFilePath)
+	slog.Debug("logger set", "debug", c.Debug, "log_to_file", c.LogToFile, "log_file_path", c.LogFilePath)
 
-	slog.Debug("config initialized", "debug", c.Logging.Debug, "exit_on_error", c.General.ExitOnError,
-		"log_to_file", c.Logging.LogToFile, "log_file_path", c.Logging.LogFilePath,
-		"root_url", c.General.RootURL, "max_msg_length", c.Messages.MaxMsgLength,
-		"excluded_cw_members", c.Messages.ExcludedCWMembers,
-		"attempt_notify", c.Messages.AttemptNotify)
+	slog.Debug("config initialized", "debug", c.Debug, "exit_on_error", c.ExitOnError,
+		"log_to_file", c.LogToFile, "log_file_path", c.LogFilePath,
+		"root_url", c.RootURL, "max_msg_length", c.MaxMsgLength,
+		"excluded_cw_members", c.ExcludedCWMembers,
+		"attempt_notify", c.AttemptNotify)
 
 	if !c.isValid() {
 		return nil, errors.New("config is missing required fields, please open file and fill any empty fields")
@@ -123,14 +68,14 @@ func InitCfg(configPath string) (*Cfg, error) {
 
 func (cfg *Cfg) isValid() bool {
 	vals := map[string]string{
-		"root_url":            cfg.General.RootURL,
-		"initial_admin_email": cfg.General.InitialAdminEmail,
-		"cw_pub_key":          cfg.Creds.CW.PubKey,
-		"cw_priv_key":         cfg.Creds.CW.PrivKey,
-		"cw_client_id":        cfg.Creds.CW.ClientID,
-		"cw_company_id":       cfg.Creds.CW.CompanyID,
-		"postgres_dsn":        cfg.Creds.PostgresDSN,
-		"webex_secret":        cfg.Creds.WebexSecret,
+		"ROOT_URL":            cfg.RootURL,
+		"INITIAL_ADMIN_EMAIL": cfg.InitialAdminEmail,
+		"CW_PUB_KEY":          cfg.CWPubKey,
+		"CW_PRIV_KEY":         cfg.CWPrivKey,
+		"CW_CLIENT_ID":        cfg.CWClientID,
+		"CW_COMPANY_ID":       cfg.CWCompanyID,
+		"POSTGRES_DSN":        cfg.PostgresDSN,
+		"WEBEX_SECRET":        cfg.WebexSecret,
 	}
 
 	var empty []string
@@ -152,23 +97,24 @@ func (cfg *Cfg) isValid() bool {
 }
 
 func setConfigDefaults() {
-	viper.SetDefault("general.exit_on_error", false)
-	viper.SetDefault("general.initial_admin_email", "")
-	viper.SetDefault("general.root_url", "")
-	viper.SetDefault("general.use_auto_tls", false)
-	viper.SetDefault("logging.log_to_file", false)
-	viper.SetDefault("logging.log_file_path", "ticketbot.log")
-	viper.SetDefault("logging.verbose", false)
-	viper.SetDefault("logging.debug", false)
-	viper.SetDefault("creds.connectwise.pub_key", "")
-	viper.SetDefault("creds.connectwise.priv_key", "")
-	viper.SetDefault("creds.connectwise.client_id", "")
-	viper.SetDefault("creds.connectwise.company_id", "")
-	viper.SetDefault("creds.webex_secret", "")
-	viper.SetDefault("creds.postgres_dsn", "")
-	viper.SetDefault("messages.attempt_notify", false)
-	viper.SetDefault("messages.max_msg_length", 300)
-	viper.SetDefault("messages.excluded_cw_members", []string{})
+	viper.SetDefault("exit_on_error", false)
+	viper.SetDefault("initial_admin_email", "")
+	viper.SetDefault("root_url", "")
+	viper.SetDefault("max_concurrent_preloads", 5)
+	viper.SetDefault("use_auto_tls", false)
+	viper.SetDefault("log_to_file", false)
+	viper.SetDefault("log_file_path", "ticketbot.log")
+	viper.SetDefault("verbose", false)
+	viper.SetDefault("debug", false)
+	viper.SetDefault("cw_pub_key", "")
+	viper.SetDefault("cw_priv_key", "")
+	viper.SetDefault("cw_client_id", "")
+	viper.SetDefault("cw_company_id", "")
+	viper.SetDefault("webex_secret", "")
+	viper.SetDefault("postgres_dsn", "")
+	viper.SetDefault("attempt_notify", false)
+	viper.SetDefault("max_msg_length", 300)
+	viper.SetDefault("excluded_cw_members", []string{})
 }
 
 func isEmpty(s string) bool {

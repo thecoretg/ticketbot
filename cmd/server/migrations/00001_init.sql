@@ -1,5 +1,10 @@
 -- +goose Up
 -- +goose StatementBegin
+CREATE TABLE IF NOT EXISTS app_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS api_user (
     id SERIAL PRIMARY KEY,
     email_address TEXT UNIQUE NOT NULL,
@@ -112,4 +117,5 @@ DROP TABLE IF EXISTS cw_board;
 DROP TABLE IF EXISTS webex_room;
 DROP TABLE IF EXISTS api_key;
 DROP TABLE IF EXISTS api_user;
+DROP TABLE IF EXISTS app_state;
 -- +goose StatementEnd

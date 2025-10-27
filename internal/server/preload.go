@@ -5,33 +5,38 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
-	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/db"
 	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
-func (s *Server) PreloadData(ctx context.Context, preloadBoards, preloadTickets bool, maxConcurrent int) error {
-	if preloadBoards {
-		time.Sleep(2 * time.Second)
-		if err := s.PreloadBoards(ctx, maxConcurrent); err != nil {
-			return fmt.Errorf("preloading active boards: %w", err)
+func (s *Server) handlePreload(c *gin.Context) {
+	c.Status(http.StatusOK)
+
+	go func() {
+		if err := s.preloadConnectwiseData(c.Request.Context()); err != nil {
+			slog.Error("preloading data", "error", err)
 		}
+	}()
+}
+
+func (s *Server) preloadConnectwiseData(ctx context.Context) error {
+	if err := s.preloadBoards(ctx, s.Config.MaxConcurrentPreloads); err != nil {
+		return fmt.Errorf("preloading active boards: %w", err)
 	}
 
-	if preloadTickets {
-		time.Sleep(2 * time.Second)
-		if err := s.PreloadOpenTickets(ctx, maxConcurrent); err != nil {
-			return fmt.Errorf("preloading open tickets: %w", err)
-		}
+	if err := s.preloadOpenTickets(ctx, s.Config.MaxConcurrentPreloads); err != nil {
+		return fmt.Errorf("preloading open tickets: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Server) PreloadBoards(ctx context.Context, maxConcurrent int) error {
+func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	slog.Debug("beginning preloading boards")
 	params := map[string]string{
 		"conditions": "inactiveFlag = false",
@@ -122,10 +127,10 @@ func (s *Server) preloadMembers(ctx context.Context, maxConcurrent int) error {
 	return nil
 }
 
-// PreloadOpenTickets finds all open tickets in Connectwise and loads them into the DB if they don't
+// preloadOpenTickets finds all open tickets in Connectwise and loads them into the DB if they don't
 // already exist. It does not attempt to notify since that would result in tons of notifications
 // for already existing tickets.
-func (s *Server) PreloadOpenTickets(ctx context.Context, maxConcurrent int) error {
+func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) error {
 	slog.Debug("beginning preloading tickets")
 	params := map[string]string{
 		"pageSize":   "100",
@@ -162,7 +167,7 @@ func (s *Server) PreloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 	for err := range errCh {
 		if err != nil {
 			slog.Error("preloading ticket", "error", err)
-			if s.Config.General.ExitOnError {
+			if s.Config.ExitOnError {
 				slog.Debug("exiting because EXIT_ON_ERROR is enabled")
 				return err
 			}

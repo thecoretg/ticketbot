@@ -103,7 +103,7 @@ func (s *Server) processTicket(ctx context.Context, ticketID int, action string,
 	// which checks if it meets message criteria and then notifies if valid.
 	// AttemptNotify and the bypassNotis (used for preloads) acts as a hard block from even attempting.
 	notified := false
-	if s.Config.Messages.AttemptNotify && sd.note.ID != 0 && !bypassNotis {
+	if s.Config.AttemptNotify && sd.note.ID != 0 && !bypassNotis {
 		notified, err = s.runNotificationAction(ctx, action, cd, sd)
 		if err != nil {
 			return fmt.Errorf("running notifier: %w", err)

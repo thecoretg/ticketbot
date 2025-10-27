@@ -1,7 +1,17 @@
 package main
 
-import "log"
+import (
+	"embed"
+	"log/slog"
+
+	"github.com/thecoretg/ticketbot/internal/server"
+)
+
+//go:embed migrations/*.sql
+var embeddedMigrations embed.FS
 
 func main() {
-	log.Fatal(Execute())
+	if err := server.Run(embeddedMigrations); err != nil {
+		slog.Error("an error occured running the server", "error", err)
+	}
 }

@@ -1,3 +1,11 @@
+-- name: GetAppState :one
+SELECT value FROM app_state WHERE key = $1 LIMIT 1;
+
+-- name: SetAppState :exec
+INSERT INTO app_state(key, value)
+VALUES($1, $2)
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
 -- name: GetUser :one
 SELECT * FROM api_user
 WHERE id = $1 LIMIT 1;

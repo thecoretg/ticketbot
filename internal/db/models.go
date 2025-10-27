@@ -25,6 +25,11 @@ type ApiUser struct {
 	Deleted      bool      `json:"deleted"`
 }
 
+type AppState struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 type CwBoard struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -26,49 +27,64 @@ type Server struct {
 	ticketLocks sync.Map
 }
 
-// Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
-// restart it
-func (s *Server) Run() error {
-	if !s.Config.Logging.Debug {
-		gin.SetMode(gin.ReleaseMode)
+func Run(embeddedMigrations embed.FS) error {
+	ctx := context.Background()
+	c, err := cfg.InitCfg()
+	if err != nil {
+		return fmt.Errorf("initializing config: %w", err)
 	}
 
+	pool, err := pgxpool.New(ctx, c.PostgresDSN)
+	if err != nil {
+		return fmt.Errorf("creating pgx pool: %w", err)
+	}
+
+	if err := migrateDB(pool, embeddedMigrations); err != nil {
+		return fmt.Errorf("connecting/migrating db: %w", err)
+	}
+
+	s := NewServer(c, pool)
+
+	if err := s.checkAndRunInit(ctx); err != nil {
+		return fmt.Errorf("running initialization: %w", err)
+	}
+
+	if err := s.serve(); err != nil {
+		return fmt.Errorf("serving api: %w", err)
+	}
+
+	return nil
+}
+
+// Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
+// restart it
+func (s *Server) serve() error {
 	s.GinEngine = gin.Default()
 	s.addRoutes()
 
-	if s.Config.General.UseAutoTLS {
-		slog.Debug("running server with auto tls", "url", s.Config.General.RootURL)
-		return autotls.Run(s.GinEngine, s.Config.General.RootURL)
+	if s.Config.UseAutoTLS {
+		slog.Debug("running server with auto tls", "url", s.Config.RootURL)
+		return autotls.Run(s.GinEngine, s.Config.RootURL)
 	}
 
 	slog.Debug("running server without auto tls")
 	return s.GinEngine.Run()
 }
 
-func ConnectToDB(ctx context.Context, dsn string) (*db.Queries, error) {
-	slog.Debug("connecting to postgres server")
-	dbConn, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		return nil, fmt.Errorf("connecting to db: %w", err)
-	}
-
-	return db.New(dbConn), nil
-}
-
-func NewServer(cfg *cfg.Cfg, dbConn *db.Queries) *Server {
+func NewServer(cfg *cfg.Cfg, pool *pgxpool.Pool) *Server {
 	slog.Debug("initializing server client")
 	cwCreds := &psa.Creds{
-		PublicKey:  cfg.Creds.CW.PubKey,
-		PrivateKey: cfg.Creds.CW.PrivKey,
-		ClientId:   cfg.Creds.CW.ClientID,
-		CompanyId:  cfg.Creds.CW.CompanyID,
+		PublicKey:  cfg.CWPubKey,
+		PrivateKey: cfg.CWPrivKey,
+		ClientId:   cfg.CWClientID,
+		CompanyId:  cfg.CWCompanyID,
 	}
 
 	s := &Server{
 		Config:      cfg,
 		CWClient:    psa.NewClient(cwCreds),
-		WebexClient: webex.NewClient(cfg.Creds.WebexSecret),
-		Queries:     dbConn,
+		WebexClient: webex.NewClient(cfg.WebexSecret),
+		Queries:     db.New(pool),
 	}
 
 	return s
