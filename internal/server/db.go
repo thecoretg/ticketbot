@@ -20,26 +20,26 @@ func setupDB(ctx context.Context, dsn string, embeddedMigrations embed.FS) (*pgx
 		return nil, fmt.Errorf("creating pgx pool: %w", err)
 	}
 
-	if err := migrateDB(pool, embeddedMigrations); err != nil {
+	d := stdlib.OpenDBFromPool(pool)
+
+	if err := migrateDB(d, embeddedMigrations); err != nil {
 		return nil, fmt.Errorf("connecting/migrating db: %w", err)
 	}
 
 	return pool, nil
 }
 
-func migrateDB(pool *pgxpool.Pool, embeddedMigrations embed.FS) error {
+func migrateDB(d *sql.DB, embeddedMigrations embed.FS) error {
+	defer func() {
+		if err := d.Close(); err != nil {
+			slog.Error("closing database after migration", "error", err)
+		}
+	}()
+
 	goose.SetBaseFS(embeddedMigrations)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("setting goose dialect: %w", err)
 	}
-
-	d := stdlib.OpenDBFromPool(pool)
-	defer func(d *sql.DB) {
-		err := d.Close()
-		if err != nil {
-			slog.Error("error closing db", "error", err)
-		}
-	}(d)
 
 	if err := goose.Up(d, "migrations"); err != nil {
 		return fmt.Errorf("running goose up: %w", err)

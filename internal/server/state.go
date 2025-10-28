@@ -5,19 +5,25 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
 const (
-	initStatusKey    = "init_done"
-	attemptNotifyKey = "attempt_notify"
+	debugKey             = "debug"
+	attemptNotifyKey     = "attempt_notify"
+	syncingTicketsKey    = "syncing_tickets"
+	syncingWebexRoomsKey = "syncing_webex_rooms"
 )
 
 type appState struct {
-	InitDone      bool `json:"init_done"`
-	AttemptNotify bool `json:"attempt_notify"`
+	Debug             bool `json:"debug"`
+	AttemptNotify     bool `json:"attempt_notify"`
+	SyncingTickets    bool `json:"syncing_tickets"`
+	SyncingWebexRooms bool `json:"syncing_webex_rooms"`
 }
 
 type boolStateResult struct {
@@ -26,23 +32,53 @@ type boolStateResult struct {
 	err   error
 }
 
-func (cl *Client) populateAppState(ctx context.Context) error {
-	if err := cl.setStateIfNotSet(ctx, initStatusKey); err != nil {
-		return fmt.Errorf("checking init status: %w", err)
+func (cl *Client) handleGetState(c *gin.Context) {
+	if cl.State == nil {
+		c.Error(errors.New("app state is nil"))
+		return
 	}
 
-	if err := cl.setStateIfNotSet(ctx, attemptNotifyKey); err != nil {
+	c.JSON(http.StatusOK, cl.State)
+}
+
+func (cl *Client) populateAppState(ctx context.Context) error {
+	if err := cl.setStateIfNotSet(ctx, debugKey, false); err != nil {
+		return fmt.Errorf("checking debug value: %w", err)
+	}
+
+	if err := cl.setStateIfNotSet(ctx, attemptNotifyKey, false); err != nil {
 		return fmt.Errorf("checking attempt notify value: %w", err)
 	}
 
+	if err := cl.setStateIfNotSet(ctx, syncingTicketsKey, false); err != nil {
+		return fmt.Errorf("checking syncing tickets value: %w", err)
+	}
+
+	if err := cl.setStateIfNotSet(ctx, syncingWebexRoomsKey, false); err != nil {
+		return fmt.Errorf("checking syncing webex rooms value: %w", err)
+	}
+
 	return nil
+}
+
+func (cl *Client) setDebug(ctx context.Context, debug bool) error {
+	setLogLevel(debug)
+	return cl.setBoolState(ctx, debugKey, debug)
 }
 
 func (cl *Client) setAttemptNotify(ctx context.Context, attempt bool) error {
 	return cl.setBoolState(ctx, attemptNotifyKey, attempt)
 }
 
-func (cl *Client) setStateIfNotSet(ctx context.Context, key string) error {
+func (cl *Client) setSyncingTickets(ctx context.Context, syncing bool) error {
+	return cl.setBoolState(ctx, syncingTicketsKey, syncing)
+}
+
+func (cl *Client) setSyncingWebexRooms(ctx context.Context, syncing bool) error {
+	return cl.setBoolState(ctx, syncingWebexRoomsKey, syncing)
+}
+
+func (cl *Client) setStateIfNotSet(ctx context.Context, key string, defaultState bool) error {
 	r := cl.getBoolState(ctx, key)
 	if r.err != nil {
 		slog.Warn("error getting app state", "key", key, "error", r.err)
@@ -50,7 +86,7 @@ func (cl *Client) setStateIfNotSet(ctx context.Context, key string) error {
 
 	if !r.isSet {
 		slog.Debug("app state key is not set - setting to false", "key", key)
-		return cl.setBoolState(ctx, key, false)
+		return cl.setBoolState(ctx, key, defaultState)
 	}
 
 	slog.Debug("app state key is already set", "key", key, "value", r.value)

@@ -24,7 +24,7 @@ func (cl *Client) handleSetAttemptNotify(c *gin.Context) {
 		return
 	}
 
-	if err := cl.setBoolState(c.Request.Context(), attemptNotifyKey, p.Enabled); err != nil {
+	if err := cl.setAttemptNotify(c.Request.Context(), p.Enabled); err != nil {
 		c.Error(fmt.Errorf("setting notify state: %w", err))
 		return
 	}
@@ -188,7 +188,7 @@ func (cl *Client) messageHeader(action string, cd *cwData) string {
 	}
 
 	// add clickable ticket ID with link to ticket, with ticket title
-	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cd.ticket.ID, cl.cwCompanyID), cd.ticket.Summary)
+	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cd.ticket.ID, cl.Config.CWCompanyID), cd.ticket.Summary)
 	return header
 }
 

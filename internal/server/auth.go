@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -50,10 +51,10 @@ func (cl *Client) handleCreateAPIKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"api_key": key})
 }
 
-func (cl *Client) bootstrapAdmin(ctx context.Context) (string, error) {
+func (cl *Client) bootstrapAdmin(ctx context.Context) error {
 	email := cl.Config.InitialAdminEmail
 	if email == "" {
-		return "", errors.New("initial admin config field must not be blank")
+		return errors.New("initial admin config field must not be blank")
 	}
 
 	u, err := cl.Queries.GetUserByEmail(ctx, email)
@@ -62,10 +63,10 @@ func (cl *Client) bootstrapAdmin(ctx context.Context) (string, error) {
 			slog.Debug("initial admin not found in db - creating now", "email", email)
 			u, err = cl.Queries.InsertUser(ctx, email)
 			if err != nil {
-				return "", fmt.Errorf("creating admin user: %w", err)
+				return fmt.Errorf("creating admin user: %w", err)
 			}
 		} else {
-			return "", err
+			return err
 		}
 	} else {
 		slog.Debug("initial admin found in db", "email", email)
@@ -73,7 +74,7 @@ func (cl *Client) bootstrapAdmin(ctx context.Context) (string, error) {
 
 	keys, err := cl.Queries.ListAPIKeys(ctx)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	hasKey := false
@@ -85,26 +86,29 @@ func (cl *Client) bootstrapAdmin(ctx context.Context) (string, error) {
 	}
 
 	if hasKey {
-		return "", nil
+		slog.Debug("initial admin already has an api token")
+		return nil
 	}
 
 	key, err := cl.createAPIKey(ctx, u.ID)
 	if err != nil {
-		return "", fmt.Errorf("creating bootstrap key: %w", err)
+		return fmt.Errorf("creating bootstrap key: %w", err)
 	}
 
-	return key, nil
+	slog.Info("bootstrap token created", "email", email, "key", key)
+	slog.Info("waiting 60 seconds - please copy the above key, as it will not be shown again")
+	time.Sleep(60 * time.Minute)
+
+	return nil
 }
 
 func (cl *Client) createAPIKey(ctx context.Context, userID int) (string, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generating key: %w", err)
+	plain, err := generateKey()
+	if err != nil {
+		return "", err
 	}
 
-	plain := base64.RawURLEncoding.EncodeToString(raw)
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	hash, err := hashKey(plain)
 	if err != nil {
 		return "", fmt.Errorf("hashing key: %w", err)
 	}
@@ -113,10 +117,24 @@ func (cl *Client) createAPIKey(ctx context.Context, userID int) (string, error) 
 		UserID:  userID,
 		KeyHash: hash,
 	}
+
 	_, err = cl.Queries.InsertAPIKey(ctx, params)
 	if err != nil {
 		return "", fmt.Errorf("storing key: %w", err)
 	}
 
 	return plain, nil
+}
+
+func generateKey() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("generating key: %w", err)
+	}
+
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func hashKey(key string) ([]byte, error) {
+	return bcrypt.GenerateFromPassword([]byte(key), bcrypt.DefaultCost)
 }

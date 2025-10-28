@@ -350,6 +350,26 @@ func (q *Queries) GetWebexRoom(ctx context.Context, id int) (WebexRoom, error) {
 	return i, err
 }
 
+const getWebexRoomByWebexID = `-- name: GetWebexRoomByWebexID :one
+SELECT id, webex_id, name, type, created_on, updated_on, deleted FROM webex_room
+WHERE webex_id = $1
+`
+
+func (q *Queries) GetWebexRoomByWebexID(ctx context.Context, webexID string) (WebexRoom, error) {
+	row := q.db.QueryRow(ctx, getWebexRoomByWebexID, webexID)
+	var i WebexRoom
+	err := row.Scan(
+		&i.ID,
+		&i.WebexID,
+		&i.Name,
+		&i.Type,
+		&i.CreatedOn,
+		&i.UpdatedOn,
+		&i.Deleted,
+	)
+	return i, err
+}
+
 const getWebexRoomIDByInternalID = `-- name: GetWebexRoomIDByInternalID :one
 SELECT webex_id FROM webex_room
 WHERE id = $1

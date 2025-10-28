@@ -1,8 +1,15 @@
 package server
 
 func (cl *Client) addRoutes() {
+	// health check endpoint
 	cl.Server.GET("/", cl.ping)
-	cl.Server.POST("/preload", cl.handlePreload, ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
+
+	state := cl.Server.Group("/state", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
+	state.GET("/", cl.handleGetState)
+
+	sc := cl.Server.Group("/sync", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
+	sc.POST("/tickets", cl.handleSyncTickets)
+	sc.POST("webex_rooms", cl.handleSyncWebexRooms)
 
 	settings := cl.Server.Group("/settings", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
 	settings.POST("/attempt_notify", cl.handleSetAttemptNotify)

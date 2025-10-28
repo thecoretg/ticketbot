@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"time"
 
 	"github.com/gin-gonic/autotls"
 	"github.com/gin-gonic/gin"
@@ -18,14 +17,14 @@ import (
 )
 
 type Client struct {
-	Queries     *db.Queries
-	Server      *gin.Engine
 	Config      *cfg.Cfg
+	State       *appState
 	CWClient    *psa.Client
 	WebexClient *webex.Client
-	State       *appState
+	Pool        *pgxpool.Pool
+	Queries     *db.Queries
+	Server      *gin.Engine
 
-	cwCompanyID string
 	ticketLocks sync.Map
 }
 
@@ -69,18 +68,10 @@ func (cl *Client) startup(ctx context.Context) error {
 	if err := cl.populateAppState(ctx); err != nil {
 		return fmt.Errorf("checking app state values: %w", err)
 	}
+	setLogger(cl.State.Debug)
 
-	key, err := cl.bootstrapAdmin(ctx)
-	if err != nil {
+	if err := cl.bootstrapAdmin(ctx); err != nil {
 		return fmt.Errorf("bootstrapping initial admin key: %w", err)
-	}
-
-	if key != "" {
-		slog.Info("bootstrap token created", "email", cl.Config.InitialAdminEmail, "key", key)
-		slog.Info("waiting 60 seconds - please copy the above key, as it will not be shown again")
-		time.Sleep(60 * time.Minute)
-	} else {
-		slog.Info("bootstrap token already exists")
 	}
 
 	if err := cl.initAllHooks(); err != nil {
@@ -100,10 +91,12 @@ func newClient(cfg *cfg.Cfg, pool *pgxpool.Pool) *Client {
 	}
 
 	s := &Client{
+		Queries:     db.New(pool),
+		Pool:        pool,
 		Config:      cfg,
 		CWClient:    psa.NewClient(cwCreds),
+		State:       &appState{},
 		WebexClient: webex.NewClient(cfg.WebexSecret),
-		Queries:     db.New(pool),
 	}
 
 	return s

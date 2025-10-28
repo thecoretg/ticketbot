@@ -78,6 +78,10 @@ WHERE id = $1;
 SELECT * FROM webex_room
 WHERE id = $1;
 
+-- name: GetWebexRoomByWebexID :one
+SELECT * FROM webex_room
+WHERE webex_id = $1;
+
 -- name: ListWebexRooms :many
 SELECT * FROM webex_room
 ORDER BY id;

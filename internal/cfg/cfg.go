@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/spf13/viper"
-	"github.com/thecoretg/ticketbot/internal/logger"
 )
 
 type Cfg struct {
@@ -24,7 +23,6 @@ type Cfg struct {
 	ExitOnError           bool   `mapstructure:"exit_on_error"`
 
 	VerboseLogging bool   `mapstructure:"verbose"`
-	Debug          bool   `mapstructure:"debug"`
 	LogToFile      bool   `mapstructure:"log_to_file"`
 	LogFilePath    string `mapstructure:"log_file_path"`
 
@@ -44,13 +42,7 @@ func InitCfg() (*Cfg, error) {
 		return nil, fmt.Errorf("unmarshaling config to json: %w", err)
 	}
 
-	if err := logger.SetLogger(c.VerboseLogging, c.Debug, c.LogToFile, c.LogFilePath); err != nil {
-		return nil, fmt.Errorf("error setting logger: %w", err)
-	}
-
-	slog.Debug("logger set", "debug", c.Debug, "log_to_file", c.LogToFile, "log_file_path", c.LogFilePath)
-
-	slog.Debug("config initialized", "debug", c.Debug, "exit_on_error", c.ExitOnError,
+	slog.Debug("config initialized", "exit_on_error", c.ExitOnError,
 		"log_to_file", c.LogToFile, "log_file_path", c.LogFilePath,
 		"root_url", c.RootURL, "max_msg_length", c.MaxMsgLength,
 		"excluded_cw_members", c.ExcludedCWMembers)
