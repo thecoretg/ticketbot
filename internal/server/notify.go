@@ -17,14 +17,14 @@ type setNotifyPayload struct {
 	Enabled bool `json:"enabled"`
 }
 
-func (s *Server) handleSetAttemptNotify(c *gin.Context) {
+func (cl *Client) handleSetAttemptNotify(c *gin.Context) {
 	p := &setNotifyPayload{}
 	if err := c.ShouldBindJSON(&p); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := s.setBoolState(c.Request.Context(), attemptNotifyKey, p.Enabled); err != nil {
+	if err := cl.setBoolState(c.Request.Context(), attemptNotifyKey, p.Enabled); err != nil {
 		c.Error(fmt.Errorf("setting notify state: %w", err))
 		return
 	}
@@ -32,9 +32,9 @@ func (s *Server) handleSetAttemptNotify(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-func (s *Server) handleListWebexRooms(c *gin.Context) {
+func (cl *Client) handleListWebexRooms(c *gin.Context) {
 	// TODO: query params?
-	rooms, err := s.WebexClient.ListRooms(nil)
+	rooms, err := cl.WebexClient.ListRooms(nil)
 	if err != nil {
 		c.Error(fmt.Errorf("listing rooms: %w", err))
 		return
@@ -47,9 +47,9 @@ func (s *Server) handleListWebexRooms(c *gin.Context) {
 	c.JSON(http.StatusOK, rooms)
 }
 
-func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) error {
+func (cl *Client) makeAndSendWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) error {
 
-	messages, err := s.makeWebexMsgs(ctx, action, cd, sd)
+	messages, err := cl.makeWebexMsgs(ctx, action, cd, sd)
 	if err != nil {
 		return fmt.Errorf("creating webex messages: %w", err)
 	}
@@ -61,7 +61,7 @@ func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cd *cw
 
 	slog.Debug("created webex messages", "action", action, "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "total_messages", len(messages))
 	for _, msg := range messages {
-		_, err := s.WebexClient.PostMessage(&msg)
+		_, err := cl.WebexClient.PostMessage(&msg)
 		if err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
@@ -81,9 +81,9 @@ func (s *Server) makeAndSendWebexMsgs(ctx context.Context, action string, cd *cw
 
 // makeWebexMsgs constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
 // the message should be sent to.
-func (s *Server) makeWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) ([]webex.Message, error) {
+func (cl *Client) makeWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) ([]webex.Message, error) {
 	var body string
-	body += s.messageHeader(action, cd)
+	body += cl.messageHeader(action, cd)
 
 	// add company name if present (even Catchall is considered a company, so this will always exist)
 	if cd.ticket.Company.Name != "" {
@@ -96,7 +96,7 @@ func (s *Server) makeWebexMsgs(ctx context.Context, action string, cd *cwData, s
 	}
 
 	if cd.note.Text != "" {
-		body += s.messageText(cd)
+		body += cl.messageText(cd)
 	}
 
 	// Divider line for easily distinguishable breaks in notifications
@@ -109,7 +109,7 @@ func (s *Server) makeWebexMsgs(ctx context.Context, action string, cd *cwData, s
 			messages = append(messages, webex.NewMessageToRoom(r.WebexID, body))
 		}
 	} else if action == "updated" {
-		sendTo, err := s.getSendTo(ctx, sd)
+		sendTo, err := cl.getSendTo(ctx, sd)
 		if len(sendTo) > 0 {
 			slog.Debug("got send-to list", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID, "send_to", sendTo)
 		} else {
@@ -140,7 +140,7 @@ func roomNames(rooms []db.WebexRoom) []string {
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
 // recent update and any other exclusions passed in by the Config.
-func (s *Server) getSendTo(ctx context.Context, sd *storedData) ([]string, error) {
+func (cl *Client) getSendTo(ctx context.Context, sd *storedData) ([]string, error) {
 	var (
 		excludedMembers []int
 		sendToMembers   []db.CwMember
@@ -158,7 +158,7 @@ func (s *Server) getSendTo(ctx context.Context, sd *storedData) ([]string, error
 	}
 
 	for _, r := range resources {
-		m, err := s.Queries.GetMemberByIdentifier(ctx, r)
+		m, err := cl.Queries.GetMemberByIdentifier(ctx, r)
 		if err != nil {
 			slog.Warn("getSendTo: couldn't get member data", "resource", r, "error", err)
 			continue
@@ -179,7 +179,7 @@ func (s *Server) getSendTo(ctx context.Context, sd *storedData) ([]string, error
 	return emails, nil
 }
 
-func (s *Server) messageHeader(action string, cd *cwData) string {
+func (cl *Client) messageHeader(action string, cd *cwData) string {
 	var header string
 	if action == "added" {
 		header += "**New Ticket:** "
@@ -188,11 +188,11 @@ func (s *Server) messageHeader(action string, cd *cwData) string {
 	}
 
 	// add clickable ticket ID with link to ticket, with ticket title
-	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cd.ticket.ID, s.cwCompanyID), cd.ticket.Summary)
+	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cd.ticket.ID, cl.cwCompanyID), cd.ticket.Summary)
 	return header
 }
 
-func (s *Server) messageText(cd *cwData) string {
+func (cl *Client) messageText(cd *cwData) string {
 	var body string
 	sender := getSenderName(cd)
 	if sender != nil {
@@ -200,8 +200,8 @@ func (s *Server) messageText(cd *cwData) string {
 	}
 
 	text := cd.note.Text
-	if len(text) > s.Config.MaxMsgLength {
-		text = text[:s.Config.MaxMsgLength] + "..."
+	if len(text) > cl.Config.MaxMsgLength {
+		text = text[:cl.Config.MaxMsgLength] + "..."
 	}
 	body += fmt.Sprintf("\n%s", blockQuoteText(text))
 	return body

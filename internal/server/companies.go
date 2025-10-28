@@ -10,12 +10,12 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (s *Server) ensureCompanyInStore(ctx context.Context, id int) (db.CwCompany, error) {
-	company, err := s.Queries.GetCompany(ctx, id)
+func (cl *Client) ensureCompanyInStore(ctx context.Context, id int) (db.CwCompany, error) {
+	company, err := cl.Queries.GetCompany(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("company not in store, attempting insert", "company_id", id)
-			cwComp, err := s.CWClient.GetCompany(id, nil)
+			cwComp, err := cl.CWClient.GetCompany(id, nil)
 			if err != nil {
 				return db.CwCompany{}, fmt.Errorf("getting company from cw: %w", err)
 			}
@@ -25,7 +25,7 @@ func (s *Server) ensureCompanyInStore(ctx context.Context, id int) (db.CwCompany
 			}
 			slog.Debug("created insert company params", "id", p.ID, "name", p.Name)
 
-			company, err = s.Queries.InsertCompany(ctx, p)
+			company, err = cl.Queries.InsertCompany(ctx, p)
 			if err != nil {
 				return db.CwCompany{}, fmt.Errorf("inserting company into db: %w", err)
 			}

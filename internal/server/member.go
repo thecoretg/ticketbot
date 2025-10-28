@@ -10,12 +10,12 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (s *Server) ensureMemberByIdentifier(ctx context.Context, identifier string) (db.CwMember, error) {
-	member, err := s.Queries.GetMemberByIdentifier(ctx, identifier)
+func (cl *Client) ensureMemberByIdentifier(ctx context.Context, identifier string) (db.CwMember, error) {
+	member, err := cl.Queries.GetMemberByIdentifier(ctx, identifier)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("member not in store, attempting insert", "member_identifier", identifier)
-			cwMember, err := s.CWClient.GetMemberByIdentifier(identifier)
+			cwMember, err := cl.CWClient.GetMemberByIdentifier(identifier)
 			if err != nil {
 				return db.CwMember{}, fmt.Errorf("getting member from cw by identifier: %w", err)
 			}
@@ -24,7 +24,7 @@ func (s *Server) ensureMemberByIdentifier(ctx context.Context, identifier string
 				return db.CwMember{}, fmt.Errorf("member %s not found", identifier)
 			}
 
-			return s.ensureMemberInStore(ctx, cwMember.ID)
+			return cl.ensureMemberInStore(ctx, cwMember.ID)
 		}
 		return db.CwMember{}, fmt.Errorf("querying db for member: %w", err)
 	}
@@ -32,12 +32,12 @@ func (s *Server) ensureMemberByIdentifier(ctx context.Context, identifier string
 	return member, nil
 }
 
-func (s *Server) ensureMemberInStore(ctx context.Context, id int) (db.CwMember, error) {
-	member, err := s.Queries.GetMember(ctx, id)
+func (cl *Client) ensureMemberInStore(ctx context.Context, id int) (db.CwMember, error) {
+	member, err := cl.Queries.GetMember(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("member not in store, attempting insert", "member_id", id)
-			cwMember, err := s.CWClient.GetMember(id, nil)
+			cwMember, err := cl.CWClient.GetMember(id, nil)
 			if err != nil {
 				return db.CwMember{}, fmt.Errorf("getting member from cw: %w", err)
 			}
@@ -50,7 +50,7 @@ func (s *Server) ensureMemberInStore(ctx context.Context, id int) (db.CwMember, 
 			}
 			slog.Debug("created insert member params", "id", p.ID, "identifier", p.Identifier, "first_name", p.FirstName, "last_name", p.LastName, "primary_email", p.PrimaryEmail)
 
-			member, err = s.Queries.InsertMember(ctx, p)
+			member, err = cl.Queries.InsertMember(ctx, p)
 			if err != nil {
 				return db.CwMember{}, fmt.Errorf("inserting member into db: %w", err)
 			}

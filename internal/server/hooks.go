@@ -7,29 +7,29 @@ import (
 	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
-func (s *Server) InitAllHooks() error {
+func (cl *Client) initAllHooks() error {
 	// this will eventually include webex hooks
-	return s.initiateCWHooks()
+	return cl.initiateCWHooks()
 }
 
-func (s *Server) initiateCWHooks() error {
+func (cl *Client) initiateCWHooks() error {
 	params := map[string]string{
 		"pageSize": "1000",
 	}
-	cwHooks, err := s.CWClient.ListCallbacks(params)
+	cwHooks, err := cl.CWClient.ListCallbacks(params)
 	if err != nil {
 		return fmt.Errorf("listing callbacks: %w", err)
 	}
 	slog.Debug("got existing webhooks", "total", len(cwHooks))
 
-	if err := s.processCwHook(s.ticketsWebhookURL(), "ticket", "owner", 1, cwHooks); err != nil {
+	if err := cl.processCwHook(cl.ticketsWebhookURL(), "ticket", "owner", 1, cwHooks); err != nil {
 		return fmt.Errorf("processing tickets hook: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Server) processCwHook(url, entity, level string, objectID int, currentHooks []psa.Callback) error {
+func (cl *Client) processCwHook(url, entity, level string, objectID int, currentHooks []psa.Callback) error {
 	hook := &psa.Callback{
 		URL:      fmt.Sprintf("https://%s", url),
 		Type:     entity,
@@ -48,7 +48,7 @@ func (s *Server) processCwHook(url, entity, level string, objectID int, currentH
 				found = true
 				continue
 			} else {
-				if err := s.CWClient.DeleteCallback(c.ID); err != nil {
+				if err := cl.CWClient.DeleteCallback(c.ID); err != nil {
 					return fmt.Errorf("deleting webhook %d: %w", c.ID, err)
 				}
 				slog.Debug("deleted unused connectwise webhook", "id", c.ID, "url", c.URL)
@@ -57,7 +57,7 @@ func (s *Server) processCwHook(url, entity, level string, objectID int, currentH
 	}
 
 	if !found {
-		newHook, err := s.CWClient.PostCallback(hook)
+		newHook, err := cl.CWClient.PostCallback(hook)
 		if err != nil {
 			return fmt.Errorf("posting webhook: %w", err)
 		}
@@ -66,6 +66,6 @@ func (s *Server) processCwHook(url, entity, level string, objectID int, currentH
 	return nil
 }
 
-func (s *Server) ticketsWebhookURL() string {
-	return fmt.Sprintf("%s/hooks/cw/tickets", s.Config.RootURL)
+func (cl *Client) ticketsWebhookURL() string {
+	return fmt.Sprintf("%s/hooks/cw/tickets", cl.Config.RootURL)
 }

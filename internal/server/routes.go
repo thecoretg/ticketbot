@@ -1,25 +1,25 @@
 package server
 
-func (s *Server) addRoutes() {
-	s.GinEngine.GET("/", s.ping)
-	s.GinEngine.POST("/preload", s.handlePreload, ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
+func (cl *Client) addRoutes() {
+	cl.Server.GET("/", cl.ping)
+	cl.Server.POST("/preload", cl.handlePreload, ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
 
-	settings := s.GinEngine.Group("/settings", ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
-	settings.POST("/attempt_notify", s.handleSetAttemptNotify)
+	settings := cl.Server.Group("/settings", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
+	settings.POST("/attempt_notify", cl.handleSetAttemptNotify)
 
-	keys := s.GinEngine.Group("/keys", ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
-	keys.POST("/", s.handleCreateAPIKey)
+	keys := cl.Server.Group("/keys", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
+	keys.POST("/", cl.handleCreateAPIKey)
 
-	boards := s.GinEngine.Group("/boards", ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
-	boards.GET("/:board_id", s.handleGetBoard)
-	boards.GET("/", s.handleListBoards)
-	boards.PUT("/:board_id", s.handlePutBoard)
-	boards.DELETE("/:board_id", s.handleDeleteBoard)
+	boards := cl.Server.Group("/boards", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
+	boards.GET("/:board_id", cl.handleGetBoard)
+	boards.GET("/", cl.handleListBoards)
+	boards.PUT("/:board_id", cl.handlePutBoard)
+	boards.DELETE("/:board_id", cl.handleDeleteBoard)
 
-	rooms := s.GinEngine.Group("/rooms", ErrorHandler(s.Config.ExitOnError), s.apiKeyAuth())
-	rooms.GET("/", s.handleListWebexRooms)
+	rooms := cl.Server.Group("/rooms", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
+	rooms.GET("/", cl.handleListWebexRooms)
 
-	hooks := s.GinEngine.Group("/hooks")
-	cwHooks := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(s.Config.ExitOnError))
-	cwHooks.POST("/tickets", s.handleTickets)
+	hooks := cl.Server.Group("/hooks")
+	cwHooks := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler(cl.Config.ExitOnError))
+	cwHooks.POST("/tickets", cl.handleTickets)
 }

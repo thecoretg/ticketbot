@@ -11,8 +11,8 @@ import (
 	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
-func (s *Server) getLatestNoteFromCW(ticketID int) (*psa.ServiceTicketNote, error) {
-	note, err := s.CWClient.GetMostRecentTicketNote(ticketID)
+func (cl *Client) getLatestNoteFromCW(ticketID int) (*psa.ServiceTicketNote, error) {
+	note, err := cl.CWClient.GetMostRecentTicketNote(ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("getting most recent note from connectwise: %w", err)
 	}
@@ -25,18 +25,18 @@ func (s *Server) getLatestNoteFromCW(ticketID int) (*psa.ServiceTicketNote, erro
 	return note, nil
 }
 
-func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwTicketNote, error) {
-	memberID, err := s.getMemberID(ctx, cwData)
+func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwTicketNote, error) {
+	memberID, err := cl.getMemberID(ctx, cwData)
 	if err != nil {
 		return db.CwTicketNote{}, fmt.Errorf("getting member data: %w", err)
 	}
 
-	contactID, err := s.getContactID(ctx, cwData)
+	contactID, err := cl.getContactID(ctx, cwData)
 	if err != nil {
 		return db.CwTicketNote{}, fmt.Errorf("getting contact data: %w", err)
 	}
 
-	note, err := s.Queries.GetTicketNote(ctx, cwData.note.ID)
+	note, err := cl.Queries.GetTicketNote(ctx, cwData.note.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("note not found in store, attempting insert", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
@@ -48,7 +48,7 @@ func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwTi
 			}
 
 			slog.Debug("created insert note params", "id", p.ID, "ticket_id", p.TicketID, "member_id", p.MemberID, "contact_id", p.ContactID, "notified", p.Notified)
-			note, err = s.Queries.InsertTicketNote(ctx, p)
+			note, err = cl.Queries.InsertTicketNote(ctx, p)
 
 			if err != nil {
 				return db.CwTicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)
@@ -66,8 +66,8 @@ func (s *Server) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwTi
 	return note, nil
 }
 
-func (s *Server) setNotified(ctx context.Context, noteID int, notified bool) error {
-	_, err := s.Queries.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
+func (cl *Client) setNotified(ctx context.Context, noteID int, notified bool) error {
+	_, err := cl.Queries.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
 		ID:       noteID,
 		Notified: notified,
 	})
@@ -79,8 +79,8 @@ func (s *Server) setNotified(ctx context.Context, noteID int, notified bool) err
 	return nil
 }
 
-func (s *Server) setSkippedNotify(ctx context.Context, noteID int, skip bool) error {
-	_, err := s.Queries.SetNoteSkippedNotify(ctx, db.SetNoteSkippedNotifyParams{
+func (cl *Client) setSkippedNotify(ctx context.Context, noteID int, skip bool) error {
+	_, err := cl.Queries.SetNoteSkippedNotify(ctx, db.SetNoteSkippedNotifyParams{
 		ID:            noteID,
 		SkippedNotify: skip,
 	})
@@ -92,9 +92,9 @@ func (s *Server) setSkippedNotify(ctx context.Context, noteID int, skip bool) er
 	return nil
 }
 
-func (s *Server) getContactID(ctx context.Context, cwData *cwData) (*int, error) {
+func (cl *Client) getContactID(ctx context.Context, cwData *cwData) (*int, error) {
 	if cwData.note.Contact.ID != 0 {
-		c, err := s.ensureContactInStore(ctx, cwData.note.Contact.ID)
+		c, err := cl.ensureContactInStore(ctx, cwData.note.Contact.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring contact in store: %w", err)
 		}
@@ -106,9 +106,9 @@ func (s *Server) getContactID(ctx context.Context, cwData *cwData) (*int, error)
 
 }
 
-func (s *Server) getMemberID(ctx context.Context, cwData *cwData) (*int, error) {
+func (cl *Client) getMemberID(ctx context.Context, cwData *cwData) (*int, error) {
 	if cwData.note.Member.ID != 0 {
-		m, err := s.ensureMemberInStore(ctx, cwData.note.Member.ID)
+		m, err := cl.ensureMemberInStore(ctx, cwData.note.Member.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring member in store: %w", err)
 		}

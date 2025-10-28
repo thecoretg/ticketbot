@@ -29,7 +29,7 @@ type storedData struct {
 	notifyRooms []db.WebexRoom
 }
 
-func (s *Server) handleTickets(c *gin.Context) {
+func (cl *Client) handleTickets(c *gin.Context) {
 	w := &psa.WebhookPayload{}
 	if err := c.ShouldBindJSON(w); err != nil {
 		c.Error(fmt.Errorf("unmarshaling connectwise webhook payload: %w", err))
@@ -44,7 +44,7 @@ func (s *Server) handleTickets(c *gin.Context) {
 	slog.Debug("received payload from connectwise", "ticket_id", w.ID, "action", w.Action)
 	switch w.Action {
 	case "added", "updated":
-		if err := s.processTicket(c.Request.Context(), w.ID, w.Action, false); err != nil {
+		if err := cl.processTicket(c.Request.Context(), w.ID, w.Action, false); err != nil {
 			c.Error(fmt.Errorf("ticket %d: adding or updating the ticket into data storage: %w", w.ID, err))
 			return
 		}
@@ -52,7 +52,7 @@ func (s *Server) handleTickets(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 
 	case "deleted":
-		if err := s.softDeleteTicket(c.Request.Context(), w.ID); err != nil {
+		if err := cl.softDeleteTicket(c.Request.Context(), w.ID); err != nil {
 			c.Error(fmt.Errorf("ticket %d: deleting ticket and its notes: %w", w.ID, err))
 			return
 		}
@@ -61,17 +61,17 @@ func (s *Server) handleTickets(c *gin.Context) {
 	}
 }
 
-func (s *Server) getTicketLock(ticketID int) *sync.Mutex {
-	lockIface, _ := s.ticketLocks.LoadOrStore(ticketID, &sync.Mutex{})
+func (cl *Client) getTicketLock(ticketID int) *sync.Mutex {
+	lockIface, _ := cl.ticketLocks.LoadOrStore(ticketID, &sync.Mutex{})
 	return lockIface.(*sync.Mutex)
 }
 
 // processTicket serves as the primary handler for updating the data store with ticket data. It also will handle
 // extra functionality such as ticket notifications.
-func (s *Server) processTicket(ctx context.Context, ticketID int, action string, bypassNotis bool) error {
+func (cl *Client) processTicket(ctx context.Context, ticketID int, action string, bypassNotis bool) error {
 	// Lock the ticket so that extra calls don't interfere. Due to the nature of Connectwise updates will often
 	// result in other hooks and actions taking place, which means a ticket rarely only sends one webhook payload.
-	lock := s.getTicketLock(ticketID)
+	lock := cl.getTicketLock(ticketID)
 	if !lock.TryLock() {
 		lock.Lock()
 	}
@@ -82,19 +82,19 @@ func (s *Server) processTicket(ctx context.Context, ticketID int, action string,
 
 	// Get the current data for the ticket via the Connectwise API.
 	// This will be used to compare for changes with the store ticket.
-	cd, err := s.getCwData(ticketID)
+	cd, err := cl.getCwData(ticketID)
 	if err != nil {
 		return fmt.Errorf("getting data from connectwise: %w", err)
 	}
 
-	sd, err := s.getStoredData(ctx, cd)
+	sd, err := cl.getStoredData(ctx, cd)
 	if err != nil {
 		return fmt.Errorf("getting or creating stored data: %w", err)
 	}
 
 	// Insert or update the ticket into the store if it didn't exist or if there were changes.
 	p := cwDataToUpdateTicketParams(cd)
-	sd.ticket, err = s.Queries.UpdateTicket(ctx, p)
+	sd.ticket, err = cl.Queries.UpdateTicket(ctx, p)
 	if err != nil {
 		return fmt.Errorf("updating ticket in store: %w", err)
 	}
@@ -103,27 +103,27 @@ func (s *Server) processTicket(ctx context.Context, ticketID int, action string,
 	// which checks if it meets message criteria and then notifies if valid.
 	// AttemptNotify and the bypassNotis (used for preloads) acts as a hard block from even attempting.
 	notified := false
-	if s.State.AttemptNotify && sd.note.ID != 0 && !bypassNotis {
-		notified, err = s.runNotificationAction(ctx, action, cd, sd)
+	if cl.State.AttemptNotify && sd.note.ID != 0 && !bypassNotis {
+		notified, err = cl.runNotificationAction(ctx, action, cd, sd)
 		if err != nil {
 			return fmt.Errorf("running notifier: %w", err)
 		}
 	}
 
 	// Log the ticket result regardless of what happened
-	s.logTicketResult(action, notified, sd)
+	cl.logTicketResult(action, notified, sd)
 	return nil
 }
 
-func (s *Server) runNotificationAction(ctx context.Context, action string, cd *cwData, sd *storedData) (bool, error) {
+func (cl *Client) runNotificationAction(ctx context.Context, action string, cd *cwData, sd *storedData) (bool, error) {
 	notified := false
 	if meetsMessageCriteria(action, sd) {
 		// set notified first in case message fails - don't want to send duplicates regardless
-		if err := s.setNotified(ctx, sd.note.ID, true); err != nil {
+		if err := cl.setNotified(ctx, sd.note.ID, true); err != nil {
 			return false, fmt.Errorf("setting notified to true: %w", err)
 		}
 
-		if err := s.makeAndSendWebexMsgs(ctx, action, cd, sd); err != nil {
+		if err := cl.makeAndSendWebexMsgs(ctx, action, cd, sd); err != nil {
 			return false, fmt.Errorf("processing webex messages: %w", err)
 		}
 		notified = true
@@ -131,8 +131,8 @@ func (s *Server) runNotificationAction(ctx context.Context, action string, cd *c
 	return notified, nil
 }
 
-func (s *Server) softDeleteTicket(ctx context.Context, ticketID int) error {
-	if err := s.Queries.SoftDeleteTicket(ctx, ticketID); err != nil {
+func (cl *Client) softDeleteTicket(ctx context.Context, ticketID int) error {
+	if err := cl.Queries.SoftDeleteTicket(ctx, ticketID); err != nil {
 		return fmt.Errorf("soft deleting ticket: %w", err)
 	}
 	slog.Debug("ticket soft deleted", "ticket_id", ticketID)
@@ -140,13 +140,13 @@ func (s *Server) softDeleteTicket(ctx context.Context, ticketID int) error {
 	return nil
 }
 
-func (s *Server) getCwData(ticketID int) (*cwData, error) {
-	ticket, err := s.CWClient.GetTicket(ticketID, nil)
+func (cl *Client) getCwData(ticketID int) (*cwData, error) {
+	ticket, err := cl.CWClient.GetTicket(ticketID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting ticket: %w", err)
 	}
 
-	note, err := s.CWClient.GetMostRecentTicketNote(ticketID)
+	note, err := cl.CWClient.GetMostRecentTicketNote(ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("getting most recent note: %w", err)
 	}
@@ -161,21 +161,21 @@ func (s *Server) getCwData(ticketID int) (*cwData, error) {
 	}, nil
 }
 
-func (s *Server) getStoredData(ctx context.Context, cd *cwData) (*storedData, error) {
+func (cl *Client) getStoredData(ctx context.Context, cd *cwData) (*storedData, error) {
 	// first check for or create board since it needs to exist before the ticket
-	board, err := s.ensureBoardInStore(ctx, cd)
+	board, err := cl.ensureBoardInStore(ctx, cd)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring board in store: %w", err)
 	}
 
-	company, err := s.ensureCompanyInStore(ctx, cd.ticket.Company.ID)
+	company, err := cl.ensureCompanyInStore(ctx, cd.ticket.Company.ID)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring company in store: %w", err)
 	}
 
 	contact := db.CwContact{}
 	if cd.ticket.Contact.ID != 0 {
-		contact, err = s.ensureContactInStore(ctx, cd.ticket.Contact.ID)
+		contact, err = cl.ensureContactInStore(ctx, cd.ticket.Contact.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring contact in store: %w", err)
 		}
@@ -183,14 +183,14 @@ func (s *Server) getStoredData(ctx context.Context, cd *cwData) (*storedData, er
 
 	owner := db.CwMember{}
 	if cd.ticket.Owner.ID != 0 {
-		owner, err = s.ensureMemberInStore(ctx, cd.ticket.Owner.ID)
+		owner, err = cl.ensureMemberInStore(ctx, cd.ticket.Owner.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring owner in store: %w", err)
 		}
 	}
 
 	// check for, or create ticket
-	ticket, err := s.ensureTicketInStore(ctx, cd)
+	ticket, err := cl.ensureTicketInStore(ctx, cd)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
@@ -198,13 +198,13 @@ func (s *Server) getStoredData(ctx context.Context, cd *cwData) (*storedData, er
 	// start with empty note, use existing or created note if there is a note in the ticket
 	note := db.CwTicketNote{}
 	if cd.note.ID != 0 {
-		note, err = s.ensureNoteInStore(ctx, cd)
+		note, err = cl.ensureNoteInStore(ctx, cd)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring note in store: %w", err)
 		}
 	}
 
-	rooms, err := s.Queries.ListRoomsByBoard(ctx, board.ID)
+	rooms, err := cl.Queries.ListRoomsByBoard(ctx, board.ID)
 	if err != nil {
 		return nil, fmt.Errorf("getting rooms to notify: %w", err)
 	}
@@ -220,8 +220,8 @@ func (s *Server) getStoredData(ctx context.Context, cd *cwData) (*storedData, er
 	}, nil
 }
 
-func (s *Server) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTicket, error) {
-	ticket, err := s.Queries.GetTicket(ctx, cd.ticket.ID)
+func (cl *Client) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTicket, error) {
+	ticket, err := cl.Queries.GetTicket(ctx, cd.ticket.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			p := db.InsertTicketParams{
@@ -237,7 +237,7 @@ func (s *Server) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTick
 
 			slog.Debug("created insert ticket params", "id", p.ID, "summary", p.Summary, "board_id", p.BoardID, "owner_id", p.OwnerID, "company_id", p.CompanyID, "contact_id", p.ContactID, "resources", p.Resources, "updated_by", p.UpdatedBy)
 
-			ticket, err = s.Queries.InsertTicket(ctx, p)
+			ticket, err = cl.Queries.InsertTicket(ctx, p)
 			if err != nil {
 				return db.CwTicket{}, fmt.Errorf("inserting ticket into db: %w", err)
 			}
@@ -253,7 +253,7 @@ func (s *Server) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTick
 	return ticket, nil
 }
 
-func (s *Server) logTicketResult(action string, notified bool, sd *storedData) {
+func (cl *Client) logTicketResult(action string, notified bool, sd *storedData) {
 	slog.Debug("ticket processed",
 		"ticket_id", sd.ticket.ID,
 		"action", action,

@@ -14,36 +14,36 @@ import (
 	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
-func (s *Server) handlePreload(c *gin.Context) {
+func (cl *Client) handlePreload(c *gin.Context) {
 	c.Status(http.StatusOK)
 
 	go func() {
-		if err := s.preloadConnectwiseData(context.Background()); err != nil {
+		if err := cl.preloadConnectwiseData(context.Background()); err != nil {
 			slog.Error("preloading data", "error", err)
 		}
 	}()
 }
 
-func (s *Server) preloadConnectwiseData(ctx context.Context) error {
-	if err := s.preloadBoards(ctx, s.Config.MaxConcurrentPreloads); err != nil {
+func (cl *Client) preloadConnectwiseData(ctx context.Context) error {
+	if err := cl.preloadBoards(ctx, cl.Config.MaxConcurrentPreloads); err != nil {
 		return fmt.Errorf("preloading active boards: %w", err)
 	}
 
-	if err := s.preloadOpenTickets(ctx, s.Config.MaxConcurrentPreloads); err != nil {
+	if err := cl.preloadOpenTickets(ctx, cl.Config.MaxConcurrentPreloads); err != nil {
 		return fmt.Errorf("preloading open tickets: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
+func (cl *Client) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	slog.Debug("beginning preloading boards")
 	params := map[string]string{
 		"conditions": "inactiveFlag = false",
 	}
 
 	slog.Debug("loading existing boards from connectwise")
-	boards, err := s.CWClient.ListBoards(params)
+	boards, err := cl.CWClient.ListBoards(params)
 	if err != nil {
 		return fmt.Errorf("getting boards from CW: %w", err)
 	}
@@ -51,7 +51,7 @@ func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	sem := make(chan struct{}, maxConcurrent)
 	var wg sync.WaitGroup
 	for _, board := range boards {
-		_, err := s.Queries.GetBoard(ctx, board.ID)
+		_, err := cl.Queries.GetBoard(ctx, board.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				slog.Debug("board not found in data store - adding", "board_id", board.ID, "board_name", board.Name)
@@ -64,7 +64,7 @@ func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 						ID:   board.ID,
 						Name: board.Name,
 					}
-					if _, err := s.Queries.InsertBoard(ctx, p); err != nil {
+					if _, err := cl.Queries.InsertBoard(ctx, p); err != nil {
 						slog.Warn("error preloading board", "board_id", board.ID, "error", err)
 					}
 					slog.Debug("preloaded board", "board_id", board.ID, "board_name", board.Name)
@@ -81,11 +81,11 @@ func (s *Server) preloadBoards(ctx context.Context, maxConcurrent int) error {
 	return nil
 }
 
-func (s *Server) preloadMembers(ctx context.Context, maxConcurrent int) error {
+func (cl *Client) preloadMembers(ctx context.Context, maxConcurrent int) error {
 	slog.Debug("beginning preloading members")
 	slog.Debug("loading existing members from connectwise")
 
-	members, err := s.CWClient.ListMembers(nil)
+	members, err := cl.CWClient.ListMembers(nil)
 	if err != nil {
 		return fmt.Errorf("getting members from CW: %w", err)
 	}
@@ -94,7 +94,7 @@ func (s *Server) preloadMembers(ctx context.Context, maxConcurrent int) error {
 	sem := make(chan struct{}, maxConcurrent)
 	var wg sync.WaitGroup
 	for _, member := range members {
-		_, err := s.Queries.GetMember(ctx, member.ID)
+		_, err := cl.Queries.GetMember(ctx, member.ID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				slog.Debug("member not found in data store - adding", "member_id", member.ID, "member_identifier", member.Identifier)
@@ -110,7 +110,7 @@ func (s *Server) preloadMembers(ctx context.Context, maxConcurrent int) error {
 						LastName:     member.LastName,
 						PrimaryEmail: member.PrimaryEmail,
 					}
-					if _, err := s.Queries.InsertMember(ctx, p); err != nil {
+					if _, err := cl.Queries.InsertMember(ctx, p); err != nil {
 						slog.Warn("error preloading member", "member_id", member.ID, "member_identifier", member.Identifier, "error", err)
 					}
 					slog.Debug("preloaded member", "member_id", member.ID, "member_identifier", member.Identifier)
@@ -130,7 +130,7 @@ func (s *Server) preloadMembers(ctx context.Context, maxConcurrent int) error {
 // preloadOpenTickets finds all open tickets in Connectwise and loads them into the DB if they don't
 // already exist. It does not attempt to notify since that would result in tons of notifications
 // for already existing tickets.
-func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) error {
+func (cl *Client) preloadOpenTickets(ctx context.Context, maxConcurrent int) error {
 	slog.Debug("beginning preloading tickets")
 	params := map[string]string{
 		"pageSize":   "100",
@@ -138,7 +138,7 @@ func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 	}
 
 	slog.Debug("loading existing open tickets")
-	openTickets, err := s.CWClient.ListTickets(params)
+	openTickets, err := cl.CWClient.ListTickets(params)
 	if err != nil {
 		return fmt.Errorf("getting open tickets from CW: %w", err)
 	}
@@ -153,7 +153,7 @@ func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 		go func(ticket psa.Ticket) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			if err := s.processTicket(ctx, ticket.ID, "preload", true); err != nil {
+			if err := cl.processTicket(ctx, ticket.ID, "preload", true); err != nil {
 				errCh <- fmt.Errorf("error preloading ticket %d: %w", ticket.ID, err)
 			} else {
 				errCh <- nil
@@ -167,7 +167,7 @@ func (s *Server) preloadOpenTickets(ctx context.Context, maxConcurrent int) erro
 	for err := range errCh {
 		if err != nil {
 			slog.Error("preloading ticket", "error", err)
-			if s.Config.ExitOnError {
+			if cl.Config.ExitOnError {
 				slog.Debug("exiting because EXIT_ON_ERROR is enabled")
 				return err
 			}

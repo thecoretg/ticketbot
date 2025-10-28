@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func (s *Server) apiKeyAuth() gin.HandlerFunc {
+func (cl *Client) apiKeyAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
@@ -22,7 +22,7 @@ func (s *Server) apiKeyAuth() gin.HandlerFunc {
 
 		key := strings.TrimPrefix(auth, "Bearer ")
 
-		keys, err := s.Queries.ListAPIKeys(c.Request.Context())
+		keys, err := cl.Queries.ListAPIKeys(c.Request.Context())
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "db error"})
 			return

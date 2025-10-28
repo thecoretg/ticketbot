@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/autotls"
 	"github.com/gin-gonic/gin"
@@ -16,14 +17,14 @@ import (
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
-type Server struct {
+type Client struct {
 	Queries     *db.Queries
-	GinEngine   *gin.Engine
+	Server      *gin.Engine
 	Config      *cfg.Cfg
 	CWClient    *psa.Client
 	WebexClient *webex.Client
-
 	State       *appState
+
 	cwCompanyID string
 	ticketLocks sync.Map
 }
@@ -35,23 +36,11 @@ func Run(embeddedMigrations embed.FS) error {
 		return fmt.Errorf("initializing config: %w", err)
 	}
 
-	pool, err := pgxpool.New(ctx, c.PostgresDSN)
-	if err != nil {
-		return fmt.Errorf("creating pgx pool: %w", err)
-	}
+	pool, err := setupDB(ctx, c.PostgresDSN, embeddedMigrations)
+	s := newClient(c, pool)
 
-	if err := migrateDB(pool, embeddedMigrations); err != nil {
-		return fmt.Errorf("connecting/migrating db: %w", err)
-	}
-
-	s := NewServer(c, pool)
-
-	if err := s.populateAppState(ctx); err != nil {
-		return fmt.Errorf("checking app state values: %w", err)
-	}
-
-	if err := s.checkAndRunInit(ctx); err != nil {
-		return fmt.Errorf("running initialization: %w", err)
+	if err := s.startup(ctx); err != nil {
+		return fmt.Errorf("running server startup: %w", err)
 	}
 
 	if err := s.serve(); err != nil {
@@ -63,20 +52,45 @@ func Run(embeddedMigrations embed.FS) error {
 
 // Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
 // restart it
-func (s *Server) serve() error {
-	s.GinEngine = gin.Default()
-	s.addRoutes()
+func (cl *Client) serve() error {
+	cl.Server = gin.Default()
+	cl.addRoutes()
 
-	if s.Config.UseAutoTLS {
-		slog.Debug("running server with auto tls", "url", s.Config.RootURL)
-		return autotls.Run(s.GinEngine, s.Config.RootURL)
+	if cl.Config.UseAutoTLS {
+		slog.Debug("running server with auto tls", "url", cl.Config.RootURL)
+		return autotls.Run(cl.Server, cl.Config.RootURL)
 	}
 
 	slog.Debug("running server without auto tls")
-	return s.GinEngine.Run()
+	return cl.Server.Run()
 }
 
-func NewServer(cfg *cfg.Cfg, pool *pgxpool.Pool) *Server {
+func (cl *Client) startup(ctx context.Context) error {
+	if err := cl.populateAppState(ctx); err != nil {
+		return fmt.Errorf("checking app state values: %w", err)
+	}
+
+	key, err := cl.bootstrapAdmin(ctx)
+	if err != nil {
+		return fmt.Errorf("bootstrapping initial admin key: %w", err)
+	}
+
+	if key != "" {
+		slog.Info("bootstrap token created", "email", cl.Config.InitialAdminEmail, "key", key)
+		slog.Info("waiting 60 seconds - please copy the above key, as it will not be shown again")
+		time.Sleep(60 * time.Minute)
+	} else {
+		slog.Info("bootstrap token already exists")
+	}
+
+	if err := cl.initAllHooks(); err != nil {
+		return fmt.Errorf("initializing webhooks: %w", err)
+	}
+
+	return nil
+}
+
+func newClient(cfg *cfg.Cfg, pool *pgxpool.Pool) *Client {
 	slog.Debug("initializing server client")
 	cwCreds := &psa.Creds{
 		PublicKey:  cfg.CWPubKey,
@@ -85,7 +99,7 @@ func NewServer(cfg *cfg.Cfg, pool *pgxpool.Pool) *Server {
 		CompanyId:  cfg.CWCompanyID,
 	}
 
-	s := &Server{
+	s := &Client{
 		Config:      cfg,
 		CWClient:    psa.NewClient(cwCreds),
 		WebexClient: webex.NewClient(cfg.WebexSecret),

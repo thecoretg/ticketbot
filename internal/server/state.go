@@ -26,39 +26,39 @@ type boolStateResult struct {
 	err   error
 }
 
-func (s *Server) populateAppState(ctx context.Context) error {
-	if err := s.setStateIfNotSet(ctx, initStatusKey); err != nil {
+func (cl *Client) populateAppState(ctx context.Context) error {
+	if err := cl.setStateIfNotSet(ctx, initStatusKey); err != nil {
 		return fmt.Errorf("checking init status: %w", err)
 	}
 
-	if err := s.setStateIfNotSet(ctx, attemptNotifyKey); err != nil {
+	if err := cl.setStateIfNotSet(ctx, attemptNotifyKey); err != nil {
 		return fmt.Errorf("checking attempt notify value: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Server) setAttemptNotify(ctx context.Context, attempt bool) error {
-	return s.setBoolState(ctx, attemptNotifyKey, attempt)
+func (cl *Client) setAttemptNotify(ctx context.Context, attempt bool) error {
+	return cl.setBoolState(ctx, attemptNotifyKey, attempt)
 }
 
-func (s *Server) setStateIfNotSet(ctx context.Context, key string) error {
-	r := s.getBoolState(ctx, key)
+func (cl *Client) setStateIfNotSet(ctx context.Context, key string) error {
+	r := cl.getBoolState(ctx, key)
 	if r.err != nil {
 		slog.Warn("error getting app state", "key", key, "error", r.err)
 	}
 
 	if !r.isSet {
 		slog.Debug("app state key is not set - setting to false", "key", key)
-		return s.setBoolState(ctx, key, false)
+		return cl.setBoolState(ctx, key, false)
 	}
 
 	slog.Debug("app state key is already set", "key", key, "value", r.value)
 	return nil
 }
 
-func (s *Server) getBoolState(ctx context.Context, key string) boolStateResult {
-	val, err := s.Queries.GetAppState(ctx, key)
+func (cl *Client) getBoolState(ctx context.Context, key string) boolStateResult {
+	val, err := cl.Queries.GetAppState(ctx, key)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return boolStateResult{
@@ -90,7 +90,7 @@ func (s *Server) getBoolState(ctx context.Context, key string) boolStateResult {
 	}
 }
 
-func (s *Server) setBoolState(ctx context.Context, key string, val bool) error {
+func (cl *Client) setBoolState(ctx context.Context, key string, val bool) error {
 	v := "false"
 	if val {
 		v = "true"
@@ -101,7 +101,7 @@ func (s *Server) setBoolState(ctx context.Context, key string, val bool) error {
 		Value: v,
 	}
 
-	if err := s.Queries.SetAppState(ctx, p); err != nil {
+	if err := cl.Queries.SetAppState(ctx, p); err != nil {
 		return fmt.Errorf("setting key %s to %s: %w", key, v, err)
 	}
 

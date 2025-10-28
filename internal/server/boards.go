@@ -13,14 +13,14 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (s *Server) handleGetBoard(c *gin.Context) {
+func (cl *Client) handleGetBoard(c *gin.Context) {
 	boardID, err := strconv.Atoi(c.Param("board_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorOutput("board id must be a valid integer"))
 		return
 	}
 
-	board, err := s.Queries.GetBoard(c.Request.Context(), boardID)
+	board, err := cl.Queries.GetBoard(c.Request.Context(), boardID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("board %d not found", boardID)))
@@ -33,8 +33,8 @@ func (s *Server) handleGetBoard(c *gin.Context) {
 	c.JSON(http.StatusOK, board)
 }
 
-func (s *Server) handleListBoards(c *gin.Context) {
-	boards, err := s.Queries.ListBoards(c.Request.Context())
+func (cl *Client) handleListBoards(c *gin.Context) {
+	boards, err := cl.Queries.ListBoards(c.Request.Context())
 	if err != nil {
 		c.Error(fmt.Errorf("listing boards: %w", err))
 		return
@@ -47,14 +47,14 @@ func (s *Server) handleListBoards(c *gin.Context) {
 	c.JSON(http.StatusOK, boards)
 }
 
-func (s *Server) handlePutBoard(c *gin.Context) {
+func (cl *Client) handlePutBoard(c *gin.Context) {
 	boardID, err := strconv.Atoi(c.Param("board_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorOutput("board id must be a valid integer"))
 		return
 	}
 
-	board, err := s.Queries.GetBoard(c.Request.Context(), boardID)
+	board, err := cl.Queries.GetBoard(c.Request.Context(), boardID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("board %d not found", boardID)))
@@ -69,7 +69,7 @@ func (s *Server) handlePutBoard(c *gin.Context) {
 		return
 	}
 
-	updatedBoard, err := s.Queries.UpdateBoard(c.Request.Context(), db.UpdateBoardParams{
+	updatedBoard, err := cl.Queries.UpdateBoard(c.Request.Context(), db.UpdateBoardParams{
 		ID:   board.ID,
 		Name: board.Name,
 	})
@@ -77,14 +77,14 @@ func (s *Server) handlePutBoard(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedBoard)
 }
 
-func (s *Server) handleDeleteBoard(c *gin.Context) {
+func (cl *Client) handleDeleteBoard(c *gin.Context) {
 	boardID, err := strconv.Atoi(c.Param("board_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, errorOutput("board id must be a valid integer"))
 		return
 	}
 
-	err = s.Queries.DeleteBoard(c.Request.Context(), boardID)
+	err = cl.Queries.DeleteBoard(c.Request.Context(), boardID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("board %d not found", boardID)))
@@ -95,8 +95,8 @@ func (s *Server) handleDeleteBoard(c *gin.Context) {
 	}
 }
 
-func (s *Server) ensureBoardInStore(ctx context.Context, cwData *cwData) (db.CwBoard, error) {
-	board, err := s.Queries.GetBoard(ctx, cwData.ticket.Board.ID)
+func (cl *Client) ensureBoardInStore(ctx context.Context, cwData *cwData) (db.CwBoard, error) {
+	board, err := cl.Queries.GetBoard(ctx, cwData.ticket.Board.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("board not in store, attempting insert", "board_id", cwData.ticket.Board.ID)
@@ -104,7 +104,7 @@ func (s *Server) ensureBoardInStore(ctx context.Context, cwData *cwData) (db.CwB
 				ID:   cwData.ticket.Board.ID,
 				Name: cwData.ticket.Board.Name,
 			}
-			board, err = s.Queries.InsertBoard(ctx, p)
+			board, err = cl.Queries.InsertBoard(ctx, p)
 			if err != nil {
 				return db.CwBoard{}, fmt.Errorf("inserting board into db: %w", err)
 			}
