@@ -34,14 +34,14 @@ func (cl *Client) handleSetAttemptNotify(c *gin.Context) {
 
 func (cl *Client) handleListWebexRooms(c *gin.Context) {
 	// TODO: query params?
-	rooms, err := cl.WebexClient.ListRooms(nil)
+	rooms, err := cl.Queries.ListWebexRooms(c.Request.Context())
 	if err != nil {
 		c.Error(fmt.Errorf("listing rooms: %w", err))
 		return
 	}
 
 	if rooms == nil {
-		rooms = []webex.Room{}
+		rooms = []db.WebexRoom{}
 	}
 
 	c.JSON(http.StatusOK, rooms)
@@ -139,7 +139,7 @@ func roomNames(rooms []db.WebexRoom) []string {
 }
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
-// recent update and any other exclusions passed in by the Config.
+// recent update and any other exclusions passed in by the cfgOld.
 func (cl *Client) getSendTo(ctx context.Context, sd *storedData) ([]string, error) {
 	var (
 		excludedMembers []int
@@ -188,7 +188,7 @@ func (cl *Client) messageHeader(action string, cd *cwData) string {
 	}
 
 	// add clickable ticket ID with link to ticket, with ticket title
-	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cd.ticket.ID, cl.Config.CWCompanyID), cd.ticket.Summary)
+	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(cd.ticket.ID, cl.Creds.CWCompanyID), cd.ticket.Summary)
 	return header
 }
 
@@ -200,8 +200,8 @@ func (cl *Client) messageText(cd *cwData) string {
 	}
 
 	text := cd.note.Text
-	if len(text) > cl.Config.MaxMsgLength {
-		text = text[:cl.Config.MaxMsgLength] + "..."
+	if len(text) > cl.Config.MaxMessageLength {
+		text = text[:cl.Config.MaxMessageLength] + "..."
 	}
 	body += fmt.Sprintf("\n%s", blockQuoteText(text))
 	return body

@@ -21,7 +21,7 @@ func (cl *Client) handleSyncTickets(c *gin.Context) {
 
 	c.Status(http.StatusOK)
 	go func() {
-		if err := cl.syncOpenTickets(context.Background(), cl.Config.MaxConcurrentPreloads); err != nil {
+		if err := cl.syncOpenTickets(context.Background(), cl.Config.MaxConcurrentSyncCalls); err != nil {
 			slog.Error("syncing connectwise tickets", "error", err)
 		}
 	}()
@@ -29,11 +29,12 @@ func (cl *Client) handleSyncTickets(c *gin.Context) {
 
 func (cl *Client) handleSyncWebexRooms(c *gin.Context) {
 	if cl.State.SyncingWebexRooms {
+		slog.Debug("webex room sync requested, but one is already in progress. returning 'sync already in progress' result")
 		c.JSON(http.StatusOK, gin.H{"result": "sync already in progress"})
 		return
 	}
 
-	c.Status(http.StatusOK)
+	c.JSON(http.StatusOK, gin.H{"result": "webex room sync started"})
 	go func() {
 		if err := cl.syncWebexRooms(context.Background()); err != nil {
 			slog.Error("syncing webex rooms", "error", err)
@@ -92,10 +93,6 @@ func (cl *Client) syncOpenTickets(ctx context.Context, maxConcurrent int) error 
 	for err := range errCh {
 		if err != nil {
 			slog.Error("preloading ticket", "error", err)
-			if cl.Config.ExitOnError {
-				slog.Debug("exiting because EXIT_ON_ERROR is enabled")
-				return err
-			}
 		}
 	}
 	return nil
@@ -179,6 +176,7 @@ func (cl *Client) syncWebexRooms(ctx context.Context) error {
 		return fmt.Errorf("committing tx: %w", err)
 	}
 
+	slog.Debug("webex room sync complete")
 	return nil
 }
 

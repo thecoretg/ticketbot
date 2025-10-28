@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -52,7 +53,7 @@ func (cl *Client) handleCreateAPIKey(c *gin.Context) {
 }
 
 func (cl *Client) bootstrapAdmin(ctx context.Context) error {
-	email := cl.Config.InitialAdminEmail
+	email := cl.Creds.InitialAdminEmail
 	if email == "" {
 		return errors.New("initial admin config field must not be blank")
 	}
@@ -96,8 +97,11 @@ func (cl *Client) bootstrapAdmin(ctx context.Context) error {
 	}
 
 	slog.Info("bootstrap token created", "email", email, "key", key)
-	slog.Info("waiting 60 seconds - please copy the above key, as it will not be shown again")
-	time.Sleep(60 * time.Minute)
+
+	if os.Getenv("API_KEY_DELAY") == "true" {
+		slog.Info("waiting 60 seconds - please copy the above key, as it will not be shown again")
+		time.Sleep(60 * time.Minute)
+	}
 
 	return nil
 }

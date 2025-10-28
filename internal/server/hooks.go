@@ -67,5 +67,5 @@ func (cl *Client) processCwHook(url, entity, level string, objectID int, current
 }
 
 func (cl *Client) ticketsWebhookURL() string {
-	return fmt.Sprintf("%s/hooks/cw/tickets", cl.Config.RootURL)
+	return fmt.Sprintf("%s/hooks/cw/tickets", cl.Creds.RootURL)
 }

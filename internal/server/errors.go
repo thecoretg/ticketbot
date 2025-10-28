@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/thecoretg/ticketbot/internal/psa"
 
@@ -21,7 +20,7 @@ func (e ErrWasDeleted) Error() string {
 	return fmt.Sprintf("%s %d was deleted by external factors", e.ItemType, e.ItemID)
 }
 
-func ErrorHandler(exitOnError bool) gin.HandlerFunc {
+func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 
@@ -32,13 +31,10 @@ func ErrorHandler(exitOnError bool) gin.HandlerFunc {
 				c.Status(http.StatusNoContent)
 				return
 			}
-			slog.Error("error occurred in request", "error", err, "exitOnError", exitOnError)
+			slog.Error("error occurred in request", "error", err)
 			c.Status(http.StatusInternalServerError)
 			c.Abort()
 			c.Writer.Flush()
-			if exitOnError {
-				os.Exit(1)
-			}
 		}
 	}
 }

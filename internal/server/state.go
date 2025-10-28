@@ -20,10 +20,13 @@ const (
 )
 
 type appState struct {
-	Debug             bool `json:"debug"`
-	AttemptNotify     bool `json:"attempt_notify"`
 	SyncingTickets    bool `json:"syncing_tickets"`
 	SyncingWebexRooms bool `json:"syncing_webex_rooms"`
+}
+
+var defaultAppState = &appState{
+	SyncingTickets:    false,
+	SyncingWebexRooms: false,
 }
 
 type boolStateResult struct {
@@ -34,7 +37,7 @@ type boolStateResult struct {
 
 func (cl *Client) handleGetState(c *gin.Context) {
 	if cl.State == nil {
-		c.Error(errors.New("app state is nil"))
+		c.Error(errors.New("app config state is nil"))
 		return
 	}
 

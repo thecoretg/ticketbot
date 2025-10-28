@@ -3,22 +3,25 @@ package server
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 
-	"github.com/gin-gonic/autotls"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/cfg"
 	"github.com/thecoretg/ticketbot/internal/db"
 	"github.com/thecoretg/ticketbot/internal/psa"
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
+var mocking = false
+
 type Client struct {
-	Config      *cfg.Cfg
 	State       *appState
+	Creds       *creds
+	Config      *appConfig
 	CWClient    *psa.Client
 	WebexClient *webex.Client
 	Pool        *pgxpool.Pool
@@ -28,40 +31,59 @@ type Client struct {
 	ticketLocks sync.Map
 }
 
+type creds struct {
+	RootURL           string
+	InitialAdminEmail string
+	PostgresDSN       string
+	CWPublicKey       string
+	CWPrivateKey      string
+	CWClientID        string
+	CWCompanyID       string
+	WebexSecret       string
+}
+
 func Run(embeddedMigrations embed.FS) error {
+	setInitialLogger()
 	ctx := context.Background()
-	c, err := cfg.InitCfg()
-	if err != nil {
-		return fmt.Errorf("initializing config: %w", err)
+
+	if os.Getenv("MOCKING") == "true" {
+		slog.Info("server started in mock mode")
+		mocking = true
 	}
 
-	pool, err := setupDB(ctx, c.PostgresDSN, embeddedMigrations)
-	s := newClient(c, pool)
+	root := os.Getenv("ROOT_URL")
+	if root == "" {
+		return errors.New("root URL is empty")
+	}
 
-	if err := s.startup(ctx); err != nil {
+	cr := getCreds()
+	if err := cr.validate(); err != nil {
+		return fmt.Errorf("validating credentials: %w", err)
+	}
+
+	pool, err := setupDB(ctx, cr.PostgresDSN, embeddedMigrations)
+	if err != nil {
+		return fmt.Errorf("setting up db connections: %w", err)
+	}
+
+	cl := newClient(cr, pool)
+
+	if err := cl.startup(ctx); err != nil {
 		return fmt.Errorf("running server startup: %w", err)
 	}
 
-	if err := s.serve(); err != nil {
+	if err := cl.serve(); err != nil {
 		return fmt.Errorf("serving api: %w", err)
 	}
 
 	return nil
 }
 
-// Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
-// restart it
 func (cl *Client) serve() error {
-	setInitialLogger()
 	cl.Server = gin.Default()
 	cl.addRoutes()
 
-	if cl.Config.UseAutoTLS {
-		slog.Debug("running server with auto tls", "url", cl.Config.RootURL)
-		return autotls.Run(cl.Server, cl.Config.RootURL)
-	}
-
-	slog.Debug("running server without auto tls")
+	slog.Debug("running server")
 	return cl.Server.Run()
 }
 
@@ -69,36 +91,81 @@ func (cl *Client) startup(ctx context.Context) error {
 	if err := cl.populateAppState(ctx); err != nil {
 		return fmt.Errorf("checking app state values: %w", err)
 	}
-	setLogLevel(cl.State.Debug)
+	setLogLevel(cl.Config.Debug)
 
 	if err := cl.bootstrapAdmin(ctx); err != nil {
 		return fmt.Errorf("bootstrapping initial admin key: %w", err)
 	}
 
-	if err := cl.initAllHooks(); err != nil {
-		return fmt.Errorf("initializing webhooks: %w", err)
+	if !mocking {
+		if err := cl.initAllHooks(); err != nil {
+			return fmt.Errorf("initializing webhooks: %w", err)
+		}
+	} else {
+		slog.Debug("not initializing hooks since we are in mock mode")
 	}
 
 	return nil
 }
 
-func newClient(cfg *cfg.Cfg, pool *pgxpool.Pool) *Client {
+func newClient(cr *creds, pool *pgxpool.Pool) *Client {
 	slog.Debug("initializing server client")
+
 	cwCreds := &psa.Creds{
-		PublicKey:  cfg.CWPubKey,
-		PrivateKey: cfg.CWPrivKey,
-		ClientId:   cfg.CWClientID,
-		CompanyId:  cfg.CWCompanyID,
+		PublicKey:  cr.CWPublicKey,
+		PrivateKey: cr.CWPrivateKey,
+		ClientId:   cr.CWClientID,
+		CompanyId:  cr.CWCompanyID,
 	}
 
-	s := &Client{
+	cl := &Client{
+		State:       defaultAppState,
+		Config:      defaultAppConfig,
+		Creds:       cr,
 		Queries:     db.New(pool),
 		Pool:        pool,
-		Config:      cfg,
 		CWClient:    psa.NewClient(cwCreds),
-		State:       &appState{},
-		WebexClient: webex.NewClient(cfg.WebexSecret),
+		WebexClient: webex.NewClient(cr.WebexSecret),
 	}
 
-	return s
+	return cl
+}
+
+func getCreds() *creds {
+	return &creds{
+		RootURL:           os.Getenv("ROOT_URL"),
+		InitialAdminEmail: os.Getenv("INITIAL_ADMIN_EMAIL"),
+		PostgresDSN:       os.Getenv("POSTGRES_DSN"),
+		CWPublicKey:       os.Getenv("CW_PUB_KEY"),
+		CWPrivateKey:      os.Getenv("CW_PRIV_KEY"),
+		CWClientID:        os.Getenv("CW_CLIENT_ID"),
+		CWCompanyID:       os.Getenv("CW_COMPANY_ID"),
+		WebexSecret:       os.Getenv("WEBEX_SECRET"),
+	}
+}
+
+func (c *creds) validate() error {
+	vals := map[string]string{
+		"ROOT_URL":            c.RootURL,
+		"INITIAL_ADMIN_EMAIL": c.InitialAdminEmail,
+		"POSTGRES_DSN":        c.PostgresDSN,
+		"CW_PUB_KEY":          c.CWPublicKey,
+		"CW_PRIV_KEY":         c.CWPrivateKey,
+		"CW_CLIENT_ID":        c.CWClientID,
+		"CW_COMPANY_ID":       c.CWCompanyID,
+		"WEBEX_SECRET":        c.WebexSecret,
+	}
+
+	var empty []string
+	for k, v := range vals {
+		if v == "" {
+			empty = append(empty, k)
+		}
+	}
+
+	if len(empty) > 0 {
+		return fmt.Errorf("1 or more required env variables are empty: %v", empty)
+	}
+
+	return nil
 }

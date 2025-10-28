@@ -10,6 +10,12 @@ gensql:
 docker-build:
 	docker buildx build --platform=linux/amd64 -t ticketbot:latest --load .
 
+test-up:
+	docker compose up --build
+
+test-down:
+	docker compose down
+
 deploy-lightsail:
 	aws lightsail push-container-image \
 	--region us-west-2 \
