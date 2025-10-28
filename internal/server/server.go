@@ -52,6 +52,7 @@ func Run(embeddedMigrations embed.FS) error {
 // Run just runs the server, and does not do the initialization steps. Good if it went down and you just need to
 // restart it
 func (cl *Client) serve() error {
+	setInitialLogger()
 	cl.Server = gin.Default()
 	cl.addRoutes()
 
@@ -68,7 +69,7 @@ func (cl *Client) startup(ctx context.Context) error {
 	if err := cl.populateAppState(ctx); err != nil {
 		return fmt.Errorf("checking app state values: %w", err)
 	}
-	setLogger(cl.State.Debug)
+	setLogLevel(cl.State.Debug)
 
 	if err := cl.bootstrapAdmin(ctx); err != nil {
 		return fmt.Errorf("bootstrapping initial admin key: %w", err)

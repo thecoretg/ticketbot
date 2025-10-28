@@ -6,6 +6,7 @@ func (cl *Client) addRoutes() {
 
 	state := cl.Server.Group("/state", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
 	state.GET("/", cl.handleGetState)
+	state.POST("/debug", cl.handleSetDebug)
 
 	sc := cl.Server.Group("/sync", ErrorHandler(cl.Config.ExitOnError), cl.apiKeyAuth())
 	sc.POST("/tickets", cl.handleSyncTickets)

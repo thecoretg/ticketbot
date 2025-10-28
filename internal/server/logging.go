@@ -28,15 +28,10 @@ func (cl *Client) handleSetDebug(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// setLogger sets the default logger and is run at server startup
-func setLogger(debug bool) {
-	level := slog.LevelInfo
-	if debug {
-		level = slog.LevelDebug
-	}
-
+// setInitialLogger sets the default logger and is run at server startup
+func setInitialLogger() {
 	j := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
+		Level: slog.LevelDebug,
 	})
 
 	slog.SetDefault(slog.New(j))
@@ -49,5 +44,6 @@ func setLogLevel(debug bool) {
 		level = slog.LevelDebug
 	}
 
+	slog.Info("setting debug level", "debug", debug)
 	slog.SetLogLoggerLevel(level)
 }
