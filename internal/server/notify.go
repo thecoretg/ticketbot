@@ -13,26 +13,6 @@ import (
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
-type setNotifyPayload struct {
-	Enabled bool `json:"enabled"`
-}
-
-func (cl *Client) handleSetAttemptNotify(c *gin.Context) {
-	p := &setNotifyPayload{}
-	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	cl.Config.AttemptNotify = p.Enabled
-	if err := cl.updateConfigInDB(c.Request.Context(), cl.Config); err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.Status(http.StatusOK)
-}
-
 func (cl *Client) handleListWebexRooms(c *gin.Context) {
 	// TODO: query params?
 	rooms, err := cl.Queries.ListWebexRooms(c.Request.Context())

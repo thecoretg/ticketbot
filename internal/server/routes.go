@@ -1,36 +1,32 @@
 package server
 
 func (cl *Client) addRoutes() {
-	// health check endpoint
-	cl.Server.GET("/", cl.ping)
+	// Health Check
+	cl.Server.GET("", cl.ping)
 
-	state := cl.Server.Group("/state", ErrorHandler(), cl.apiKeyAuth())
-	state.GET("/", cl.handleGetState)
+	// State
+	cl.Server.GET("state", cl.handleGetState, ErrorHandler(), cl.apiKeyAuth())
 
-	config := cl.Server.Group("/config", ErrorHandler(), cl.apiKeyAuth())
-	config.GET("/", cl.handleGetConfig)
-	config.PUT("/", cl.handlePutConfig)
+	// Config
+	cl.Server.GET("config", cl.handleGetConfig, ErrorHandler(), cl.apiKeyAuth())
+	cl.Server.PUT("config", cl.handlePutConfig, ErrorHandler(), cl.apiKeyAuth())
 
-	sc := cl.Server.Group("/sync", ErrorHandler(), cl.apiKeyAuth())
-	sc.POST("/tickets", cl.handleSyncTickets)
-	sc.POST("webex_rooms", cl.handleSyncWebexRooms)
+	// Sync
+	cl.Server.POST("sync/tickets", cl.handleSyncTickets, ErrorHandler(), cl.apiKeyAuth())
+	cl.Server.POST("sync/webex_rooms", cl.handleSyncWebexRooms, ErrorHandler(), cl.apiKeyAuth())
 
-	settings := cl.Server.Group("/settings", ErrorHandler(), cl.apiKeyAuth())
-	settings.POST("/attempt_notify", cl.handleSetAttemptNotify)
+	// API Keys
+	cl.Server.POST("keys", cl.handleCreateAPIKey, ErrorHandler(), cl.apiKeyAuth())
 
-	keys := cl.Server.Group("/keys", ErrorHandler(), cl.apiKeyAuth())
-	keys.POST("/", cl.handleCreateAPIKey)
+	// Boards
+	cl.Server.GET("boards", cl.handleListBoards, ErrorHandler(), cl.apiKeyAuth())
+	cl.Server.GET("boards/:board_id", cl.handleGetBoard, ErrorHandler(), cl.apiKeyAuth())
+	cl.Server.PUT("boards/:board_id", cl.handlePutBoard, ErrorHandler(), cl.apiKeyAuth())
+	cl.Server.DELETE("boards/:board_id", cl.handleDeleteBoard, ErrorHandler(), cl.apiKeyAuth())
 
-	boards := cl.Server.Group("/boards", ErrorHandler(), cl.apiKeyAuth())
-	boards.GET("/:board_id", cl.handleGetBoard)
-	boards.GET("/", cl.handleListBoards)
-	boards.PUT("/:board_id", cl.handlePutBoard)
-	boards.DELETE("/:board_id", cl.handleDeleteBoard)
+	// Webex Rooms
+	cl.Server.GET("rooms", cl.handleListWebexRooms)
 
-	rooms := cl.Server.Group("/rooms", ErrorHandler(), cl.apiKeyAuth())
-	rooms.GET("/", cl.handleListWebexRooms)
-
-	hooks := cl.Server.Group("/hooks")
-	cwHooks := hooks.Group("/cw", requireValidCWSignature(), ErrorHandler())
-	cwHooks.POST("/tickets", cl.handleTickets)
+	// ConnectWise Webhooks
+	cl.Server.POST("hooks/cw/tickets", requireValidCWSignature(), ErrorHandler())
 }

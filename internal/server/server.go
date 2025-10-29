@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"embed"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -44,11 +43,6 @@ type creds struct {
 func Run(embeddedMigrations embed.FS) error {
 	setInitialLogger()
 	ctx := context.Background()
-
-	root := os.Getenv("ROOT_URL")
-	if root == "" {
-		return errors.New("root URL is empty")
-	}
 
 	cr := getCreds()
 	if err := cr.validate(); err != nil {
@@ -146,20 +140,34 @@ func getCreds() *creds {
 }
 
 func (c *creds) validate() error {
-	vals := map[string]string{
-		"ROOT_URL":            c.RootURL,
+	req := map[string]string{
 		"INITIAL_ADMIN_EMAIL": c.InitialAdminEmail,
 		"POSTGRES_DSN":        c.PostgresDSN,
-		"CW_PUB_KEY":          c.CWPublicKey,
-		"CW_PRIV_KEY":         c.CWPrivateKey,
-		"CW_CLIENT_ID":        c.CWClientID,
-		"CW_COMPANY_ID":       c.CWCompanyID,
-		"WEBEX_SECRET":        c.WebexSecret,
+	}
+
+	// values that are okay to be empty if in testing
+	okTest := map[string]string{
+		"ROOT_URL":      c.RootURL,
+		"CW_PUB_KEY":    c.CWPublicKey,
+		"CW_PRIV_KEY":   c.CWPrivateKey,
+		"CW_CLIENT_ID":  c.CWClientID,
+		"CW_COMPANY_ID": c.CWCompanyID,
+		"WEBEX_SECRET":  c.WebexSecret,
 	}
 
 	var empty []string
-	for k, v := range vals {
+	for k, v := range req {
 		if v == "" {
+			empty = append(empty, k)
+		}
+	}
+
+	for k, v := range okTest {
+		if v == "" {
+			if testingEnabled() {
+				slog.Warn("env variable empty, but ok since testing is enabled", "key", k)
+				continue
+			}
 			empty = append(empty, k)
 		}
 	}
