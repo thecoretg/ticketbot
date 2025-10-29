@@ -14,7 +14,7 @@ test-up:
 	docker compose up --build
 
 test-down:
-	docker compose down
+	docker compose down -v
 
 deploy-lightsail:
 	aws lightsail push-container-image \

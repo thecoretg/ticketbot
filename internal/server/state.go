@@ -12,13 +12,6 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-const (
-	debugKey             = "debug"
-	attemptNotifyKey     = "attempt_notify"
-	syncingTicketsKey    = "syncing_tickets"
-	syncingWebexRoomsKey = "syncing_webex_rooms"
-)
-
 type appState struct {
 	SyncingTickets    bool `json:"syncing_tickets"`
 	SyncingWebexRooms bool `json:"syncing_webex_rooms"`
@@ -29,120 +22,73 @@ var defaultAppState = &appState{
 	SyncingWebexRooms: false,
 }
 
-type boolStateResult struct {
-	isSet bool
-	value bool
-	err   error
-}
-
 func (cl *Client) handleGetState(c *gin.Context) {
-	if cl.State == nil {
-		c.Error(errors.New("app config state is nil"))
+	as, err := cl.getAppState(c.Request.Context())
+	if err != nil {
+		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, cl.State)
+	c.JSON(http.StatusOK, as)
 }
 
-func (cl *Client) populateAppState(ctx context.Context) error {
-	if err := cl.setStateIfNotSet(ctx, debugKey, false); err != nil {
-		return fmt.Errorf("checking debug value: %w", err)
+func (cl *Client) getAppState(ctx context.Context) (*appState, error) {
+	ds, err := cl.Queries.GetAppState(ctx)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Debug("no app state found, creating default")
+			ds, err = cl.Queries.UpsertAppState(ctx, db.UpsertAppStateParams{})
+			if err != nil {
+				return nil, fmt.Errorf("creating default app state: %w", err)
+			}
+			return dbStateToAppState(ds), nil
+		}
+		return nil, fmt.Errorf("getting app state from db: %w", err)
 	}
 
-	if err := cl.setStateIfNotSet(ctx, attemptNotifyKey, false); err != nil {
-		return fmt.Errorf("checking attempt notify value: %w", err)
-	}
-
-	if err := cl.setStateIfNotSet(ctx, syncingTicketsKey, false); err != nil {
-		return fmt.Errorf("checking syncing tickets value: %w", err)
-	}
-
-	if err := cl.setStateIfNotSet(ctx, syncingWebexRoomsKey, false); err != nil {
-		return fmt.Errorf("checking syncing webex rooms value: %w", err)
-	}
-
-	return nil
-}
-
-func (cl *Client) setDebug(ctx context.Context, debug bool) error {
-	setLogLevel(debug)
-	return cl.setBoolState(ctx, debugKey, debug)
-}
-
-func (cl *Client) setAttemptNotify(ctx context.Context, attempt bool) error {
-	return cl.setBoolState(ctx, attemptNotifyKey, attempt)
+	return dbStateToAppState(ds), nil
 }
 
 func (cl *Client) setSyncingTickets(ctx context.Context, syncing bool) error {
-	return cl.setBoolState(ctx, syncingTicketsKey, syncing)
+	cl.State.SyncingTickets = syncing
+	if err := cl.updateAppState(ctx, cl.State); err != nil {
+		return fmt.Errorf("state was set in memory, but an error occured updating the db: %w", err)
+	}
+
+	return nil
 }
 
 func (cl *Client) setSyncingWebexRooms(ctx context.Context, syncing bool) error {
-	return cl.setBoolState(ctx, syncingWebexRoomsKey, syncing)
-}
-
-func (cl *Client) setStateIfNotSet(ctx context.Context, key string, defaultState bool) error {
-	r := cl.getBoolState(ctx, key)
-	if r.err != nil {
-		slog.Warn("error getting app state", "key", key, "error", r.err)
+	cl.State.SyncingWebexRooms = syncing
+	if err := cl.updateAppState(ctx, cl.State); err != nil {
+		return fmt.Errorf("state was set in memory, but an error occured updating the db: %w", err)
 	}
 
-	if !r.isSet {
-		slog.Debug("app state key is not set - setting to false", "key", key)
-		return cl.setBoolState(ctx, key, defaultState)
-	}
-
-	slog.Debug("app state key is already set", "key", key, "value", r.value)
 	return nil
 }
 
-func (cl *Client) getBoolState(ctx context.Context, key string) boolStateResult {
-	val, err := cl.Queries.GetAppState(ctx, key)
+func (cl *Client) updateAppState(ctx context.Context, as *appState) error {
+	p := stateToParams(as)
+
+	ds, err := cl.Queries.UpsertAppState(ctx, p)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return boolStateResult{
-				isSet: false,
-				value: false,
-				err:   nil,
-			}
-		}
-		return boolStateResult{
-			isSet: false,
-			value: false,
-			err:   err,
-		}
+		return fmt.Errorf("updating in db: %w", err)
 	}
 
-	b := false
-	if val == "true" {
-		b = true
-	}
+	cl.State = dbStateToAppState(ds)
+	return nil
+}
 
-	if val != "true" && val != "false" {
-		err = fmt.Errorf("unexpected value found: %s", val)
-	}
-
-	return boolStateResult{
-		isSet: true,
-		value: b,
-		err:   err,
+func stateToParams(as *appState) db.UpsertAppStateParams {
+	return db.UpsertAppStateParams{
+		SyncingTickets:    as.SyncingTickets,
+		SyncingWebexRooms: as.SyncingWebexRooms,
 	}
 }
 
-func (cl *Client) setBoolState(ctx context.Context, key string, val bool) error {
-	v := "false"
-	if val {
-		v = "true"
+func dbStateToAppState(ds db.AppState) *appState {
+	return &appState{
+		SyncingTickets:    ds.SyncingTickets,
+		SyncingWebexRooms: ds.SyncingWebexRooms,
 	}
-
-	p := db.SetAppStateParams{
-		Key:   key,
-		Value: v,
-	}
-
-	if err := cl.Queries.SetAppState(ctx, p); err != nil {
-		return fmt.Errorf("setting key %s to %s: %w", key, v, err)
-	}
-
-	return nil
 }

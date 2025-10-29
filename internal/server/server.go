@@ -16,8 +16,6 @@ import (
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
-var mocking = false
-
 type Client struct {
 	State       *appState
 	Creds       *creds
@@ -28,6 +26,7 @@ type Client struct {
 	Queries     *db.Queries
 	Server      *gin.Engine
 
+	testing     bool
 	ticketLocks sync.Map
 }
 
@@ -46,11 +45,6 @@ func Run(embeddedMigrations embed.FS) error {
 	setInitialLogger()
 	ctx := context.Background()
 
-	if os.Getenv("MOCKING") == "true" {
-		slog.Info("server started in mock mode")
-		mocking = true
-	}
-
 	root := os.Getenv("ROOT_URL")
 	if root == "" {
 		return errors.New("root URL is empty")
@@ -66,7 +60,7 @@ func Run(embeddedMigrations embed.FS) error {
 		return fmt.Errorf("setting up db connections: %w", err)
 	}
 
-	cl := newClient(cr, pool)
+	cl := newClient(cr, pool, testingEnabled())
 
 	if err := cl.startup(ctx); err != nil {
 		return fmt.Errorf("running server startup: %w", err)
@@ -88,16 +82,23 @@ func (cl *Client) serve() error {
 }
 
 func (cl *Client) startup(ctx context.Context) error {
-	if err := cl.populateAppState(ctx); err != nil {
-		return fmt.Errorf("checking app state values: %w", err)
+	var err error
+	cl.Config, err = cl.getFullConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching config: %w", err)
 	}
 	setLogLevel(cl.Config.Debug)
+
+	cl.State, err = cl.getAppState(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching app state: %w", err)
+	}
 
 	if err := cl.bootstrapAdmin(ctx); err != nil {
 		return fmt.Errorf("bootstrapping initial admin key: %w", err)
 	}
 
-	if !mocking {
+	if !cl.testing {
 		if err := cl.initAllHooks(); err != nil {
 			return fmt.Errorf("initializing webhooks: %w", err)
 		}
@@ -108,7 +109,7 @@ func (cl *Client) startup(ctx context.Context) error {
 	return nil
 }
 
-func newClient(cr *creds, pool *pgxpool.Pool) *Client {
+func newClient(cr *creds, pool *pgxpool.Pool, testing bool) *Client {
 	slog.Debug("initializing server client")
 
 	cwCreds := &psa.Creds{
@@ -120,12 +121,12 @@ func newClient(cr *creds, pool *pgxpool.Pool) *Client {
 
 	cl := &Client{
 		State:       defaultAppState,
-		Config:      defaultAppConfig,
 		Creds:       cr,
 		Queries:     db.New(pool),
 		Pool:        pool,
 		CWClient:    psa.NewClient(cwCreds),
 		WebexClient: webex.NewClient(cr.WebexSecret),
+		testing:     testing,
 	}
 
 	return cl
@@ -168,4 +169,8 @@ func (c *creds) validate() error {
 	}
 
 	return nil
+}
+
+func testingEnabled() bool {
+	return os.Getenv("TESTING") == "true"
 }

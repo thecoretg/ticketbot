@@ -21,7 +21,7 @@ func (cl *Client) handleSyncTickets(c *gin.Context) {
 
 	c.Status(http.StatusOK)
 	go func() {
-		if err := cl.syncOpenTickets(context.Background(), cl.Config.MaxConcurrentSyncCalls); err != nil {
+		if err := cl.syncOpenTickets(context.Background()); err != nil {
 			slog.Error("syncing connectwise tickets", "error", err)
 		}
 	}()
@@ -45,7 +45,7 @@ func (cl *Client) handleSyncWebexRooms(c *gin.Context) {
 // syncOpenTickets finds all open tickets in Connectwise and loads them into the DB if they don't
 // already exist. It does not attempt to notify since that would result in tons of notifications
 // for already existing tickets.
-func (cl *Client) syncOpenTickets(ctx context.Context, maxConcurrent int) error {
+func (cl *Client) syncOpenTickets(ctx context.Context) error {
 	if err := cl.setSyncingTickets(ctx, true); err != nil {
 		slog.Warn("error setting syncing tickets value to true", "error", err)
 	}
@@ -69,7 +69,7 @@ func (cl *Client) syncOpenTickets(ctx context.Context, maxConcurrent int) error 
 		return fmt.Errorf("getting open tickets from CW: %w", err)
 	}
 	slog.Debug("got open tickets from connectwise", "total_tickets", len(openTickets))
-	sem := make(chan struct{}, maxConcurrent)
+	sem := make(chan struct{}, cl.Config.MaxConcurrentSyncs)
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(openTickets))
 
@@ -99,7 +99,15 @@ func (cl *Client) syncOpenTickets(ctx context.Context, maxConcurrent int) error 
 }
 
 func (cl *Client) syncWebexRooms(ctx context.Context) error {
-	//TODO: THIS IS MESSY
+	if err := cl.setSyncingWebexRooms(ctx, true); err != nil {
+		slog.Warn("error setting syncing rooms value to true", "error", err)
+	}
+
+	defer func() {
+		if err := cl.setSyncingWebexRooms(ctx, false); err != nil {
+			slog.Warn("error setting syncing rooms value to false")
+		}
+	}()
 
 	slog.Debug("beginning sync of webex rooms")
 	w, err := cl.WebexClient.ListRooms(nil)

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
-	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -30,12 +29,6 @@ func setupDB(ctx context.Context, dsn string, embeddedMigrations embed.FS) (*pgx
 }
 
 func migrateDB(d *sql.DB, embeddedMigrations embed.FS) error {
-	defer func() {
-		if err := d.Close(); err != nil {
-			slog.Error("closing database after migration", "error", err)
-		}
-	}()
-
 	goose.SetBaseFS(embeddedMigrations)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("setting goose dialect: %w", err)

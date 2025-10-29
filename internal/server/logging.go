@@ -1,32 +1,9 @@
 package server
 
 import (
-	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
-
-	"github.com/gin-gonic/gin"
 )
-
-type setDebugPayload struct {
-	Enabled bool `json:"enabled"`
-}
-
-func (cl *Client) handleSetDebug(c *gin.Context) {
-	p := &setDebugPayload{}
-	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if err := cl.setDebug(c.Request.Context(), p.Enabled); err != nil {
-		c.Error(fmt.Errorf("setting debug state: %w", err))
-		return
-	}
-
-	c.Status(http.StatusOK)
-}
 
 // setInitialLogger sets the default logger and is run at server startup
 func setInitialLogger() {

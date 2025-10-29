@@ -1,8 +1,17 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS app_state (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
+    id INT PRIMARY KEY DEFAULT 1,
+    syncing_tickets BOOLEAN NOT NULL DEFAULT false,
+    syncing_webex_rooms BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE TABLE IF NOT EXISTS app_config (
+    id INT PRIMARY KEY DEFAULT 1,
+    debug BOOLEAN NOT NULL DEFAULT true,
+    attempt_notify BOOLEAN NOT NULL DEFAULT false,
+    max_message_length INT NOT NULL DEFAULT 300,
+    max_concurrent_syncs INT NOT NULL DEFAULT 5
 );
 
 CREATE TABLE IF NOT EXISTS api_user (
@@ -117,5 +126,6 @@ DROP TABLE IF EXISTS cw_board;
 DROP TABLE IF EXISTS webex_room;
 DROP TABLE IF EXISTS api_key;
 DROP TABLE IF EXISTS api_user;
+DROP TABLE IF EXISTS app_config;
 DROP TABLE IF EXISTS app_state;
 -- +goose StatementEnd

@@ -24,8 +24,9 @@ func (cl *Client) handleSetAttemptNotify(c *gin.Context) {
 		return
 	}
 
-	if err := cl.setAttemptNotify(c.Request.Context(), p.Enabled); err != nil {
-		c.Error(fmt.Errorf("setting notify state: %w", err))
+	cl.Config.AttemptNotify = p.Enabled
+	if err := cl.updateConfigInDB(c.Request.Context(), cl.Config); err != nil {
+		c.Error(err)
 		return
 	}
 

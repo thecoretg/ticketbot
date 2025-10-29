@@ -133,15 +133,34 @@ func (q *Queries) GetAPILKey(ctx context.Context, id int) (ApiKey, error) {
 	return i, err
 }
 
-const getAppState = `-- name: GetAppState :one
-SELECT value FROM app_state WHERE key = $1 LIMIT 1
+const getAppConfig = `-- name: GetAppConfig :one
+SELECT id, debug, attempt_notify, max_message_length, max_concurrent_syncs FROM app_config
+WHERE id = 1
 `
 
-func (q *Queries) GetAppState(ctx context.Context, key string) (string, error) {
-	row := q.db.QueryRow(ctx, getAppState, key)
-	var value string
-	err := row.Scan(&value)
-	return value, err
+func (q *Queries) GetAppConfig(ctx context.Context) (AppConfig, error) {
+	row := q.db.QueryRow(ctx, getAppConfig)
+	var i AppConfig
+	err := row.Scan(
+		&i.ID,
+		&i.Debug,
+		&i.AttemptNotify,
+		&i.MaxMessageLength,
+		&i.MaxConcurrentSyncs,
+	)
+	return i, err
+}
+
+const getAppState = `-- name: GetAppState :one
+SELECT id, syncing_tickets, syncing_webex_rooms FROM app_state
+WHERE id = 1
+`
+
+func (q *Queries) GetAppState(ctx context.Context) (AppState, error) {
+	row := q.db.QueryRow(ctx, getAppState)
+	var i AppState
+	err := row.Scan(&i.ID, &i.SyncingTickets, &i.SyncingWebexRooms)
+	return i, err
 }
 
 const getBoard = `-- name: GetBoard :one
@@ -1115,22 +1134,6 @@ func (q *Queries) ListWebexRooms(ctx context.Context) ([]WebexRoom, error) {
 	return items, nil
 }
 
-const setAppState = `-- name: SetAppState :exec
-INSERT INTO app_state(key, value)
-VALUES($1, $2)
-ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-`
-
-type SetAppStateParams struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-func (q *Queries) SetAppState(ctx context.Context, arg SetAppStateParams) error {
-	_, err := q.db.Exec(ctx, setAppState, arg.Key, arg.Value)
-	return err
-}
-
 const setNoteNotified = `-- name: SetNoteNotified :one
 UPDATE cw_ticket_note
 SET
@@ -1646,5 +1649,62 @@ func (q *Queries) UpdateWebexRoom(ctx context.Context, arg UpdateWebexRoomParams
 		&i.UpdatedOn,
 		&i.Deleted,
 	)
+	return i, err
+}
+
+const upsertAppConfig = `-- name: UpsertAppConfig :one
+INSERT INTO app_config(id, debug, attempt_notify, max_message_length, max_concurrent_syncs)
+VALUES(1, $1, $2, $3, $4)
+ON CONFLICT (id) DO UPDATE SET
+    debug = EXCLUDED.debug,
+    attempt_notify = EXCLUDED.attempt_notify,
+    max_message_length = EXCLUDED.max_message_length,
+    max_concurrent_syncs = EXCLUDED.max_concurrent_syncs
+RETURNING id, debug, attempt_notify, max_message_length, max_concurrent_syncs
+`
+
+type UpsertAppConfigParams struct {
+	Debug              bool `json:"debug"`
+	AttemptNotify      bool `json:"attempt_notify"`
+	MaxMessageLength   int  `json:"max_message_length"`
+	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
+}
+
+func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams) (AppConfig, error) {
+	row := q.db.QueryRow(ctx, upsertAppConfig,
+		arg.Debug,
+		arg.AttemptNotify,
+		arg.MaxMessageLength,
+		arg.MaxConcurrentSyncs,
+	)
+	var i AppConfig
+	err := row.Scan(
+		&i.ID,
+		&i.Debug,
+		&i.AttemptNotify,
+		&i.MaxMessageLength,
+		&i.MaxConcurrentSyncs,
+	)
+	return i, err
+}
+
+const upsertAppState = `-- name: UpsertAppState :one
+INSERT INTO app_state(id, syncing_tickets, syncing_webex_rooms)
+VALUES(1, $1, $2)
+ON CONFLICT (id) DO UPDATE SET
+    syncing_tickets = EXCLUDED.syncing_tickets,
+    syncing_webex_rooms = EXCLUDED.syncing_webex_rooms
+RETURNING id, syncing_tickets, syncing_webex_rooms
+`
+
+type UpsertAppStateParams struct {
+	SyncingTickets    bool `json:"syncing_tickets"`
+	SyncingWebexRooms bool `json:"syncing_webex_rooms"`
+}
+
+func (q *Queries) UpsertAppState(ctx context.Context, arg UpsertAppStateParams) (AppState, error) {
+	row := q.db.QueryRow(ctx, upsertAppState, arg.SyncingTickets, arg.SyncingWebexRooms)
+	var i AppState
+	err := row.Scan(&i.ID, &i.SyncingTickets, &i.SyncingWebexRooms)
 	return i, err
 }

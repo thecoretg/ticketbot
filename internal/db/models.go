@@ -25,9 +25,18 @@ type ApiUser struct {
 	Deleted      bool      `json:"deleted"`
 }
 
+type AppConfig struct {
+	ID                 int  `json:"id"`
+	Debug              bool `json:"debug"`
+	AttemptNotify      bool `json:"attempt_notify"`
+	MaxMessageLength   int  `json:"max_message_length"`
+	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
+}
+
 type AppState struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	ID                int  `json:"id"`
+	SyncingTickets    bool `json:"syncing_tickets"`
+	SyncingWebexRooms bool `json:"syncing_webex_rooms"`
 }
 
 type CwBoard struct {

@@ -1,10 +1,28 @@
 -- name: GetAppState :one
-SELECT value FROM app_state WHERE key = $1 LIMIT 1;
+SELECT * FROM app_state
+WHERE id = 1;
 
--- name: SetAppState :exec
-INSERT INTO app_state(key, value)
-VALUES($1, $2)
-ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+-- name: UpsertAppState :one
+INSERT INTO app_state(id, syncing_tickets, syncing_webex_rooms)
+VALUES(1, $1, $2)
+ON CONFLICT (id) DO UPDATE SET
+    syncing_tickets = EXCLUDED.syncing_tickets,
+    syncing_webex_rooms = EXCLUDED.syncing_webex_rooms
+RETURNING *;
+
+-- name: GetAppConfig :one
+SELECT * FROM app_config
+WHERE id = 1;
+
+-- name: UpsertAppConfig :one
+INSERT INTO app_config(id, debug, attempt_notify, max_message_length, max_concurrent_syncs)
+VALUES(1, $1, $2, $3, $4)
+ON CONFLICT (id) DO UPDATE SET
+    debug = EXCLUDED.debug,
+    attempt_notify = EXCLUDED.attempt_notify,
+    max_message_length = EXCLUDED.max_message_length,
+    max_concurrent_syncs = EXCLUDED.max_concurrent_syncs
+RETURNING *;
 
 -- name: GetUser :one
 SELECT * FROM api_user
