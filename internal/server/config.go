@@ -19,6 +19,14 @@ type appConfig struct {
 	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
 }
 
+// appConfigPayload is used for partial updates to the app config
+type appConfigPayload struct {
+	Debug              *bool `json:"debug,omitempty"`
+	AttemptNotify      *bool `json:"attempt_notify,omitempty"`
+	MaxMessageLength   *int  `json:"max_message_length,omitempty"`
+	MaxConcurrentSyncs *int  `json:"max_concurrent_syncs,omitempty"`
+}
+
 func (cl *Client) handleGetConfig(c *gin.Context) {
 	ac, err := cl.getFullConfig(c.Request.Context())
 	if err != nil {
@@ -30,13 +38,15 @@ func (cl *Client) handleGetConfig(c *gin.Context) {
 }
 
 func (cl *Client) handlePutConfig(c *gin.Context) {
-	r := &appConfig{}
+	r := &appConfigPayload{}
 	if err := c.ShouldBindJSON(r); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json request"})
 		return
 	}
 
-	if err := cl.updateConfigInDB(c.Request.Context(), r); err != nil {
+	mc := mergeConfigPayload(cl.Config, r)
+
+	if err := cl.updateConfigInDB(c.Request.Context(), mc); err != nil {
 		c.Error(err)
 		return
 	}
@@ -49,7 +59,7 @@ func (cl *Client) getFullConfig(ctx context.Context) (*appConfig, error) {
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("no app config found, creating default")
-			dc, err = cl.Queries.UpsertAppConfig(ctx, db.UpsertAppConfigParams{})
+			dc, err = cl.Queries.InsertDefaultAppConfig(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("creating default app config: %w", err)
 			}
@@ -59,6 +69,27 @@ func (cl *Client) getFullConfig(ctx context.Context) (*appConfig, error) {
 	}
 
 	return dbConfigToAppConfig(dc), nil
+}
+
+func mergeConfigPayload(ac *appConfig, p *appConfigPayload) *appConfig {
+	merged := *ac
+	if p.Debug != nil {
+		merged.Debug = *p.Debug
+	}
+
+	if p.AttemptNotify != nil {
+		merged.AttemptNotify = *p.AttemptNotify
+	}
+
+	if p.MaxMessageLength != nil {
+		merged.MaxMessageLength = *p.MaxMessageLength
+	}
+
+	if p.MaxConcurrentSyncs != nil {
+		merged.MaxConcurrentSyncs = *p.MaxConcurrentSyncs
+	}
+
+	return &merged
 }
 
 func (cl *Client) updateConfigInDB(ctx context.Context, ac *appConfig) error {

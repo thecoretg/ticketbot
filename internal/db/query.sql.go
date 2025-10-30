@@ -511,6 +511,25 @@ func (q *Queries) InsertContact(ctx context.Context, arg InsertContactParams) (C
 	return i, err
 }
 
+const insertDefaultAppConfig = `-- name: InsertDefaultAppConfig :one
+INSERT INTO app_config (id) VALUES (1)
+ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
+RETURNING id, debug, attempt_notify, max_message_length, max_concurrent_syncs
+`
+
+func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (AppConfig, error) {
+	row := q.db.QueryRow(ctx, insertDefaultAppConfig)
+	var i AppConfig
+	err := row.Scan(
+		&i.ID,
+		&i.Debug,
+		&i.AttemptNotify,
+		&i.MaxMessageLength,
+		&i.MaxConcurrentSyncs,
+	)
+	return i, err
+}
+
 const insertMember = `-- name: InsertMember :one
 INSERT INTO cw_member
 (id, identifier, first_name, last_name, primary_email)
