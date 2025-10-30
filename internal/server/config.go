@@ -45,8 +45,9 @@ func (cl *Client) handlePutConfig(c *gin.Context) {
 	}
 
 	mc := mergeConfigPayload(cl.Config, r)
+	cl.Config = mc
 
-	if err := cl.updateConfigInDB(c.Request.Context(), mc); err != nil {
+	if err := cl.updateConfigInDB(c.Request.Context()); err != nil {
 		c.Error(err)
 		return
 	}
@@ -92,15 +93,12 @@ func mergeConfigPayload(ac *appConfig, p *appConfigPayload) *appConfig {
 	return &merged
 }
 
-func (cl *Client) updateConfigInDB(ctx context.Context, ac *appConfig) error {
-	p := configToParams(ac)
-
-	dc, err := cl.Queries.UpsertAppConfig(ctx, p)
-	if err != nil {
+func (cl *Client) updateConfigInDB(ctx context.Context) error {
+	p := configToParams(cl.Config)
+	if _, err := cl.Queries.UpsertAppConfig(ctx, p); err != nil {
 		return fmt.Errorf("updating in db: %w", err)
 	}
 
-	cl.Config = dbConfigToAppConfig(dc)
 	setLogLevel(cl.Config.Debug)
 	return nil
 }

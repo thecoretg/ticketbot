@@ -37,7 +37,7 @@ func (cl *Client) getAppState(ctx context.Context) (*appState, error) {
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("no app state found, creating default")
-			ds, err = cl.Queries.UpsertAppState(ctx, db.UpsertAppStateParams{})
+			ds, err = cl.Queries.InsertDefaultAppState(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("creating default app state: %w", err)
 			}
@@ -51,7 +51,7 @@ func (cl *Client) getAppState(ctx context.Context) (*appState, error) {
 
 func (cl *Client) setSyncingTickets(ctx context.Context, syncing bool) error {
 	cl.State.SyncingTickets = syncing
-	if err := cl.updateAppState(ctx, cl.State); err != nil {
+	if err := cl.updateDBAppState(ctx); err != nil {
 		return fmt.Errorf("state was set in memory, but an error occured updating the db: %w", err)
 	}
 
@@ -60,16 +60,15 @@ func (cl *Client) setSyncingTickets(ctx context.Context, syncing bool) error {
 
 func (cl *Client) setSyncingWebexRooms(ctx context.Context, syncing bool) error {
 	cl.State.SyncingWebexRooms = syncing
-	if err := cl.updateAppState(ctx, cl.State); err != nil {
+	if err := cl.updateDBAppState(ctx); err != nil {
 		return fmt.Errorf("state was set in memory, but an error occured updating the db: %w", err)
 	}
 
 	return nil
 }
 
-func (cl *Client) updateAppState(ctx context.Context, as *appState) error {
-	p := stateToParams(as)
-
+func (cl *Client) updateDBAppState(ctx context.Context) error {
+	p := stateToParams(cl.State)
 	ds, err := cl.Queries.UpsertAppState(ctx, p)
 	if err != nil {
 		return fmt.Errorf("updating in db: %w", err)

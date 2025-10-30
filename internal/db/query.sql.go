@@ -530,6 +530,19 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (AppConfig, error)
 	return i, err
 }
 
+const insertDefaultAppState = `-- name: InsertDefaultAppState :one
+INSERT INTO app_state (id) VALUES (1)
+ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
+RETURNING id, syncing_tickets, syncing_webex_rooms
+`
+
+func (q *Queries) InsertDefaultAppState(ctx context.Context) (AppState, error) {
+	row := q.db.QueryRow(ctx, insertDefaultAppState)
+	var i AppState
+	err := row.Scan(&i.ID, &i.SyncingTickets, &i.SyncingWebexRooms)
+	return i, err
+}
+
 const insertMember = `-- name: InsertMember :one
 INSERT INTO cw_member
 (id, identifier, first_name, last_name, primary_email)
