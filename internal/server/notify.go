@@ -13,6 +13,11 @@ import (
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
+type messageSender interface {
+	PostMessage(message *webex.Message) (*webex.Message, error)
+	ListRooms(params map[string]string) ([]webex.Room, error)
+}
+
 func (cl *Client) handleListWebexRooms(c *gin.Context) {
 	// TODO: query params?
 	rooms, err := cl.Queries.ListWebexRooms(c.Request.Context())
@@ -28,9 +33,9 @@ func (cl *Client) handleListWebexRooms(c *gin.Context) {
 	c.JSON(http.StatusOK, rooms)
 }
 
-func (cl *Client) makeAndSendWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) error {
+func (cl *Client) makeAndSendMessages(ctx context.Context, action string, cd *cwData, sd *storedData) error {
 
-	messages, err := cl.makeWebexMsgs(ctx, action, cd, sd)
+	messages, err := cl.makeMessages(ctx, action, cd, sd)
 	if err != nil {
 		return fmt.Errorf("creating webex messages: %w", err)
 	}
@@ -42,7 +47,7 @@ func (cl *Client) makeAndSendWebexMsgs(ctx context.Context, action string, cd *c
 
 	slog.Debug("created webex messages", "action", action, "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "total_messages", len(messages))
 	for _, msg := range messages {
-		_, err := cl.WebexClient.PostMessage(&msg)
+		_, err := cl.MessageSender.PostMessage(&msg)
 		if err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
@@ -60,9 +65,9 @@ func (cl *Client) makeAndSendWebexMsgs(ctx context.Context, action string, cd *c
 	return nil
 }
 
-// makeWebexMsgs constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
+// makeMessages constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
 // the message should be sent to.
-func (cl *Client) makeWebexMsgs(ctx context.Context, action string, cd *cwData, sd *storedData) ([]webex.Message, error) {
+func (cl *Client) makeMessages(ctx context.Context, action string, cd *cwData, sd *storedData) ([]webex.Message, error) {
 	var body string
 	body += cl.messageHeader(action, cd)
 

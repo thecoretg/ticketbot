@@ -123,7 +123,7 @@ func (cl *Client) runNotificationAction(ctx context.Context, action string, cd *
 			return false, fmt.Errorf("setting notified to true: %w", err)
 		}
 
-		if err := cl.makeAndSendWebexMsgs(ctx, action, cd, sd); err != nil {
+		if err := cl.makeAndSendMessages(ctx, action, cd, sd); err != nil {
 			return false, fmt.Errorf("processing webex messages: %w", err)
 		}
 		notified = true

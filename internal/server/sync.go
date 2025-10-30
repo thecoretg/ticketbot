@@ -110,7 +110,7 @@ func (cl *Client) syncWebexRooms(ctx context.Context) error {
 	}()
 
 	slog.Debug("beginning sync of webex rooms")
-	w, err := cl.WebexClient.ListRooms(nil)
+	w, err := cl.MessageSender.ListRooms(nil)
 	if err != nil {
 		return fmt.Errorf("listing webex rooms: %w", err)
 	}

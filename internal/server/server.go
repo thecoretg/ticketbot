@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,19 +12,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/db"
+	"github.com/thecoretg/ticketbot/internal/mock"
 	"github.com/thecoretg/ticketbot/internal/psa"
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
 type Client struct {
-	State       *appState
-	Creds       *creds
-	Config      *appConfig
-	CWClient    *psa.Client
-	WebexClient *webex.Client
-	Pool        *pgxpool.Pool
-	Queries     *db.Queries
-	Server      *gin.Engine
+	State         *appState
+	Creds         *creds
+	Config        *appConfig
+	CWClient      *psa.Client
+	MessageSender messageSender
+	Pool          *pgxpool.Pool
+	Queries       *db.Queries
+	Server        *gin.Engine
 
 	testing     bool
 	ticketLocks sync.Map
@@ -54,7 +56,10 @@ func Run(embeddedMigrations embed.FS) error {
 		return fmt.Errorf("setting up db connections: %w", err)
 	}
 
-	cl := newClient(cr, pool, testingEnabled())
+	cl, err := newClient(cr, pool, testingEnabled())
+	if err != nil {
+		return fmt.Errorf("creating server client: %w", err)
+	}
 
 	if err := cl.startup(ctx); err != nil {
 		return fmt.Errorf("running server startup: %w", err)
@@ -103,7 +108,7 @@ func (cl *Client) startup(ctx context.Context) error {
 	return nil
 }
 
-func newClient(cr *creds, pool *pgxpool.Pool, testing bool) *Client {
+func newClient(cr *creds, pool *pgxpool.Pool, testing bool) (*Client, error) {
 	slog.Debug("initializing server client")
 
 	cwCreds := &psa.Creds{
@@ -113,17 +118,35 @@ func newClient(cr *creds, pool *pgxpool.Pool, testing bool) *Client {
 		CompanyId:  cr.CWCompanyID,
 	}
 
-	cl := &Client{
-		State:       defaultAppState,
-		Creds:       cr,
-		Queries:     db.New(pool),
-		Pool:        pool,
-		CWClient:    psa.NewClient(cwCreds),
-		WebexClient: webex.NewClient(cr.WebexSecret),
-		testing:     testing,
+	ms, err := getMessageSender(cr.WebexSecret, testing)
+	if err != nil {
+		return nil, fmt.Errorf("getting message sender: %w", err)
 	}
 
-	return cl
+	cl := &Client{
+		State:         defaultAppState,
+		Creds:         cr,
+		Queries:       db.New(pool),
+		Pool:          pool,
+		CWClient:      psa.NewClient(cwCreds),
+		MessageSender: ms,
+		testing:       testing,
+	}
+
+	return cl, nil
+}
+
+func getMessageSender(token string, testing bool) (messageSender, error) {
+	if testing {
+		slog.Info("using mock webex client since testing is enabled")
+		return mock.NewWebexClient(token), nil
+	}
+
+	if token == "" {
+		return nil, errors.New("webex secret is empty and testing is not enabled")
+	}
+
+	return webex.NewClient(token), nil
 }
 
 func getCreds() *creds {
