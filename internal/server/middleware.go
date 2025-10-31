@@ -15,7 +15,7 @@ import (
 
 func (cl *Client) apiKeyAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if cl.testing {
+		if cl.testing.skipAuth {
 			slog.Debug("skipping auth because server is in test mode")
 			c.Set("user_id", 12345)
 			c.Next()

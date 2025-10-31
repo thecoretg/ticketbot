@@ -27,7 +27,7 @@ type Client struct {
 	Queries       *db.Queries
 	Server        *gin.Engine
 
-	testing     bool
+	testing     testFlags
 	ticketLocks sync.Map
 }
 
@@ -42,12 +42,20 @@ type creds struct {
 	WebexSecret       string
 }
 
+type testFlags struct {
+	skipAuth        bool
+	skipHooks       bool
+	mockWebex       bool
+	mockConnectwise bool // currently does nothing
+}
+
 func Run(embeddedMigrations embed.FS) error {
 	setInitialLogger()
 	ctx := context.Background()
 
+	tf := getTestFlags()
 	cr := getCreds()
-	if err := cr.validate(); err != nil {
+	if err := cr.validate(tf); err != nil {
 		return fmt.Errorf("validating credentials: %w", err)
 	}
 
@@ -56,7 +64,7 @@ func Run(embeddedMigrations embed.FS) error {
 		return fmt.Errorf("setting up db connections: %w", err)
 	}
 
-	cl, err := newClient(cr, pool, testingEnabled())
+	cl, err := newClient(cr, pool, tf)
 	if err != nil {
 		return fmt.Errorf("creating server client: %w", err)
 	}
@@ -97,18 +105,18 @@ func (cl *Client) startup(ctx context.Context) error {
 		return fmt.Errorf("bootstrapping initial admin key: %w", err)
 	}
 
-	if !cl.testing {
+	if !cl.testing.skipHooks {
 		if err := cl.initAllHooks(); err != nil {
 			return fmt.Errorf("initializing webhooks: %w", err)
 		}
 	} else {
-		slog.Debug("not initializing hooks since we are in mock mode")
+		slog.Info("skipping webhook creating")
 	}
 
 	return nil
 }
 
-func newClient(cr *creds, pool *pgxpool.Pool, testing bool) (*Client, error) {
+func newClient(cr *creds, pool *pgxpool.Pool, tf testFlags) (*Client, error) {
 	slog.Debug("initializing server client")
 
 	cwCreds := &psa.Creds{
@@ -118,7 +126,7 @@ func newClient(cr *creds, pool *pgxpool.Pool, testing bool) (*Client, error) {
 		CompanyId:  cr.CWCompanyID,
 	}
 
-	ms, err := getMessageSender(cr.WebexSecret, testing)
+	ms, err := getMessageSender(cr.WebexSecret, tf.mockWebex)
 	if err != nil {
 		return nil, fmt.Errorf("getting message sender: %w", err)
 	}
@@ -130,15 +138,15 @@ func newClient(cr *creds, pool *pgxpool.Pool, testing bool) (*Client, error) {
 		Pool:          pool,
 		CWClient:      psa.NewClient(cwCreds),
 		MessageSender: ms,
-		testing:       testing,
+		testing:       tf,
 	}
 
 	return cl, nil
 }
 
-func getMessageSender(token string, testing bool) (messageSender, error) {
-	if testing {
-		slog.Info("using mock webex client since testing is enabled")
+func getMessageSender(token string, mocking bool) (messageSender, error) {
+	if mocking {
+		slog.Info("using mock webex client")
 		return mock.NewWebexClient(token), nil
 	}
 
@@ -162,20 +170,17 @@ func getCreds() *creds {
 	}
 }
 
-func (c *creds) validate() error {
+func (c *creds) validate(tf testFlags) error {
 	req := map[string]string{
 		"INITIAL_ADMIN_EMAIL": c.InitialAdminEmail,
 		"POSTGRES_DSN":        c.PostgresDSN,
 	}
 
-	// values that are okay to be empty if in testing
-	okTest := map[string]string{
-		"ROOT_URL":      c.RootURL,
+	cwVals := map[string]string{
 		"CW_PUB_KEY":    c.CWPublicKey,
 		"CW_PRIV_KEY":   c.CWPrivateKey,
 		"CW_CLIENT_ID":  c.CWClientID,
 		"CW_COMPANY_ID": c.CWCompanyID,
-		"WEBEX_SECRET":  c.WebexSecret,
 	}
 
 	var empty []string
@@ -185,10 +190,22 @@ func (c *creds) validate() error {
 		}
 	}
 
-	for k, v := range okTest {
+	if c.RootURL == "" {
+		if tf.skipHooks {
+			slog.Warn("ROOT_URL is empty, but ok since SKIP_HOOKS is enabled")
+		} else {
+			empty = append(empty, "ROOT_URL")
+		}
+	}
+
+	if c.WebexSecret == "" {
+		empty = append(empty, "WEBEX_SECRET")
+	}
+
+	for k, v := range cwVals {
 		if v == "" {
-			if testingEnabled() {
-				slog.Warn("env variable empty, but ok since testing is enabled", "key", k)
+			if tf.mockConnectwise {
+				slog.Warn("env variable empty, but ok since MOCK_CONNECTWISE is enabled", "key", k)
 				continue
 			}
 			empty = append(empty, k)
@@ -202,6 +219,11 @@ func (c *creds) validate() error {
 	return nil
 }
 
-func testingEnabled() bool {
-	return os.Getenv("TESTING") == "true"
+func getTestFlags() testFlags {
+	return testFlags{
+		skipAuth:        os.Getenv("SKIP_AUTH") == "true",
+		skipHooks:       os.Getenv("SKIP_HOOKS") == "true",
+		mockWebex:       os.Getenv("MOCK_WEBEX") == "true",
+		mockConnectwise: os.Getenv("MOCK_CONNECTWISE") == "true",
+	}
 }

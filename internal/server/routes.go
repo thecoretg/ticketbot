@@ -1,32 +1,40 @@
 package server
 
 func (cl *Client) addRoutes() {
+	eh := ErrorHandler()
+	au := cl.apiKeyAuth()
+
 	// Health Check
 	cl.Server.GET("", cl.ping)
 
 	// State
-	cl.Server.GET("state", cl.handleGetState, ErrorHandler(), cl.apiKeyAuth())
+	cl.Server.GET("state", cl.handleGetState, eh, au)
 
 	// Config
-	cl.Server.GET("config", cl.handleGetConfig, ErrorHandler(), cl.apiKeyAuth())
-	cl.Server.PUT("config", cl.handlePutConfig, ErrorHandler(), cl.apiKeyAuth())
+	c := cl.Server.Group("config", eh, au)
+	c.GET("", cl.handleGetConfig)
+	c.PUT("", cl.handlePutConfig)
 
 	// Sync
-	cl.Server.POST("sync/tickets", cl.handleSyncTickets, ErrorHandler(), cl.apiKeyAuth())
-	cl.Server.POST("sync/webex_rooms", cl.handleSyncWebexRooms, ErrorHandler(), cl.apiKeyAuth())
+	s := cl.Server.Group("sync", eh, au)
+	s.POST("tickets", cl.handleSyncTickets)
+	s.POST("webex_rooms", cl.handleSyncWebexRooms)
 
 	// API Keys
-	cl.Server.POST("keys", cl.handleCreateAPIKey, ErrorHandler(), cl.apiKeyAuth())
+	cl.Server.POST("keys", cl.handleCreateAPIKey, eh, au)
 
 	// Boards
-	cl.Server.GET("boards", cl.handleListBoards, ErrorHandler(), cl.apiKeyAuth())
-	cl.Server.GET("boards/:board_id", cl.handleGetBoard, ErrorHandler(), cl.apiKeyAuth())
-	cl.Server.PUT("boards/:board_id", cl.handlePutBoard, ErrorHandler(), cl.apiKeyAuth())
-	cl.Server.DELETE("boards/:board_id", cl.handleDeleteBoard, ErrorHandler(), cl.apiKeyAuth())
+	b := cl.Server.Group("boards", eh, au)
+	b.GET("", cl.handleListBoards)
+	b.GET(":board_id", cl.handleGetBoard)
+	b.PUT(":board_id", cl.handlePutBoard)
+	b.DELETE(":board_id", cl.handleDeleteBoard)
 
 	// Webex Rooms
-	cl.Server.GET("rooms", cl.handleListWebexRooms)
+	cl.Server.GET("rooms", cl.handleListWebexRooms, eh, au)
 
-	// ConnectWise Webhooks
-	cl.Server.POST("hooks/cw/tickets", requireValidCWSignature(), ErrorHandler())
+	// Webhooks
+	sig := requireValidCWSignature()
+	h := cl.Server.Group("hooks", eh, sig)
+	h.POST("cw/tickets", cl.handleTickets)
 }
