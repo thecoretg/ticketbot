@@ -61,43 +61,6 @@ func (q *Queries) GetMemberByIdentifier(ctx context.Context, identifier string) 
 	return i, err
 }
 
-const insertMember = `-- name: InsertMember :one
-INSERT INTO cw_member
-(id, identifier, first_name, last_name, primary_email)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted
-`
-
-type InsertMemberParams struct {
-	ID           int    `json:"id"`
-	Identifier   string `json:"identifier"`
-	FirstName    string `json:"first_name"`
-	LastName     string `json:"last_name"`
-	PrimaryEmail string `json:"primary_email"`
-}
-
-func (q *Queries) InsertMember(ctx context.Context, arg InsertMemberParams) (CwMember, error) {
-	row := q.db.QueryRow(ctx, insertMember,
-		arg.ID,
-		arg.Identifier,
-		arg.FirstName,
-		arg.LastName,
-		arg.PrimaryEmail,
-	)
-	var i CwMember
-	err := row.Scan(
-		&i.ID,
-		&i.Identifier,
-		&i.FirstName,
-		&i.LastName,
-		&i.PrimaryEmail,
-		&i.UpdatedOn,
-		&i.AddedOn,
-		&i.Deleted,
-	)
-	return i, err
-}
-
 const listMembers = `-- name: ListMembers :many
 SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted FROM cw_member
 ORDER BY id
@@ -143,19 +106,20 @@ func (q *Queries) SoftDeleteMember(ctx context.Context, id int) error {
 	return err
 }
 
-const updateMember = `-- name: UpdateMember :one
-UPDATE cw_member
-SET
-    identifier = $2,
-    first_name = $3,
-    last_name = $4,
-    primary_email = $5,
+const upsertMember = `-- name: UpsertMember :one
+INSERT INTO cw_member
+(id, identifier, first_name, last_name, primary_email)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (id) DO UPDATE SET
+    identifier = EXCLUDED.identifier,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    primary_email = EXCLUDED.primary_email,
     updated_on = NOW()
-WHERE id = $1
 RETURNING id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted
 `
 
-type UpdateMemberParams struct {
+type UpsertMemberParams struct {
 	ID           int    `json:"id"`
 	Identifier   string `json:"identifier"`
 	FirstName    string `json:"first_name"`
@@ -163,8 +127,8 @@ type UpdateMemberParams struct {
 	PrimaryEmail string `json:"primary_email"`
 }
 
-func (q *Queries) UpdateMember(ctx context.Context, arg UpdateMemberParams) (CwMember, error) {
-	row := q.db.QueryRow(ctx, updateMember,
+func (q *Queries) UpsertMember(ctx context.Context, arg UpsertMemberParams) (CwMember, error) {
+	row := q.db.QueryRow(ctx, upsertMember,
 		arg.ID,
 		arg.Identifier,
 		arg.FirstName,

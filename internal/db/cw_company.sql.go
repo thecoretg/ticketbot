@@ -37,31 +37,6 @@ func (q *Queries) GetCompany(ctx context.Context, id int) (CwCompany, error) {
 	return i, err
 }
 
-const insertCompany = `-- name: InsertCompany :one
-INSERT INTO cw_company
-(id, name)
-VALUES ($1, $2)
-RETURNING id, name, updated_on, added_on, deleted
-`
-
-type InsertCompanyParams struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
-func (q *Queries) InsertCompany(ctx context.Context, arg InsertCompanyParams) (CwCompany, error) {
-	row := q.db.QueryRow(ctx, insertCompany, arg.ID, arg.Name)
-	var i CwCompany
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.UpdatedOn,
-		&i.AddedOn,
-		&i.Deleted,
-	)
-	return i, err
-}
-
 const listCompanies = `-- name: ListCompanies :many
 SELECT id, name, updated_on, added_on, deleted FROM cw_company
 ORDER BY id
@@ -120,6 +95,34 @@ type UpdateCompanyParams struct {
 
 func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (CwCompany, error) {
 	row := q.db.QueryRow(ctx, updateCompany, arg.ID, arg.Name)
+	var i CwCompany
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UpdatedOn,
+		&i.AddedOn,
+		&i.Deleted,
+	)
+	return i, err
+}
+
+const upsertCompany = `-- name: UpsertCompany :one
+INSERT INTO cw_company
+(id, name)
+VALUES ($1, $2)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    updated_on = NOW()
+RETURNING id, name, updated_on, added_on, deleted
+`
+
+type UpsertCompanyParams struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (CwCompany, error) {
+	row := q.db.QueryRow(ctx, upsertCompany, arg.ID, arg.Name)
 	var i CwCompany
 	err := row.Scan(
 		&i.ID,

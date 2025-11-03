@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS cw_board (
 );
 
 CREATE TABLE IF NOT EXISTS notifier_connection (
-    id INT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     cw_board_id INT NOT NULL REFERENCES cw_board(id) ON DELETE CASCADE,
     webex_room_id INT NOT NULL REFERENCES webex_room(id) ON DELETE CASCADE,
     notify_enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS cw_contact (
 
 CREATE TABLE IF NOT EXISTS cw_member (
     id INT PRIMARY KEY,
-    identifier TEXT UNIQUE NOT NULL,
+    identifier TEXT NOT NULL,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
     primary_email TEXT NOT NULL,

@@ -40,7 +40,7 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwT
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Debug("note not found in store, attempting insert", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
-			p := db.InsertTicketNoteParams{
+			p := db.UpsertTicketNoteParams{
 				ID:        cwData.note.ID,
 				TicketID:  cwData.note.TicketId,
 				MemberID:  memberID,
@@ -48,7 +48,7 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwT
 			}
 
 			slog.Debug("created insert note params", "id", p.ID, "ticket_id", p.TicketID, "member_id", p.MemberID, "contact_id", p.ContactID, "notified", p.Notified)
-			note, err = cl.Queries.InsertTicketNote(ctx, p)
+			note, err = cl.Queries.UpsertTicketNote(ctx, p)
 
 			if err != nil {
 				return db.CwTicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)

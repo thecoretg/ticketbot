@@ -13,15 +13,25 @@ import (
 	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
+type syncTicketsPayload struct {
+	BoardIDs []int `json:"board_ids"`
+}
+
 func (cl *Client) handleSyncTickets(c *gin.Context) {
 	if cl.State.SyncingTickets {
 		c.JSON(http.StatusOK, gin.H{"result": "sync already in progress"})
 		return
 	}
 
+	p := &syncTicketsPayload{}
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json request"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"result": "ticket sync started"})
 	go func() {
-		if err := cl.syncOpenTickets(context.Background()); err != nil {
+		if err := cl.syncOpenTickets(context.Background(), p.BoardIDs); err != nil {
 			slog.Error("syncing connectwise tickets", "error", err)
 		}
 	}()
@@ -45,7 +55,7 @@ func (cl *Client) handleSyncWebexRooms(c *gin.Context) {
 // syncOpenTickets finds all open tickets in Connectwise and loads them into the DB if they don't
 // already exist. It does not attempt to notify since that would result in tons of notifications
 // for already existing tickets.
-func (cl *Client) syncOpenTickets(ctx context.Context) error {
+func (cl *Client) syncOpenTickets(ctx context.Context, boardIDS []int) error {
 	if err := cl.setSyncingTickets(ctx, true); err != nil {
 		slog.Warn("error setting syncing tickets value to true", "error", err)
 	}
@@ -56,11 +66,17 @@ func (cl *Client) syncOpenTickets(ctx context.Context) error {
 		}
 	}()
 
-	slog.Debug("beginning preloading tickets")
+	slog.Debug("beginning syncing tickets")
+
+	con := "closedFlag = false"
+	if len(boardIDS) > 0 {
+		slog.Info("board ids provided for ticket sync", "ids", boardIDS)
+		con += fmt.Sprintf(" AND %s", boardIDParam(boardIDS))
+	}
 
 	params := map[string]string{
 		"pageSize":   "100",
-		"conditions": "closedFlag = false",
+		"conditions": con,
 	}
 
 	slog.Debug("loading existing open tickets")
@@ -79,8 +95,8 @@ func (cl *Client) syncOpenTickets(ctx context.Context) error {
 		go func(ticket psa.Ticket) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			if err := cl.processTicket(ctx, ticket.ID, "preload", true); err != nil {
-				errCh <- fmt.Errorf("error preloading ticket %d: %w", ticket.ID, err)
+			if err := cl.processTicket(ctx, ticket.ID, "sync", true); err != nil {
+				errCh <- fmt.Errorf("error syncing ticket %d: %w", ticket.ID, err)
 			} else {
 				errCh <- nil
 			}
@@ -92,9 +108,10 @@ func (cl *Client) syncOpenTickets(ctx context.Context) error {
 
 	for err := range errCh {
 		if err != nil {
-			slog.Error("preloading ticket", "error", err)
+			slog.Error("syncing ticket", "error", err)
 		}
 	}
+	slog.Info("syncing tickets complete")
 	return nil
 }
 
@@ -145,25 +162,24 @@ func (cl *Client) syncWebexRooms(ctx context.Context) error {
 		if existing, ok := dbByWebexID[id]; ok {
 			if roomChanged(existing, r) {
 				rlog.Debug("updates needed for room")
-				p := db.UpdateWebexRoomParams{
-					ID:   existing.ID,
+				p := db.UpsertWebexRoomParams{
 					Name: r.Title,
 					Type: r.Type,
 				}
 
-				if _, err := qtx.UpdateWebexRoom(ctx, p); err != nil {
+				if _, err := qtx.UpsertWebexRoom(ctx, p); err != nil {
 					return fmt.Errorf("updating room %s: %w", id, err)
 				}
 				rlog.Debug("room updated in db", "id", existing.ID)
 			}
 		} else {
-			p := db.InsertWebexRoomParams{
+			p := db.UpsertWebexRoomParams{
 				WebexID: id,
 				Name:    r.Title,
 				Type:    r.Type,
 			}
 
-			n, err := qtx.InsertWebexRoom(ctx, p)
+			n, err := qtx.UpsertWebexRoom(ctx, p)
 			if err != nil {
 				return fmt.Errorf("inserting room %s: %w", id, err)
 			}
@@ -199,4 +215,20 @@ func roomLogger(r webex.Room) slog.Attr {
 
 func roomChanged(existing db.WebexRoom, webexRoom webex.Room) bool {
 	return existing.Name != webexRoom.Title || existing.Type != webexRoom.Type
+}
+
+func boardIDParam(ids []int) string {
+	if len(ids) == 0 {
+		return ""
+	}
+
+	param := ""
+	for i, id := range ids {
+		param += fmt.Sprintf("board/id = %d", id)
+		if i < len(ids)-1 {
+			param += " OR "
+		}
+	}
+
+	return fmt.Sprintf("(%s)", param)
 }

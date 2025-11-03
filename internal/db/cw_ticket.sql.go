@@ -75,92 +75,6 @@ func (q *Queries) GetTicketNote(ctx context.Context, id int) (CwTicketNote, erro
 	return i, err
 }
 
-const insertTicket = `-- name: InsertTicket :one
-INSERT INTO cw_ticket
-(id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted
-`
-
-type InsertTicketParams struct {
-	ID        int     `json:"id"`
-	Summary   string  `json:"summary"`
-	BoardID   int     `json:"board_id"`
-	OwnerID   *int    `json:"owner_id"`
-	CompanyID int     `json:"company_id"`
-	ContactID *int    `json:"contact_id"`
-	Resources *string `json:"resources"`
-	UpdatedBy *string `json:"updated_by"`
-}
-
-func (q *Queries) InsertTicket(ctx context.Context, arg InsertTicketParams) (CwTicket, error) {
-	row := q.db.QueryRow(ctx, insertTicket,
-		arg.ID,
-		arg.Summary,
-		arg.BoardID,
-		arg.OwnerID,
-		arg.CompanyID,
-		arg.ContactID,
-		arg.Resources,
-		arg.UpdatedBy,
-	)
-	var i CwTicket
-	err := row.Scan(
-		&i.ID,
-		&i.Summary,
-		&i.BoardID,
-		&i.OwnerID,
-		&i.CompanyID,
-		&i.ContactID,
-		&i.Resources,
-		&i.UpdatedBy,
-		&i.UpdatedOn,
-		&i.AddedOn,
-		&i.Deleted,
-	)
-	return i, err
-}
-
-const insertTicketNote = `-- name: InsertTicketNote :one
-INSERT INTO cw_ticket_note
-(id, ticket_id, member_id, contact_id, notified, skipped_notify)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, ticket_id, member_id, contact_id, notified, skipped_notify, updated_on, added_on, deleted
-`
-
-type InsertTicketNoteParams struct {
-	ID            int  `json:"id"`
-	TicketID      int  `json:"ticket_id"`
-	MemberID      *int `json:"member_id"`
-	ContactID     *int `json:"contact_id"`
-	Notified      bool `json:"notified"`
-	SkippedNotify bool `json:"skipped_notify"`
-}
-
-func (q *Queries) InsertTicketNote(ctx context.Context, arg InsertTicketNoteParams) (CwTicketNote, error) {
-	row := q.db.QueryRow(ctx, insertTicketNote,
-		arg.ID,
-		arg.TicketID,
-		arg.MemberID,
-		arg.ContactID,
-		arg.Notified,
-		arg.SkippedNotify,
-	)
-	var i CwTicketNote
-	err := row.Scan(
-		&i.ID,
-		&i.TicketID,
-		&i.MemberID,
-		&i.ContactID,
-		&i.Notified,
-		&i.SkippedNotify,
-		&i.UpdatedOn,
-		&i.AddedOn,
-		&i.Deleted,
-	)
-	return i, err
-}
-
 const listAllTicketNotes = `-- name: ListAllTicketNotes :many
 SELECT id, ticket_id, member_id, contact_id, notified, skipped_notify, updated_on, added_on, deleted FROM cw_ticket_note
 ORDER BY id
@@ -353,22 +267,23 @@ func (q *Queries) SoftDeleteTicketNote(ctx context.Context, id int) error {
 	return err
 }
 
-const updateTicket = `-- name: UpdateTicket :one
-UPDATE cw_ticket
-SET
-    summary = $2,
-    board_id = $3,
-    owner_id = $4,
-    company_id = $5,
-    contact_id = $6,
-    resources = $7,
-    updated_by = $8,
+const upsertTicket = `-- name: UpsertTicket :one
+INSERT INTO cw_ticket
+(id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (id) DO UPDATE SET
+    summary = EXCLUDED.summary,
+    board_id = EXCLUDED.board_id,
+    owner_id = EXCLUDED.owner_id,
+    company_id = EXCLUDED.company_id,
+    contact_id = EXCLUDED.contact_id,
+    resources = EXCLUDED.resources,
+    updated_by = EXCLUDED.updated_by,
     updated_on = NOW()
-WHERE id = $1
 RETURNING id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted
 `
 
-type UpdateTicketParams struct {
+type UpsertTicketParams struct {
 	ID        int     `json:"id"`
 	Summary   string  `json:"summary"`
 	BoardID   int     `json:"board_id"`
@@ -379,8 +294,8 @@ type UpdateTicketParams struct {
 	UpdatedBy *string `json:"updated_by"`
 }
 
-func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (CwTicket, error) {
-	row := q.db.QueryRow(ctx, updateTicket,
+func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (CwTicket, error) {
+	row := q.db.QueryRow(ctx, upsertTicket,
 		arg.ID,
 		arg.Summary,
 		arg.BoardID,
@@ -407,20 +322,21 @@ func (q *Queries) UpdateTicket(ctx context.Context, arg UpdateTicketParams) (CwT
 	return i, err
 }
 
-const updateTicketNote = `-- name: UpdateTicketNote :one
-UPDATE cw_ticket_note
-SET
-    ticket_id = $2,
-    member_id = $3,
-    contact_id = $4,
-    notified = $5,
-    skipped_notify = $6,
+const upsertTicketNote = `-- name: UpsertTicketNote :one
+INSERT INTO cw_ticket_note
+(id, ticket_id, member_id, contact_id, notified, skipped_notify)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO UPDATE SET
+    ticket_id = EXCLUDED.ticket_id,
+    member_id = EXCLUDED.member_id,
+    contact_id = EXCLUDED.contact_id,
+    notified = EXCLUDED.notified,
+    skipped_notify = EXCLUDED.skipped_notify,
     updated_on = NOW()
-WHERE id = $1
 RETURNING id, ticket_id, member_id, contact_id, notified, skipped_notify, updated_on, added_on, deleted
 `
 
-type UpdateTicketNoteParams struct {
+type UpsertTicketNoteParams struct {
 	ID            int  `json:"id"`
 	TicketID      int  `json:"ticket_id"`
 	MemberID      *int `json:"member_id"`
@@ -429,8 +345,8 @@ type UpdateTicketNoteParams struct {
 	SkippedNotify bool `json:"skipped_notify"`
 }
 
-func (q *Queries) UpdateTicketNote(ctx context.Context, arg UpdateTicketNoteParams) (CwTicketNote, error) {
-	row := q.db.QueryRow(ctx, updateTicketNote,
+func (q *Queries) UpsertTicketNote(ctx context.Context, arg UpsertTicketNoteParams) (CwTicketNote, error) {
+	row := q.db.QueryRow(ctx, upsertTicketNote,
 		arg.ID,
 		arg.TicketID,
 		arg.MemberID,

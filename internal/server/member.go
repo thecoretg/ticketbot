@@ -41,7 +41,7 @@ func (cl *Client) ensureMemberInStore(ctx context.Context, id int) (db.CwMember,
 			if err != nil {
 				return db.CwMember{}, fmt.Errorf("getting member from cw: %w", err)
 			}
-			p := db.InsertMemberParams{
+			p := db.UpsertMemberParams{
 				ID:           id,
 				Identifier:   cwMember.Identifier,
 				FirstName:    cwMember.FirstName,
@@ -50,7 +50,7 @@ func (cl *Client) ensureMemberInStore(ctx context.Context, id int) (db.CwMember,
 			}
 			slog.Debug("created insert member params", "id", p.ID, "identifier", p.Identifier, "first_name", p.FirstName, "last_name", p.LastName, "primary_email", p.PrimaryEmail)
 
-			member, err = cl.Queries.InsertMember(ctx, p)
+			member, err = cl.Queries.UpsertMember(ctx, p)
 			if err != nil {
 				return db.CwMember{}, fmt.Errorf("inserting member into db: %w", err)
 			}

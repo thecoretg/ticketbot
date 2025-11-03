@@ -6,18 +6,13 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM cw_board
 ORDER BY id;
 
--- name: InsertBoard :one
+-- name: UpsertBoard :one
 INSERT INTO cw_board
 (id, name)
 VALUES ($1, $2)
-RETURNING *;
-
--- name: UpdateBoard :one
-UPDATE cw_board
-SET
-    name = $2,
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
     updated_on = NOW()
-WHERE id = $1
 RETURNING *;
 
 -- name: SoftDeleteBoard :exec

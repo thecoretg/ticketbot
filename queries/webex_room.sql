@@ -14,19 +14,14 @@ WHERE webex_id = $1;
 SELECT * FROM webex_room
 ORDER BY id;
 
--- name: InsertWebexRoom :one
+-- name: UpsertWebexRoom :one
 INSERT INTO webex_room
 (webex_id, name, type)
 VALUES ($1, $2, $3)
-RETURNING *;
-
--- name: UpdateWebexRoom :one
-UPDATE webex_room
-SET
-    name = $2,
-    type = $3,
+ON CONFLICT (webex_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    type = EXCLUDED.type,
     updated_on = NOW()
-WHERE id = $1
 RETURNING *;
 
 -- name: SoftDeleteWebexRoom :exec

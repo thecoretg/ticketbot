@@ -94,7 +94,7 @@ func (cl *Client) processTicket(ctx context.Context, ticketID int, action string
 
 	// Insert or update the ticket into the store if it didn't exist or if there were changes.
 	p := cwDataToUpdateTicketParams(cd)
-	sd.ticket, err = cl.Queries.UpdateTicket(ctx, p)
+	sd.ticket, err = cl.Queries.UpsertTicket(ctx, p)
 	if err != nil {
 		return fmt.Errorf("updating ticket in store: %w", err)
 	}
@@ -163,7 +163,7 @@ func (cl *Client) getCwData(ticketID int) (*cwData, error) {
 
 func (cl *Client) getStoredData(ctx context.Context, cd *cwData) (*storedData, error) {
 	// first check for or create board since it needs to exist before the ticket
-	board, err := cl.ensureBoardInStore(ctx, cd)
+	board, err := cl.ensureBoardInStore(ctx, cd.ticket.Board.ID)
 	if err != nil {
 		return nil, fmt.Errorf("ensuring board in store: %w", err)
 	}
@@ -224,7 +224,7 @@ func (cl *Client) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTic
 	ticket, err := cl.Queries.GetTicket(ctx, cd.ticket.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			p := db.InsertTicketParams{
+			p := db.UpsertTicketParams{
 				ID:        cd.ticket.ID,
 				Summary:   cd.ticket.Summary,
 				BoardID:   cd.ticket.Board.ID,
@@ -237,7 +237,7 @@ func (cl *Client) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTic
 
 			slog.Debug("created insert ticket params", "id", p.ID, "summary", p.Summary, "board_id", p.BoardID, "owner_id", p.OwnerID, "company_id", p.CompanyID, "contact_id", p.ContactID, "resources", p.Resources, "updated_by", p.UpdatedBy)
 
-			ticket, err = cl.Queries.InsertTicket(ctx, p)
+			ticket, err = cl.Queries.UpsertTicket(ctx, p)
 			if err != nil {
 				return db.CwTicket{}, fmt.Errorf("inserting ticket into db: %w", err)
 			}
@@ -286,8 +286,8 @@ func roomsToNotifyExist(sd *storedData) bool {
 	return sd.notifyRooms != nil && len(sd.notifyRooms) > 0
 }
 
-func cwDataToUpdateTicketParams(cd *cwData) db.UpdateTicketParams {
-	return db.UpdateTicketParams{
+func cwDataToUpdateTicketParams(cd *cwData) db.UpsertTicketParams {
+	return db.UpsertTicketParams{
 		ID:        cd.ticket.ID,
 		Summary:   cd.ticket.Summary,
 		BoardID:   cd.ticket.Board.ID,

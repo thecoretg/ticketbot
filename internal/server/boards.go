@@ -47,16 +47,26 @@ func (cl *Client) handleListBoards(c *gin.Context) {
 	c.JSON(http.StatusOK, boards)
 }
 
-func (cl *Client) ensureBoardInStore(ctx context.Context, cwData *cwData) (db.CwBoard, error) {
-	board, err := cl.Queries.GetBoard(ctx, cwData.ticket.Board.ID)
+func (cl *Client) ensureBoardInStore(ctx context.Context, boardID int) (db.CwBoard, error) {
+	board, err := cl.Queries.GetBoard(ctx, boardID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Debug("board not in store, attempting insert", "board_id", cwData.ticket.Board.ID)
-			p := db.InsertBoardParams{
-				ID:   cwData.ticket.Board.ID,
-				Name: cwData.ticket.Board.Name,
+			cwBoard, err := cl.CWClient.GetBoard(boardID, nil)
+			if err != nil {
+				return db.CwBoard{}, fmt.Errorf("getting board from cw: %w", err)
 			}
-			board, err = cl.Queries.InsertBoard(ctx, p)
+
+			if cwBoard == nil {
+				return db.CwBoard{}, fmt.Errorf("board %d not found", boardID)
+			}
+
+			slog.Debug("board not in store, attempting insert", "board_id", boardID)
+			p := db.UpsertBoardParams{
+				ID:   cwBoard.ID,
+				Name: cwBoard.Name,
+			}
+
+			board, err = cl.Queries.UpsertBoard(ctx, p)
 			if err != nil {
 				return db.CwBoard{}, fmt.Errorf("inserting board into db: %w", err)
 			}

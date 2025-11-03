@@ -30,6 +30,7 @@ func (cl *Client) handleListNotifiers(c *gin.Context) {
 
 	if notis == nil {
 		c.JSON(http.StatusOK, []dbNotifierResponse{})
+		return
 	}
 
 	var resp []dbNotifierResponse
@@ -50,6 +51,11 @@ func (cl *Client) handlePostNotifier(c *gin.Context) {
 
 	if err := validateNotifierRequest(r); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		return
+	}
+
+	if _, err := cl.ensureBoardInStore(c.Request.Context(), r.CwBoardID); err != nil {
+		c.Error(fmt.Errorf("ensuring board %d in store: %w", r.CwBoardID, err))
 		return
 	}
 

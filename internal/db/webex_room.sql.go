@@ -71,34 +71,6 @@ func (q *Queries) GetWebexRoomIDByInternalID(ctx context.Context, id int) (strin
 	return webex_id, err
 }
 
-const insertWebexRoom = `-- name: InsertWebexRoom :one
-INSERT INTO webex_room
-(webex_id, name, type)
-VALUES ($1, $2, $3)
-RETURNING id, webex_id, name, type, created_on, updated_on, deleted
-`
-
-type InsertWebexRoomParams struct {
-	WebexID string `json:"webex_id"`
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-}
-
-func (q *Queries) InsertWebexRoom(ctx context.Context, arg InsertWebexRoomParams) (WebexRoom, error) {
-	row := q.db.QueryRow(ctx, insertWebexRoom, arg.WebexID, arg.Name, arg.Type)
-	var i WebexRoom
-	err := row.Scan(
-		&i.ID,
-		&i.WebexID,
-		&i.Name,
-		&i.Type,
-		&i.CreatedOn,
-		&i.UpdatedOn,
-		&i.Deleted,
-	)
-	return i, err
-}
-
 const listWebexRooms = `-- name: ListWebexRooms :many
 SELECT id, webex_id, name, type, created_on, updated_on, deleted FROM webex_room
 ORDER BY id
@@ -145,24 +117,25 @@ func (q *Queries) SoftDeleteWebexRoom(ctx context.Context, id int) error {
 	return err
 }
 
-const updateWebexRoom = `-- name: UpdateWebexRoom :one
-UPDATE webex_room
-SET
-    name = $2,
-    type = $3,
+const upsertWebexRoom = `-- name: UpsertWebexRoom :one
+INSERT INTO webex_room
+(webex_id, name, type)
+VALUES ($1, $2, $3)
+ON CONFLICT (webex_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    type = EXCLUDED.type,
     updated_on = NOW()
-WHERE id = $1
 RETURNING id, webex_id, name, type, created_on, updated_on, deleted
 `
 
-type UpdateWebexRoomParams struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"type"`
+type UpsertWebexRoomParams struct {
+	WebexID string `json:"webex_id"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
 }
 
-func (q *Queries) UpdateWebexRoom(ctx context.Context, arg UpdateWebexRoomParams) (WebexRoom, error) {
-	row := q.db.QueryRow(ctx, updateWebexRoom, arg.ID, arg.Name, arg.Type)
+func (q *Queries) UpsertWebexRoom(ctx context.Context, arg UpsertWebexRoomParams) (WebexRoom, error) {
+	row := q.db.QueryRow(ctx, upsertWebexRoom, arg.WebexID, arg.Name, arg.Type)
 	var i WebexRoom
 	err := row.Scan(
 		&i.ID,

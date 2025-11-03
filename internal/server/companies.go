@@ -19,13 +19,13 @@ func (cl *Client) ensureCompanyInStore(ctx context.Context, id int) (db.CwCompan
 			if err != nil {
 				return db.CwCompany{}, fmt.Errorf("getting company from cw: %w", err)
 			}
-			p := db.InsertCompanyParams{
+			p := db.UpsertCompanyParams{
 				ID:   cwComp.Id,
 				Name: cwComp.Name,
 			}
 			slog.Debug("created insert company params", "id", p.ID, "name", p.Name)
 
-			company, err = cl.Queries.InsertCompany(ctx, p)
+			company, err = cl.Queries.UpsertCompany(ctx, p)
 			if err != nil {
 				return db.CwCompany{}, fmt.Errorf("inserting company into db: %w", err)
 			}

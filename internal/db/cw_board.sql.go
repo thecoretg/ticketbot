@@ -37,31 +37,6 @@ func (q *Queries) GetBoard(ctx context.Context, id int) (CwBoard, error) {
 	return i, err
 }
 
-const insertBoard = `-- name: InsertBoard :one
-INSERT INTO cw_board
-(id, name)
-VALUES ($1, $2)
-RETURNING id, name, updated_on, added_on, deleted
-`
-
-type InsertBoardParams struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
-}
-
-func (q *Queries) InsertBoard(ctx context.Context, arg InsertBoardParams) (CwBoard, error) {
-	row := q.db.QueryRow(ctx, insertBoard, arg.ID, arg.Name)
-	var i CwBoard
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.UpdatedOn,
-		&i.AddedOn,
-		&i.Deleted,
-	)
-	return i, err
-}
-
 const listBoards = `-- name: ListBoards :many
 SELECT id, name, updated_on, added_on, deleted FROM cw_board
 ORDER BY id
@@ -106,22 +81,23 @@ func (q *Queries) SoftDeleteBoard(ctx context.Context, id int) error {
 	return err
 }
 
-const updateBoard = `-- name: UpdateBoard :one
-UPDATE cw_board
-SET
-    name = $2,
+const upsertBoard = `-- name: UpsertBoard :one
+INSERT INTO cw_board
+(id, name)
+VALUES ($1, $2)
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
     updated_on = NOW()
-WHERE id = $1
 RETURNING id, name, updated_on, added_on, deleted
 `
 
-type UpdateBoardParams struct {
+type UpsertBoardParams struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 }
 
-func (q *Queries) UpdateBoard(ctx context.Context, arg UpdateBoardParams) (CwBoard, error) {
-	row := q.db.QueryRow(ctx, updateBoard, arg.ID, arg.Name)
+func (q *Queries) UpsertBoard(ctx context.Context, arg UpsertBoardParams) (CwBoard, error) {
+	row := q.db.QueryRow(ctx, upsertBoard, arg.ID, arg.Name)
 	var i CwBoard
 	err := row.Scan(
 		&i.ID,
