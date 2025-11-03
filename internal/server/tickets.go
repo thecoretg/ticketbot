@@ -41,7 +41,6 @@ func (cl *Client) handleTickets(c *gin.Context) {
 		return
 	}
 
-	slog.Debug("received payload from connectwise", "ticket_id", w.ID, "action", w.Action)
 	switch w.Action {
 	case "added", "updated":
 		if err := cl.processTicket(c.Request.Context(), w.ID, w.Action, false); err != nil {
@@ -135,7 +134,6 @@ func (cl *Client) softDeleteTicket(ctx context.Context, ticketID int) error {
 	if err := cl.Queries.SoftDeleteTicket(ctx, ticketID); err != nil {
 		return fmt.Errorf("soft deleting ticket: %w", err)
 	}
-	slog.Debug("ticket soft deleted", "ticket_id", ticketID)
 
 	return nil
 }
@@ -235,21 +233,17 @@ func (cl *Client) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTic
 				UpdatedBy: &cd.ticket.Info.UpdatedBy,
 			}
 
-			slog.Debug("created insert ticket params", "id", p.ID, "summary", p.Summary, "board_id", p.BoardID, "owner_id", p.OwnerID, "company_id", p.CompanyID, "contact_id", p.ContactID, "resources", p.Resources, "updated_by", p.UpdatedBy)
-
 			ticket, err = cl.Queries.UpsertTicket(ctx, p)
 			if err != nil {
 				return db.CwTicket{}, fmt.Errorf("inserting ticket into db: %w", err)
 			}
 
-			slog.Debug("inserted ticket into db", "ticket_id", ticket.ID, "summary", ticket.Summary)
 			return ticket, nil
 		} else {
 			return db.CwTicket{}, fmt.Errorf("getting ticket from storage: %w", err)
 		}
 	}
 
-	slog.Debug("got existing ticket from store", "ticket_id", ticket.ID, "summary", ticket.Summary)
 	return ticket, nil
 }
 

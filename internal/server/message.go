@@ -24,11 +24,9 @@ func (cl *Client) makeAndSendMessages(ctx context.Context, action string, cd *cw
 	}
 
 	if messages == nil {
-		slog.Debug("no messages to send", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID)
 		return nil
 	}
 
-	slog.Debug("created webex messages", "action", action, "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "total_messages", len(messages))
 	for _, msg := range messages {
 		_, err := cl.MessageSender.PostMessage(&msg)
 		if err != nil {
@@ -73,7 +71,6 @@ func (cl *Client) makeMessages(ctx context.Context, action string, cd *cwData, s
 
 	var messages []webex.Message
 	if action == "added" {
-		slog.Debug("creating message for new ticket", "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "rooms_to_notify", roomNames(sd.notifyRooms))
 		for _, r := range sd.notifyRooms {
 			messages = append(messages, webex.NewMessageToRoom(r.WebexID, body))
 		}
@@ -82,7 +79,6 @@ func (cl *Client) makeMessages(ctx context.Context, action string, cd *cwData, s
 		if len(sendTo) > 0 {
 			slog.Debug("got send-to list", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID, "send_to", sendTo)
 		} else {
-			slog.Debug("send-to list is empty", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID)
 			return nil, nil
 		}
 
@@ -96,15 +92,6 @@ func (cl *Client) makeMessages(ctx context.Context, action string, cd *cwData, s
 	}
 
 	return messages, nil
-}
-
-func roomNames(rooms []db.WebexRoom) []string {
-	var names []string
-	for _, r := range rooms {
-		names = append(names, r.Name)
-	}
-
-	return names
 }
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most

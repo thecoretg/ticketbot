@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -95,27 +94,21 @@ func (cl *Client) handleGetNotifier(c *gin.Context) {
 	c.JSON(http.StatusOK, r)
 }
 
-func (cl *Client) handlePutNotifier(c *gin.Context) {
-	c.JSON(http.StatusOK, comingSoon())
-}
-
 func (cl *Client) handleDeleteNotifier(c *gin.Context) {
-	c.JSON(http.StatusOK, comingSoon())
-}
-
-func (cl *Client) addNotifier(ctx context.Context, boardID, roomID int, notify bool) (int, error) {
-	p := db.InsertNotifierConnectionParams{
-		CwBoardID:     boardID,
-		WebexRoomID:   roomID,
-		NotifyEnabled: notify,
-	}
-
-	n, err := cl.Queries.InsertNotifierConnection(ctx, p)
+	id, err := strconv.Atoi(c.Param("notifier_id"))
 	if err != nil {
-		return 0, fmt.Errorf("inserting into db: %w", err)
+		c.JSON(http.StatusBadRequest, errorOutput("notifier id must be a valid integer"))
+		return
 	}
 
-	return n.ID, nil
+	if err := cl.Queries.DeleteNotifierConnection(c.Request.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("notifier with id %d does not exist", id)})
+			return
+		}
+	}
+
+	c.Status(http.StatusOK)
 }
 
 func validateNotifierRequest(r *db.InsertNotifierConnectionParams) error {

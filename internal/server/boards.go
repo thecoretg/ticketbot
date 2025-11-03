@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -55,12 +54,6 @@ func (cl *Client) ensureBoardInStore(ctx context.Context, boardID int) (db.CwBoa
 			if err != nil {
 				return db.CwBoard{}, fmt.Errorf("getting board from cw: %w", err)
 			}
-
-			if cwBoard == nil {
-				return db.CwBoard{}, fmt.Errorf("board %d not found", boardID)
-			}
-
-			slog.Debug("board not in store, attempting insert", "board_id", boardID)
 			p := db.UpsertBoardParams{
 				ID:   cwBoard.ID,
 				Name: cwBoard.Name,
@@ -70,13 +63,10 @@ func (cl *Client) ensureBoardInStore(ctx context.Context, boardID int) (db.CwBoa
 			if err != nil {
 				return db.CwBoard{}, fmt.Errorf("inserting board into db: %w", err)
 			}
-			slog.Debug("inserted board into store", "board_id", board.ID, "name", board.Name)
-			return board, nil
 		} else {
 			return db.CwBoard{}, fmt.Errorf("getting board from storage: %w", err)
 		}
 	}
 
-	slog.Debug("got existing board from store", "board_id", board.ID, "name", board.Name)
 	return board, nil
 }

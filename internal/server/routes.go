@@ -36,7 +36,6 @@ func (cl *Client) addRoutes() {
 	n.GET("", cl.handleListNotifiers)
 	n.POST("", cl.handlePostNotifier)
 	n.GET(":notifier_id", cl.handleGetNotifier)
-	n.PUT(":notifier_id", cl.handlePutNotifier)
 	n.DELETE(":notifier_id", cl.handleDeleteNotifier)
 
 	// Webhooks

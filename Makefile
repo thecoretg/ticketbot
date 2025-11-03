@@ -8,7 +8,6 @@ gensql:
 	sqlc generate
 
 docker-build:
-	cp -r migrations cmd/server/
 	docker buildx build --platform=linux/amd64 -t ticketbot:latest --load .
 
 test-up:

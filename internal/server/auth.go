@@ -100,7 +100,7 @@ func (cl *Client) bootstrapAdmin(ctx context.Context) error {
 
 	if os.Getenv("API_KEY_DELAY") == "true" {
 		slog.Info("waiting 60 seconds - please copy the above key, as it will not be shown again")
-		time.Sleep(60 * time.Minute)
+		time.Sleep(60 * time.Second)
 	}
 
 	return nil

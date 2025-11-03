@@ -54,7 +54,7 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwT
 				return db.CwTicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)
 			}
 
-			slog.Debug("inserted note into store", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
+			slog.Debug("inserted note into store")
 			return note, nil
 
 		} else {
