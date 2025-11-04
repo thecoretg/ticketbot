@@ -27,7 +27,6 @@ func ErrorHandler() gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last().Err
 			if errors.Is(err, psa.ErrNotFound) {
-				slog.Debug("ErrorHandler: connectwise 404 status received, not returning error")
 				c.Status(http.StatusNoContent)
 				return
 			}

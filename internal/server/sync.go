@@ -39,7 +39,7 @@ func (cl *Client) handleSyncTickets(c *gin.Context) {
 
 func (cl *Client) handleSyncWebexRooms(c *gin.Context) {
 	if cl.State.SyncingWebexRooms {
-		slog.Debug("webex room sync requested, but one is already in progress. returning 'sync already in progress' result")
+		slog.Info("webex room sync requested, but one is already in progress. returning 'sync already in progress' result")
 		c.JSON(http.StatusOK, gin.H{"result": "sync already in progress"})
 		return
 	}

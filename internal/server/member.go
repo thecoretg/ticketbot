@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/db"
@@ -14,7 +13,6 @@ func (cl *Client) ensureMemberByIdentifier(ctx context.Context, identifier strin
 	member, err := cl.Queries.GetMemberByIdentifier(ctx, identifier)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Debug("member not in store, attempting insert", "member_identifier", identifier)
 			cwMember, err := cl.CWClient.GetMemberByIdentifier(identifier)
 			if err != nil {
 				return db.CwMember{}, fmt.Errorf("getting member from cw by identifier: %w", err)

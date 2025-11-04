@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -20,13 +21,13 @@ type cwData struct {
 }
 
 type storedData struct {
-	ticket      db.CwTicket
-	company     db.CwCompany
-	contact     db.CwContact
-	owner       db.CwMember
-	note        db.CwTicketNote
-	board       db.CwBoard
-	notifyRooms []db.WebexRoom
+	ticket       db.CwTicket
+	company      db.CwCompany
+	contact      db.CwContact
+	owner        db.CwMember
+	note         db.CwTicketNote
+	board        db.CwBoard
+	enabledRooms []db.WebexRoom
 }
 
 func (cl *Client) handleTickets(c *gin.Context) {
@@ -208,13 +209,13 @@ func (cl *Client) getStoredData(ctx context.Context, cd *cwData) (*storedData, e
 	}
 
 	return &storedData{
-		ticket:      ticket,
-		company:     company,
-		contact:     contact,
-		owner:       owner,
-		note:        note,
-		board:       board,
-		notifyRooms: roomsFromNotifiers(cons),
+		ticket:       ticket,
+		company:      company,
+		contact:      contact,
+		owner:        owner,
+		note:         note,
+		board:        board,
+		enabledRooms: roomsFromNotifiers(cons),
 	}, nil
 }
 
@@ -248,22 +249,124 @@ func (cl *Client) ensureTicketInStore(ctx context.Context, cd *cwData) (db.CwTic
 }
 
 func logTicketResult(action string, notified, mockMsg bool, sd *storedData) {
+	tg := slog.Group("ticket",
+		slog.Int("id", sd.ticket.ID),
+		slog.String("action", action),
+		slog.Bool("notified", notified),
+		boardLogGroup(sd.board),
+		companyLogGroup(sd.company),
+		contactLogGroup(sd.contact),
+		ownerLogGroup(sd.owner),
+		noteLogGroup(sd.note),
+		notifiedRoomsLogGroup(sd.enabledRooms),
+	)
+
+	logger := slog.Default().
+		With(
+			slog.String("action", action),
+			slog.Bool("notified", notified),
+		).With(tg)
+
 	msg := "ticket processed"
 	if mockMsg {
 		msg = "ticket processed with webex mocking"
 	}
 
-	slog.Info(msg,
-		"ticket_id", sd.ticket.ID,
-		"action", action,
-		"notified", notified)
+	logger.Info(msg)
+}
+
+func boardLogGroup(board db.CwBoard) slog.Attr {
+	return slog.Group("board",
+		slog.Int("id", board.ID),
+		slog.String("name", board.Name),
+	)
+}
+
+func companyLogGroup(company db.CwCompany) slog.Attr {
+	return slog.Group("company",
+		slog.Int("id", company.ID),
+		slog.String("name", company.Name),
+	)
+}
+
+func contactLogGroup(contact db.CwContact) slog.Attr {
+	if contact.ID == 0 {
+		return slog.Bool("contact", false)
+	}
+
+	// TODO: get company name in here
+	lastName := ""
+	companyID := 0
+
+	if contact.LastName != nil {
+		lastName = *contact.LastName
+	}
+
+	if contact.CompanyID != nil {
+		companyID = *contact.CompanyID
+	}
+
+	return slog.Group("contact",
+		slog.Int("id", contact.ID),
+		slog.Int("company_id", companyID),
+		slog.String("first_name", contact.FirstName),
+		slog.String("last_name", lastName),
+	)
+}
+
+func ownerLogGroup(owner db.CwMember) slog.Attr {
+	if owner.ID == 0 {
+		return slog.Bool("owner", false)
+	}
+
+	return slog.Group("owner",
+		slog.Int("id", owner.ID),
+		slog.String("identifier", owner.Identifier),
+		slog.String("first_name", owner.FirstName),
+		slog.String("last_name", owner.LastName),
+		slog.String("primary_email", owner.PrimaryEmail),
+	)
+}
+
+func noteLogGroup(note db.CwTicketNote) slog.Attr {
+	// TODO: member, contact name, already notified
+	if note.ID == 0 {
+		return slog.Bool("latest_note", false)
+	}
+
+	memberID := 0
+	contactID := 0
+	if note.MemberID != nil {
+		memberID = *note.MemberID
+	}
+
+	if note.ContactID != nil {
+		contactID = *note.ContactID
+	}
+
+	return slog.Group("latest_note",
+		slog.Int("id", note.ID),
+		slog.Int("member_id", memberID),
+		slog.Int("contact_id", contactID),
+	)
+}
+
+func notifiedRoomsLogGroup(rooms []db.WebexRoom) slog.Attr {
+	if len(rooms) == 0 {
+		return slog.Bool("notified_rooms", false)
+	}
+
+	var names []string
+	for _, r := range rooms {
+		names = append(names, r.Name)
+	}
+
+	return slog.String("notified_rooms", strings.Join(names, ","))
 }
 
 // meetsMessageCriteria checks if a message would be allowed to send a notification,
 // depending on if it was added or updated, if the note changed, and the board's notification settings.
 func meetsMessageCriteria(action string, sd *storedData) bool {
-	slog.Debug("checking message conditions", "action", action, "ticket_id", sd.ticket.ID, "note_id", sd.note.ID,
-		"board_id", sd.board.ID, "already_notified", sd.note.Notified)
 	meetsCrit := false
 	if action == "added" {
 		meetsCrit = roomsToNotifyExist(sd)
@@ -277,7 +380,7 @@ func meetsMessageCriteria(action string, sd *storedData) bool {
 }
 
 func roomsToNotifyExist(sd *storedData) bool {
-	return sd.notifyRooms != nil && len(sd.notifyRooms) > 0
+	return sd.enabledRooms != nil && len(sd.enabledRooms) > 0
 }
 
 func cwDataToUpdateTicketParams(cd *cwData) db.UpsertTicketParams {

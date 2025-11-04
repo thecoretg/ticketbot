@@ -1,9 +1,5 @@
 package server
 
-import (
-	"github.com/gin-gonic/gin"
-)
-
 func intToPtr(i int) *int {
 	if i == 0 {
 		return nil
@@ -28,8 +24,4 @@ func intSliceContains(s []int, i int) bool {
 	}
 
 	return false
-}
-
-func comingSoon() gin.H {
-	return gin.H{"result": "coming soon"}
 }

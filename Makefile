@@ -16,7 +16,7 @@ test-up:
 test-down:
 	docker compose down -v
 
-deploy-lightsail:
+deploy-lightsail: docker-build
 	aws lightsail push-container-image \
 	--region us-west-2 \
 	--service-name ticketbot \

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/db"
@@ -18,7 +17,6 @@ func (cl *Client) getLatestNoteFromCW(ticketID int) (*psa.ServiceTicketNote, err
 	}
 
 	if note == nil {
-		slog.Debug("no most recent note found", "ticket_id", ticketID)
 		note = &psa.ServiceTicketNote{}
 	}
 
@@ -39,7 +37,6 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwT
 	note, err := cl.Queries.GetTicketNote(ctx, cwData.note.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			slog.Debug("note not found in store, attempting insert", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
 			p := db.UpsertTicketNoteParams{
 				ID:        cwData.note.ID,
 				TicketID:  cwData.note.TicketId,
@@ -47,14 +44,11 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwT
 				ContactID: contactID,
 			}
 
-			slog.Debug("created insert note params", "id", p.ID, "ticket_id", p.TicketID, "member_id", p.MemberID, "contact_id", p.ContactID, "notified", p.Notified)
 			note, err = cl.Queries.UpsertTicketNote(ctx, p)
-
 			if err != nil {
 				return db.CwTicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)
 			}
 
-			slog.Debug("inserted note into store")
 			return note, nil
 
 		} else {
@@ -62,7 +56,6 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *cwData) (db.CwT
 		}
 	}
 
-	slog.Debug("note already in store", "ticket_id", cwData.ticket.ID, "note_id", cwData.note.ID)
 	return note, nil
 }
 

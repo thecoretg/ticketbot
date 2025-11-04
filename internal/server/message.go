@@ -34,13 +34,6 @@ func (cl *Client) makeAndSendMessages(ctx context.Context, action string, cd *cw
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
 			slog.Warn("error sending webex message", "action", action, "ticket_id", sd.ticket.ID, "room_id", msg.RoomId, "person", msg.ToPersonEmail, "error", err)
 		}
-
-		sentTo := "webex room"
-		if msg.ToPersonEmail != "" {
-			sentTo = msg.ToPersonEmail
-		}
-
-		slog.Debug("notification sent", "action", action, "ticket_id", sd.ticket.ID, "board_name", sd.board.Name, "sent_to", sentTo)
 	}
 
 	return nil
@@ -71,14 +64,12 @@ func (cl *Client) makeMessages(ctx context.Context, action string, cd *cwData, s
 
 	var messages []webex.Message
 	if action == "added" {
-		for _, r := range sd.notifyRooms {
+		for _, r := range sd.enabledRooms {
 			messages = append(messages, webex.NewMessageToRoom(r.WebexID, body))
 		}
 	} else if action == "updated" {
 		sendTo, err := cl.getSendTo(ctx, sd)
-		if len(sendTo) > 0 {
-			slog.Debug("got send-to list", "ticket_id", sd.ticket.ID, "note_id", sd.note.ID, "send_to", sendTo)
-		} else {
+		if len(sendTo) == 0 {
 			return nil, nil
 		}
 
