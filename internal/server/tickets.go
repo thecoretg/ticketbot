@@ -36,6 +36,7 @@ type requestState struct {
 	cwData *connectwiseData
 	dbData *storedData
 
+	ticketID       int
 	action         string
 	attemptNotify  bool
 	syncing        bool
@@ -45,6 +46,7 @@ type requestState struct {
 	noNotiReason   string
 	roomsNotify    []string
 	peopleNotify   []string
+	err            error
 }
 
 func (cl *Client) handleTickets(c *gin.Context) {
@@ -69,7 +71,7 @@ func (cl *Client) handleTickets(c *gin.Context) {
 		c.Status(http.StatusOK)
 
 	case "deleted":
-		if err := cl.softDeleteTicket(c.Request.Context(), w.ID); err != nil {
+		if err := cl.softDeleteTicket(c.Request.Context(), cl.Queries, w.ID); err != nil {
 			c.Error(fmt.Errorf("ticket %d: deleting ticket and its notes: %w", w.ID, err))
 			return
 		}
@@ -97,18 +99,22 @@ func (cl *Client) processTicket(ctx context.Context, ticketID int, action string
 		lock.Unlock()
 	}()
 
-	rs, err := cl.getInitialRequestState(ctx, action, ticketID, syncing)
-	if err != nil {
-		return fmt.Errorf("getting initial request state: %w", err)
-	}
+	rs := cl.newRequestState(action, ticketID, syncing)
 
 	defer func() {
 		logTicketResult(rs)
 	}()
 
-	// Upsert the ticket data into the database
-	rs, err = cl.upsertTicket(ctx, rs)
+	var err error
+	rs, err = cl.getInitialData(ctx, rs)
 	if err != nil {
+		return fmt.Errorf("getting initial request state: %w", err)
+	}
+
+	// Upsert the ticket data into the database
+	rs, err = cl.upsertTicket(ctx, cl.Queries, rs)
+	if err != nil {
+		rs.err = fmt.Errorf("upserting ticket data: %w", err)
 		return fmt.Errorf("upserting ticket data: %w", err)
 	}
 
@@ -117,8 +123,10 @@ func (cl *Client) processTicket(ctx context.Context, ticketID int, action string
 	// AttemptNotify and the bypassNotis (used for preloads) acts as a hard block from even attempting.
 	rs, err = cl.runNotificationAction(ctx, rs)
 	if err != nil {
+		rs.err = fmt.Errorf("running notifier: %w", err)
 		return fmt.Errorf("running notifier: %w", err)
 	}
+	rs.logger = rs.logger.With(notifyLogGroup(rs))
 
 	return nil
 }
@@ -130,7 +138,7 @@ func (cl *Client) runNotificationAction(ctx context.Context, rs *requestState) (
 	}
 
 	// set notified regardless, even if it doesn't meet critera - this is so it doesnt attempt again
-	if err := cl.setNotified(ctx, rs.dbData.note.ID, true); err != nil {
+	if err := cl.setNotified(ctx, cl.Queries, rs.dbData.note.ID, true); err != nil {
 		rs.noNotiReason = "SET_NOTIFIED_ERROR"
 		return rs, fmt.Errorf("setting notified to true: %w", err)
 	}
@@ -159,109 +167,156 @@ func (cl *Client) runNotificationAction(ctx context.Context, rs *requestState) (
 	return rs, nil
 }
 
-func (cl *Client) softDeleteTicket(ctx context.Context, ticketID int) error {
-	if err := cl.Queries.SoftDeleteTicket(ctx, ticketID); err != nil {
+func (cl *Client) softDeleteTicket(ctx context.Context, q *db.Queries, ticketID int) error {
+	if err := q.SoftDeleteTicket(ctx, ticketID); err != nil {
 		return fmt.Errorf("soft deleting ticket: %w", err)
 	}
 
 	return nil
 }
 
-func (cl *Client) getInitialRequestState(ctx context.Context, action string, ticketID int, syncing bool) (*requestState, error) {
-	cd, err := cl.getCwData(ticketID)
-	if err != nil {
-		return nil, fmt.Errorf("getting data from connectwise: %w", err)
-	}
-
-	sd, err := cl.ensureStoredData(ctx, cd)
-	if err != nil {
-		return nil, fmt.Errorf("ensuring stored data: %w", err)
-	}
-
-	return &requestState{
+func (cl *Client) newRequestState(action string, ticketID int, syncing bool) *requestState {
+	rs := &requestState{
 		logger:         slog.Default(),
-		cwData:         cd,
-		dbData:         sd,
 		action:         action,
+		ticketID:       ticketID,
 		webexMock:      cl.testing.mockWebex,
 		messagesToSend: []webex.Message{},
 		attemptNotify:  cl.Config.AttemptNotify,
 		syncing:        syncing,
 		roomsNotify:    []string{},
 		peopleNotify:   []string{},
-	}, nil
-}
-
-func (cl *Client) getCwData(ticketID int) (*connectwiseData, error) {
-	ticket, err := cl.CWClient.GetTicket(ticketID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("getting ticket: %w", err)
 	}
 
-	note, err := cl.CWClient.GetMostRecentTicketNote(ticketID)
+	rs.logger = rs.logger.With(
+		slog.Int("id", rs.ticketID),
+		slog.String("action", rs.action),
+		slog.Bool("webex_mocking", rs.webexMock),
+	)
+
+	return rs
+}
+
+func (cl *Client) getInitialData(ctx context.Context, rs *requestState) (*requestState, error) {
+	var err error
+	rs, err = cl.getCwData(rs)
 	if err != nil {
-		return nil, fmt.Errorf("getting most recent note: %w", err)
+		e := fmt.Errorf("getting data from connectwise: %w", err)
+		if rs != nil {
+			rs.err = e
+		}
+		return rs, e
+	}
+
+	rs, err = cl.ensureStoredData(ctx, rs)
+	if err != nil {
+		e := fmt.Errorf("ensuring stored data: %w", err)
+		if rs != nil {
+			rs.err = e
+		}
+		return rs, e
+	}
+
+	return rs, nil
+}
+
+func (cl *Client) getCwData(rs *requestState) (*requestState, error) {
+	ticket, err := cl.CWClient.GetTicket(rs.ticketID, nil)
+	if err != nil {
+		return rs, fmt.Errorf("getting ticket: %w", err)
+	}
+
+	note, err := cl.CWClient.GetMostRecentTicketNote(rs.ticketID)
+	if err != nil {
+		return rs, fmt.Errorf("getting most recent note: %w", err)
 	}
 
 	if note == nil {
 		note = &psa.ServiceTicketNote{}
 	}
 
-	return &connectwiseData{
+	rs.cwData = &connectwiseData{
 		ticket: ticket,
 		note:   note,
-	}, nil
+	}
+
+	return rs, nil
 }
 
-func (cl *Client) ensureStoredData(ctx context.Context, cd *connectwiseData) (*storedData, error) {
-	// first check for or create board since it needs to exist before the ticket
-	board, err := cl.ensureBoardInStore(ctx, cd.ticket.Board.ID)
+func (cl *Client) ensureStoredData(ctx context.Context, rs *requestState) (*requestState, error) {
+	cd := rs.cwData
+	tx, err := cl.Pool.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ensuring board in store: %w", err)
+		return rs, fmt.Errorf("begin tx: %w", err)
 	}
 
-	company, err := cl.ensureCompanyInStore(ctx, cd.ticket.Company.ID)
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	q := db.New(tx)
+
+	// first check for or create board since it needs to exist before the ticket
+	board, err := cl.ensureBoardInStore(ctx, q, cd.ticket.Board.ID)
 	if err != nil {
-		return nil, fmt.Errorf("ensuring company in store: %w", err)
+		return rs, fmt.Errorf("ensuring board in store: %w", err)
 	}
+	rs.logger = rs.logger.With(boardLogGroup(board))
+
+	company, err := cl.ensureCompanyInStore(ctx, q, cd.ticket.Company.ID)
+	if err != nil {
+		return rs, fmt.Errorf("ensuring company in store: %w", err)
+	}
+	rs.logger = rs.logger.With(companyLogGroup(company))
 
 	contact := db.CwContact{}
 	if cd.ticket.Contact.ID != 0 {
-		contact, err = cl.ensureContactInStore(ctx, cd.ticket.Contact.ID)
+		contact, err = cl.ensureContactInStore(ctx, q, cd.ticket.Contact.ID)
 		if err != nil {
-			return nil, fmt.Errorf("ensuring contact in store: %w", err)
+			return rs, fmt.Errorf("ensuring contact in store: %w", err)
 		}
+		rs.logger = rs.logger.With(contactLogGroup(contact))
 	}
 
 	owner := db.CwMember{}
 	if cd.ticket.Owner.ID != 0 {
-		owner, err = cl.ensureMemberInStore(ctx, cd.ticket.Owner.ID)
+		owner, err = cl.ensureMemberInStore(ctx, q, cd.ticket.Owner.ID)
 		if err != nil {
-			return nil, fmt.Errorf("ensuring owner in store: %w", err)
+			return rs, fmt.Errorf("ensuring owner in store: %w", err)
 		}
+		rs.logger = rs.logger.With(ownerLogGroup(owner))
 	}
 
 	// check for, or create ticket
-	ticket, err := cl.ensureTicketInStore(ctx, cd)
+	ticket, err := cl.ensureTicketInStore(ctx, q, cd)
 	if err != nil {
-		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
+		return rs, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
 	// start with empty note, use existing or created note if there is a note in the ticket
 	note := db.CwTicketNote{}
 	if cd.note.ID != 0 {
-		note, err = cl.ensureNoteInStore(ctx, cd)
+		note, err = cl.ensureNoteInStore(ctx, q, cd)
 		if err != nil {
-			return nil, fmt.Errorf("ensuring note in store: %w", err)
+			return rs, fmt.Errorf("ensuring note in store: %w", err)
 		}
+		rs.logger.With(noteLogGroup(note))
 	}
 
-	cons, err := cl.Queries.ListNotifierConnectionsByBoard(ctx, board.ID)
+	cons, err := q.ListNotifierConnectionsByBoard(ctx, board.ID)
 	if err != nil {
-		return nil, fmt.Errorf("getting rooms to notify: %w", err)
+		return rs, fmt.Errorf("getting rooms to notify: %w", err)
 	}
 
-	return &storedData{
+	if err := tx.Commit(ctx); err != nil {
+		return rs, fmt.Errorf("commit tx: %w", err)
+	}
+	committed = true
+
+	sd := &storedData{
 		ticket:       ticket,
 		company:      company,
 		contact:      contact,
@@ -269,11 +324,14 @@ func (cl *Client) ensureStoredData(ctx context.Context, cd *connectwiseData) (*s
 		note:         note,
 		board:        board,
 		enabledRooms: roomsFromNotifiers(cons),
-	}, nil
+	}
+
+	rs.dbData = sd
+	return rs, nil
 }
 
-func (cl *Client) ensureTicketInStore(ctx context.Context, cd *connectwiseData) (db.CwTicket, error) {
-	ticket, err := cl.Queries.GetTicket(ctx, cd.ticket.ID)
+func (cl *Client) ensureTicketInStore(ctx context.Context, q *db.Queries, cd *connectwiseData) (db.CwTicket, error) {
+	ticket, err := q.GetTicket(ctx, cd.ticket.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			p := db.UpsertTicketParams{
@@ -287,7 +345,7 @@ func (cl *Client) ensureTicketInStore(ctx context.Context, cd *connectwiseData) 
 				UpdatedBy: &cd.ticket.Info.UpdatedBy,
 			}
 
-			ticket, err = cl.Queries.UpsertTicket(ctx, p)
+			ticket, err = q.UpsertTicket(ctx, p)
 			if err != nil {
 				return db.CwTicket{}, fmt.Errorf("inserting ticket into db: %w", err)
 			}
@@ -301,10 +359,10 @@ func (cl *Client) ensureTicketInStore(ctx context.Context, cd *connectwiseData) 
 	return ticket, nil
 }
 
-func (cl *Client) upsertTicket(ctx context.Context, rs *requestState) (*requestState, error) {
+func (cl *Client) upsertTicket(ctx context.Context, q *db.Queries, rs *requestState) (*requestState, error) {
 	var err error
 	p := cwDataToUpdateTicketParams(rs.cwData)
-	rs.dbData.ticket, err = cl.Queries.UpsertTicket(ctx, p)
+	rs.dbData.ticket, err = q.UpsertTicket(ctx, p)
 	if err != nil {
 		return rs, fmt.Errorf("updating ticket in store: %w", err)
 	}
@@ -313,24 +371,12 @@ func (cl *Client) upsertTicket(ctx context.Context, rs *requestState) (*requestS
 }
 
 func logTicketResult(rs *requestState) {
-	tg := slog.Group("ticket",
-		slog.Int("id", rs.dbData.ticket.ID),
-		slog.String("action", rs.action),
-		slog.Bool("notified", rs.notified),
-		notifyLogGroup(rs),
-		boardLogGroup(rs.dbData.board),
-		companyLogGroup(rs.dbData.company),
-		contactLogGroup(rs.dbData.contact),
-		ownerLogGroup(rs.dbData.owner),
-		noteLogGroup(rs.dbData.note),
-	)
-
-	msg := "ticket processed"
-	if rs.webexMock {
-		msg = "ticket processed with webex mocking"
+	if rs.err != nil {
+		rs.logger.Error("error processing ticket", "error", rs.err)
+		return
 	}
 
-	rs.logger.With(tg).Info(msg)
+	rs.logger.Info("ticket processed")
 }
 
 func boardLogGroup(board db.CwBoard) slog.Attr {

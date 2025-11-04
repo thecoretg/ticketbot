@@ -53,7 +53,7 @@ func (cl *Client) handlePostNotifier(c *gin.Context) {
 		return
 	}
 
-	if _, err := cl.ensureBoardInStore(c.Request.Context(), r.CwBoardID); err != nil {
+	if _, err := cl.ensureBoardInStore(c.Request.Context(), cl.Queries, r.CwBoardID); err != nil {
 		c.Error(fmt.Errorf("ensuring board %d in store: %w", r.CwBoardID, err))
 		return
 	}

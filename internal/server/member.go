@@ -9,8 +9,8 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (cl *Client) ensureMemberByIdentifier(ctx context.Context, identifier string) (db.CwMember, error) {
-	member, err := cl.Queries.GetMemberByIdentifier(ctx, identifier)
+func (cl *Client) ensureMemberByIdentifier(ctx context.Context, q *db.Queries, identifier string) (db.CwMember, error) {
+	member, err := q.GetMemberByIdentifier(ctx, identifier)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			cwMember, err := cl.CWClient.GetMemberByIdentifier(identifier)
@@ -22,7 +22,7 @@ func (cl *Client) ensureMemberByIdentifier(ctx context.Context, identifier strin
 				return db.CwMember{}, fmt.Errorf("member %s not found", identifier)
 			}
 
-			return cl.ensureMemberInStore(ctx, cwMember.ID)
+			return cl.ensureMemberInStore(ctx, q, cwMember.ID)
 		}
 		return db.CwMember{}, fmt.Errorf("querying db for member: %w", err)
 	}
@@ -30,8 +30,8 @@ func (cl *Client) ensureMemberByIdentifier(ctx context.Context, identifier strin
 	return member, nil
 }
 
-func (cl *Client) ensureMemberInStore(ctx context.Context, memberID int) (db.CwMember, error) {
-	member, err := cl.Queries.GetMember(ctx, memberID)
+func (cl *Client) ensureMemberInStore(ctx context.Context, q *db.Queries, memberID int) (db.CwMember, error) {
+	member, err := q.GetMember(ctx, memberID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			cwMember, err := cl.CWClient.GetMember(memberID, nil)
@@ -46,7 +46,7 @@ func (cl *Client) ensureMemberInStore(ctx context.Context, memberID int) (db.CwM
 				PrimaryEmail: cwMember.PrimaryEmail,
 			}
 
-			member, err = cl.Queries.UpsertMember(ctx, p)
+			member, err = q.UpsertMember(ctx, p)
 			if err != nil {
 				return db.CwMember{}, fmt.Errorf("inserting member into db: %w", err)
 			}

@@ -9,8 +9,8 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (cl *Client) ensureContactInStore(ctx context.Context, contactID int) (db.CwContact, error) {
-	contact, err := cl.Queries.GetContact(ctx, contactID)
+func (cl *Client) ensureContactInStore(ctx context.Context, q *db.Queries, contactID int) (db.CwContact, error) {
+	contact, err := q.GetContact(ctx, contactID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			cwContact, err := cl.CWClient.GetContact(contactID, nil)
@@ -25,7 +25,7 @@ func (cl *Client) ensureContactInStore(ctx context.Context, contactID int) (db.C
 				CompanyID: intToPtr(cwContact.Company.ID),
 			}
 
-			contact, err = cl.Queries.InsertContact(ctx, p)
+			contact, err = q.InsertContact(ctx, p)
 			if err != nil {
 				return db.CwContact{}, fmt.Errorf("inserting contact into db: %w", err)
 			}

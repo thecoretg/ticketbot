@@ -9,8 +9,8 @@ import (
 	"github.com/thecoretg/ticketbot/internal/db"
 )
 
-func (cl *Client) ensureCompanyInStore(ctx context.Context, companyID int) (db.CwCompany, error) {
-	company, err := cl.Queries.GetCompany(ctx, companyID)
+func (cl *Client) ensureCompanyInStore(ctx context.Context, q *db.Queries, companyID int) (db.CwCompany, error) {
+	company, err := q.GetCompany(ctx, companyID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			cwComp, err := cl.CWClient.GetCompany(companyID, nil)
@@ -22,7 +22,7 @@ func (cl *Client) ensureCompanyInStore(ctx context.Context, companyID int) (db.C
 				Name: cwComp.Name,
 			}
 
-			company, err = cl.Queries.UpsertCompany(ctx, p)
+			company, err = q.UpsertCompany(ctx, p)
 			if err != nil {
 				return db.CwCompany{}, fmt.Errorf("inserting company into db: %w", err)
 			}

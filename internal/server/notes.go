@@ -23,18 +23,18 @@ func (cl *Client) getLatestNoteFromCW(ticketID int) (*psa.ServiceTicketNote, err
 	return note, nil
 }
 
-func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *connectwiseData) (db.CwTicketNote, error) {
-	memberID, err := cl.getMemberID(ctx, cwData)
+func (cl *Client) ensureNoteInStore(ctx context.Context, q *db.Queries, cwData *connectwiseData) (db.CwTicketNote, error) {
+	memberID, err := cl.getMemberID(ctx, q, cwData)
 	if err != nil {
 		return db.CwTicketNote{}, fmt.Errorf("getting member data: %w", err)
 	}
 
-	contactID, err := cl.getContactID(ctx, cwData)
+	contactID, err := cl.getContactID(ctx, q, cwData)
 	if err != nil {
 		return db.CwTicketNote{}, fmt.Errorf("getting contact data: %w", err)
 	}
 
-	note, err := cl.Queries.GetTicketNote(ctx, cwData.note.ID)
+	note, err := q.GetTicketNote(ctx, cwData.note.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			p := db.UpsertTicketNoteParams{
@@ -44,7 +44,7 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *connectwiseData
 				ContactID: contactID,
 			}
 
-			note, err = cl.Queries.UpsertTicketNote(ctx, p)
+			note, err = q.UpsertTicketNote(ctx, p)
 			if err != nil {
 				return db.CwTicketNote{}, fmt.Errorf("inserting ticket note into db: %w", err)
 			}
@@ -59,8 +59,8 @@ func (cl *Client) ensureNoteInStore(ctx context.Context, cwData *connectwiseData
 	return note, nil
 }
 
-func (cl *Client) setNotified(ctx context.Context, noteID int, notified bool) error {
-	_, err := cl.Queries.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
+func (cl *Client) setNotified(ctx context.Context, q *db.Queries, noteID int, notified bool) error {
+	_, err := q.SetNoteNotified(ctx, db.SetNoteNotifiedParams{
 		ID:       noteID,
 		Notified: notified,
 	})
@@ -72,8 +72,8 @@ func (cl *Client) setNotified(ctx context.Context, noteID int, notified bool) er
 	return nil
 }
 
-func (cl *Client) setSkippedNotify(ctx context.Context, noteID int, skip bool) error {
-	_, err := cl.Queries.SetNoteSkippedNotify(ctx, db.SetNoteSkippedNotifyParams{
+func (cl *Client) setSkippedNotify(ctx context.Context, q *db.Queries, noteID int, skip bool) error {
+	_, err := q.SetNoteSkippedNotify(ctx, db.SetNoteSkippedNotifyParams{
 		ID:            noteID,
 		SkippedNotify: skip,
 	})
@@ -85,9 +85,9 @@ func (cl *Client) setSkippedNotify(ctx context.Context, noteID int, skip bool) e
 	return nil
 }
 
-func (cl *Client) getContactID(ctx context.Context, cwData *connectwiseData) (*int, error) {
+func (cl *Client) getContactID(ctx context.Context, q *db.Queries, cwData *connectwiseData) (*int, error) {
 	if cwData.note.Contact.ID != 0 {
-		c, err := cl.ensureContactInStore(ctx, cwData.note.Contact.ID)
+		c, err := cl.ensureContactInStore(ctx, q, cwData.note.Contact.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring contact in store: %w", err)
 		}
@@ -99,9 +99,9 @@ func (cl *Client) getContactID(ctx context.Context, cwData *connectwiseData) (*i
 
 }
 
-func (cl *Client) getMemberID(ctx context.Context, cwData *connectwiseData) (*int, error) {
+func (cl *Client) getMemberID(ctx context.Context, q *db.Queries, cwData *connectwiseData) (*int, error) {
 	if cwData.note.Member.ID != 0 {
-		m, err := cl.ensureMemberInStore(ctx, cwData.note.Member.ID)
+		m, err := cl.ensureMemberInStore(ctx, q, cwData.note.Member.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring member in store: %w", err)
 		}

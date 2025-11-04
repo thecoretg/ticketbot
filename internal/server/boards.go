@@ -46,8 +46,8 @@ func (cl *Client) handleListBoards(c *gin.Context) {
 	c.JSON(http.StatusOK, boards)
 }
 
-func (cl *Client) ensureBoardInStore(ctx context.Context, boardID int) (db.CwBoard, error) {
-	board, err := cl.Queries.GetBoard(ctx, boardID)
+func (cl *Client) ensureBoardInStore(ctx context.Context, q *db.Queries, boardID int) (db.CwBoard, error) {
+	board, err := q.GetBoard(ctx, boardID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			cwBoard, err := cl.CWClient.GetBoard(boardID, nil)
@@ -59,7 +59,7 @@ func (cl *Client) ensureBoardInStore(ctx context.Context, boardID int) (db.CwBoa
 				Name: cwBoard.Name,
 			}
 
-			board, err = cl.Queries.UpsertBoard(ctx, p)
+			board, err = q.UpsertBoard(ctx, p)
 			if err != nil {
 				return db.CwBoard{}, fmt.Errorf("inserting board into db: %w", err)
 			}
