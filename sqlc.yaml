@@ -1,0 +1,31 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "queries"
+    schema: "migrations"
+    gen:
+      go:
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        package: "db"
+        out: "internal/db/."
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "pg_catalog.int4"
+            go_type: "int"
+          - db_type: "serial"
+            go_type: "int"
+          - db_type: "serial"
+            nullable: true
+            go_type:
+              type: "int"
+              pointer: true
+          - db_type: "pg_catalog.int4"
+            nullable: true
+            go_type:
+              type: "int"
+              pointer: true
+          - db_type: "pg_catalog.timestamp"
+            go_type:
+              import: "time"
+              type: "Time"
