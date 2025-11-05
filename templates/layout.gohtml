@@ -1,0 +1,30 @@
+{{ define "layout" }}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        header {
+            background: #1e1e2e;
+            color: white;
+            padding: 10px 20px;
+            font-size: 1.3em;
+        }
+        body {
+            margin: 0;
+            font-family: sans-serif;
+        }
+        main {
+           padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>{{ .Title }}</header>
+    <main>
+        {{ block "content" . }}{{ end }}
+    </main>
+</body>
+</html>
+{{ end }}

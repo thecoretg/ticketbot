@@ -1,0 +1,10 @@
+{{ define "content" }}
+<u1>
+    {{ range .Boards }}
+    <li>{{ .Name }}</li>
+    {{ else }}
+    <li>No boards found</li>
+    {{ end }}
+</u1>
+{{ end }}
+{{ template "layout" . }}

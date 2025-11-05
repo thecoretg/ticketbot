@@ -4,8 +4,12 @@ func (cl *Client) addRoutes() {
 	eh := ErrorHandler()
 	au := cl.apiKeyAuth()
 
+	cl.Server.LoadHTMLGlob("templates/*")
 	// Health Check
 	cl.Server.GET("", cl.ping)
+
+	// Admin
+	cl.Server.GET("admin", cl.handleBaseAdminPage)
 
 	// State
 	cl.Server.GET("state", cl.handleGetState, eh, au)
