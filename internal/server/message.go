@@ -24,19 +24,31 @@ func (cl *Client) makeAndSendMessages(ctx context.Context, rs *requestState) (*r
 	}
 
 	if rs.messagesToSend == nil || len(rs.messagesToSend) == 0 {
+		rs.noNotiReason = "NONE_TO_SEND"
 		return rs, nil
 	}
 
-	for _, msg := range rs.messagesToSend {
-		_, err := cl.MessageSender.PostMessage(&msg)
-		if err != nil {
+	var msgErr error
+	for _, m := range rs.messagesToSend {
+		if _, err := cl.MessageSender.PostMessage(&m); err != nil {
 			// Don't fully exit, just warn, if a message isn't sent. Sometimes, this will happen if
 			// the person on the ticket doesn't have an account, or the same email address, in Webex.
-			slog.Warn("error sending webex message", "action", rs.action, "ticket_id", rs.dbData.ticket.ID, "room_id", msg.RoomId, "person", msg.ToPersonEmail, "error", err)
+			// We will also set msgErr so that when the loop is done, it will exit as an error
+			rs.logger.Warn("error sending webex message",
+				slog.String("type", m.RecipientType),
+				slog.String("name", m.RecipientName),
+				slog.String("error", err.Error()))
+			rs.failedNotis = append(rs.failedNotis, m.RecipientName)
+			msgErr = fmt.Errorf("sending message to %s %s: %w", m.RecipientType, m.RecipientName, err)
+		} else {
+			rs.logger.Debug("success sending webex message",
+				slog.String("type", m.RecipientType),
+				slog.String("name", m.RecipientName))
+			rs.successNotis = append(rs.successNotis, m.RecipientName)
 		}
 	}
 
-	return rs, nil
+	return rs, msgErr
 }
 
 // makeMessages constructs a message - it handles new tickets and updated tickets, and determines which Webex room, or which people,
@@ -65,18 +77,18 @@ func (cl *Client) makeMessages(ctx context.Context, rs *requestState) (*requestS
 	var messages []webex.Message
 	if rs.action == "added" {
 		for _, r := range rs.dbData.enabledRooms {
-			rs.roomsNotify = append(rs.roomsNotify, r.Name)
-			messages = append(messages, webex.NewMessageToRoom(r.WebexID, body))
+			rs.logger.Debug("adding room to send list", slog.String("name", r.Name))
+			messages = append(messages, webex.NewMessageToRoom(r.WebexID, r.Name, body))
 		}
 	} else if rs.action == "updated" {
 		rs = cl.getSendTo(ctx, rs)
-		if len(rs.peopleNotify) == 0 {
+		if len(rs.membersToNotify) == 0 {
 			return rs, nil
 		}
 
-		for _, email := range rs.peopleNotify {
-			rs.peopleNotify = append(rs.peopleNotify, email)
-			messages = append(messages, webex.NewMessageToPerson(email, body))
+		for _, m := range rs.membersToNotify {
+			rs.logger.Debug("adding person to send list", slog.String("email", m.PrimaryEmail))
+			messages = append(messages, webex.NewMessageToPerson(m.PrimaryEmail, body))
 		}
 	}
 
@@ -87,10 +99,7 @@ func (cl *Client) makeMessages(ctx context.Context, rs *requestState) (*requestS
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
 // recent update and any other exclusions passed in by the cfgOld.
 func (cl *Client) getSendTo(ctx context.Context, rs *requestState) *requestState {
-	var (
-		excludedMembers []int
-		sendToMembers   []db.CwMember
-	)
+	var excludedMembers []int
 
 	// if the sender of the note is a member, exclude them from messages since they don't need a notification for their own note
 	if rs.dbData.note.MemberID != nil {
@@ -107,25 +116,19 @@ func (cl *Client) getSendTo(ctx context.Context, rs *requestState) *requestState
 		resources[i] = strings.TrimSpace(r)
 	}
 
+	if rs.membersToNotify == nil {
+		rs.membersToNotify = []db.CwMember{}
+	}
+
 	for _, r := range resources {
 		m, err := cl.Queries.GetMemberByIdentifier(ctx, r)
 		if err != nil {
-			slog.Warn("getSendTo: couldn't get member data", "resource", r, "error", err)
+			rs.logger.Warn("getSendTo: couldn't get member data, skipping for notifications", "resource", r, "error", err)
 			continue
 		}
 
 		if m.ID != 0 && !intSliceContains(excludedMembers, m.ID) {
-			sendToMembers = append(sendToMembers, m)
-		}
-	}
-
-	if rs.peopleNotify == nil {
-		rs.peopleNotify = []string{}
-	}
-
-	for _, m := range sendToMembers {
-		if m.PrimaryEmail != "" {
-			rs.peopleNotify = append(rs.peopleNotify, m.PrimaryEmail)
+			rs.membersToNotify = append(rs.membersToNotify, m)
 		}
 	}
 
@@ -148,8 +151,8 @@ func (cl *Client) messageHeader(action string, cd *connectwiseData) string {
 func (cl *Client) messageText(cd *connectwiseData) string {
 	var body string
 	sender := getSenderName(cd)
-	if sender != nil {
-		body += fmt.Sprintf("\n**Latest Note Sent By:** %s", *sender)
+	if sender != "" {
+		body += fmt.Sprintf("\n**Latest Note Sent By:** %s", sender)
 	}
 
 	text := cd.note.Text
@@ -171,14 +174,14 @@ func blockQuoteText(text string) string {
 }
 
 // getSenderName determines the name of the sender of a note. It checks for members in Connectwise and external contacts from companies.
-func getSenderName(cd *connectwiseData) *string {
+func getSenderName(cd *connectwiseData) string {
 	if cd.note.Member.Name != "" {
-		return &cd.note.Member.Name
+		return cd.note.Member.Name
 	} else if cd.note.CreatedBy != "" {
-		return &cd.note.CreatedBy
+		return cd.note.CreatedBy
 	} else if cd.note.Contact.Name != "" {
-		return &cd.note.Contact.Name
+		return cd.note.Contact.Name
 	}
 
-	return nil
+	return ""
 }

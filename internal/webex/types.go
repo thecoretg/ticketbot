@@ -49,6 +49,11 @@ type Message struct {
 	ToPersonEmail string `json:"toPersonEmail,omitempty"`
 	PersonEmail   string `json:"personEmail,omitempty"`
 	PersonId      string `json:"personId,omitempty"`
+
+	// This does not go to the request; it is used for logging in the server message requests,
+	// specifically for rooms so the name can be identified
+	RecipientType string
+	RecipientName string
 }
 
 type ListRoomsResp struct {

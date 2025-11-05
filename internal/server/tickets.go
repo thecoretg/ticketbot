@@ -32,21 +32,26 @@ type storedData struct {
 }
 
 type requestState struct {
-	logger *slog.Logger
+	logger        *slog.Logger
+	webexMock     bool
+	attemptNotify bool
+	syncing       bool
+
 	cwData *connectwiseData
 	dbData *storedData
 
-	ticketID       int
-	action         string
-	attemptNotify  bool
-	syncing        bool
-	webexMock      bool
-	messagesToSend []webex.Message
-	notified       bool
-	noNotiReason   string
-	roomsNotify    []string
-	peopleNotify   []string
-	err            error
+	ticketID     int
+	action       string
+	notified     bool
+	noNotiReason string
+
+	membersToNotify []db.CwMember
+	roomsToNotify   []db.WebexRoom
+	messagesToSend  []webex.Message
+	failedNotis     []string
+	successNotis    []string
+
+	err error
 }
 
 func (cl *Client) handleTickets(c *gin.Context) {
@@ -183,14 +188,14 @@ func (cl *Client) softDeleteTicket(ctx context.Context, q *db.Queries, ticketID 
 func (cl *Client) newRequestState(action string, ticketID int, syncing bool) *requestState {
 	rs := &requestState{
 		logger:         slog.Default(),
-		action:         action,
-		ticketID:       ticketID,
 		webexMock:      cl.testing.mockWebex,
-		messagesToSend: []webex.Message{},
 		attemptNotify:  cl.Config.AttemptNotify,
 		syncing:        syncing,
-		roomsNotify:    []string{},
-		peopleNotify:   []string{},
+		ticketID:       ticketID,
+		action:         action,
+		messagesToSend: []webex.Message{},
+		failedNotis:    []string{},
+		successNotis:   []string{},
 	}
 
 	rs.logger = rs.logger.With(
@@ -470,16 +475,24 @@ func notifyLogGroup(rs *requestState) slog.Attr {
 		er = append(er, r.Name)
 	}
 
-	attrs := []slog.Attr{
-		slog.Bool("sent", rs.notified),
-		slog.String("enabled_rooms", strings.Join(er, ",")),
-		slog.String("rooms", strings.Join(rs.roomsNotify, ",")),
-		slog.String("people", strings.Join(rs.peopleNotify, ",")),
-	}
+	attrs := []slog.Attr{slog.Bool("sent", rs.notified)}
 
 	if rs.noNotiReason != "" {
 		a := slog.String("no_noti_reason", rs.noNotiReason)
 		attrs = append(attrs, a)
+	}
+
+	if rs.dbData.note.ID != 0 {
+		attrs = append(attrs, slog.String("sender", getSenderName(rs.cwData)))
+		if len(rs.membersToNotify) > 0 || len(rs.roomsToNotify) > 0 {
+			if len(rs.successNotis) > 0 {
+				attrs = append(attrs, slog.String("successfull_notifications", strings.Join(rs.successNotis, ",")))
+			}
+
+			if len(rs.failedNotis) > 0 {
+				attrs = append(attrs, slog.String("failed_notifications", strings.Join(rs.failedNotis, ",")))
+			}
+		}
 	}
 
 	var anyAttrs []any
@@ -487,7 +500,7 @@ func notifyLogGroup(rs *requestState) slog.Attr {
 		anyAttrs = append(anyAttrs, a)
 	}
 
-	return slog.Group("webex_notifications", anyAttrs...)
+	return slog.Group("notifications", anyAttrs...)
 }
 
 // meetsMessageCriteria checks if a message would be allowed to send a notification,
