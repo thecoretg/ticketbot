@@ -1,0 +1,46 @@
+{{ define "notifiers.gohtml" }}
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>{{ .Title }}</title>
+        <link rel="stylesheet" href="/static/style.css">
+    </head>
+    <body>
+    {{ template "header" . }}
+    <main>
+        <ul>
+            {{ range .Notifiers }}
+                <li>{{ .NotifierConnection.NotifyEnabled }}</li>
+            {{ else }}
+                <li>No notifiers found</li>
+            {{ end }}
+        </ul>
+    </main>
+    </body>
+    </html>
+{{ end }}
+
+<main>
+    {{ if .Notifiers }}
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Board</th>
+                <th>Webex Room</th>
+            </tr>
+            </thead>
+            <tbody>
+            {{ range .Notifiers }}
+                <tr>
+                    <td>{{ .NotifierConnection.ID }}</td>
+                    <td>{{ .CwBoard.Name }}</td>
+                    <td>{{ .WebexRoom.Name }}</td>
+                </tr>
+            {{ end }}
+            </tbody>
+        </table>
+    {{ else }}
+        <p>No notifiers found.</p>
+    {{ end }}
+</main>

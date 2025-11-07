@@ -1,0 +1,31 @@
+body {
+    margin: 0;
+    font-family: sans-serif;
+    background: #1e1e2e;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #6c7086;
+    color: #f8f8f8;
+    padding: 12px 20px;
+}
+
+.nav-links a {
+    color: #f8f8f8;
+    text-decoration: none;
+    margin-left: 20px;
+    font-weight: 500;
+}
+
+.nav-links a:hover {
+    color: #74c7ec;
+    text-decoration: underline;
+}
+
+main {
+    color: #f8f8f8;
+    padding: 20px;
+}

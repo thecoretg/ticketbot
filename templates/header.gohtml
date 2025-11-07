@@ -1,0 +1,18 @@
+{{ define "header" }}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ .Title }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="title">{{ .Title }}</div>
+        <nav class="nav-links">
+            <a href="/admin/boards">Boards</a>
+            <a href="/admin/notifiers">Notifiers</a>
+        </nav>
+    </header>
+</body>
+</html>
+{{ end }}
