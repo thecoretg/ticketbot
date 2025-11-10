@@ -23,6 +23,7 @@ func (cl *Client) addRoutes() {
 	s := cl.Server.Group("sync", eh, au)
 	s.POST("tickets", cl.handleSyncTickets)
 	s.POST("webex_rooms", cl.handleSyncWebexRooms)
+	s.POST("boards", cl.handleSyncBoards)
 
 	// API Keys
 	cl.Server.POST("keys", cl.handleCreateAPIKey, eh, au)

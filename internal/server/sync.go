@@ -52,6 +52,16 @@ func (cl *Client) handleSyncWebexRooms(c *gin.Context) {
 	}()
 }
 
+func (cl *Client) handleSyncBoards(c *gin.Context) {
+	// TODO: state check
+	c.JSON(http.StatusOK, gin.H{"result": "connectwise board sync started"})
+	go func() {
+		if err := cl.syncBoards(context.Background()); err != nil {
+			slog.Error("syncing connectwise boards", "error", err)
+		}
+	}()
+}
+
 // syncOpenTickets finds all open tickets in Connectwise and loads them into the DB if they don't
 // already exist. It does not attempt to notify since that would result in tons of notifications
 // for already existing tickets.
@@ -205,6 +215,92 @@ func (cl *Client) syncWebexRooms(ctx context.Context) error {
 	return nil
 }
 
+func (cl *Client) syncBoards(ctx context.Context) error {
+	//if err := cl.setSyncingBoards(ctx, true); err != nil {
+	//	slog.Warn("error setting syncing boards value to true", "error", err)
+	//}
+
+	//defer func() {
+	//	if err := cl.setSyncingBoards(ctx, false); err != nil {
+	//		slog.Warn("error setting syncing boards value to false", "error", err)
+	//	}
+	//}()
+
+	slog.Debug("beginning sync of connectwise boards")
+	cwb, err := cl.CWClient.ListBoards(nil)
+	if err != nil {
+		return fmt.Errorf("listing connectwise boards: %w", err)
+	}
+	slog.Debug("got boards from connectwise", "total_boards", len(cwb))
+	boards := make(map[int]psa.Board, len(cwb))
+	for _, b := range cwb {
+		boards[b.ID] = b
+	}
+
+	dbBoards, err := cl.Queries.ListBoards(ctx)
+	if err != nil {
+		return fmt.Errorf("listing boards in database: %w", err)
+	}
+
+	dbByID := make(map[int]db.CwBoard, len(dbBoards))
+	for _, d := range dbBoards {
+		dbByID[d.ID] = d
+	}
+
+	tx, err := cl.Pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction pool: %w", err)
+	}
+	qtx := cl.Queries.WithTx(tx)
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	for id, b := range boards {
+		if existing, ok := dbByID[id]; ok {
+			if boardChanged(existing, b) {
+				slog.Debug("update needed for board", "id", id)
+				p := db.UpsertBoardParams{
+					ID:   b.ID,
+					Name: b.Name,
+				}
+
+				if _, err := qtx.UpsertBoard(ctx, p); err != nil {
+					return fmt.Errorf("updating board: %w", err)
+				}
+				slog.Debug("board updated in db", "id", b.ID, "name", b.Name)
+			}
+		} else {
+			p := db.UpsertBoardParams{
+				ID:   b.ID,
+				Name: b.Name,
+			}
+
+			n, err := qtx.UpsertBoard(ctx, p)
+			if err != nil {
+				return fmt.Errorf("inserting board: %w", err)
+			}
+			slog.Debug("board inserted into db", "id", n.ID, "name", n.Name)
+		}
+	}
+
+	for _, d := range dbBoards {
+		if _, ok := boards[d.ID]; !ok {
+			if err := qtx.DeleteBoard(ctx, d.ID); err != nil {
+				return fmt.Errorf("deleting board from db: %w", err)
+			}
+			slog.Debug("board deleted from db", "id", d.ID, "name", d.Name)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing tx: %w", err)
+	}
+	slog.Debug("board room sync complete")
+	return nil
+}
+
 func roomLogger(r webex.Room) slog.Attr {
 	return slog.Group(
 		"webex_room",
@@ -216,6 +312,10 @@ func roomLogger(r webex.Room) slog.Attr {
 
 func roomChanged(existing db.WebexRoom, webexRoom webex.Room) bool {
 	return existing.Name != webexRoom.Title || existing.Type != webexRoom.Type
+}
+
+func boardChanged(existing db.CwBoard, cwBoard psa.Board) bool {
+	return existing.Name != cwBoard.Name
 }
 
 func boardIDParam(ids []int) string {
