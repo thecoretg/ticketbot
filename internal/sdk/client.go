@@ -31,6 +31,21 @@ var (
 	ErrNotFound = errors.New("404 status returned")
 )
 
+func (c *Client) TestConnection() error {
+	res, err := c.restClient.R().
+		Get("ping")
+
+	if err != nil {
+		return err
+	}
+
+	if res.IsError() {
+		return fmt.Errorf("error response from ticketbot api: %s", res.String())
+	}
+
+	return nil
+}
+
 func GetOne[T any](c *Client, endpoint string, params map[string]string) (*T, error) {
 	var target T
 	res, err := c.restClient.R().
@@ -149,7 +164,7 @@ func PutWithReturn[T any](c *Client, endpoint string, body any) (*T, error) {
 		if res.StatusCode() == http.StatusNotFound {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("error response from ConnectWise API: %s", res.String())
+		return nil, fmt.Errorf("error response from API: %s", res.String())
 	}
 
 	return res.Result().(*T), nil
@@ -167,7 +182,7 @@ func Delete(c *Client, endpoint string) error {
 		if res.StatusCode() == http.StatusNotFound {
 			return ErrNotFound
 		}
-		return fmt.Errorf("error response from ConnectWise API: %s", res.String())
+		return fmt.Errorf("error response from API: %s", res.String())
 	}
 
 	return nil
