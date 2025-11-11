@@ -4,9 +4,6 @@ func (cl *Client) addRoutes() {
 	eh := ErrorHandler()
 	au := cl.apiKeyAuth()
 
-	cl.Server.LoadHTMLGlob("templates/*")
-	cl.Server.Static("/static", "./static")
-
 	// Health Check
 	cl.Server.GET("", cl.ping) // Authless ping for Lightsail health checks
 	cl.Server.GET("authtest", au)

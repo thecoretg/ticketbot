@@ -21,8 +21,10 @@ var (
 				return fmt.Errorf("getting app state: %w", err)
 			}
 
-			fmt.Printf("Syncing Tickets: %v\nSyncing Rooms: %v\n",
-				state.SyncingTickets, state.SyncingWebexRooms)
+			fmt.Printf("Syncing Tickets: %v\n"+
+				"Syncing Rooms: %v\n"+
+				"Syncing Boards: %v\n",
+				state.SyncingTickets, state.SyncingWebexRooms, state.SyncingBoards)
 
 			return nil
 		},
@@ -49,25 +51,11 @@ var (
 	updateCfgCmd = &cobra.Command{
 		Use: "update",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p := &server.AppConfigPayload{}
-			if cmd.Flags().Changed("debug") {
-				fmt.Printf("Changing debug to: %v\n", cfgDebug)
-				p.Debug = &cfgDebug
-			}
-
-			if cmd.Flags().Changed("attempt-notify") {
-				fmt.Printf("Changing attempt notify to: %v\n", attemptNotify)
-				p.AttemptNotify = &attemptNotify
-			}
-
-			if cmd.Flags().Changed("max-msg-length") {
-				fmt.Printf("Changing max message length to: %d\n", maxMsgLength)
-				p.MaxMessageLength = &maxMsgLength
-			}
-
-			if cmd.Flags().Changed("max-concurrent-syncs") {
-				fmt.Printf("Changing max concurrent syncs to: %d\n", maxConcurrentSyncs)
-				p.MaxConcurrentSyncs = &maxConcurrentSyncs
+			p := &server.AppConfigPayload{
+				Debug:              flagToBoolPtr(cmd, "debug", cfgDebug),
+				AttemptNotify:      flagToBoolPtr(cmd, "attempt-notify", attemptNotify),
+				MaxMessageLength:   flagToIntPtr(cmd, "max-msg-length", maxMsgLength),
+				MaxConcurrentSyncs: flagToIntPtr(cmd, "max-concurrent-syncs", maxConcurrentSyncs),
 			}
 
 			cfg, err := client.UpdateConfig(p)
@@ -83,7 +71,10 @@ var (
 )
 
 func printCfg(cfg *server.AppConfig) {
-	fmt.Printf("Debug: %v\nAttempt Notify: %v\nMax Msg Length: %d\nMax Concurrent Syncs: %d\n",
+	fmt.Printf("Debug: %v\n"+
+		"Attempt Notify: %v\n"+
+		"Max Msg Length: %d\n"+
+		"Max Concurrent Syncs: %d\n",
 		cfg.Debug, cfg.AttemptNotify, cfg.MaxMessageLength, cfg.MaxConcurrentSyncs)
 }
 
