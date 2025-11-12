@@ -1,7 +1,7 @@
 package mock
 
 import (
-	webex2 "github.com/thecoretg/ticketbot/internal/external/webex"
+	"github.com/thecoretg/ticketbot/internal/external/webex"
 )
 
 // This isn't ideal at all, but I need it short term just to get this up and running.
@@ -9,19 +9,19 @@ import (
 
 type WebexClient struct {
 	// real webex client used for listing rooms, but not posting messages
-	webexClient *webex2.Client
+	webexClient *webex.Client
 }
 
 func NewWebexClient(token string) *WebexClient {
 	return &WebexClient{
-		webexClient: webex2.NewClient(token),
+		webexClient: webex.NewClient(token),
 	}
 }
 
-func (w *WebexClient) PostMessage(message *webex2.Message) (*webex2.Message, error) {
+func (w *WebexClient) PostMessage(message *webex.Message) (*webex.Message, error) {
 	return message, nil
 }
 
-func (w *WebexClient) ListRooms(params map[string]string) ([]webex2.Room, error) {
+func (w *WebexClient) ListRooms(params map[string]string) ([]webex.Room, error) {
 	return w.webexClient.ListRooms(params)
 }

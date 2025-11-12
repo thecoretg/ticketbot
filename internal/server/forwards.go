@@ -78,12 +78,23 @@ func (cl *Client) handleCreateUserForward(c *gin.Context) {
 	c.JSON(http.StatusOK, f)
 }
 
-func (cl *Client) handleUpdateUserForward(c *gin.Context) {
-
-}
-
 func (cl *Client) handleDeleteUserForward(c *gin.Context) {
+	fwdID, err := strconv.Atoi(c.Param("forward_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorOutput("forward id not provided"))
+		return
+	}
 
+	if err := cl.deleteUserForward(c.Request.Context(), fwdID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, errorOutput(fmt.Sprintf("forward %d not found", fwdID)))
+			return
+		}
+		c.Error(fmt.Errorf("deleting forward: %w", err))
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
 
 func (cl *Client) listUserForwards(ctx context.Context, email string) ([]WebexUserForward, error) {
@@ -122,6 +133,10 @@ func (cl *Client) createUserForward(ctx context.Context, p db.InsertWebexUserFor
 	}
 
 	return dbForwardToResponse(df.WebexUserForward, df.WebexRoom), nil
+}
+
+func (cl *Client) deleteUserForward(ctx context.Context, id int) error {
+	return cl.Queries.DeleteWebexForward(ctx, id)
 }
 
 func dbForwardToResponse(uf db.WebexUserForward, r db.WebexRoom) *WebexUserForward {

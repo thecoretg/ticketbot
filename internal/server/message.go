@@ -8,12 +8,12 @@ import (
 
 	"github.com/thecoretg/ticketbot/internal/db"
 	"github.com/thecoretg/ticketbot/internal/external/psa"
-	webex2 "github.com/thecoretg/ticketbot/internal/external/webex"
+	"github.com/thecoretg/ticketbot/internal/external/webex"
 )
 
 type messageSender interface {
-	PostMessage(message *webex2.Message) (*webex2.Message, error)
-	ListRooms(params map[string]string) ([]webex2.Room, error)
+	PostMessage(message *webex.Message) (*webex.Message, error)
+	ListRooms(params map[string]string) ([]webex.Room, error)
 }
 
 func (cl *Client) makeAndSendMessages(ctx context.Context, rs *requestState) (*requestState, error) {
@@ -74,12 +74,12 @@ func (cl *Client) makeMessages(ctx context.Context, rs *requestState) (*requestS
 	// Divider line for easily distinguishable breaks in notifications
 	body += fmt.Sprintf("\n\n---")
 
-	var messages []webex2.Message
+	var messages []webex.Message
 	if rs.action == "added" {
 		for _, r := range rs.dbData.enabledRooms {
 			rs.logger.Debug("adding room to send list", slog.String("name", r.Name))
 			rs.roomsToNotify = append(rs.roomsToNotify, r)
-			messages = append(messages, webex2.NewMessageToRoom(r.WebexID, r.Name, body))
+			messages = append(messages, webex.NewMessageToRoom(r.WebexID, r.Name, body))
 		}
 	} else if rs.action == "updated" {
 		rs = cl.getSendTo(ctx, rs)
@@ -89,7 +89,7 @@ func (cl *Client) makeMessages(ctx context.Context, rs *requestState) (*requestS
 
 		for _, m := range rs.membersToNotify {
 			rs.logger.Debug("adding person to send list", slog.String("email", m.PrimaryEmail))
-			messages = append(messages, webex2.NewMessageToPerson(m.PrimaryEmail, body))
+			messages = append(messages, webex.NewMessageToPerson(m.PrimaryEmail, body))
 		}
 	}
 
