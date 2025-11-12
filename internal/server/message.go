@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/thecoretg/ticketbot/internal/db"
 	"github.com/thecoretg/ticketbot/internal/external/psa"
@@ -95,6 +96,28 @@ func (cl *Client) makeMessages(ctx context.Context, rs *requestState) (*requestS
 
 	rs.messagesToSend = messages
 	return rs, nil
+}
+
+func forwardIsActive(fwd WebexUserForward) bool {
+	active := false
+	if fwd.Enabled {
+		active = dateRangeActive(fwd.StartDate, fwd.EndDate)
+	}
+
+	return active
+}
+
+func dateRangeActive(start, end *time.Time) bool {
+	now := time.Now()
+	if start == nil {
+		return false
+	}
+
+	if end == nil {
+		return now.After(*start)
+	}
+
+	return now.After(*start) && now.Before(*end)
 }
 
 // getSendTo creates a list of emails to send notifications to, factoring in who made the most
