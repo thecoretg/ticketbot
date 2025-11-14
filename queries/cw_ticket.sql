@@ -48,29 +48,13 @@ ORDER BY id;
 
 -- name: UpsertTicketNote :one
 INSERT INTO cw_ticket_note
-(id, ticket_id, member_id, contact_id, notified, skipped_notify)
-VALUES ($1, $2, $3, $4, $5, $6)
+(id, ticket_id, member_id, contact_id)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (id) DO UPDATE SET
     ticket_id = EXCLUDED.ticket_id,
     member_id = EXCLUDED.member_id,
     contact_id = EXCLUDED.contact_id,
-    notified = EXCLUDED.notified,
-    skipped_notify = EXCLUDED.skipped_notify,
     updated_on = NOW()
-RETURNING *;
-
--- name: SetNoteNotified :one
-UPDATE cw_ticket_note
-SET
-    notified = $2
-WHERE id = $1
-RETURNING *;
-
--- name: SetNoteSkippedNotify :one
-UPDATE cw_ticket_note
-SET
-    skipped_notify = $2
-WHERE id = $1
 RETURNING *;
 
 -- name: SoftDeleteTicketNote :exec

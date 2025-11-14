@@ -85,15 +85,13 @@ type CwTicket struct {
 }
 
 type CwTicketNote struct {
-	ID            int       `json:"id"`
-	TicketID      int       `json:"ticket_id"`
-	MemberID      *int      `json:"member_id"`
-	ContactID     *int      `json:"contact_id"`
-	Notified      bool      `json:"notified"`
-	SkippedNotify bool      `json:"skipped_notify"`
-	UpdatedOn     time.Time `json:"updated_on"`
-	AddedOn       time.Time `json:"added_on"`
-	Deleted       bool      `json:"deleted"`
+	ID        int       `json:"id"`
+	TicketID  int       `json:"ticket_id"`
+	MemberID  *int      `json:"member_id"`
+	ContactID *int      `json:"contact_id"`
+	UpdatedOn time.Time `json:"updated_on"`
+	AddedOn   time.Time `json:"added_on"`
+	Deleted   bool      `json:"deleted"`
 }
 
 type NotifierConnection struct {

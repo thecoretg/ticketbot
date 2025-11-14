@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS webex_user_forward (
 );
 
 ALTER TABLE cw_ticket_note
-DROP CONSTRAINT cw_ticket_note_ticket_id_fkey;
+DROP CONSTRAINT cw_ticket_note_ticket_id_fkey,
+DROP COLUMN notified,
+DROP COLUMN skipped_notify;
 
 ALTER TABLE cw_ticket_note
 ADD CONSTRAINT fk_ticket_note_ticket
@@ -35,6 +37,8 @@ CREATE TABLE IF NOT EXISTS app_state (
 );
 
 ALTER TABLE cw_ticket_note
+ADD notified BOOLEAN NOT NULL DEFAULT FALSE,
+ADD skipped_notify BOOLEAN NOT NULL DEFAULT FALSE,
 DROP CONSTRAINT fk_ticket_note_ticket;
 
 ALTER TABLE cw_ticket_note
