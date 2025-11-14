@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
@@ -120,18 +121,22 @@ func (s *Service) ensureMember(ctx context.Context, id int) (models.Member, erro
 	return m, nil
 }
 
-func (s *Service) ensureTicket(ctx context.Context, cd cwData) (models.Ticket, error) {
-	t, err := s.Tickets.Get(ctx, cd.ticket.ID)
+func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (models.Ticket, error) {
+	if cwt == nil {
+		return models.Ticket{}, errors.New("received nil ticket")
+	}
+
+	t, err := s.Tickets.Get(ctx, cwt.ID)
 	if err != nil && !errors.Is(err, models.ErrTicketNotFound) {
 		t, err = s.Tickets.Upsert(ctx, models.Ticket{
-			ID:        cd.ticket.ID,
-			Summary:   cd.ticket.Summary,
-			BoardID:   cd.ticket.Board.ID,
-			OwnerID:   intToPtr(cd.ticket.Owner.ID),
-			CompanyID: cd.ticket.Company.ID,
-			ContactID: intToPtr(cd.ticket.Contact.ID),
-			Resources: &cd.ticket.Resources,
-			UpdatedBy: &cd.ticket.Info.UpdatedBy,
+			ID:        cwt.ID,
+			Summary:   cwt.Summary,
+			BoardID:   cwt.Board.ID,
+			OwnerID:   intToPtr(cwt.Owner.ID),
+			CompanyID: cwt.Company.ID,
+			ContactID: intToPtr(cwt.Contact.ID),
+			Resources: &cwt.Resources,
+			UpdatedBy: &cwt.Info.UpdatedBy,
 		})
 
 		if err != nil {
@@ -142,22 +147,26 @@ func (s *Service) ensureTicket(ctx context.Context, cd cwData) (models.Ticket, e
 	return t, nil
 }
 
-func (s *Service) ensureTicketNote(ctx context.Context, cd cwData) (models.TicketNote, error) {
-	memberID, err := s.getMemberID(ctx, cd)
+func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNote) (models.TicketNote, error) {
+	if cwn == nil {
+		return models.TicketNote{}, errors.New("received nil ticket note")
+	}
+
+	memberID, err := s.getNoteMemberID(ctx, cwn)
 	if err != nil {
 		return models.TicketNote{}, fmt.Errorf("getting member data: %w", err)
 	}
 
-	contactID, err := s.getContactID(ctx, cd)
+	contactID, err := s.getNoteContactID(ctx, cwn)
 	if err != nil {
 		return models.TicketNote{}, fmt.Errorf("getting contact data: %w ", err)
 	}
 
-	n, err := s.Notes.Get(ctx, cd.note.ID)
+	n, err := s.Notes.Get(ctx, cwn.ID)
 	if err != nil && !errors.Is(err, models.ErrTicketNoteNotFound) {
 		n, err = s.Notes.Upsert(ctx, models.TicketNote{
-			ID:        cd.note.ID,
-			TicketID:  cd.note.TicketId,
+			ID:        cwn.ID,
+			TicketID:  cwn.TicketId,
 			MemberID:  memberID,
 			ContactID: contactID,
 		})
@@ -170,9 +179,9 @@ func (s *Service) ensureTicketNote(ctx context.Context, cd cwData) (models.Ticke
 	return n, nil
 }
 
-func (s *Service) getContactID(ctx context.Context, cd cwData) (*int, error) {
-	if cd.note.Contact.ID != 0 {
-		c, err := s.ensureContact(ctx, cd.note.Contact.ID)
+func (s *Service) getNoteContactID(ctx context.Context, n *psa.ServiceTicketNote) (*int, error) {
+	if n.Contact.ID != 0 {
+		c, err := s.ensureContact(ctx, n.Contact.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring contact in store: %w", err)
 		}
@@ -183,9 +192,9 @@ func (s *Service) getContactID(ctx context.Context, cd cwData) (*int, error) {
 	return nil, nil
 }
 
-func (s *Service) getMemberID(ctx context.Context, cd cwData) (*int, error) {
-	if cd.note.Member.ID != 0 {
-		c, err := s.ensureMember(ctx, cd.note.Member.ID)
+func (s *Service) getNoteMemberID(ctx context.Context, n *psa.ServiceTicketNote) (*int, error) {
+	if n.Member.ID != 0 {
+		c, err := s.ensureMember(ctx, n.Member.ID)
 		if err != nil {
 			return nil, fmt.Errorf("ensuring member in store: %w", err)
 		}
