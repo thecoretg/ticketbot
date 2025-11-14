@@ -11,15 +11,18 @@ import (
 )
 
 type UserForwardRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewUserForwardRepo(pool *pgxpool.Pool, q *db.Queries) *UserForwardRepo {
+func NewUserForwardRepo(pool *pgxpool.Pool) *UserForwardRepo {
 	return &UserForwardRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
 	}
+}
+
+func (p *UserForwardRepo) WithTx(tx pgx.Tx) models.UserForwardRepository {
+	return &UserForwardRepo{
+		queries: db.New(tx)}
 }
 
 func (p *UserForwardRepo) ListAll(ctx context.Context) ([]models.UserForward, error) {

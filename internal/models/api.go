@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var ErrAPIKeyNotFound = errors.New("api key not found")
@@ -17,6 +19,7 @@ type APIKey struct {
 }
 
 type APIKeyRepository interface {
+	WithTx(tx pgx.Tx) APIKeyRepository
 	List(ctx context.Context) ([]APIKey, error)
 	Get(ctx context.Context, id int) (APIKey, error)
 	Insert(ctx context.Context, a APIKey) (APIKey, error)
@@ -33,6 +36,7 @@ type APIUser struct {
 }
 
 type APIUserRepository interface {
+	WithTx(tx pgx.Tx) APIUserRepository
 	List(ctx context.Context) ([]APIUser, error)
 	Get(ctx context.Context, id int) (APIUser, error)
 	GetByEmail(ctx context.Context, email string) (APIUser, error)

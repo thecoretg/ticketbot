@@ -11,15 +11,18 @@ import (
 )
 
 type MemberRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewMemberRepo(pool *pgxpool.Pool, q *db.Queries) *MemberRepo {
+func NewMemberRepo(pool *pgxpool.Pool) *MemberRepo {
 	return &MemberRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
 	}
+}
+
+func (p *MemberRepo) WithTx(tx pgx.Tx) models.MemberRepository {
+	return &MemberRepo{
+		queries: db.New(tx)}
 }
 
 func (p *MemberRepo) List(ctx context.Context) ([]models.Member, error) {

@@ -11,15 +11,18 @@ import (
 )
 
 type ContactRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewContactRepo(pool *pgxpool.Pool, q *db.Queries) *ContactRepo {
+func NewContactRepo(pool *pgxpool.Pool) *ContactRepo {
 	return &ContactRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
 	}
+}
+
+func (p *ContactRepo) WithTx(tx pgx.Tx) models.ContactRepository {
+	return &ContactRepo{
+		queries: db.New(tx)}
 }
 
 func (p *ContactRepo) List(ctx context.Context) ([]models.Contact, error) {

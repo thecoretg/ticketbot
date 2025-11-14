@@ -11,15 +11,18 @@ import (
 )
 
 type CompanyRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewCompanyRepo(pool *pgxpool.Pool, q *db.Queries) *CompanyRepo {
+func NewCompanyRepo(pool *pgxpool.Pool) *CompanyRepo {
 	return &CompanyRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
 	}
+}
+
+func (p *CompanyRepo) WithTx(tx pgx.Tx) *CompanyRepo {
+	return &CompanyRepo{
+		queries: db.New(tx)}
 }
 
 func (p *CompanyRepo) List(ctx context.Context) ([]models.Company, error) {

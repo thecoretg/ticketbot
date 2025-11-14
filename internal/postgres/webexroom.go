@@ -11,15 +11,18 @@ import (
 )
 
 type WebexRoomRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewWebexRoomRepo(pool *pgxpool.Pool, q *db.Queries) *WebexRoomRepo {
+func NewWebexRoomRepo(pool *pgxpool.Pool) *WebexRoomRepo {
 	return &WebexRoomRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
 	}
+}
+
+func (p *WebexRoomRepo) WithTx(tx pgx.Tx) models.WebexRoomRepository {
+	return &WebexRoomRepo{
+		queries: db.New(tx)}
 }
 
 func (p *WebexRoomRepo) List(ctx context.Context) ([]models.WebexRoom, error) {

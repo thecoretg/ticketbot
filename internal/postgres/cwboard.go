@@ -11,14 +11,18 @@ import (
 )
 
 type BoardRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewBoardRepo(pool *pgxpool.Pool, q *db.Queries) *BoardRepo {
+func NewBoardRepo(pool *pgxpool.Pool) *BoardRepo {
 	return &BoardRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
+	}
+}
+
+func (p *BoardRepo) WithTx(tx pgx.Tx) models.BoardRepository {
+	return &BoardRepo{
+		queries: db.New(tx),
 	}
 }
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 var ErrBoardNotFound = errors.New("board not found")
@@ -16,6 +18,7 @@ type Board struct {
 }
 
 type BoardRepository interface {
+	WithTx(tx pgx.Tx) BoardRepository
 	List(ctx context.Context) ([]Board, error)
 	Get(ctx context.Context, id int) (Board, error)
 	Upsert(ctx context.Context, b Board) (Board, error)
@@ -32,6 +35,7 @@ type Company struct {
 }
 
 type CompanyRepository interface {
+	WithTx(tx pgx.Tx) CompanyRepository
 	List(ctx context.Context) ([]Company, error)
 	Get(ctx context.Context, id int) (Company, error)
 	Upsert(ctx context.Context, c Company) (Company, error)
@@ -50,6 +54,7 @@ type Contact struct {
 }
 
 type ContactRepository interface {
+	WithTx(tx pgx.Tx) ContactRepository
 	List(ctx context.Context) ([]Contact, error)
 	Get(ctx context.Context, id int) (Contact, error)
 	Upsert(ctx context.Context, c Contact) (Contact, error)
@@ -69,6 +74,7 @@ type Member struct {
 }
 
 type MemberRepository interface {
+	WithTx(tx pgx.Tx) MemberRepository
 	List(ctx context.Context) ([]Member, error)
 	Get(ctx context.Context, id int) (Member, error)
 	Upsert(ctx context.Context, c Member) (Member, error)
@@ -91,6 +97,7 @@ type Ticket struct {
 }
 
 type TicketRepository interface {
+	WithTx(tx pgx.Tx) TicketRepository
 	List(ctx context.Context) ([]Ticket, error)
 	Get(ctx context.Context, id int) (Ticket, error)
 	Upsert(ctx context.Context, c Ticket) (Ticket, error)
@@ -109,6 +116,7 @@ type TicketNote struct {
 }
 
 type TicketNoteRepository interface {
+	WithTx(tx pgx.Tx) TicketNoteRepository
 	ListByTicketID(ctx context.Context, ticketID int) ([]TicketNote, error)
 	ListAll(ctx context.Context) ([]TicketNote, error)
 	Get(ctx context.Context, id int) (TicketNote, error)

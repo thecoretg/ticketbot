@@ -11,15 +11,15 @@ import (
 )
 
 type APIUserRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewAPIUserRepo(pool *pgxpool.Pool, q *db.Queries) *APIUserRepo {
-	return &APIUserRepo{
-		pool:    pool,
-		queries: q,
-	}
+func NewAPIUserRepo(pool *pgxpool.Pool) *APIUserRepo {
+	return &APIUserRepo{queries: db.New(pool)}
+}
+
+func (p *APIUserRepo) WithTx(tx pgx.Tx) models.APIUserRepository {
+	return &APIUserRepo{queries: db.New(tx)}
 }
 
 func (p *APIUserRepo) List(ctx context.Context) ([]models.APIUser, error) {

@@ -11,15 +11,15 @@ import (
 )
 
 type APIKeyRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewAPIKeyRepo(pool *pgxpool.Pool, q *db.Queries) *APIKeyRepo {
-	return &APIKeyRepo{
-		pool:    pool,
-		queries: q,
-	}
+func NewAPIKeyRepo(pool *pgxpool.Pool) *APIKeyRepo {
+	return &APIKeyRepo{queries: db.New(pool)}
+}
+
+func (p *APIKeyRepo) WithTx(tx pgx.Tx) models.APIKeyRepository {
+	return &APIKeyRepo{queries: db.New(tx)}
 }
 
 func (p *APIKeyRepo) List(ctx context.Context) ([]models.APIKey, error) {

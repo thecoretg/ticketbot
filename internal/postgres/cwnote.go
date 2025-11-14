@@ -11,15 +11,18 @@ import (
 )
 
 type TicketNoteRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewTicketNoteRepo(pool *pgxpool.Pool, q *db.Queries) *TicketNoteRepo {
+func NewTicketNoteRepo(pool *pgxpool.Pool) *TicketNoteRepo {
 	return &TicketNoteRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
 	}
+}
+
+func (p *TicketNoteRepo) WithTx(tx pgx.Tx) models.TicketNoteRepository {
+	return &TicketNoteRepo{
+		queries: db.New(tx)}
 }
 
 func (p *TicketNoteRepo) ListByTicketID(ctx context.Context, ticketID int) ([]models.TicketNote, error) {

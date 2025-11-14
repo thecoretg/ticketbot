@@ -11,14 +11,17 @@ import (
 )
 
 type ConfigRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewConfigRepo(pool *pgxpool.Pool, q *db.Queries) *ConfigRepo {
+func NewConfigRepo(pool *pgxpool.Pool) *ConfigRepo {
 	return &ConfigRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
+	}
+}
+func (p *ConfigRepo) WithTx(tx pgx.Tx) models.ConfigRepository {
+	return &ConfigRepo{
+		queries: db.New(tx),
 	}
 }
 

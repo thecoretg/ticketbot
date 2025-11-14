@@ -11,15 +11,18 @@ import (
 )
 
 type NotifierRepo struct {
-	pool    *pgxpool.Pool
 	queries *db.Queries
 }
 
-func NewNotifierRepo(pool *pgxpool.Pool, q *db.Queries) *NotifierRepo {
+func NewNotifierRepo(pool *pgxpool.Pool) *NotifierRepo {
 	return &NotifierRepo{
-		pool:    pool,
-		queries: q,
+		queries: db.New(pool),
 	}
+}
+
+func (p *NotifierRepo) WithTx(tx pgx.Tx) models.NotifierRepository {
+	return &NotifierRepo{
+		queries: db.New(tx)}
 }
 
 func (p *NotifierRepo) ListAll(ctx context.Context) ([]models.Notifier, error) {
