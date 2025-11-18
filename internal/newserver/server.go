@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/external/webex"

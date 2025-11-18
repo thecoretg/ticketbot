@@ -18,18 +18,31 @@ func New(u models.APIUserRepository, k models.APIKeyRepository) *Service {
 	}
 }
 
-func (s *Service) List(ctx context.Context) ([]models.APIUser, error) {
+func (s *Service) ListUsers(ctx context.Context) ([]models.APIUser, error) {
 	return s.Users.List(ctx)
 }
 
-func (s *Service) Get(ctx context.Context, id int) (*models.APIUser, error) {
+func (s *Service) GetUser(ctx context.Context, id int) (*models.APIUser, error) {
 	return s.Users.Get(ctx, id)
 }
 
-func (s *Service) Delete(ctx context.Context, id int) error {
+func (s *Service) DeleteUser(ctx context.Context, id int) error {
 	return s.Users.Delete(ctx, id)
 }
 
-func (s *Service) AddAPIKey(ctx context.Context, userEmail string) (string, error) {
-	k, err := s.createAPIKey(ctx, userID)
+func (s *Service) ListAPIKeys(ctx context.Context) ([]models.APIKey, error) {
+	return s.Keys.List(ctx)
+}
+
+func (s *Service) GetAPIKey(ctx context.Context, id int) (*models.APIKey, error) {
+	return s.Keys.Get(ctx, id)
+}
+
+// AddAPIKey creates an API key and returns the plaintext (only once)
+func (s *Service) AddAPIKey(ctx context.Context, email string) (string, error) {
+	return s.createAPIKey(ctx, email)
+}
+
+func (s *Service) DeleteAPIKey(ctx context.Context, id int) error {
+	return s.Keys.Delete(ctx, id)
 }

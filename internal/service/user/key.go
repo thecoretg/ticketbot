@@ -17,6 +17,7 @@ func (s *Service) createAPIKey(ctx context.Context, email string) (string, error
 		if errors.Is(err, models.ErrAPIUserNotFound) {
 			return "", err
 		}
+		return "", fmt.Errorf("getting user by email: %w", err)
 	}
 
 	plain, err := generateKey()
@@ -30,7 +31,7 @@ func (s *Service) createAPIKey(ctx context.Context, email string) (string, error
 	}
 
 	p := &models.APIKey{
-		UserID:  userID,
+		UserID:  u.ID,
 		KeyHash: hash,
 	}
 
