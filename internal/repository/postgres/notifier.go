@@ -33,7 +33,8 @@ func (p *NotifierRepo) ListAll(ctx context.Context) ([]models.Notifier, error) {
 
 	var b []models.Notifier
 	for _, d := range dm {
-		b = append(b, notifierFromPG(d))
+		n := notifierFromPG(d)
+		b = append(b, *n)
 	}
 
 	return b, nil
@@ -47,7 +48,8 @@ func (p *NotifierRepo) ListByBoard(ctx context.Context, boardID int) ([]models.N
 
 	var b []models.Notifier
 	for _, d := range dm {
-		b = append(b, notifierFromPG(d))
+		n := notifierFromPG(d)
+		b = append(b, *n)
 	}
 
 	return b, nil
@@ -61,40 +63,55 @@ func (p *NotifierRepo) ListByRoom(ctx context.Context, roomID int) ([]models.Not
 
 	var b []models.Notifier
 	for _, d := range dm {
-		b = append(b, notifierFromPG(d))
+		n := notifierFromPG(d)
+		b = append(b, *n)
 	}
 
 	return b, nil
 }
 
-func (p *NotifierRepo) Get(ctx context.Context, id int) (models.Notifier, error) {
+func (p *NotifierRepo) Get(ctx context.Context, id int) (*models.Notifier, error) {
 	d, err := p.queries.GetNotifierConnection(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Notifier{}, models.ErrNotifierNotFound
+			return nil, models.ErrNotifierNotFound
 		}
-		return models.Notifier{}, err
+		return nil, err
 	}
 
 	return notifierFromPG(d), nil
 }
 
-func (p *NotifierRepo) Insert(ctx context.Context, n models.Notifier) (models.Notifier, error) {
+func (p *NotifierRepo) Exists(ctx context.Context, boardID, roomID int) (bool, error) {
+	ids := db.CheckNotifierExistsParams{
+		CwBoardID:   boardID,
+		WebexRoomID: roomID,
+	}
+
+	exists, err := p.queries.CheckNotifierExists(ctx, ids)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (p *NotifierRepo) Insert(ctx context.Context, n *models.Notifier) (*models.Notifier, error) {
 	d, err := p.queries.InsertNotifierConnection(ctx, notifierToInsertParams(n))
 	if err != nil {
-		return models.Notifier{}, err
+		return nil, err
 	}
 
 	return notifierFromPG(d), nil
 }
 
-func (p *NotifierRepo) Update(ctx context.Context, n models.Notifier) (models.Notifier, error) {
+func (p *NotifierRepo) Update(ctx context.Context, n *models.Notifier) (*models.Notifier, error) {
 	d, err := p.queries.UpdateNotifierConnection(ctx, notifierToUpdateParams(n))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Notifier{}, models.ErrNotifierNotFound
+			return nil, models.ErrNotifierNotFound
 		}
-		return models.Notifier{}, err
+		return nil, err
 	}
 
 	return notifierFromPG(d), nil
@@ -111,7 +128,7 @@ func (p *NotifierRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func notifierToInsertParams(n models.Notifier) db.InsertNotifierConnectionParams {
+func notifierToInsertParams(n *models.Notifier) db.InsertNotifierConnectionParams {
 	return db.InsertNotifierConnectionParams{
 		CwBoardID:     n.CwBoardID,
 		WebexRoomID:   n.WebexRoomID,
@@ -119,7 +136,7 @@ func notifierToInsertParams(n models.Notifier) db.InsertNotifierConnectionParams
 	}
 }
 
-func notifierToUpdateParams(n models.Notifier) db.UpdateNotifierConnectionParams {
+func notifierToUpdateParams(n *models.Notifier) db.UpdateNotifierConnectionParams {
 	return db.UpdateNotifierConnectionParams{
 		ID:            n.ID,
 		CwBoardID:     n.CwBoardID,
@@ -128,8 +145,8 @@ func notifierToUpdateParams(n models.Notifier) db.UpdateNotifierConnectionParams
 	}
 }
 
-func notifierFromPG(pg db.NotifierConnection) models.Notifier {
-	return models.Notifier{
+func notifierFromPG(pg db.NotifierConnection) *models.Notifier {
+	return &models.Notifier{
 		ID:            pg.ID,
 		CwBoardID:     pg.CwBoardID,
 		WebexRoomID:   pg.WebexRoomID,

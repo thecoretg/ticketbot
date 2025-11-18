@@ -46,9 +46,10 @@ type NotifierRepository interface {
 	ListAll(ctx context.Context) ([]Notifier, error)
 	ListByBoard(ctx context.Context, boardID int) ([]Notifier, error)
 	ListByRoom(ctx context.Context, roomID int) ([]Notifier, error)
-	Get(ctx context.Context, id int) (Notifier, error)
-	Insert(ctx context.Context, n Notifier) (Notifier, error)
-	Update(ctx context.Context, n Notifier) (Notifier, error)
+	Get(ctx context.Context, id int) (*Notifier, error)
+	Exists(ctx context.Context, boardID, roomID int) (bool, error)
+	Insert(ctx context.Context, n *Notifier) (*Notifier, error)
+	Update(ctx context.Context, n *Notifier) (*Notifier, error)
 	Delete(ctx context.Context, id int) error
 }
 
