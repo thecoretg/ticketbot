@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -9,15 +10,21 @@ import (
 )
 
 type NotifierHandler struct {
-	Repo models.NotifierRepository
+	BoardRepo    models.BoardRepository
+	RoomRepo     models.WebexRoomRepository
+	NotifierRepo models.NotifierRepository
 }
 
-func NewNotifierHandler(r models.NotifierRepository) *NotifierHandler {
-	return &NotifierHandler{Repo: r}
+func NewNotifierHandler(r models.NotifierRepository, br models.BoardRepository, wr models.WebexRoomRepository) *NotifierHandler {
+	return &NotifierHandler{
+		BoardRepo:    br,
+		RoomRepo:     wr,
+		NotifierRepo: r,
+	}
 }
 
 func (h *NotifierHandler) ListNotifiers(c *gin.Context) {
-	n, err := h.Repo.ListAll(c.Request.Context())
+	n, err := h.NotifierRepo.ListAll(c.Request.Context())
 	if err != nil {
 		c.Error(err)
 		return
@@ -27,13 +34,14 @@ func (h *NotifierHandler) ListNotifiers(c *gin.Context) {
 }
 
 func (h *NotifierHandler) AddNotifier(c *gin.Context) {
+	ctx := c.Request.Context()
 	p := &models.Notifier{}
 	if err := c.ShouldBindJSON(p); err != nil {
 		c.JSON(http.StatusBadRequest, errorOutput(fmt.Errorf("bad json payload: %w", err)))
 		return
 	}
 
-	exists, err := h.Repo.Exists(c.Request.Context(), p.CwBoardID, p.WebexRoomID)
+	exists, err := h.NotifierRepo.Exists(ctx, p.CwBoardID, p.WebexRoomID)
 	if err != nil {
 		c.Error(err)
 		return
@@ -44,9 +52,25 @@ func (h *NotifierHandler) AddNotifier(c *gin.Context) {
 		c.JSON(http.StatusConflict, errorOutput(err))
 	}
 
-	// TODO: board existence check?
+	if _, err = h.BoardRepo.Get(ctx, p.CwBoardID); err != nil {
+		if errors.Is(err, models.ErrBoardNotFound) {
+			c.JSON(http.StatusNotFound, err)
+			return
+		}
+		c.Error(err)
+		return
+	}
 
-	n, err := h.Repo.Insert(c.Request.Context(), p)
+	if _, err = h.RoomRepo.Get(ctx, p.WebexRoomID); err != nil {
+		if errors.Is(err, models.ErrWebexRoomNotFound) {
+			c.JSON(http.StatusNotFound, err)
+			return
+		}
+		c.Error(err)
+		return
+	}
+
+	n, err := h.NotifierRepo.Insert(c.Request.Context(), p)
 	if err != nil {
 		c.Error(err)
 		return

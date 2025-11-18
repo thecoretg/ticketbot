@@ -25,6 +25,9 @@ func (a *App) addRoutes(g *gin.Engine) {
 
 	th := handler.NewTicketHandler(a.Svc.Ticket)
 	g.POST("hooks/cw/tickets", th.ProcessTicket, errh, cws)
+
+	n := g.Group("notifiers", errh, auth)
+	registerNotifierRoutes(n, a.Stores.Notifiers, a.Stores.CW.Board, a.Stores.WebexRoom)
 }
 
 func registerUserRoutes(r *gin.RouterGroup, svc *user.Service) {
@@ -50,4 +53,10 @@ func registerBoardRoutes(r *gin.RouterGroup, rp models.BoardRepository) {
 	h := handler.NewBoardHandler(rp)
 	r.GET("", h.ListBoards)
 	r.GET(":id", h.GetBoard)
+}
+
+func registerNotifierRoutes(r *gin.RouterGroup, nr models.NotifierRepository, br models.BoardRepository, wr models.WebexRoomRepository) {
+	h := handler.NewNotifierHandler(nr, br, wr)
+	r.GET("", h.ListNotifiers)
+	r.POST("", h.AddNotifier)
 }
