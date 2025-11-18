@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/thecoretg/ticketbot/internal/external/psa"
+	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/repository/postgres"
 )
 
@@ -52,7 +53,7 @@ func TestService_Run(t *testing.T) {
 	ids := testTicketIDs(t)
 	// add
 	for _, id := range ids {
-		if _, err := s.Run(ctx, "added", id); err != nil {
+		if _, err := s.ProcessTicket(ctx, id); err != nil {
 			t.Errorf("adding ticket %d: %v", id, err)
 			continue
 		}
@@ -60,7 +61,7 @@ func TestService_Run(t *testing.T) {
 
 	// update (not changing anything, just simualting)
 	for _, id := range ids {
-		if _, err := s.Run(ctx, "updated", id); err != nil {
+		if _, err := s.ProcessTicket(ctx, id); err != nil {
 			t.Errorf("updating ticket %d: %v", id, err)
 			continue
 		}
@@ -68,7 +69,7 @@ func TestService_Run(t *testing.T) {
 
 	// delete
 	for _, id := range ids {
-		if _, err := s.Run(ctx, "deleted", id); err != nil {
+		if err := s.DeleteTicket(ctx, id); err != nil {
 			t.Errorf("deleting ticket %d: %v", id, err)
 			continue
 		}
@@ -104,16 +105,16 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, error) {
 		CompanyId:  os.Getenv("CW_COMPANY_ID"),
 	}
 
-	return New(
-		pool,
-		postgres.NewBoardRepo(pool),
-		postgres.NewCompanyRepo(pool),
-		postgres.NewContactRepo(pool),
-		postgres.NewMemberRepo(pool),
-		postgres.NewTicketRepo(pool),
-		postgres.NewTicketNoteRepo(pool),
-		psa.NewClient(cwCreds),
-	), nil
+	r := models.CWRepos{
+		Board:   postgres.NewBoardRepo(pool),
+		Company: postgres.NewCompanyRepo(pool),
+		Contact: postgres.NewContactRepo(pool),
+		Member:  postgres.NewMemberRepo(pool),
+		Note:    postgres.NewTicketNoteRepo(pool),
+		Ticket:  postgres.NewTicketRepo(pool),
+	}
+
+	return New(pool, r, psa.NewClient(cwCreds)), nil
 }
 
 func testTicketIDs(t *testing.T) []int {

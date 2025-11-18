@@ -1,4 +1,4 @@
-package notifier
+package ticketbot
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"

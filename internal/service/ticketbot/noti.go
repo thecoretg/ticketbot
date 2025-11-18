@@ -1,4 +1,4 @@
-package notifier
+package ticketbot
 
 import (
 	"context"
@@ -17,7 +17,7 @@ var (
 	ErrAlreadySent = errors.New("notification(s) already sent for this note")
 )
 
-func (s *Service) run(ctx context.Context, ticket *models.FullTicket, action, cwClientID string) error {
+func (s *Service) Run(ctx context.Context, ticket *models.FullTicket, action, cwClientID string) error {
 	if ticket == nil {
 		return errors.New("received nil ticket")
 	}
