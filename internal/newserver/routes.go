@@ -4,32 +4,40 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/handler"
 	"github.com/thecoretg/ticketbot/internal/middleware"
+	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/user"
 )
 
-func (a *App) addRoutes(r *gin.Engine) {
+func (a *App) addRoutes(g *gin.Engine) {
 	errh := middleware.ErrorHandler()
-	auth := middleware.APIKeyAuth(a.Stores.APIKey)
+	auth := middleware.APIKeyAuth(a.Svc.User.Keys)
+	cws := middleware.RequireConnectwiseSignature()
+
+	u := g.Group("users", errh, auth)
+	registerUserRoutes(u, a.Svc.User)
+
+	c := g.Group("config", errh, auth)
+	registerConfigRoutes(c, a.Svc.Config)
 
 	th := handler.NewTicketHandler(a.Svc.Ticket)
-	r.POST("hooks/cw/tickets", th.ProcessTicket, errh, middleware.RequireConnectwiseSignature())
-
-	ch := handler.NewConfigHandler(a.Svc.Config)
-	cfg := r.Group("config", errh, auth)
-	cfg.GET("", ch.Get)
-	cfg.PUT("", ch.Update)
+	g.POST("hooks/cw/tickets", th.ProcessTicket, errh, cws)
 }
 
-func registerUserRoutes(g *gin.Engine, svc *user.Service) {
+func registerUserRoutes(r *gin.RouterGroup, svc *user.Service) {
 	h := handler.NewUserHandler(svc)
-	u := g.Group("users", middleware.ErrorHandler(), middleware.APIKeyAuth(svc.Keys))
-	u.GET("", h.ListUsers)
-	u.GET(":id", h.GetUser)
-	u.DELETE(":id")
+	r.GET("", h.ListUsers)
+	r.GET(":id", h.GetUser)
+	r.DELETE(":id")
 
-	k := u.Group("keys")
+	k := r.Group("keys")
 	k.GET("", h.ListAPIKeys)
 	k.GET(":id", h.GetAPIKey)
 	k.POST("", h.AddAPIKey)
 	k.DELETE(":id", h.DeleteAPIKey)
+}
+
+func registerConfigRoutes(r *gin.RouterGroup, svc *config.Service) {
+	h := handler.NewConfigHandler(svc)
+	r.GET("", h.Get)
+	r.PUT("", h.Update)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/ticket"
+	"github.com/thecoretg/ticketbot/internal/service/user"
 )
 
 type App struct {
@@ -44,6 +45,7 @@ type testFlags struct {
 
 type Services struct {
 	Config   *config.Service
+	User     *user.Service
 	Ticket   *ticket.Service
 	Notifier *notifier.Service
 }
@@ -93,6 +95,7 @@ func newApp(ctx context.Context) (*App, error) {
 		Forwards:      r.Forwards,
 	}
 
+	us := user.New(r.APIUser, r.APIKey)
 	ns := notifier.New(nr, wx, cr.cw.CompanyId, cfg.MaxMessageLength)
 	ts := ticket.New(s.pool, r.CW, cw)
 
@@ -105,6 +108,7 @@ func newApp(ctx context.Context) (*App, error) {
 		WebexClient: webex.NewClient(cr.WebexSecret),
 		Svc: &Services{
 			Config:   cs,
+			User:     us,
 			Ticket:   ts,
 			Notifier: ns,
 		},
