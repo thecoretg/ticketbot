@@ -47,17 +47,22 @@ func (s *Service) SyncBoards(ctx context.Context) error {
 		}
 	}()
 
-	var addErrs, delErrs []error
-	// TODO: make this concurrent, but its already pretty fast
+	var syncErrs []error
 	for _, b := range s.boardsToUpsert(cwb) {
 		if _, err := txSvc.Boards.Upsert(ctx, b); err != nil {
-			addErrs = append(addErrs, fmt.Errorf("upserting board %d (%s): %w", b.ID, b.Name, err))
+			syncErrs = append(syncErrs, fmt.Errorf("upserting board %d (%s): %w", b.ID, b.Name, err))
 		}
 	}
 
 	for _, b := range s.boardsToDelete(cwb, sb) {
 		if err := txSvc.Boards.Delete(ctx, b.ID); err != nil {
-			delErrs = append(delErrs, fmt.Errorf("deleting board %d (%s): %w", b.ID, b.Name, err))
+			syncErrs = append(syncErrs, fmt.Errorf("deleting board %d (%s): %w", b.ID, b.Name, err))
+		}
+	}
+
+	if len(syncErrs) > 0 {
+		for _, e := range syncErrs {
+			slog.Error("board sync", "error", e)
 		}
 	}
 

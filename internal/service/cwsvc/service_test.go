@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -117,6 +118,7 @@ func newTestService(t *testing.T, ctx context.Context) (*Service, error) {
 
 func testTicketIDs(t *testing.T) []int {
 	t.Helper()
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 	raw := os.Getenv("TEST_TICKET_IDS")
 	split := strings.Split(raw, ",")
 
