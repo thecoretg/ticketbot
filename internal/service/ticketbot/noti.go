@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/external/webex"
@@ -46,6 +47,33 @@ func (s *Service) CreateMessages(ctx context.Context, ticket *models.FullTicket,
 		return ErrAlreadySent
 	}
 
+}
+
+func (s *Service) MarkNotiSkipped(ctx context.Context, ticket *models.FullTicket) error {
+	if ticket.LatestNote == nil {
+		return nil
+	}
+
+	noteID := ticket.LatestNote.ID
+	notified, err := s.Notifications.ExistsForNote(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("checking existence of notification for note: %w", err)
+	}
+
+	if notified {
+		return nil
+	}
+
+	n := models.TicketNotification{
+		TicketNoteID: noteID,
+		Skipped:      true,
+	}
+
+	if _, err := s.Notifications.Insert(ctx, n); err != nil {
+		return fmt.Errorf("inserting notification: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Service) makeMessages(ctx context.Context, action string, t *models.FullTicket) ([]webex.Message, error) {

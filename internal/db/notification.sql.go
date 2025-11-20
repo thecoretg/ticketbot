@@ -64,7 +64,7 @@ RETURNING id, notifier_id, ticket_note_id, webex_room_id, sent_to_email, sent, s
 `
 
 type InsertTicketNotificationParams struct {
-	NotifierID   int     `json:"notifier_id"`
+	NotifierID   *int    `json:"notifier_id"`
 	TicketNoteID int     `json:"ticket_note_id"`
 	WebexRoomID  *int    `json:"webex_room_id"`
 	SentToEmail  *string `json:"sent_to_email"`
