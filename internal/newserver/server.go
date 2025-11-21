@@ -13,7 +13,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
-	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
+	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 )
@@ -49,7 +49,7 @@ type Services struct {
 	User     *user.Service
 	CW       *cwsvc.Service
 	Webex    *webexsvc.Service
-	Notifier *ticketbot.Service
+	Notifier *notifier.Service
 }
 
 type repoType string
@@ -93,7 +93,7 @@ func newApp(ctx context.Context) (*App, error) {
 		return nil, fmt.Errorf("getting initial config: %w", err)
 	}
 
-	nr := ticketbot.Repos{
+	nr := notifier.Repos{
 		Rooms:         r.WebexRoom,
 		Notifiers:     r.Notifiers,
 		Notifications: r.Notifications,
@@ -101,7 +101,7 @@ func newApp(ctx context.Context) (*App, error) {
 	}
 
 	us := user.New(r.APIUser, r.APIKey)
-	tb := ticketbot.New(nr, wx, cr.cw.CompanyId, cfg.MaxMessageLength)
+	tb := notifier.New(nr, wx, cr.cw.CompanyId, cfg.MaxMessageLength)
 	cws := cwsvc.New(s.pool, r.CW, cw)
 	ws := webexsvc.New(s.pool, r.WebexRoom, wx)
 

@@ -1,37 +1,43 @@
 package ticketbot
 
 import (
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/external/webex"
+	"context"
+	"fmt"
+
 	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
+	"github.com/thecoretg/ticketbot/internal/service/notifier"
 )
 
 type Service struct {
-	Rooms            models.WebexRoomRepository
-	Notifiers        models.NotifierRepository
-	Notifications    models.TicketNotificationRepository
-	Forwards         models.UserForwardRepository
-	Pool             *pgxpool.Pool
-	WebexClient      *webex.Client
-	CWCompanyID      string
-	MaxMessageLength int
+	Cfg      models.Config
+	CW       *cwsvc.Service
+	Notifier *notifier.Service
 }
 
-type Repos struct {
-	Rooms         models.WebexRoomRepository
-	Notifiers     models.NotifierRepository
-	Notifications models.TicketNotificationRepository
-	Forwards      models.UserForwardRepository
-}
-
-func New(r Repos, wc *webex.Client, cwCompanyID string, max int) *Service {
+func New(cfg models.Config, cw *cwsvc.Service, ns *notifier.Service) *Service {
 	return &Service{
-		Rooms:            r.Rooms,
-		Notifiers:        r.Notifiers,
-		Notifications:    r.Notifications,
-		Forwards:         r.Forwards,
-		WebexClient:      wc,
-		CWCompanyID:      cwCompanyID,
-		MaxMessageLength: max,
+		Cfg:      cfg,
+		CW:       cw,
+		Notifier: ns,
 	}
+}
+
+func (s *Service) ProcessNewTicket(ctx context.Context, id int) ([]models.TicketNotification, error) {
+	ticket, err := s.CW.ProcessTicket(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("processing ticket: %w", err)
+	}
+
+	var notis []models.TicketNotification
+	if s.Cfg.AttemptNotify {
+		res := s.Notifier.ProcessWithNewTicket(ctx, ticket)
+		if res.Error != nil {
+			return res.Notifications, fmt.Errorf("processing notifications: %w", res.Error)
+		}
+
+		notis = res.Notifications
+	}
+
+	return notis, nil
 }

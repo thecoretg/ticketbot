@@ -1,4 +1,4 @@
-package ticketbot
+package notifier
 
 import (
 	"context"
@@ -10,6 +10,12 @@ import (
 	"github.com/thecoretg/ticketbot/internal/external/webex"
 	"github.com/thecoretg/ticketbot/internal/models"
 )
+
+type Result struct {
+	Ticket        *models.FullTicket
+	Notifications []models.TicketNotification
+	Error         error
+}
 
 type message struct {
 	webexMsg     webex.Message
@@ -25,25 +31,37 @@ func newMessage(wm webex.Message, wr *models.WebexRoom, n models.TicketNotificat
 	}
 }
 
-func (s *Service) ProcessWithNewTicket(ctx context.Context, ticket *models.FullTicket) error {
+func (s *Service) ProcessWithNewTicket(ctx context.Context, ticket *models.FullTicket) *Result {
+	res := &Result{
+		Ticket:        ticket,
+		Notifications: []models.TicketNotification{},
+	}
+
 	if ticket == nil {
-		return errors.New("received nil ticket")
+		res.Error = errors.New("received nil ticket")
+		return res
 	}
 
 	notifiers, err := s.Notifiers.ListByBoard(ctx, ticket.Board.ID)
 	if err != nil {
-		return fmt.Errorf("listing notifiers for board: %w", err)
+		res.Error = fmt.Errorf("listing notifiers for board: %w", err)
+		return res
 	}
 
 	if len(notifiers) == 0 {
-		return nil
+		return res
 	}
 
 	var rooms []models.WebexRoom
 	for _, n := range notifiers {
+		if !n.NotifyEnabled {
+			continue
+		}
+
 		r, err := s.Rooms.Get(ctx, n.WebexRoomID)
 		if err != nil {
-			return fmt.Errorf("getting webex room from notifier: %w", err)
+			res.Error = fmt.Errorf("getting webex room from notifier: %w", err)
+			return res
 		}
 
 		rooms = append(rooms, r)
@@ -53,10 +71,14 @@ func (s *Service) ProcessWithNewTicket(ctx context.Context, ticket *models.FullT
 	var msgErrs []error
 
 	for _, m := range msgs {
-		if _, err := s.WebexClient.PostMessage(&m.webexMsg); err != nil {
+		if _, err := s.MessageSender.PostMessage(&m.webexMsg); err != nil {
 			e := fmt.Errorf("sending webex message: %w", err)
 			msgErrs = append(msgErrs, e)
+		} else {
+			slog.Info("ticketbot: notification sent for new ticket", "ticket_id", ticket.Ticket.ID, "sent_to", m.webexRoom.Name)
 		}
+
+		res.Notifications = append(res.Notifications, m.notification)
 
 		n, err := s.Notifications.Insert(ctx, m.notification)
 		if err != nil {
@@ -71,10 +93,10 @@ func (s *Service) ProcessWithNewTicket(ctx context.Context, ticket *models.FullT
 		for _, e := range msgErrs {
 			slog.Error("sending ticket notification", "error", e)
 		}
-		return fmt.Errorf("sending ticket notifications for ticket %d - see logs for details", ticket.Ticket.ID)
+		res.Error = fmt.Errorf("sending ticket notifications for ticket %d - see logs for details", ticket.Ticket.ID)
 	}
 
-	return nil
+	return res
 }
 
 func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models.FullTicket) []message {

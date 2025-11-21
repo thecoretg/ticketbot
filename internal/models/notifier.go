@@ -6,7 +6,13 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/thecoretg/ticketbot/internal/external/webex"
 )
+
+type MessageSender interface {
+	PostMessage(message *webex.Message) (*webex.Message, error)
+	ListRooms(params map[string]string) ([]webex.Room, error)
+}
 
 var ErrUserForwardNotFound = errors.New("forward rule not found")
 
