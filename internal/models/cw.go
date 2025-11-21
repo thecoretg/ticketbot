@@ -77,6 +77,7 @@ type MemberRepository interface {
 	WithTx(tx pgx.Tx) MemberRepository
 	List(ctx context.Context) ([]Member, error)
 	Get(ctx context.Context, id int) (Member, error)
+	GetByIdentifier(ctx context.Context, identifier string) (Member, error)
 	Upsert(ctx context.Context, c Member) (Member, error)
 	Delete(ctx context.Context, id int) error
 }
@@ -111,6 +112,7 @@ type FullTicket struct {
 	Contact    *Contact
 	Owner      *Member
 	LatestNote *FullTicketNote
+	Resources  []Member
 }
 
 var ErrTicketNoteNotFound = errors.New("ticket note not found")

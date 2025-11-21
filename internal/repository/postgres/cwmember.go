@@ -51,6 +51,18 @@ func (p *MemberRepo) Get(ctx context.Context, id int) (models.Member, error) {
 	return memberFromPG(d), nil
 }
 
+func (p *MemberRepo) GetByIdentifier(ctx context.Context, identifier string) (models.Member, error) {
+	d, err := p.queries.GetMemberByIdentifier(ctx, identifier)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.Member{}, models.ErrMemberNotFound
+		}
+		return models.Member{}, err
+	}
+
+	return memberFromPG(d), nil
+}
+
 func (p *MemberRepo) Upsert(ctx context.Context, b models.Member) (models.Member, error) {
 	d, err := p.queries.UpsertMember(ctx, memberToUpsertParams(b))
 	if err != nil {

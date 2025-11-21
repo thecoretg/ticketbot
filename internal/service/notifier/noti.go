@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/thecoretg/ticketbot/internal/external/webex"
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -99,6 +100,29 @@ func (s *Service) ProcessWithNewTicket(ctx context.Context, ticket *models.FullT
 	return res
 }
 
+func (s *Service) ProcessWithUpdatedTicket(ctx context.Context, ticket *models.FullTicket) *Result {
+	res := &Result{
+		Ticket:        ticket,
+		Notifications: []models.TicketNotification{},
+	}
+
+	if ticket == nil {
+		res.Error = errors.New("received nil ticket")
+		return res
+	}
+
+	notifiers, err := s.Notifiers.ListByBoard(ctx, ticket.Board.ID)
+	if err != nil {
+		res.Error = fmt.Errorf("listing notifiers for board: %w", err)
+		return res
+	}
+
+	if len(notifiers) == 0 {
+		return res
+	}
+
+}
+
 func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models.FullTicket) []message {
 	body := "**New Ticket:** "
 	if ticket.Company.Name != "" {
@@ -113,6 +137,9 @@ func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models
 	if ticket.LatestNote != nil && ticket.LatestNote.Content != nil {
 		body += messageText(ticket, s.MaxMessageLength)
 	}
+
+	// Divider line for easily distinguishable breaks in notifications
+	body += fmt.Sprintf("\n\n---")
 
 	var msgs []message
 	for _, r := range rooms {
@@ -132,6 +159,107 @@ func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models
 	}
 
 	return msgs
+}
+
+func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket) []message {
+	body := "**Ticket Updated:** "
+	if ticket.Company.Name != "" {
+		body += fmt.Sprintf("\n**Company:** %s", ticket.Company.Name)
+	}
+
+	if ticket.Contact != nil {
+		name := fullName(ticket.Contact.FirstName, ticket.Contact.LastName)
+		body += fmt.Sprintf("\n**Ticket Contact:** %s", name)
+	}
+
+	if ticket.LatestNote != nil && ticket.LatestNote.Content != nil {
+		body += messageText(ticket, s.MaxMessageLength)
+	}
+
+	var msgs []message
+
+	return msgs
+}
+
+func (s *Service) getUpdateRecipients(ctx context.Context, ticket *models.FullTicket) ([]models.Member, error) {
+	var excluded []models.Member
+
+	// if the sender of the note is a member, exclude them from messages;
+	// they don't need a notification for their own note
+	if ticket.LatestNote != nil && ticket.LatestNote.Member != nil {
+		excluded = append(excluded, *ticket.LatestNote.Member)
+	}
+
+	var recipients []models.Member
+	for _, r := range ticket.Resources {
+		if memberSliceContains(excluded, r) {
+			continue
+		}
+
+		fwds, err := s.Forwards.ListByEmail(ctx, r.PrimaryEmail)
+		if err != nil {
+			slog.Warn("checking forwards; adding member as recipient", "email", r.PrimaryEmail, "error", err)
+			recipients = append(recipients, r)
+			continue
+		}
+
+		if len(fwds) > 0 {
+
+		}
+	}
+}
+
+func (s *Service) forwardsToRecipients(ctx context.Context, member models.Member) []models.Member {
+	fwds, err := s.Forwards.ListByEmail(ctx, member.PrimaryEmail)
+	if err != nil {
+		slog.Warn("checking forwards; adding member as recipient", "email", member.PrimaryEmail, "error", err)
+		return []models.Member{member}
+	}
+
+	if len(fwds) == 0 {
+		return []models.Member{member}
+	}
+
+	activeFwds := filterActiveFwds(fwds)
+	if len(activeFwds) == 0 {
+		return []models.Member{member}
+	}
+
+	var rec []models.Member
+	for _, f := range activeFwds {
+		if f.UserKeepsCopy {
+			rec = append(rec, member)
+			break
+		}
+	}
+
+	for _, f := range activeFwds {
+		rec = append(rec)
+	}
+}
+
+func filterActiveFwds(fwds []models.UserForward) []models.UserForward {
+	var activeFwds []models.UserForward
+	for _, f := range fwds {
+		if f.Enabled && dateRangeActive(f.StartDate, f.EndDate) {
+			activeFwds = append(activeFwds, f)
+		}
+	}
+
+	return activeFwds
+}
+
+func dateRangeActive(start, end *time.Time) bool {
+	now := time.Now()
+	if start == nil {
+		return false
+	}
+
+	if end == nil {
+		return now.After(*start)
+	}
+
+	return now.After(*start) && now.Before(*end)
 }
 
 func messageText(t *models.FullTicket, maxLen int) string {
@@ -180,4 +308,14 @@ func fullName(first string, last *string) string {
 	}
 
 	return first
+}
+
+func memberSliceContains(members []models.Member, check models.Member) bool {
+	for _, x := range members {
+		if x.ID == check.ID {
+			return true
+		}
+	}
+
+	return false
 }

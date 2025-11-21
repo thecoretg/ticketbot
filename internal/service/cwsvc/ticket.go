@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -143,6 +144,20 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
+	var rsc []models.Member
+	if ticket.Resources != nil {
+		ids := resourceStringToSlice(*ticket.Resources)
+		for _, i := range ids {
+			member, err := s.ensureMemberByIdentifier(ctx, i)
+			if err != nil {
+				slog.Warn("error getting resource member by identifier", "error", err)
+				continue
+			}
+
+			rsc = append(rsc, member)
+		}
+	}
+
 	var note *models.FullTicketNote
 	if cd.note != nil && cd.note.ID != 0 {
 		note, err = txSvc.ensureTicketNote(ctx, cd.note)
@@ -176,6 +191,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 		Contact:    ptrContact,
 		Owner:      ptrOwner,
 		LatestNote: note,
+		Resources:  rsc,
 	}, nil
 }
 
@@ -337,6 +353,24 @@ func (s *Service) ensureContact(ctx context.Context, id int) (models.Contact, er
 	return c, nil
 }
 
+func (s *Service) ensureMemberByIdentifier(ctx context.Context, identifier string) (models.Member, error) {
+	m, err := s.Members.GetByIdentifier(ctx, identifier)
+	if err == nil {
+		return m, nil
+	}
+
+	if !errors.Is(err, models.ErrMemberNotFound) {
+		return models.Member{}, fmt.Errorf("getting member from store: %w", err)
+	}
+
+	cw, err := s.cwClient.GetMemberByIdentifier(identifier)
+	if err != nil {
+		return models.Member{}, fmt.Errorf("getting member from cw by identifier: %w", err)
+	}
+
+	return s.ensureMember(ctx, cw.ID)
+}
+
 func (s *Service) ensureMember(ctx context.Context, id int) (models.Member, error) {
 	m, err := s.Members.Get(ctx, id)
 	if err == nil {
@@ -458,6 +492,15 @@ func (s *Service) getNoteMemberID(ctx context.Context, n *psa.ServiceTicketNote)
 	}
 
 	return nil, nil
+}
+
+func resourceStringToSlice(s string) []string {
+	rsc := strings.Split(s, ",")
+	for i, r := range rsc {
+		rsc[i] = strings.TrimSpace(r)
+	}
+
+	return rsc
 }
 
 func intToPtr(i int) *int {

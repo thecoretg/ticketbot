@@ -48,6 +48,19 @@ func (p *MemberRepo) Get(ctx context.Context, id int) (models.Member, error) {
 	return v, nil
 }
 
+func (p *MemberRepo) GetByIdentifier(ctx context.Context, identifier string) (models.Member, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, v := range p.data {
+		if v.Identifier == identifier {
+			return v, nil
+		}
+	}
+
+	return models.Member{}, models.ErrMemberNotFound
+}
+
 func (p *MemberRepo) Upsert(ctx context.Context, m models.Member) (models.Member, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
