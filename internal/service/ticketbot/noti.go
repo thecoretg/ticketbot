@@ -4,108 +4,112 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
-	"time"
 
-	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/external/webex"
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
-var (
-	ErrNoRooms     = errors.New("no rooms enabled for this board")
-	ErrNoNote      = errors.New("no note found for this ticket")
-	ErrAlreadySent = errors.New("notification(s) already sent for this note")
-)
+type message struct {
+	webexMsg     webex.Message
+	webexRoom    *models.WebexRoom
+	notification models.TicketNotification
+}
 
-func (s *Service) CreateMessages(ctx context.Context, ticket *models.FullTicket, action, cwClientID string) error {
+func newMessage(wm webex.Message, wr *models.WebexRoom, n models.TicketNotification) message {
+	return message{
+		webexMsg:     wm,
+		webexRoom:    wr,
+		notification: n,
+	}
+}
+
+func (s *Service) ProcessWithNewTicket(ctx context.Context, ticket *models.FullTicket) error {
 	if ticket == nil {
 		return errors.New("received nil ticket")
 	}
 
-	// return ErrNoNote so caller can check (and return non-error)
-	noteID := ticket.LatestNote.ID
-	if noteID == 0 {
-		return ErrNoNote
-	}
-
-	rooms, err := s.Notifiers.ListByBoard(ctx, ticket.Board.ID)
+	notifiers, err := s.Notifiers.ListByBoard(ctx, ticket.Board.ID)
 	if err != nil {
-		return fmt.Errorf("getting enabled rooms: %w", err)
+		return fmt.Errorf("listing notifiers for board: %w", err)
 	}
 
-	if rooms == nil || len(rooms) == 0 {
-		return ErrNoRooms
-	}
-
-	sent, err := s.Notifications.ExistsForNote(ctx, noteID)
-	if err != nil {
-		return fmt.Errorf("checking if notification exists for note: %w", err)
-	}
-
-	if sent {
-		return ErrAlreadySent
-	}
-
-}
-
-func (s *Service) MarkNotiSkipped(ctx context.Context, ticket *models.FullTicket) error {
-	if ticket.LatestNote == nil {
+	if len(notifiers) == 0 {
 		return nil
 	}
 
-	noteID := ticket.LatestNote.ID
-	notified, err := s.Notifications.ExistsForNote(ctx, noteID)
-	if err != nil {
-		return fmt.Errorf("checking existence of notification for note: %w", err)
+	var rooms []models.WebexRoom
+	for _, n := range notifiers {
+		r, err := s.Rooms.Get(ctx, n.WebexRoomID)
+		if err != nil {
+			return fmt.Errorf("getting webex room from notifier: %w", err)
+		}
+
+		rooms = append(rooms, r)
 	}
 
-	if notified {
-		return nil
+	msgs := s.makeNewTicketMessages(rooms, ticket)
+	var msgErrs []error
+
+	for _, m := range msgs {
+		if _, err := s.WebexClient.PostMessage(&m.webexMsg); err != nil {
+			e := fmt.Errorf("sending webex message: %w", err)
+			msgErrs = append(msgErrs, e)
+		}
+
+		n, err := s.Notifications.Insert(ctx, m.notification)
+		if err != nil {
+			e := fmt.Errorf("inserting notification into store: %w", err)
+			msgErrs = append(msgErrs, e)
+			continue
+		}
+		slog.Info("sent new ticket notification", "id", n.ID, "ticket_id", ticket.Ticket.ID, "to_webex_room", m.webexRoom.Name)
 	}
 
-	n := models.TicketNotification{
-		TicketNoteID: noteID,
-		Skipped:      true,
-	}
-
-	if _, err := s.Notifications.Insert(ctx, n); err != nil {
-		return fmt.Errorf("inserting notification: %w", err)
+	if len(msgErrs) > 0 {
+		for _, e := range msgErrs {
+			slog.Error("sending ticket notification", "error", e)
+		}
+		return fmt.Errorf("sending ticket notifications for ticket %d - see logs for details", ticket.Ticket.ID)
 	}
 
 	return nil
 }
 
-func (s *Service) makeMessages(ctx context.Context, action string, t *models.FullTicket) ([]webex.Message, error) {
-	var body string
-	body += messageHeader(t, action, s.CWCompanyID)
-
-	// add company name if present (even Catchall is considered a company; this will always exist)
-	if t.Company.Name != "" {
-		body += fmt.Sprintf("\n**Company:** %s", t.Company.Name)
+func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models.FullTicket) []message {
+	body := "**New Ticket:** "
+	if ticket.Company.Name != "" {
+		body += fmt.Sprintf("\n**Company:** %s", ticket.Company.Name)
 	}
 
-	// add ticket contact name if exists (not always true)
-	if t.Contact.ID != 0 {
-		body += fmt.Sprintf("\n**Ticket Contact:** %s", fullName(t.Contact.FirstName, t.Contact.LastName))
+	if ticket.Contact != nil {
+		name := fullName(ticket.Contact.FirstName, ticket.Contact.LastName)
+		body += fmt.Sprintf("\n**Ticket Contact:** %s", name)
 	}
 
-	if rs.cwData.note.Text != "" {
-		body += cl.messageText(rs.cwData)
-	}
-}
-
-func messageHeader(t *models.FullTicket, action, cwClientID string) string {
-	var header string
-	if action == "added" {
-		header += "**New Ticket:** "
-	} else {
-		header += "**Ticket Updated:** "
+	if ticket.LatestNote != nil && ticket.LatestNote.Content != nil {
+		body += messageText(ticket, s.MaxMessageLength)
 	}
 
-	// add clickable ticket ID with link to ticket, with ticket title
-	header += fmt.Sprintf("%s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, cwClientID), t.Ticket.Summary)
-	return header
+	var msgs []message
+	for _, r := range rooms {
+		wm := webex.NewMessageToRoom(r.WebexID, r.Name, body)
+
+		n := &models.TicketNotification{
+			TicketID:    ticket.Ticket.ID,
+			WebexRoomID: &r.ID,
+			Sent:        true,
+		}
+
+		if ticket.LatestNote != nil {
+			n.TicketNoteID = &ticket.LatestNote.ID
+		}
+
+		msgs = append(msgs, newMessage(wm, &r, *n))
+	}
+
+	return msgs
 }
 
 func messageText(t *models.FullTicket, maxLen int) string {

@@ -37,7 +37,7 @@ func (p NotificationRepo) ListAll(ctx context.Context) ([]models.TicketNotificat
 }
 
 func (p NotificationRepo) ListByNoteID(ctx context.Context, noteID int) ([]models.TicketNotification, error) {
-	dn, err := p.queries.ListTicketNotificationsByNoteID(ctx, noteID)
+	dn, err := p.queries.ListTicketNotificationsByNoteID(ctx, &noteID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +50,17 @@ func (p NotificationRepo) ListByNoteID(ctx context.Context, noteID int) ([]model
 	return n, nil
 }
 
+func (p NotificationRepo) ExistsForTicket(ctx context.Context, ticketID int) (bool, error) {
+	exists, err := p.queries.CheckNotificationsExistByTicketID(ctx, ticketID)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
 func (p NotificationRepo) ExistsForNote(ctx context.Context, noteID int) (bool, error) {
-	exists, err := p.queries.CheckNotificationsExist(ctx, noteID)
+	exists, err := p.queries.CheckNotificationsExistByNote(ctx, &noteID)
 	if err != nil {
 		return false, err
 	}
@@ -93,7 +102,7 @@ func (p NotificationRepo) Delete(ctx context.Context, id int) error {
 
 func notificationToInsertParams(n models.TicketNotification) db.InsertTicketNotificationParams {
 	return db.InsertTicketNotificationParams{
-		NotifierID:   n.NotifierID,
+		TicketID:     n.TicketID,
 		TicketNoteID: n.TicketNoteID,
 		WebexRoomID:  n.WebexRoomID,
 		SentToEmail:  n.SentToEmail,
@@ -105,7 +114,7 @@ func notificationToInsertParams(n models.TicketNotification) db.InsertTicketNoti
 func notificationFromPG(pg db.TicketNotification) models.TicketNotification {
 	return models.TicketNotification{
 		ID:           pg.ID,
-		NotifierID:   pg.NotifierID,
+		TicketID:     pg.TicketID,
 		TicketNoteID: pg.TicketNoteID,
 		WebexRoomID:  pg.WebexRoomID,
 		SentToEmail:  pg.SentToEmail,

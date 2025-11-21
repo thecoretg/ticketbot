@@ -9,7 +9,7 @@ import (
 	"context"
 )
 
-const checkNotificationsExist = `-- name: CheckNotificationsExist :one
+const checkNotificationsExistByNote = `-- name: CheckNotificationsExistByNote :one
 SELECT EXISTS (
     SELECT 1
     FROM ticket_notification
@@ -17,8 +17,23 @@ SELECT EXISTS (
 ) AS exists
 `
 
-func (q *Queries) CheckNotificationsExist(ctx context.Context, ticketNoteID int) (bool, error) {
-	row := q.db.QueryRow(ctx, checkNotificationsExist, ticketNoteID)
+func (q *Queries) CheckNotificationsExistByNote(ctx context.Context, ticketNoteID *int) (bool, error) {
+	row := q.db.QueryRow(ctx, checkNotificationsExistByNote, ticketNoteID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkNotificationsExistByTicketID = `-- name: CheckNotificationsExistByTicketID :one
+SELECT EXISTS (
+    SELECT 1
+    FROM ticket_notification
+    WHERE ticket_id = $1
+) AS exists
+`
+
+func (q *Queries) CheckNotificationsExistByTicketID(ctx context.Context, ticketID int) (bool, error) {
+	row := q.db.QueryRow(ctx, checkNotificationsExistByTicketID, ticketID)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -35,7 +50,7 @@ func (q *Queries) DeleteTicketNotification(ctx context.Context, id int) error {
 }
 
 const getTicketNotification = `-- name: GetTicketNotification :one
-SELECT id, notifier_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on FROM ticket_notification
+SELECT id, ticket_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on FROM ticket_notification
 WHERE id = $1
 `
 
@@ -44,7 +59,7 @@ func (q *Queries) GetTicketNotification(ctx context.Context, id int) (TicketNoti
 	var i TicketNotification
 	err := row.Scan(
 		&i.ID,
-		&i.NotifierID,
+		&i.TicketID,
 		&i.TicketNoteID,
 		&i.WebexRoomID,
 		&i.SentToEmail,
@@ -58,14 +73,14 @@ func (q *Queries) GetTicketNotification(ctx context.Context, id int) (TicketNoti
 
 const insertTicketNotification = `-- name: InsertTicketNotification :one
 INSERT INTO ticket_notification
-(notifier_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped)
+(ticket_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, notifier_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on
+RETURNING id, ticket_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on
 `
 
 type InsertTicketNotificationParams struct {
-	NotifierID   *int    `json:"notifier_id"`
-	TicketNoteID int     `json:"ticket_note_id"`
+	TicketID     int     `json:"ticket_id"`
+	TicketNoteID *int    `json:"ticket_note_id"`
 	WebexRoomID  *int    `json:"webex_room_id"`
 	SentToEmail  *string `json:"sent_to_email"`
 	Sent         bool    `json:"sent"`
@@ -74,7 +89,7 @@ type InsertTicketNotificationParams struct {
 
 func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicketNotificationParams) (TicketNotification, error) {
 	row := q.db.QueryRow(ctx, insertTicketNotification,
-		arg.NotifierID,
+		arg.TicketID,
 		arg.TicketNoteID,
 		arg.WebexRoomID,
 		arg.SentToEmail,
@@ -84,7 +99,7 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 	var i TicketNotification
 	err := row.Scan(
 		&i.ID,
-		&i.NotifierID,
+		&i.TicketID,
 		&i.TicketNoteID,
 		&i.WebexRoomID,
 		&i.SentToEmail,
@@ -97,7 +112,7 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 }
 
 const listTicketNotifications = `-- name: ListTicketNotifications :many
-SELECT id, notifier_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on FROM ticket_notification
+SELECT id, ticket_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on FROM ticket_notification
 ORDER BY created_on
 `
 
@@ -112,7 +127,7 @@ func (q *Queries) ListTicketNotifications(ctx context.Context) ([]TicketNotifica
 		var i TicketNotification
 		if err := rows.Scan(
 			&i.ID,
-			&i.NotifierID,
+			&i.TicketID,
 			&i.TicketNoteID,
 			&i.WebexRoomID,
 			&i.SentToEmail,
@@ -132,11 +147,11 @@ func (q *Queries) ListTicketNotifications(ctx context.Context) ([]TicketNotifica
 }
 
 const listTicketNotificationsByNoteID = `-- name: ListTicketNotificationsByNoteID :many
-SELECT id, notifier_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on FROM ticket_notification
+SELECT id, ticket_id, ticket_note_id, webex_room_id, sent_to_email, sent, skipped, created_on, updated_on FROM ticket_notification
 WHERE ticket_note_id = $1
 `
 
-func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNoteID int) ([]TicketNotification, error) {
+func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNoteID *int) ([]TicketNotification, error) {
 	rows, err := q.db.Query(ctx, listTicketNotificationsByNoteID, ticketNoteID)
 	if err != nil {
 		return nil, err
@@ -147,7 +162,7 @@ func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNot
 		var i TicketNotification
 		if err := rows.Scan(
 			&i.ID,
-			&i.NotifierID,
+			&i.TicketID,
 			&i.TicketNoteID,
 			&i.WebexRoomID,
 			&i.SentToEmail,

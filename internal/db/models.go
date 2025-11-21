@@ -105,8 +105,8 @@ type NotifierConnection struct {
 
 type TicketNotification struct {
 	ID           int       `json:"id"`
-	NotifierID   *int      `json:"notifier_id"`
-	TicketNoteID int       `json:"ticket_note_id"`
+	TicketID     int       `json:"ticket_id"`
+	TicketNoteID *int      `json:"ticket_note_id"`
 	WebexRoomID  *int      `json:"webex_room_id"`
 	SentToEmail  *string   `json:"sent_to_email"`
 	Sent         bool      `json:"sent"`
