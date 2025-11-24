@@ -43,7 +43,7 @@ func New(pool *pgxpool.Pool, r models.CWRepos, cl *psa.Client) *Service {
 	}
 }
 
-func (s *Service) withTx(tx pgx.Tx) *Service {
+func (s *Service) withTX(tx pgx.Tx) *Service {
 	return &Service{
 		Boards:    s.Boards.WithTx(tx),
 		Companies: s.Companies.WithTx(tx),

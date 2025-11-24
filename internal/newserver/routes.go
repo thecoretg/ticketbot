@@ -11,6 +11,9 @@ func (a *App) addRoutes(g *gin.Engine) {
 	auth := middleware.APIKeyAuth(a.Svc.User.Keys)
 	cws := middleware.RequireConnectwiseSignature()
 
+	sh := handler.NewSyncHandler(a.Svc.CW, a.Svc.Webex)
+	g.POST("sync", sh.HandleSync)
+
 	u := g.Group("users", errh, auth)
 	uh := handler.NewUserHandler(a.Svc.User)
 	registerUserRoutes(u, uh)
@@ -31,8 +34,8 @@ func (a *App) addRoutes(g *gin.Engine) {
 	nh := handler.NewNotifierHandler(a.Stores.Notifiers, a.Stores.CW.Board, a.Stores.WebexRoom)
 	registerNotifierRoutes(n, nh)
 
-	th := handler.NewCWHandler(a.Svc.CW)
-	g.POST("hooks/cw/tickets", th.ProcessTicket, errh, cws)
+	tb := handler.NewTicketbotHandler(a.Svc.Ticketbot)
+	g.POST("hooks/cw/tickets", tb.ProcessTicket, errh, cws)
 }
 
 func registerUserRoutes(r *gin.RouterGroup, h *handler.UserHandler) {
@@ -56,17 +59,12 @@ func registerCWRoutes(r *gin.RouterGroup, h *handler.CWHandler) {
 	b := r.Group("boards")
 	b.GET("", h.ListBoards)
 	b.GET(":id", h.GetBoard)
-	b.POST("sync", h.SyncBoards)
-
-	t := r.Group("tickets")
-	t.POST("sync", h.SyncOpenTickets)
 }
 
 func registerWebexRoutes(r *gin.RouterGroup, h *handler.WebexHandler) {
 	ro := r.Group("rooms")
 	ro.GET("", h.ListRooms)
 	ro.GET(":id", h.GetRoom)
-	ro.POST("", h.SyncRooms)
 }
 
 func registerNotifierRoutes(r *gin.RouterGroup, h *handler.NotifierHandler) {

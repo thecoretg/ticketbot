@@ -24,14 +24,15 @@ type Repos struct {
 	Forwards      models.UserForwardRepository
 }
 
-func New(cfg models.Config, r Repos, ms models.MessageSender, cwCompanyID string) *Service {
+func New(cfg models.Config, r Repos, ms models.MessageSender, cwCompanyID string, maxLen int) *Service {
 	return &Service{
-		Cfg:           cfg,
-		Rooms:         r.Rooms,
-		Notifiers:     r.Notifiers,
-		Notifications: r.Notifications,
-		Forwards:      r.Forwards,
-		MessageSender: ms,
-		CWCompanyID:   cwCompanyID,
+		Cfg:              cfg,
+		Rooms:            r.Rooms,
+		Notifiers:        r.Notifiers,
+		Notifications:    r.Notifications,
+		Forwards:         r.Forwards,
+		MessageSender:    ms,
+		CWCompanyID:      cwCompanyID,
+		MaxMessageLength: maxLen,
 	}
 }

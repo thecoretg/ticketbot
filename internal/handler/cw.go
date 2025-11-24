@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 )
@@ -19,34 +18,6 @@ type CWHandler struct {
 
 func NewCWHandler(svc *cwsvc.Service) *CWHandler {
 	return &CWHandler{Service: svc}
-}
-
-func (h *CWHandler) ProcessTicket(c *gin.Context) {
-	w := &psa.WebhookPayload{}
-	if err := c.ShouldBindJSON(w); err != nil {
-		c.Error(fmt.Errorf("bad json payload: %w", err))
-		return
-	}
-
-	switch w.Action {
-	case "added", "updated":
-		t, err := h.Service.ProcessTicket(c.Request.Context(), w.ID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, t)
-	case "deleted":
-		if err := h.Service.DeleteTicket(c.Request.Context(), w.ID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.Status(http.StatusOK)
-		return
-	default:
-		c.Error(fmt.Errorf("invalid action; expected 'added', 'updated', or 'deleted'; got '%s'", w.Action))
-		return
-	}
 }
 
 func (h *CWHandler) SyncOpenTickets(c *gin.Context) {

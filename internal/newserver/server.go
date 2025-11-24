@@ -14,6 +14,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 )
@@ -45,11 +46,12 @@ type testFlags struct {
 }
 
 type Services struct {
-	Config   *config.Service
-	User     *user.Service
-	CW       *cwsvc.Service
-	Webex    *webexsvc.Service
-	Notifier *notifier.Service
+	Config    *config.Service
+	User      *user.Service
+	CW        *cwsvc.Service
+	Webex     *webexsvc.Service
+	Notifier  *notifier.Service
+	Ticketbot *ticketbot.Service
 }
 
 type repoType string
@@ -60,7 +62,7 @@ const (
 
 func Run() error {
 	ctx := context.Background()
-	a, err := newApp(ctx)
+	a, err := NewApp(ctx)
 	if err != nil {
 		return fmt.Errorf("initializing app: %w", err)
 	}
@@ -71,7 +73,7 @@ func Run() error {
 	return srv.Run()
 }
 
-func newApp(ctx context.Context) (*App, error) {
+func NewApp(ctx context.Context) (*App, error) {
 	cr := getCreds()
 	tf := getTestFlags()
 	if err := cr.validate(tf); err != nil {
@@ -101,10 +103,11 @@ func newApp(ctx context.Context) (*App, error) {
 	}
 
 	us := user.New(r.APIUser, r.APIKey)
-	tb := notifier.New(nr, wx, cr.cw.CompanyId, cfg.MaxMessageLength)
 	cws := cwsvc.New(s.pool, r.CW, cw)
 	ws := webexsvc.New(s.pool, r.WebexRoom, wx)
 
+	ns := notifier.New(*cfg, nr, wx, cr.cw.CompanyId, cfg.MaxMessageLength)
+	tb := ticketbot.New(*cfg, cws, ns)
 	return &App{
 		Creds:       cr,
 		TestFlags:   tf,
@@ -113,11 +116,12 @@ func newApp(ctx context.Context) (*App, error) {
 		CWClient:    psa.NewClient(cr.cw),
 		WebexClient: webex.NewClient(cr.WebexSecret),
 		Svc: &Services{
-			Config:   cs,
-			User:     us,
-			CW:       cws,
-			Webex:    ws,
-			Notifier: tb,
+			Config:    cs,
+			User:      us,
+			CW:        cws,
+			Webex:     ws,
+			Notifier:  ns,
+			Ticketbot: tb,
 		},
 	}, nil
 }

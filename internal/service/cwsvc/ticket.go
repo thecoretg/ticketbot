@@ -96,7 +96,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 			return nil, fmt.Errorf("beginning tx: %w", err)
 		}
 
-		txSvc = s.withTx(tx)
+		txSvc = s.withTX(tx)
 
 		committed := false
 		defer func() {
