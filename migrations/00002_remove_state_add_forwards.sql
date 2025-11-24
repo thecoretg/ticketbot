@@ -3,14 +3,14 @@
 CREATE TABLE IF NOT EXISTS webex_user_forward (
     id SERIAL PRIMARY KEY,
     user_email TEXT NOT NULL,
-    dest_room_id INT NOT NULL REFERENCES webex_room(id) ON DELETE CASCADE,
+    dest_email TEXT NOT NULL,
     start_date TIMESTAMP,
     end_date TIMESTAMP,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     user_keeps_copy BOOLEAN NOT NULL DEFAULT TRUE,
     created_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (user_email, dest_room_id, start_date, end_date),
+    UNIQUE (user_email, dest_email, start_date, end_date),
     CHECK (start_date < end_date)
 );
 

@@ -3,6 +3,7 @@ package ticketbot
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
@@ -23,21 +24,46 @@ func New(cfg models.Config, cw *cwsvc.Service, ns *notifier.Service) *Service {
 	}
 }
 
-func (s *Service) ProcessNewTicket(ctx context.Context, id int) ([]models.TicketNotification, error) {
+func (s *Service) ProcessTicket(ctx context.Context, id int, isNew bool) error {
 	ticket, err := s.CW.ProcessTicket(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("processing ticket: %w", err)
+		return fmt.Errorf("processing ticket: %w", err)
 	}
 
-	var notis []models.TicketNotification
 	if s.Cfg.AttemptNotify {
-		res := s.Notifier.ProcessWithNewTicket(ctx, ticket)
+		res := s.Notifier.ProcessTicket(ctx, ticket, isNew)
 		if res.Error != nil {
-			return res.Notifications, fmt.Errorf("processing notifications: %w", res.Error)
+			return fmt.Errorf("processing notifications: %w", res.Error)
 		}
 
-		notis = res.Notifications
+		if res.NoNotiReason != "" {
+			slog.Info("ticketbot: notification not sent", "ticket_id", id, "reason", res.NoNotiReason)
+			return nil
+		}
+
+		for _, m := range res.MessagesToSend {
+			slog.Info("ticketbot: notification sent", "ticket_id", id, "recipients", getSentTo(m))
+		}
+
+		for _, m := range res.MessagesErrored {
+			if m.SendError != nil {
+				slog.Error("ticketbot: error sending notification", "ticket_id", id, "recipients", getSentTo(m), "error", m.SendError)
+			}
+		}
+
+		return nil
 	}
 
-	return notis, nil
+	return nil
+}
+
+func getSentTo(n notifier.Message) string {
+	sentTo := ""
+	if n.ToEmail != nil {
+		sentTo = *n.ToEmail
+	} else if n.WebexRoom != nil {
+		sentTo = n.WebexRoom.Name
+	}
+
+	return sentTo
 }

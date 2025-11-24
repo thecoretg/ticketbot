@@ -13,7 +13,7 @@ ORDER BY id;
 
 -- name: InsertWebexUserForward :one
 INSERT INTO webex_user_forward (
-    user_email, dest_room_id, start_date, end_date, enabled, user_keeps_copy
+    user_email, dest_email, start_date, end_date, enabled, user_keeps_copy
 ) VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 

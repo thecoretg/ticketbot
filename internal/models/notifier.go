@@ -19,7 +19,7 @@ var ErrUserForwardNotFound = errors.New("forward rule not found")
 type UserForward struct {
 	ID            int        `json:"id"`
 	UserEmail     string     `json:"user_email"`
-	DestRoomID    int        `json:"dest_room_id"`
+	DestEmail     string     `json:"dest_email"`
 	StartDate     *time.Time `json:"start_date"`
 	EndDate       *time.Time `json:"end_date"`
 	Enabled       bool       `json:"enabled"`

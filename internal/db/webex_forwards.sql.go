@@ -21,7 +21,7 @@ func (q *Queries) DeleteWebexForward(ctx context.Context, id int) error {
 }
 
 const getWebexUserForward = `-- name: GetWebexUserForward :one
-SELECT id, user_email, dest_room_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM webex_user_forward
+SELECT id, user_email, dest_email, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM webex_user_forward
 WHERE id = $1 LIMIT 1
 `
 
@@ -31,7 +31,7 @@ func (q *Queries) GetWebexUserForward(ctx context.Context, id int) (WebexUserFor
 	err := row.Scan(
 		&i.ID,
 		&i.UserEmail,
-		&i.DestRoomID,
+		&i.DestEmail,
 		&i.StartDate,
 		&i.EndDate,
 		&i.Enabled,
@@ -44,14 +44,14 @@ func (q *Queries) GetWebexUserForward(ctx context.Context, id int) (WebexUserFor
 
 const insertWebexUserForward = `-- name: InsertWebexUserForward :one
 INSERT INTO webex_user_forward (
-    user_email, dest_room_id, start_date, end_date, enabled, user_keeps_copy
+    user_email, dest_email, start_date, end_date, enabled, user_keeps_copy
 ) VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_email, dest_room_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on
+RETURNING id, user_email, dest_email, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on
 `
 
 type InsertWebexUserForwardParams struct {
 	UserEmail     string     `json:"user_email"`
-	DestRoomID    int        `json:"dest_room_id"`
+	DestEmail     string     `json:"dest_email"`
 	StartDate     *time.Time `json:"start_date"`
 	EndDate       *time.Time `json:"end_date"`
 	Enabled       bool       `json:"enabled"`
@@ -61,7 +61,7 @@ type InsertWebexUserForwardParams struct {
 func (q *Queries) InsertWebexUserForward(ctx context.Context, arg InsertWebexUserForwardParams) (WebexUserForward, error) {
 	row := q.db.QueryRow(ctx, insertWebexUserForward,
 		arg.UserEmail,
-		arg.DestRoomID,
+		arg.DestEmail,
 		arg.StartDate,
 		arg.EndDate,
 		arg.Enabled,
@@ -71,7 +71,7 @@ func (q *Queries) InsertWebexUserForward(ctx context.Context, arg InsertWebexUse
 	err := row.Scan(
 		&i.ID,
 		&i.UserEmail,
-		&i.DestRoomID,
+		&i.DestEmail,
 		&i.StartDate,
 		&i.EndDate,
 		&i.Enabled,
@@ -83,7 +83,7 @@ func (q *Queries) InsertWebexUserForward(ctx context.Context, arg InsertWebexUse
 }
 
 const listWebexUserForwards = `-- name: ListWebexUserForwards :many
-SELECT id, user_email, dest_room_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM webex_user_forward
+SELECT id, user_email, dest_email, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM webex_user_forward
 ORDER BY id
 `
 
@@ -99,7 +99,7 @@ func (q *Queries) ListWebexUserForwards(ctx context.Context) ([]WebexUserForward
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserEmail,
-			&i.DestRoomID,
+			&i.DestEmail,
 			&i.StartDate,
 			&i.EndDate,
 			&i.Enabled,
@@ -118,7 +118,7 @@ func (q *Queries) ListWebexUserForwards(ctx context.Context) ([]WebexUserForward
 }
 
 const listWebexUserForwardsByEmail = `-- name: ListWebexUserForwardsByEmail :many
-SELECT id, user_email, dest_room_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM webex_user_forward
+SELECT id, user_email, dest_email, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM webex_user_forward
 WHERE user_email = $1
 ORDER BY id
 `
@@ -135,7 +135,7 @@ func (q *Queries) ListWebexUserForwardsByEmail(ctx context.Context, userEmail st
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserEmail,
-			&i.DestRoomID,
+			&i.DestEmail,
 			&i.StartDate,
 			&i.EndDate,
 			&i.Enabled,

@@ -88,7 +88,7 @@ func (p *UserForwardRepo) Delete(ctx context.Context, id int) error {
 func forwardToInsertParams(t models.UserForward) db.InsertWebexUserForwardParams {
 	return db.InsertWebexUserForwardParams{
 		UserEmail:     t.UserEmail,
-		DestRoomID:    t.DestRoomID,
+		DestEmail:     t.DestEmail,
 		StartDate:     t.StartDate,
 		EndDate:       t.EndDate,
 		Enabled:       t.Enabled,
@@ -100,7 +100,7 @@ func forwardFromPG(pg db.WebexUserForward) models.UserForward {
 	return models.UserForward{
 		ID:            pg.ID,
 		UserEmail:     pg.UserEmail,
-		DestRoomID:    pg.DestRoomID,
+		DestEmail:     pg.DestEmail,
 		StartDate:     pg.StartDate,
 		EndDate:       pg.EndDate,
 		Enabled:       pg.Enabled,

@@ -32,10 +32,22 @@ func TestService_ProcessNewTicket_AttemptNotifyOff(t *testing.T) {
 		t.Fatalf("creating service: %v", err)
 	}
 
+	// Process as New tickets
 	for _, id := range testTicketIDs(t) {
-		notis, err := s.ProcessNewTicket(ctx, id)
+		notis, err := s.ProcessTicket(ctx, id, true)
 		if err != nil {
-			t.Errorf("processing ticket %d: %v", id, err)
+			t.Errorf("processing new ticket %d: %v", id, err)
+		}
+		if len(notis) > 0 {
+			t.Errorf("expected 0 notifications, got %d; ticket ID: %d", len(notis), id)
+		}
+	}
+
+	// Then process again as updated tickets
+	for _, id := range testTicketIDs(t) {
+		notis, err := s.ProcessTicket(ctx, id, false)
+		if err != nil {
+			t.Errorf("processing updated ticket %d: %v", id, err)
 		}
 		if len(notis) > 0 {
 			t.Errorf("expected 0 notifications, got %d; ticket ID: %d", len(notis), id)
@@ -57,10 +69,28 @@ func TestService_ProcessNewTicket_AttemptNotifyOn(t *testing.T) {
 		t.Fatalf("adding test notifiers: %v", err)
 	}
 
+	// Process as New tickets
 	for _, id := range testTicketIDs(t) {
-		_, err := s.ProcessNewTicket(ctx, id)
+		_, err := s.ProcessTicket(ctx, id, true)
 		if err != nil {
-			t.Errorf("processing ticket %d: %v", id, err)
+			t.Errorf("processing new ticket %d: %v", id, err)
+		}
+	}
+
+	existing, err := s.Notifier.Notifications.ListAll(ctx)
+	if err != nil {
+		t.Fatalf("listing existing notifications: %v", err)
+	}
+
+	for _, e := range existing {
+		t.Logf("existing notification found with note %d: %v", e.TicketNoteID, e)
+	}
+
+	// Then process again as updated tickets
+	for _, id := range testTicketIDs(t) {
+		_, err := s.ProcessTicket(ctx, id, false)
+		if err != nil {
+			t.Errorf("processing updated ticket %d: %v", id, err)
 		}
 	}
 }

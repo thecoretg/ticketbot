@@ -2,7 +2,6 @@ package notifier
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -12,136 +11,134 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
-type Result struct {
-	Ticket        *models.FullTicket
-	Notifications []models.TicketNotification
-	Error         error
+type Request struct {
+	Ticket          *models.FullTicket
+	Notifications   []models.TicketNotification
+	MessagesToSend  []Message
+	MessagesSent    []Message
+	MessagesErrored []Message
+	NoNotiReason    string
+	Error           error
 }
 
-type message struct {
-	webexMsg     webex.Message
-	webexRoom    *models.WebexRoom
-	notification models.TicketNotification
+type Message struct {
+	MsgType      string
+	WebexMsg     webex.Message
+	ToEmail      *string
+	WebexRoom    *models.WebexRoom
+	Notification models.TicketNotification
+	SendError    error
 }
 
-func newMessage(wm webex.Message, wr *models.WebexRoom, n models.TicketNotification) message {
-	return message{
-		webexMsg:     wm,
-		webexRoom:    wr,
-		notification: n,
+func newRequest(ticket *models.FullTicket) *Request {
+	return &Request{
+		Ticket:         ticket,
+		Notifications:  []models.TicketNotification{},
+		MessagesToSend: []Message{},
+		NoNotiReason:   "",
+		Error:          nil,
 	}
 }
 
-func (s *Service) ProcessWithNewTicket(ctx context.Context, ticket *models.FullTicket) *Result {
-	res := &Result{
-		Ticket:        ticket,
-		Notifications: []models.TicketNotification{},
+func newMessage(msgType string, wm webex.Message, toEmail *string, wr *models.WebexRoom, n models.TicketNotification) Message {
+	return Message{
+		MsgType:      msgType,
+		WebexMsg:     wm,
+		ToEmail:      toEmail,
+		WebexRoom:    wr,
+		Notification: n,
 	}
+}
 
-	if ticket == nil {
-		res.Error = errors.New("received nil ticket")
-		return res
-	}
+func (s *Service) ProcessTicket(ctx context.Context, ticket *models.FullTicket, isNew bool) *Request {
+	req := newRequest(ticket)
 
 	notifiers, err := s.Notifiers.ListByBoard(ctx, ticket.Board.ID)
 	if err != nil {
-		res.Error = fmt.Errorf("listing notifiers for board: %w", err)
-		return res
+		req.Error = fmt.Errorf("listing notifiers for board: %w", err)
+		return req
 	}
 
 	if len(notifiers) == 0 {
-		return res
+		req.NoNotiReason = "no notifiers found"
+		return req
 	}
 
-	var rooms []models.WebexRoom
-	for _, n := range notifiers {
-		if !n.NotifyEnabled {
-			continue
+	if isNew {
+		var rooms []models.WebexRoom
+		for _, n := range notifiers {
+			if !n.NotifyEnabled {
+				continue
+			}
+
+			r, err := s.Rooms.Get(ctx, n.WebexRoomID)
+			if err != nil {
+				req.Error = fmt.Errorf("getting webex room from notifier: %w", err)
+				return req
+			}
+
+			rooms = append(rooms, r)
+		}
+		req.MessagesToSend = s.makeNewTicketMessages(rooms, ticket)
+
+	} else {
+
+		if ticket.LatestNote == nil {
+			req.NoNotiReason = "no note found for ticket"
+			return req
 		}
 
-		r, err := s.Rooms.Get(ctx, n.WebexRoomID)
+		exists, err := s.checkExistingNoti(ctx, ticket.LatestNote.ID)
 		if err != nil {
-			res.Error = fmt.Errorf("getting webex room from notifier: %w", err)
-			return res
+			req.Error = fmt.Errorf("checking for existing notification for ticket note: %w", err)
+			return req
 		}
 
-		rooms = append(rooms, r)
+		if exists {
+			req.NoNotiReason = "note already notified"
+			return req
+		}
+
+		emails := s.getUpdateRecipientEmails(ctx, ticket)
+		if len(emails) == 0 {
+			req.NoNotiReason = "no resources to notify"
+			return req
+		}
+		req.MessagesToSend = s.makeUpdatedTicketMessages(ticket, emails)
 	}
 
-	msgs := s.makeNewTicketMessages(rooms, ticket)
-	var msgErrs []error
+	if len(req.MessagesToSend) > 0 {
+		for _, m := range req.MessagesToSend {
+			msg := s.sendNotification(ctx, &m)
+			if msg.SendError != nil {
+				req.MessagesErrored = append(req.MessagesErrored, *msg)
+				continue
+			}
 
-	for _, m := range msgs {
-		if _, err := s.MessageSender.PostMessage(&m.webexMsg); err != nil {
-			e := fmt.Errorf("sending webex message: %w", err)
-			msgErrs = append(msgErrs, e)
-		} else {
-			slog.Info("ticketbot: notification sent for new ticket", "ticket_id", ticket.Ticket.ID, "sent_to", m.webexRoom.Name)
+			req.MessagesSent = append(req.MessagesSent, *msg)
 		}
-
-		res.Notifications = append(res.Notifications, m.notification)
-
-		n, err := s.Notifications.Insert(ctx, m.notification)
-		if err != nil {
-			e := fmt.Errorf("inserting notification into store: %w", err)
-			msgErrs = append(msgErrs, e)
-			continue
-		}
-		slog.Info("sent new ticket notification", "id", n.ID, "ticket_id", ticket.Ticket.ID, "to_webex_room", m.webexRoom.Name)
 	}
 
-	if len(msgErrs) > 0 {
-		for _, e := range msgErrs {
-			slog.Error("sending ticket notification", "error", e)
-		}
-		res.Error = fmt.Errorf("sending ticket notifications for ticket %d - see logs for details", ticket.Ticket.ID)
-	}
-
-	return res
+	return req
 }
 
-func (s *Service) ProcessWithUpdatedTicket(ctx context.Context, ticket *models.FullTicket) *Result {
-	res := &Result{
-		Ticket:        ticket,
-		Notifications: []models.TicketNotification{},
-	}
-
-	if ticket == nil {
-		res.Error = errors.New("received nil ticket")
-		return res
-	}
-
-	notifiers, err := s.Notifiers.ListByBoard(ctx, ticket.Board.ID)
+func (s *Service) checkExistingNoti(ctx context.Context, noteID int) (bool, error) {
+	exists, err := s.Notifications.ExistsForNote(ctx, noteID)
 	if err != nil {
-		res.Error = fmt.Errorf("listing notifiers for board: %w", err)
-		return res
+		return false, err
+	}
+	if exists {
+		return true, nil
 	}
 
-	if len(notifiers) == 0 {
-		return res
-	}
-
+	return false, nil
 }
 
-func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models.FullTicket) []message {
-	body := "**New Ticket:** "
-	if ticket.Company.Name != "" {
-		body += fmt.Sprintf("\n**Company:** %s", ticket.Company.Name)
-	}
+func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models.FullTicket) []Message {
+	header := "**New Ticket:** "
+	body := makeMessageBody(ticket, header, s.MaxMessageLength)
 
-	if ticket.Contact != nil {
-		name := fullName(ticket.Contact.FirstName, ticket.Contact.LastName)
-		body += fmt.Sprintf("\n**Ticket Contact:** %s", name)
-	}
-
-	if ticket.LatestNote != nil && ticket.LatestNote.Content != nil {
-		body += messageText(ticket, s.MaxMessageLength)
-	}
-
-	// Divider line for easily distinguishable breaks in notifications
-	body += fmt.Sprintf("\n\n---")
-
-	var msgs []message
+	var msgs []Message
 	for _, r := range rooms {
 		wm := webex.NewMessageToRoom(r.WebexID, r.Name, body)
 
@@ -155,14 +152,109 @@ func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models
 			n.TicketNoteID = &ticket.LatestNote.ID
 		}
 
-		msgs = append(msgs, newMessage(wm, &r, *n))
+		msgs = append(msgs, newMessage("new_ticket", wm, nil, &r, *n))
 	}
 
 	return msgs
 }
 
-func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket) []message {
-	body := "**Ticket Updated:** "
+func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket, emails []string) []Message {
+	header := "**Ticket Updated:** "
+	body := makeMessageBody(ticket, header, s.MaxMessageLength)
+
+	var msgs []Message
+	for _, e := range emails {
+		wm := webex.NewMessageToPerson(e, body)
+
+		n := &models.TicketNotification{
+			TicketID:    ticket.Ticket.ID,
+			SentToEmail: &e,
+			Sent:        true,
+		}
+
+		if ticket.LatestNote != nil {
+			n.TicketNoteID = &ticket.LatestNote.ID
+		}
+
+		msgs = append(msgs, newMessage("updated_ticket", wm, &e, nil, *n))
+	}
+
+	return msgs
+}
+
+func (s *Service) getUpdateRecipientEmails(ctx context.Context, ticket *models.FullTicket) []string {
+	var excluded []models.Member
+
+	// if the sender of the note is a member, exclude them from messages;
+	// they don't need a notification for their own note
+	if ticket.LatestNote != nil && ticket.LatestNote.Member != nil {
+		excluded = append(excluded, *ticket.LatestNote.Member)
+	}
+
+	var emails []string
+	for _, r := range ticket.Resources {
+		if memberSliceContains(excluded, r) {
+			continue
+		}
+
+		e, err := s.forwardsToEmails(ctx, r.PrimaryEmail)
+		if err != nil {
+			slog.Warn("notifier: checking forwards for email", "email", r.PrimaryEmail, "error", err)
+		}
+
+		emails = append(emails, e...)
+	}
+
+	return filterDuplicateEmails(emails)
+}
+
+func (s *Service) forwardsToEmails(ctx context.Context, email string) ([]string, error) {
+	noFwdSlice := []string{email}
+	fwds, err := s.Forwards.ListByEmail(ctx, email)
+	if err != nil {
+		return noFwdSlice, fmt.Errorf("checking forwards: %w", err)
+	}
+
+	if len(fwds) == 0 {
+		return noFwdSlice, nil
+	}
+
+	activeFwds := filterActiveFwds(fwds)
+	if len(activeFwds) == 0 {
+		return noFwdSlice, nil
+	}
+
+	var emails []string
+	for _, f := range activeFwds {
+		if f.UserKeepsCopy {
+			emails = append(emails, email)
+			break
+		}
+	}
+
+	for _, f := range activeFwds {
+		emails = append(emails, f.DestEmail)
+	}
+
+	return emails, nil
+}
+
+func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
+	_, err := s.MessageSender.PostMessage(&m.WebexMsg)
+	if err != nil {
+		m.SendError = fmt.Errorf("sending webex message: %w", err)
+	}
+
+	m.Notification, err = s.Notifications.Insert(ctx, m.Notification)
+	if err != nil {
+		m.SendError = fmt.Errorf("message was sent, but error inserting record: %w", err)
+	}
+
+	return m
+}
+
+func makeMessageBody(ticket *models.FullTicket, header string, maxLen int) string {
+	body := header
 	if ticket.Company.Name != "" {
 		body += fmt.Sprintf("\n**Company:** %s", ticket.Company.Name)
 	}
@@ -173,69 +265,28 @@ func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket) []message
 	}
 
 	if ticket.LatestNote != nil && ticket.LatestNote.Content != nil {
-		body += messageText(ticket, s.MaxMessageLength)
+		body += messageText(ticket, maxLen)
 	}
 
-	var msgs []message
-
-	return msgs
+	// Divider line for easily distinguishable breaks in notifications
+	body += fmt.Sprintf("\n\n---")
+	return body
 }
 
-func (s *Service) getUpdateRecipients(ctx context.Context, ticket *models.FullTicket) ([]models.Member, error) {
-	var excluded []models.Member
-
-	// if the sender of the note is a member, exclude them from messages;
-	// they don't need a notification for their own note
-	if ticket.LatestNote != nil && ticket.LatestNote.Member != nil {
-		excluded = append(excluded, *ticket.LatestNote.Member)
-	}
-
-	var recipients []models.Member
-	for _, r := range ticket.Resources {
-		if memberSliceContains(excluded, r) {
-			continue
-		}
-
-		fwds, err := s.Forwards.ListByEmail(ctx, r.PrimaryEmail)
-		if err != nil {
-			slog.Warn("checking forwards; adding member as recipient", "email", r.PrimaryEmail, "error", err)
-			recipients = append(recipients, r)
-			continue
-		}
-
-		if len(fwds) > 0 {
-
-		}
-	}
-}
-
-func (s *Service) forwardsToRecipients(ctx context.Context, member models.Member) []models.Member {
-	fwds, err := s.Forwards.ListByEmail(ctx, member.PrimaryEmail)
-	if err != nil {
-		slog.Warn("checking forwards; adding member as recipient", "email", member.PrimaryEmail, "error", err)
-		return []models.Member{member}
-	}
-
-	if len(fwds) == 0 {
-		return []models.Member{member}
-	}
-
-	activeFwds := filterActiveFwds(fwds)
-	if len(activeFwds) == 0 {
-		return []models.Member{member}
-	}
-
-	var rec []models.Member
-	for _, f := range activeFwds {
-		if f.UserKeepsCopy {
-			rec = append(rec, member)
-			break
+func filterDuplicateEmails(emails []string) []string {
+	seenEmails := make(map[string]struct{})
+	for _, e := range emails {
+		if _, ok := seenEmails[e]; !ok {
+			seenEmails[e] = struct{}{}
 		}
 	}
 
-	for _, f := range activeFwds {
-		rec = append(rec)
+	var uniqueEmails []string
+	for e := range seenEmails {
+		uniqueEmails = append(uniqueEmails, e)
 	}
+
+	return uniqueEmails
 }
 
 func filterActiveFwds(fwds []models.UserForward) []models.UserForward {

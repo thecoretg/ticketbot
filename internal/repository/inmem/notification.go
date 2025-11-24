@@ -67,7 +67,7 @@ func (p *NotificationRepo) ExistsForNote(ctx context.Context, noteID int) (bool,
 	defer p.mu.Unlock()
 
 	for _, v := range p.data {
-		if v.TicketNoteID == &noteID {
+		if v.TicketNoteID != nil && *v.TicketNoteID == noteID {
 			return true, nil
 		}
 	}
