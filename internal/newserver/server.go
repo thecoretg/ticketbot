@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/external/webex"
+	"github.com/thecoretg/ticketbot/internal/mock"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
@@ -20,14 +21,14 @@ import (
 )
 
 type App struct {
-	Creds       *creds
-	TestFlags   *testFlags
-	Stores      *models.AllRepos
-	CWClient    *psa.Client
-	WebexClient *webex.Client
-	Pool        *pgxpool.Pool
-	Config      *models.Config
-	Svc         *Services
+	Creds         *creds
+	TestFlags     *testFlags
+	Stores        *models.AllRepos
+	CWClient      *psa.Client
+	MessageSender models.MessageSender
+	Pool          *pgxpool.Pool
+	Config        *models.Config
+	Svc           *Services
 }
 
 type creds struct {
@@ -39,6 +40,7 @@ type creds struct {
 }
 
 type testFlags struct {
+	inMemory        bool
 	skipAuth        bool
 	skipHooks       bool
 	mockWebex       bool
@@ -54,12 +56,6 @@ type Services struct {
 	Ticketbot *ticketbot.Service
 }
 
-type repoType string
-
-const (
-	RepoTypePostgres repoType = "POSTGRES"
-)
-
 func Run() error {
 	ctx := context.Background()
 	a, err := NewApp(ctx)
@@ -67,6 +63,16 @@ func Run() error {
 		return fmt.Errorf("initializing app: %w", err)
 	}
 
+	if !a.TestFlags.skipAuth {
+		slog.Info("attempting to bootstrap admin")
+		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail); err != nil {
+			return fmt.Errorf("bootstrapping admin api key: %w", err)
+		}
+	} else {
+		slog.Info("SKIP AUTH ENABLED")
+	}
+
+	// TODO: Init Hooks
 	srv := gin.Default()
 	a.addRoutes(srv)
 
@@ -81,9 +87,9 @@ func NewApp(ctx context.Context) (*App, error) {
 	}
 
 	cw := psa.NewClient(cr.cw)
-	wx := webex.NewClient(cr.WebexSecret)
+	ms := makeMessageSender(tf.mockWebex, cr.WebexSecret)
 
-	s, err := initStores(ctx, cr)
+	s, err := initStores(ctx, cr, tf.inMemory)
 	if err != nil {
 		return nil, fmt.Errorf("initializing stores: %w", err)
 	}
@@ -104,17 +110,17 @@ func NewApp(ctx context.Context) (*App, error) {
 
 	us := user.New(r.APIUser, r.APIKey)
 	cws := cwsvc.New(s.pool, r.CW, cw)
-	ws := webexsvc.New(s.pool, r.WebexRoom, wx)
+	ws := webexsvc.New(s.pool, r.WebexRoom, ms)
 
-	ns := notifier.New(*cfg, nr, wx, cr.cw.CompanyId, cfg.MaxMessageLength)
+	ns := notifier.New(*cfg, nr, ms, cr.cw.CompanyId, cfg.MaxMessageLength)
 	tb := ticketbot.New(*cfg, cws, ns)
 	return &App{
-		Creds:       cr,
-		TestFlags:   tf,
-		Stores:      r,
-		Pool:        s.pool,
-		CWClient:    psa.NewClient(cr.cw),
-		WebexClient: webex.NewClient(cr.WebexSecret),
+		Creds:         cr,
+		TestFlags:     tf,
+		Stores:        r,
+		Pool:          s.pool,
+		CWClient:      psa.NewClient(cr.cw),
+		MessageSender: webex.NewClient(cr.WebexSecret),
 		Svc: &Services{
 			Config:    cs,
 			User:      us,
@@ -144,7 +150,6 @@ func getCreds() *creds {
 func (c *creds) validate(tf *testFlags) error {
 	req := map[string]string{
 		"INITIAL_ADMIN_EMAIL": c.InitialAdminEmail,
-		"POSTGRES_DSN":        c.PostgresDSN,
 	}
 
 	cwVals := map[string]string{
@@ -159,6 +164,10 @@ func (c *creds) validate(tf *testFlags) error {
 		if v == "" {
 			empty = append(empty, k)
 		}
+	}
+
+	if c.PostgresDSN == "" && !tf.inMemory {
+		empty = append(empty, "POSTGRES_DSN")
 	}
 
 	if c.RootURL == "" {
@@ -190,8 +199,17 @@ func (c *creds) validate(tf *testFlags) error {
 	return nil
 }
 
+func makeMessageSender(mocking bool, webexSecret string) models.MessageSender {
+	if mocking {
+		return mock.NewWebexClient(webexSecret)
+	}
+
+	return webex.NewClient(webexSecret)
+}
+
 func getTestFlags() *testFlags {
 	return &testFlags{
+		inMemory:        os.Getenv("IN_MEMORY_STORE") == "true",
 		skipAuth:        os.Getenv("SKIP_AUTH") == "true",
 		skipHooks:       os.Getenv("SKIP_HOOKS") == "true",
 		mockWebex:       os.Getenv("MOCK_WEBEX") == "true",

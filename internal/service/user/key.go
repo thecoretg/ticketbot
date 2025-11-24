@@ -6,6 +6,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
+	"time"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 	"golang.org/x/crypto/bcrypt"
@@ -41,6 +44,58 @@ func (s *Service) createAPIKey(ctx context.Context, email string) (string, error
 	}
 
 	return plain, nil
+}
+
+func (s *Service) BootstrapAdmin(ctx context.Context, email string) error {
+	if email == "" {
+		return errors.New("received empty email")
+	}
+
+	u, err := s.Users.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, models.ErrAPIUserNotFound) {
+			slog.Info("initial admin not found; creating now", "email", email)
+			u, err = s.Users.Insert(ctx, email)
+			if err != nil {
+				return fmt.Errorf("creating user: %w", err)
+			}
+		} else {
+			return fmt.Errorf("getting admin by email: %w", err)
+		}
+	} else {
+		slog.Info("initial admin found in store: %w", err)
+	}
+
+	keys, err := s.Keys.List(ctx)
+	if err != nil {
+		return fmt.Errorf("getting keys: %w", err)
+	}
+
+	hasKey := false
+	for _, k := range keys {
+		if k.UserID == u.ID {
+			hasKey = true
+			break
+		}
+	}
+
+	if hasKey {
+		slog.Info("initial admin already has an api token, skipping creation")
+		return nil
+	}
+
+	key, err := s.createAPIKey(ctx, email)
+	if err != nil {
+		return fmt.Errorf("creating key: %w", err)
+	}
+
+	slog.Info("bootstrap token created", "email", email, "key", key)
+	if os.Getenv("API_KEY_DELAY") == "true" {
+		slog.Info("waiting 30 seconds; copy the above key, it won't be shown again")
+		time.Sleep(30 * time.Second)
+	}
+
+	return nil
 }
 
 func generateKey() (string, error) {

@@ -34,23 +34,15 @@ func TestService_ProcessNewTicket_AttemptNotifyOff(t *testing.T) {
 
 	// Process as New tickets
 	for _, id := range testTicketIDs(t) {
-		notis, err := s.ProcessTicket(ctx, id, true)
-		if err != nil {
+		if err := s.ProcessTicket(ctx, id, true); err != nil {
 			t.Errorf("processing new ticket %d: %v", id, err)
-		}
-		if len(notis) > 0 {
-			t.Errorf("expected 0 notifications, got %d; ticket ID: %d", len(notis), id)
 		}
 	}
 
 	// Then process again as updated tickets
 	for _, id := range testTicketIDs(t) {
-		notis, err := s.ProcessTicket(ctx, id, false)
-		if err != nil {
+		if err := s.ProcessTicket(ctx, id, false); err != nil {
 			t.Errorf("processing updated ticket %d: %v", id, err)
-		}
-		if len(notis) > 0 {
-			t.Errorf("expected 0 notifications, got %d; ticket ID: %d", len(notis), id)
 		}
 	}
 }
@@ -71,8 +63,7 @@ func TestService_ProcessNewTicket_AttemptNotifyOn(t *testing.T) {
 
 	// Process as New tickets
 	for _, id := range testTicketIDs(t) {
-		_, err := s.ProcessTicket(ctx, id, true)
-		if err != nil {
+		if err := s.ProcessTicket(ctx, id, true); err != nil {
 			t.Errorf("processing new ticket %d: %v", id, err)
 		}
 	}
@@ -88,8 +79,7 @@ func TestService_ProcessNewTicket_AttemptNotifyOn(t *testing.T) {
 
 	// Then process again as updated tickets
 	for _, id := range testTicketIDs(t) {
-		_, err := s.ProcessTicket(ctx, id, false)
-		if err != nil {
+		if err := s.ProcessTicket(ctx, id, false); err != nil {
 			t.Errorf("processing updated ticket %d: %v", id, err)
 		}
 	}
@@ -122,7 +112,7 @@ func testNewService(t *testing.T, cfg models.Config) (*Service, error) {
 	}
 
 	cs := cwsvc.New(nil, cwRepos, psa.NewClient(cwCreds))
-	ns := notifier.New(cfg, notiRepos, mock.NewWebexClient(webexSecret), cwCreds.CompanyId)
+	ns := notifier.New(cfg, notiRepos, mock.NewWebexClient(webexSecret), cwCreds.CompanyId, cfg.MaxConcurrentSyncs)
 
 	return New(models.DefaultConfig, cs, ns), nil
 }

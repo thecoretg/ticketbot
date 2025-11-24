@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/internal/repository/inmem"
 	"github.com/thecoretg/ticketbot/internal/repository/postgres"
 	"github.com/thecoretg/ticketbot/migrations"
 )
@@ -19,13 +19,12 @@ type storesResult struct {
 	pool   *pgxpool.Pool
 }
 
-func initStores(ctx context.Context, creds *creds) (*storesResult, error) {
-	switch os.Getenv("REPO_TYPE") {
-	case string(RepoTypePostgres):
-		return initPostgres(ctx, creds)
-	default:
-		return nil, fmt.Errorf("invalid repository set for env variable REPO_TYPE. expected 'POSTGRES', got '%s'", os.Getenv("REPO_TYPE"))
+func initStores(ctx context.Context, creds *creds, inMemory bool) (*storesResult, error) {
+	if inMemory {
+		return initInMem(), nil
 	}
+
+	return initPostgres(ctx, creds)
 }
 
 // initPostgres verifies credentials are given, runs any needed migrations, and
@@ -56,4 +55,11 @@ func initPostgres(ctx context.Context, creds *creds) (*storesResult, error) {
 		pool:   pool,
 		stores: postgres.AllRepos(pool),
 	}, nil
+}
+
+func initInMem() *storesResult {
+	return &storesResult{
+		stores: inmem.AllRepos(nil),
+		pool:   nil,
+	}
 }

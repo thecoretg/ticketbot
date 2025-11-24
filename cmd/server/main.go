@@ -3,11 +3,11 @@ package main
 import (
 	"log/slog"
 
-	"github.com/thecoretg/ticketbot/internal/server"
+	"github.com/thecoretg/ticketbot/internal/newserver"
 )
 
 func main() {
-	if err := server.Run(); err != nil {
-		slog.Error("an error occured running the server", "error", err)
+	if err := newserver.Run(); err != nil {
+		slog.Error("running the server", "error", err)
 	}
 }
