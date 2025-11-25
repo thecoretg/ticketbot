@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func (s *Service) createAPIKey(ctx context.Context, email string) (string, error) {
+func (s *Service) createAPIKey(ctx context.Context, email string, explicitKey *string) (string, error) {
 	u, err := s.Users.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, models.ErrAPIUserNotFound) {
@@ -26,6 +26,10 @@ func (s *Service) createAPIKey(ctx context.Context, email string) (string, error
 	plain, err := generateKey()
 	if err != nil {
 		return "", err
+	}
+
+	if explicitKey != nil {
+		plain = *explicitKey
 	}
 
 	hash, err := hashKey(plain)
@@ -46,7 +50,11 @@ func (s *Service) createAPIKey(ctx context.Context, email string) (string, error
 	return plain, nil
 }
 
-func (s *Service) BootstrapAdmin(ctx context.Context, email string) error {
+func (s *Service) BootstrapAdmin(ctx context.Context, email string, explicitKey *string) error {
+	if explicitKey != nil {
+		slog.Debug("bootstrapping admin with explicit key from test flags")
+	}
+
 	if email == "" {
 		return errors.New("received empty email")
 	}
@@ -84,7 +92,7 @@ func (s *Service) BootstrapAdmin(ctx context.Context, email string) error {
 		return nil
 	}
 
-	key, err := s.createAPIKey(ctx, email)
+	key, err := s.createAPIKey(ctx, email, explicitKey)
 	if err != nil {
 		return fmt.Errorf("creating key: %w", err)
 	}

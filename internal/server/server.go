@@ -42,6 +42,7 @@ type creds struct {
 
 type testFlags struct {
 	inMemory        bool
+	apiKey          *string
 	skipAuth        bool
 	skipHooks       bool
 	mockWebex       bool
@@ -64,10 +65,14 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("initializing app: %w", err)
 	}
+	if a.Config.Debug {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+		slog.Debug("DEBUG ON")
+	}
 
 	if !a.TestFlags.skipAuth {
 		slog.Info("attempting to bootstrap admin")
-		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail); err != nil {
+		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, a.TestFlags.apiKey); err != nil {
 			return fmt.Errorf("bootstrapping admin api key: %w", err)
 		}
 	} else {
@@ -107,6 +112,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting initial config: %w", err)
 	}
+	cfg = loadConfigOverrides(cfg)
 
 	nr := notifier.Repos{
 		Rooms:         r.WebexRoom,
@@ -120,10 +126,11 @@ func NewApp(ctx context.Context) (*App, error) {
 	ws := webexsvc.New(s.pool, r.WebexRoom, ms)
 	wh := webhooks.New(cw, cr.RootURL)
 
-	ns := notifier.New(*cfg, nr, ms, cr.cw.CompanyId, cfg.MaxMessageLength)
-	tb := ticketbot.New(*cfg, cws, ns)
+	ns := notifier.New(cfg, nr, ms, cr.cw.CompanyId, cfg.MaxMessageLength)
+	tb := ticketbot.New(cfg, cws, ns)
 	return &App{
 		Creds:         cr,
+		Config:        cfg,
 		TestFlags:     tf,
 		Stores:        r,
 		Pool:          s.pool,
@@ -217,8 +224,15 @@ func makeMessageSender(mocking bool, webexSecret string) models.MessageSender {
 }
 
 func getTestFlags() *testFlags {
+	var apiKey *string
+	if os.Getenv("API_KEY") != "" {
+		k := os.Getenv("API_KEY")
+		apiKey = &k
+	}
+
 	return &testFlags{
 		inMemory:        os.Getenv("IN_MEMORY_STORE") == "true",
+		apiKey:          apiKey,
 		skipAuth:        os.Getenv("SKIP_AUTH") == "true",
 		skipHooks:       os.Getenv("SKIP_HOOKS") == "true",
 		mockWebex:       os.Getenv("MOCK_WEBEX") == "true",

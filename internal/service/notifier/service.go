@@ -6,7 +6,7 @@ import (
 )
 
 type Service struct {
-	Cfg              models.Config
+	Cfg              *models.Config
 	Rooms            models.WebexRoomRepository
 	Notifiers        models.NotifierRepository
 	Notifications    models.TicketNotificationRepository
@@ -24,7 +24,7 @@ type Repos struct {
 	Forwards      models.UserForwardRepository
 }
 
-func New(cfg models.Config, r Repos, ms models.MessageSender, cwCompanyID string, maxLen int) *Service {
+func New(cfg *models.Config, r Repos, ms models.MessageSender, cwCompanyID string, maxLen int) *Service {
 	return &Service{
 		Cfg:              cfg,
 		Rooms:            r.Rooms,

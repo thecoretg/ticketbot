@@ -9,7 +9,9 @@ import (
 func (a *App) addRoutes(g *gin.Engine) {
 	errh := middleware.ErrorHandler()
 	auth := middleware.APIKeyAuth(a.Svc.User.Keys)
-	cws := middleware.RequireConnectwiseSignature()
+
+	g.GET("", handler.HandlePing) // authless ping for lightsail health checks
+	g.GET("authtest", auth)
 
 	sh := handler.NewSyncHandler(a.Svc.CW, a.Svc.Webex)
 	g.POST("sync", sh.HandleSync)
@@ -35,7 +37,7 @@ func (a *App) addRoutes(g *gin.Engine) {
 	registerNotifierRoutes(n, nh)
 
 	tb := handler.NewTicketbotHandler(a.Svc.Ticketbot)
-	g.POST("hooks/cw/tickets", tb.ProcessTicket, errh, cws)
+	g.POST("hooks/cw/tickets", middleware.RequireConnectwiseSignature(), errh, tb.ProcessTicket)
 }
 
 func registerUserRoutes(r *gin.RouterGroup, h *handler.UserHandler) {

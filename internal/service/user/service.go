@@ -40,7 +40,7 @@ func (s *Service) GetAPIKey(ctx context.Context, id int) (*models.APIKey, error)
 
 // AddAPIKey creates an API key and returns the plaintext (only once)
 func (s *Service) AddAPIKey(ctx context.Context, email string) (string, error) {
-	return s.createAPIKey(ctx, email)
+	return s.createAPIKey(ctx, email, nil)
 }
 
 func (s *Service) DeleteAPIKey(ctx context.Context, id int) error {

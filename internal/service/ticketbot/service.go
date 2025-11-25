@@ -11,12 +11,12 @@ import (
 )
 
 type Service struct {
-	Cfg      models.Config
+	Cfg      *models.Config
 	CW       *cwsvc.Service
 	Notifier *notifier.Service
 }
 
-func New(cfg models.Config, cw *cwsvc.Service, ns *notifier.Service) *Service {
+func New(cfg *models.Config, cw *cwsvc.Service, ns *notifier.Service) *Service {
 	return &Service{
 		Cfg:      cfg,
 		CW:       cw,
@@ -30,7 +30,9 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, isNew bool) error {
 		return fmt.Errorf("processing ticket: %w", err)
 	}
 
-	if s.Cfg.AttemptNotify {
+	switch s.Cfg.AttemptNotify {
+	case true:
+		slog.Debug("ticketbot: attempt notify enabled", "ticket_id", id)
 		res := s.Notifier.ProcessTicket(ctx, ticket, isNew)
 		if res.Error != nil {
 			return fmt.Errorf("processing notifications: %w", res.Error)
@@ -52,6 +54,9 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, isNew bool) error {
 		}
 
 		return nil
+
+	case false:
+		slog.Debug("ticketbot: attempt notify disabled", "ticket_id", id)
 	}
 
 	return nil

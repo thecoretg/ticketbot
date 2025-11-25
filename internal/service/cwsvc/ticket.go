@@ -28,7 +28,7 @@ func (s *Service) DeleteTicket(ctx context.Context, id int) error {
 
 func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int) error {
 	start := time.Now()
-	slog.Debug("beginning ticket sync", "board_ids", boardIDs)
+	slog.Debug("cwsvc: beginning ticket sync", "board_ids", boardIDs)
 	con := "closedFlag = false"
 	if len(boardIDs) > 0 {
 		con += fmt.Sprintf(" AND %s", boardIDParam(boardIDs))
@@ -43,7 +43,7 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 	if err != nil {
 		return fmt.Errorf("getting open tickets from connectwise: %w", err)
 	}
-	slog.Debug("open ticket sync: got open tickets from connectwise", "total_tickets", len(tix))
+	slog.Debug("cwsvc: open ticket sync: got open tickets from connectwise", "total_tickets", len(tix))
 	sem := make(chan struct{}, maxSyncs)
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(tix))
@@ -54,7 +54,7 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 		go func(ticket psa.Ticket) {
 			defer func() { <-sem }()
 			if _, err := s.ProcessTicket(ctx, t.ID); err != nil {
-				slog.Error("ticket sync error", "ticket_id", t.ID, "error", err)
+				slog.Error("cwsvc: ticket sync error", "ticket_id", t.ID, "error", err)
 				errCh <- fmt.Errorf("error syncing ticket %d: %w", t.ID, err)
 			} else {
 				errCh <- nil
@@ -67,10 +67,10 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 
 	for err := range errCh {
 		if err != nil {
-			slog.Error("syncing ticket", "error", err)
+			slog.Error("cwsvc: syncing ticket", "error", err)
 		}
 	}
-	slog.Info("syncing tickets complete", "took_time", time.Since(start))
+	slog.Info("cwsvc: syncing tickets complete", "took_time", time.Since(start))
 	return nil
 }
 
@@ -145,12 +145,13 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 	}
 
 	var rsc []models.Member
-	if ticket.Resources != nil {
+	if ticket.Resources != nil && *ticket.Resources != "" {
+		logger.Debug("cwsvc: processing resources", "resources", *ticket.Resources)
 		ids := resourceStringToSlice(*ticket.Resources)
 		for _, i := range ids {
 			member, err := s.ensureMemberByIdentifier(ctx, i)
 			if err != nil {
-				slog.Warn("error getting resource member by identifier", "error", err)
+				logger.Warn("cwsvc: error getting resource member by identifier", "identifier", i, "error", err)
 				continue
 			}
 
