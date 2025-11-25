@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/thecoretg/ticketbot/internal/db"
-	"github.com/thecoretg/ticketbot/internal/server"
+	"github.com/thecoretg/ticketbot/internal/oldserver"
 )
 
 var (
@@ -46,7 +46,7 @@ func cwBoardsToTable(boards []db.CwBoard) {
 	fmt.Println(t)
 }
 
-func notifiersTable(notifiers []server.Notifier) {
+func notifiersTable(notifiers []oldserver.Notifier) {
 	t := defaultTable()
 	t.Headers("ID", "ROOM", "BOARD", "NOTIFY")
 	for _, n := range notifiers {

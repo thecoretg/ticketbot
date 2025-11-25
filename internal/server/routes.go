@@ -1,53 +1,73 @@
 package server
 
-import "github.com/thecoretg/ticketbot/internal/middleware"
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/thecoretg/ticketbot/internal/handler"
+	"github.com/thecoretg/ticketbot/internal/middleware"
+)
 
-func (cl *Client) addRoutes() {
-	auth := middleware.NoOp()
-	if !cl.testing.skipAuth {
-		// TODO: DONT SKIP: add the real auth handler
-	}
-
+func (a *App) addRoutes(g *gin.Engine) {
 	errh := middleware.ErrorHandler()
+	auth := middleware.APIKeyAuth(a.Svc.User.Keys)
+	cws := middleware.RequireConnectwiseSignature()
 
-	// Health Check
-	cl.Server.GET("", cl.ping) // Authless ping for Lightsail health checks
-	cl.Server.GET("authtest", auth)
+	sh := handler.NewSyncHandler(a.Svc.CW, a.Svc.Webex)
+	g.POST("sync", sh.HandleSync)
 
-	// State
-	cl.Server.GET("state", cl.handleGetState, errh, auth)
+	u := g.Group("users", errh, auth)
+	uh := handler.NewUserHandler(a.Svc.User)
+	registerUserRoutes(u, uh)
 
-	// Config
-	c := cl.Server.Group("config", errh, auth)
-	c.GET("", cl.handleGetConfig)
-	c.PUT("", cl.handlePutConfig)
+	c := g.Group("config", errh, auth)
+	ch := handler.NewConfigHandler(a.Svc.Config)
+	registerConfigRoutes(c, ch)
 
-	// Sync
-	s := cl.Server.Group("sync", errh, auth)
-	s.POST("tickets", cl.handleSyncTickets)
-	s.POST("webex_rooms", cl.handleSyncWebexRooms)
-	s.POST("boards", cl.handleSyncBoards)
+	cw := g.Group("cw", errh, auth)
+	cwh := handler.NewCWHandler(a.Svc.CW)
+	registerCWRoutes(cw, cwh)
 
-	// API Keys
-	cl.Server.POST("keys", cl.handleCreateAPIKey, errh, auth)
+	wx := g.Group("webex", errh, auth)
+	wh := handler.NewWebexHandler(a.Svc.Webex)
+	registerWebexRoutes(wx, wh)
 
-	// Boards
-	b := cl.Server.Group("boards", errh, auth)
-	b.GET("", cl.handleListBoards)
-	b.GET(":board_id", cl.handleGetBoard)
+	n := g.Group("notifiers", errh, auth)
+	nh := handler.NewNotifierHandler(a.Stores.Notifiers, a.Stores.CW.Board, a.Stores.WebexRoom)
+	registerNotifierRoutes(n, nh)
 
-	// Webex Rooms
-	cl.Server.GET("rooms", cl.handleListWebexRooms, errh, auth)
+	tb := handler.NewTicketbotHandler(a.Svc.Ticketbot)
+	g.POST("hooks/cw/tickets", tb.ProcessTicket, errh, cws)
+}
 
-	// Notifiers
-	n := cl.Server.Group("notifiers", errh, auth)
-	n.GET("", cl.handleListNotifiers)
-	n.POST("", cl.handlePostNotifier)
-	n.GET(":notifier_id", cl.handleGetNotifier)
-	n.DELETE(":notifier_id", cl.handleDeleteNotifier)
+func registerUserRoutes(r *gin.RouterGroup, h *handler.UserHandler) {
+	r.GET("", h.ListUsers)
+	r.GET(":id", h.GetUser)
+	r.DELETE(":id")
 
-	// Webhooks
-	sig := middleware.RequireConnectwiseSignature()
-	h := cl.Server.Group("hooks", errh, sig)
-	h.POST("cw/tickets", cl.handleTickets)
+	k := r.Group("keys")
+	k.GET("", h.ListAPIKeys)
+	k.GET(":id", h.GetAPIKey)
+	k.POST("", h.AddAPIKey)
+	k.DELETE(":id", h.DeleteAPIKey)
+}
+
+func registerConfigRoutes(r *gin.RouterGroup, h *handler.ConfigHandler) {
+	r.GET("", h.Get)
+	r.PUT("", h.Update)
+}
+
+func registerCWRoutes(r *gin.RouterGroup, h *handler.CWHandler) {
+	b := r.Group("boards")
+	b.GET("", h.ListBoards)
+	b.GET(":id", h.GetBoard)
+}
+
+func registerWebexRoutes(r *gin.RouterGroup, h *handler.WebexHandler) {
+	ro := r.Group("rooms")
+	ro.GET("", h.ListRooms)
+	ro.GET(":id", h.GetRoom)
+}
+
+func registerNotifierRoutes(r *gin.RouterGroup, h *handler.NotifierHandler) {
+	r.GET("", h.ListNotifiers)
+	r.POST("", h.AddNotifier)
 }

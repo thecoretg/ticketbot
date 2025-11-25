@@ -5,22 +5,22 @@ import (
 	"fmt"
 
 	"github.com/thecoretg/ticketbot/internal/db"
-	"github.com/thecoretg/ticketbot/internal/server"
+	"github.com/thecoretg/ticketbot/internal/oldserver"
 )
 
-func (c *Client) ListNotifiers() ([]server.Notifier, error) {
-	return GetMany[server.Notifier](c, "notifiers", nil)
+func (c *Client) ListNotifiers() ([]oldserver.Notifier, error) {
+	return GetMany[oldserver.Notifier](c, "notifiers", nil)
 }
 
-func (c *Client) GetNotifier(id int) (*server.Notifier, error) {
+func (c *Client) GetNotifier(id int) (*oldserver.Notifier, error) {
 	if id == 0 {
 		return nil, errors.New("no id provided")
 	}
 
-	return GetOne[server.Notifier](c, fmt.Sprintf("notifiers/%d", id), nil)
+	return GetOne[oldserver.Notifier](c, fmt.Sprintf("notifiers/%d", id), nil)
 }
 
-func (c *Client) CreateNotifier(boardID, roomID int, notifyEnabled bool) (*server.Notifier, error) {
+func (c *Client) CreateNotifier(boardID, roomID int, notifyEnabled bool) (*oldserver.Notifier, error) {
 	if boardID == 0 {
 		return nil, errors.New("board id not provided")
 	}
@@ -35,7 +35,7 @@ func (c *Client) CreateNotifier(boardID, roomID int, notifyEnabled bool) (*serve
 		NotifyEnabled: notifyEnabled,
 	}
 
-	n := &server.Notifier{}
+	n := &oldserver.Notifier{}
 	if err := c.Post("notifiers", p, n); err != nil {
 		return nil, fmt.Errorf("posting to server: %w", err)
 	}

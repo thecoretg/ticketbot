@@ -1,4 +1,4 @@
-package server
+package oldserver
 
 func intToPtr(i int) *int {
 	if i == 0 {

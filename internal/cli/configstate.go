@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/thecoretg/ticketbot/internal/server"
+	"github.com/thecoretg/ticketbot/internal/oldserver"
 )
 
 var (
@@ -51,7 +51,7 @@ var (
 	updateCfgCmd = &cobra.Command{
 		Use: "update",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			p := &server.AppConfigPayload{
+			p := &oldserver.AppConfigPayload{
 				Debug:              flagToBoolPtr(cmd, "debug", cfgDebug),
 				AttemptNotify:      flagToBoolPtr(cmd, "attempt-notify", attemptNotify),
 				MaxMessageLength:   flagToIntPtr(cmd, "max-msg-length", maxMsgLength),
@@ -70,7 +70,7 @@ var (
 	}
 )
 
-func printCfg(cfg *server.AppConfig) {
+func printCfg(cfg *oldserver.AppConfig) {
 	fmt.Printf("Debug: %v\n"+
 		"Attempt Notify: %v\n"+
 		"Max Msg Length: %d\n"+
