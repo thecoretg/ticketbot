@@ -18,6 +18,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
+	"github.com/thecoretg/ticketbot/internal/service/webhooks"
 )
 
 type App struct {
@@ -51,6 +52,7 @@ type Services struct {
 	Config    *config.Service
 	User      *user.Service
 	CW        *cwsvc.Service
+	Hooks     *webhooks.Service
 	Webex     *webexsvc.Service
 	Notifier  *notifier.Service
 	Ticketbot *ticketbot.Service
@@ -72,7 +74,12 @@ func Run() error {
 		slog.Info("SKIP AUTH ENABLED")
 	}
 
-	// TODO: Init Hooks
+	if !a.TestFlags.skipHooks {
+		if err := a.Svc.Hooks.ProcessCWHooks(); err != nil {
+			return fmt.Errorf("processing connectwise hooks: %w", err)
+		}
+	}
+
 	srv := gin.Default()
 	a.addRoutes(srv)
 
@@ -111,6 +118,7 @@ func NewApp(ctx context.Context) (*App, error) {
 	us := user.New(r.APIUser, r.APIKey)
 	cws := cwsvc.New(s.pool, r.CW, cw)
 	ws := webexsvc.New(s.pool, r.WebexRoom, ms)
+	wh := webhooks.New(cw, cr.RootURL)
 
 	ns := notifier.New(*cfg, nr, ms, cr.cw.CompanyId, cfg.MaxMessageLength)
 	tb := ticketbot.New(*cfg, cws, ns)
@@ -124,6 +132,7 @@ func NewApp(ctx context.Context) (*App, error) {
 		Svc: &Services{
 			Config:    cs,
 			User:      us,
+			Hooks:     wh,
 			CW:        cws,
 			Webex:     ws,
 			Notifier:  ns,
