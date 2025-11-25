@@ -12,11 +12,13 @@ import (
 var (
 	enableNotify     bool
 	notifierID       int
+	forwardID        int
 	forwardSrcEmail  string
 	forwardDestEmail string
 	forwardStartDate string
 	forwardEndDate   string
 	forwardEnabled   bool
+	forwardUserKeeps bool
 
 	notifiersCmd = &cobra.Command{
 		Use: "notifiers",
@@ -130,8 +132,9 @@ var (
 				return fmt.Errorf("retrieving user forward: %w", err)
 			}
 
-			fmt.Printf("ID: %d\nUser: %s\nForward To: %s\nStart Date: %s\nEnd Date: %s\n",
-				uf.ID, uf.UserEmail, uf.DestEmail, uf.StartDate, uf.EndDate)
+			fmt.Printf("ID: %d\nUser: %s\nForward To: %s\nStart Date: %s\nEnd Date: %s\n"+
+				"User Keeps Copy: %v\nEnabled: %v\n",
+				uf.ID, uf.UserEmail, uf.DestEmail, uf.StartDate, uf.EndDate, uf.UserKeepsCopy, uf.Enabled)
 
 			return nil
 		},
@@ -169,11 +172,12 @@ var (
 			}
 
 			p := &models.UserForward{
-				UserEmail: forwardSrcEmail,
-				DestEmail: forwardDestEmail,
-				StartDate: start,
-				EndDate:   end,
-				Enabled:   forwardEnabled,
+				UserEmail:     forwardSrcEmail,
+				DestEmail:     forwardDestEmail,
+				StartDate:     start,
+				EndDate:       end,
+				Enabled:       forwardEnabled,
+				UserKeepsCopy: forwardUserKeeps,
 			}
 
 			uf, err := client.CreateUserForward(p)
@@ -181,8 +185,8 @@ var (
 				return fmt.Errorf("creating user forward: %w", err)
 			}
 
-			fmt.Printf("ID: %d\nUser: %s\nForward To: %s\nStart Date: %s\nEnd Date: %s\n",
-				uf.ID, uf.UserEmail, uf.DestEmail, uf.StartDate, uf.EndDate)
+			fmt.Printf("ID: %d\nUser: %s\nForward To: %s\nStart Date: %s\nEnd Date: %s\nUser Keeps Copy: %v\nEnabled: %v\n",
+				uf.ID, uf.UserEmail, uf.DestEmail, uf.StartDate, uf.EndDate, uf.UserKeepsCopy, uf.Enabled)
 
 			return nil
 		},
@@ -191,11 +195,11 @@ var (
 	deleteForwardCmd = &cobra.Command{
 		Use: "delete",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := client.DeleteUserForward(notifierID); err != nil {
+			if err := client.DeleteUserForward(forwardID); err != nil {
 				return fmt.Errorf("deleting user forward: %w", err)
 			}
 
-			fmt.Printf("Successfully deleted user forward with id of %d\n", notifierID)
+			fmt.Printf("Successfully deleted user forward with id of %d\n", forwardID)
 			return nil
 		},
 	}
@@ -206,9 +210,11 @@ func init() {
 	rulesCmd.AddCommand(createNotifierRuleCmd, listNotifierRulesCmd, getNotifierRuleCmd, deleteNotifierRuleCmd)
 	forwardsCmd.AddCommand(createForwardCmd, listForwardsCmd, getForwardCmd, deleteForwardCmd)
 	rulesCmd.PersistentFlags().IntVar(&notifierID, "id", 0, "id of notifier")
+	forwardsCmd.PersistentFlags().IntVar(&forwardID, "id", 0, "id of user forward")
 	createNotifierRuleCmd.Flags().IntVarP(&boardID, "board-id", "b", 0, "board id to use")
 	createNotifierRuleCmd.Flags().IntVarP(&roomID, "room-id", "r", 0, "room id to use")
 	createNotifierRuleCmd.Flags().BoolVarP(&enableNotify, "enable", "x", false, "enable notify for rule")
+	createForwardCmd.Flags().BoolVarP(&forwardUserKeeps, "user-keeps-copy", "k", false, "user keeps a copy of forwarded emails")
 	createForwardCmd.Flags().StringVarP(&forwardSrcEmail, "source-email", "s", "", "source email address to forward from")
 	createForwardCmd.Flags().StringVarP(&forwardDestEmail, "dest-email", "d", "", "destination email address to forward to")
 	createForwardCmd.Flags().StringVarP(&forwardStartDate, "start-date", "a", "", "start date for forward (YYYY-MM-DD)")

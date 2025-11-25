@@ -32,22 +32,20 @@ func (h *SyncHandler) HandleSync(c *gin.Context) {
 		return
 	}
 
+	ctx := context.WithoutCancel(c.Request.Context())
+	if p.WebexRooms {
+		go h.syncRooms(ctx)
+	}
+
+	if p.CWBoards {
+		go h.syncBoards(ctx)
+	}
+
+	if p.CWTickets {
+		go h.syncTickets(ctx, p.BoardIDs, p.MaxConcurrentSyncs)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"result": "sync started"})
-
-	go func() {
-		ctx := context.Background()
-		if p.WebexRooms {
-			go h.syncRooms(ctx)
-		}
-
-		if p.CWBoards {
-			go h.syncBoards(ctx)
-		}
-
-		if p.CWTickets {
-			go h.syncTickets(ctx, p.BoardIDs, p.MaxConcurrentSyncs)
-		}
-	}()
 }
 
 func (h *SyncHandler) syncRooms(ctx context.Context) {

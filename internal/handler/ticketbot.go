@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/external/psa"
@@ -25,22 +27,29 @@ func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
 	id := w.ID
 	action := w.Action
 
-	ctx := c.Request.Context()
+	ctx := context.WithoutCancel(c.Request.Context())
 	switch action {
 	case "added":
-		if err := h.Service.ProcessTicket(ctx, id, true); err != nil {
-			c.Error(err)
-			return
-		}
+		go h.processTicket(ctx, id, true)
 	case "updated":
-		if err := h.Service.ProcessTicket(ctx, id, false); err != nil {
-			c.Error(err)
-			return
-		}
+		go h.processTicket(ctx, id, false)
 	case "deleted":
-		if err := h.Service.CW.DeleteTicket(ctx, id); err != nil {
-			c.Error(err)
-			return
-		}
+		go h.deleteTicket(ctx, id)
+	default:
+		slog.Warn("unknown ticket webhook action", "action", action, "ticket_id", id)
+	}
+
+	c.JSON(200, gin.H{"result": "ticket webhook received"})
+}
+
+func (h *TicketbotHandler) processTicket(ctx context.Context, id int, isNew bool) {
+	if err := h.Service.ProcessTicket(ctx, id, isNew); err != nil {
+		slog.Error("processing ticket webhook", "ticket_id", id, "error", err)
+	}
+}
+
+func (h *TicketbotHandler) deleteTicket(ctx context.Context, id int) {
+	if err := h.Service.CW.DeleteTicket(ctx, id); err != nil {
+		slog.Error("deleting ticket from webhook", "ticket_id", id, "error", err)
 	}
 }
