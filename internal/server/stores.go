@@ -15,24 +15,24 @@ import (
 	"github.com/thecoretg/ticketbot/migrations"
 )
 
-type storesResult struct {
-	stores *models.AllRepos
-	pool   *pgxpool.Pool
+type Stores struct {
+	Repos *models.AllRepos
+	Pool  *pgxpool.Pool
 }
 
-func initStores(ctx context.Context, creds *creds, inMemory bool) (*storesResult, error) {
+func CreateStores(ctx context.Context, creds *Creds, inMemory bool) (*Stores, error) {
 	if inMemory {
 		slog.Info("running with in-memory store")
-		return initInMem(), nil
+		return InitInMemStores(), nil
 	}
 
 	slog.Info("running with postgres store")
-	return initPostgres(ctx, creds)
+	return InitPostgresStores(ctx, creds)
 }
 
-// initPostgres verifies credentials are given, runs any needed migrations, and
+// InitPostgresStores verifies credentials are given, runs any needed migrations, and
 // provides all repositories
-func initPostgres(ctx context.Context, creds *creds) (*storesResult, error) {
+func InitPostgresStores(ctx context.Context, creds *Creds) (*Stores, error) {
 	pool, err := pgxpool.New(ctx, creds.PostgresDSN)
 	if err != nil {
 		return nil, fmt.Errorf("creating pgx pool: %w", err)
@@ -54,15 +54,15 @@ func initPostgres(ctx context.Context, creds *creds) (*storesResult, error) {
 		return nil, fmt.Errorf("running goose-up: %w", err)
 	}
 
-	return &storesResult{
-		pool:   pool,
-		stores: postgres.AllRepos(pool),
+	return &Stores{
+		Pool:  pool,
+		Repos: postgres.AllRepos(pool),
 	}, nil
 }
 
-func initInMem() *storesResult {
-	return &storesResult{
-		stores: inmem.AllRepos(nil),
-		pool:   nil,
+func InitInMemStores() *Stores {
+	return &Stores{
+		Repos: inmem.AllRepos(nil),
+		Pool:  nil,
 	}
 }

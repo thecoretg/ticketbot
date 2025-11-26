@@ -1,12 +1,12 @@
-package handler
+package handlers
 
 import (
 	"context"
 	"log/slog"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
+	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
 type TicketbotHandler struct {

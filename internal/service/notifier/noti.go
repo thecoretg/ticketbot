@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/external/webex"
 	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/pkg/webex"
 )
 
 type Request struct {

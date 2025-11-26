@@ -12,10 +12,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/repository/inmem"
 	"github.com/thecoretg/ticketbot/internal/repository/postgres"
+	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
 func TestNewService(t *testing.T) {

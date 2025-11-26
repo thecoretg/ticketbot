@@ -10,8 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"github.com/thecoretg/ticketbot/internal/external/webex"
 	"github.com/thecoretg/ticketbot/internal/repository/postgres"
+	"github.com/thecoretg/ticketbot/pkg/webex"
 )
 
 func TestNewService(t *testing.T) {

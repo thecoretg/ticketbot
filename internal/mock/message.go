@@ -1,7 +1,7 @@
 package mock
 
 import (
-	"github.com/thecoretg/ticketbot/internal/external/webex"
+	"github.com/thecoretg/ticketbot/pkg/webex"
 )
 
 // This isn't ideal at all, but I need it short term just to get this up and running.

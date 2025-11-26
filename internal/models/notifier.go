@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/thecoretg/ticketbot/internal/external/webex"
+	"github.com/thecoretg/ticketbot/pkg/webex"
 )
 
 type MessageSender interface {

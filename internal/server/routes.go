@@ -2,45 +2,44 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/internal/handler"
+	"github.com/thecoretg/ticketbot/internal/handlers"
 	"github.com/thecoretg/ticketbot/internal/middleware"
 )
 
-func (a *App) addRoutes(g *gin.Engine) {
-	errh := middleware.ErrorHandler()
+func AddRoutes(a *App, g *gin.Engine) {
 	auth := middleware.APIKeyAuth(a.Svc.User.Keys)
 
-	g.GET("", handler.HandlePing) // authless ping for lightsail health checks
-	g.GET("authtest", errh, auth, handler.HandlePing)
+	g.GET("", handlers.HandlePing) // authless ping for lightsail health checks
+	g.GET("authtest", auth, handlers.HandlePing)
 
-	sh := handler.NewSyncHandler(a.Svc.CW, a.Svc.Webex)
-	g.POST("sync", errh, auth, sh.HandleSync)
+	sh := handlers.NewSyncHandler(a.Svc.CW, a.Svc.Webex)
+	g.POST("sync", auth, sh.HandleSync)
 
-	u := g.Group("users", errh, auth)
-	uh := handler.NewUserHandler(a.Svc.User)
+	u := g.Group("users", auth)
+	uh := handlers.NewUserHandler(a.Svc.User)
 	registerUserRoutes(u, uh)
 
-	c := g.Group("config", errh, auth)
-	ch := handler.NewConfigHandler(a.Svc.Config)
+	c := g.Group("config", auth)
+	ch := handlers.NewConfigHandler(a.Svc.Config)
 	registerConfigRoutes(c, ch)
 
-	cw := g.Group("cw", errh, auth)
-	cwh := handler.NewCWHandler(a.Svc.CW)
+	cw := g.Group("cw", auth)
+	cwh := handlers.NewCWHandler(a.Svc.CW)
 	registerCWRoutes(cw, cwh)
 
-	wx := g.Group("webex", errh, auth)
-	wh := handler.NewWebexHandler(a.Svc.Webex)
+	wx := g.Group("webex", auth)
+	wh := handlers.NewWebexHandler(a.Svc.Webex)
 	registerWebexRoutes(wx, wh)
 
-	n := g.Group("notifiers", errh, auth)
-	nh := handler.NewNotifierHandler(a.Stores.Notifiers, a.Stores.CW.Board, a.Stores.WebexRoom, a.Stores.Forwards)
+	n := g.Group("notifiers", auth)
+	nh := handlers.NewNotifierHandler(a.Stores.Notifiers, a.Stores.CW.Board, a.Stores.WebexRoom, a.Stores.Forwards)
 	registerNotifierRoutes(n, nh)
 
-	tb := handler.NewTicketbotHandler(a.Svc.Ticketbot)
-	g.POST("hooks/cw/tickets", middleware.RequireConnectwiseSignature(), errh, tb.ProcessTicket)
+	tb := handlers.NewTicketbotHandler(a.Svc.Ticketbot)
+	g.POST("hooks/cw/tickets", middleware.RequireConnectwiseSignature(), tb.ProcessTicket)
 }
 
-func registerUserRoutes(r *gin.RouterGroup, h *handler.UserHandler) {
+func registerUserRoutes(r *gin.RouterGroup, h *handlers.UserHandler) {
 	r.GET("", h.ListUsers)
 	r.GET(":id", h.GetUser)
 	r.DELETE(":id")
@@ -52,24 +51,24 @@ func registerUserRoutes(r *gin.RouterGroup, h *handler.UserHandler) {
 	k.DELETE(":id", h.DeleteAPIKey)
 }
 
-func registerConfigRoutes(r *gin.RouterGroup, h *handler.ConfigHandler) {
+func registerConfigRoutes(r *gin.RouterGroup, h *handlers.ConfigHandler) {
 	r.GET("", h.Get)
 	r.PUT("", h.Update)
 }
 
-func registerCWRoutes(r *gin.RouterGroup, h *handler.CWHandler) {
+func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
 	b := r.Group("boards")
 	b.GET("", h.ListBoards)
 	b.GET(":id", h.GetBoard)
 }
 
-func registerWebexRoutes(r *gin.RouterGroup, h *handler.WebexHandler) {
+func registerWebexRoutes(r *gin.RouterGroup, h *handlers.WebexHandler) {
 	ro := r.Group("rooms")
 	ro.GET("", h.ListRooms)
 	ro.GET(":id", h.GetRoom)
 }
 
-func registerNotifierRoutes(r *gin.RouterGroup, h *handler.NotifierHandler) {
+func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
 	ru := r.Group("rules")
 	ru.GET("", h.ListNotifierRules)
 	ru.GET(":id", h.GetNotifierRule)

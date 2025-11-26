@@ -1,10 +1,10 @@
-package cli
+package main
 
 import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/thecoretg/ticketbot/internal/sdk"
+	"github.com/thecoretg/ticketbot/pkg/sdk"
 )
 
 var (

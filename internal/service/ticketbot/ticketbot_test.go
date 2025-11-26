@@ -10,12 +10,12 @@ import (
 	"testing"
 
 	"github.com/joho/godotenv"
-	"github.com/thecoretg/ticketbot/internal/external/psa"
 	"github.com/thecoretg/ticketbot/internal/mock"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/repository/inmem"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
 func TestNewService(t *testing.T) {

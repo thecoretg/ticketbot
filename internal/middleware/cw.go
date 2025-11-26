@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/internal/external/psa"
+	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
 func RequireConnectwiseSignature() gin.HandlerFunc {
