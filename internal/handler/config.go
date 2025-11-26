@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -20,25 +19,25 @@ func NewConfigHandler(svc *config.Service) *ConfigHandler {
 func (h *ConfigHandler) Get(c *gin.Context) {
 	cfg, err := h.Service.Get(c.Request.Context())
 	if err != nil {
-		c.Error(err)
+		internalServerError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, cfg)
+	outputJSON(c, cfg)
 }
 
 func (h *ConfigHandler) Update(c *gin.Context) {
 	p := &models.Config{}
 	if err := c.ShouldBindJSON(p); err != nil {
-		c.Error(fmt.Errorf("bad json payload: %w", err))
+		badPayloadError(c, err)
 		return
 	}
 
 	cfg, err := h.Service.Update(c.Request.Context(), p)
 	if err != nil {
-		c.Error(fmt.Errorf("updating config: %w", err))
+		internalServerError(c, fmt.Errorf("updating config: %w", err))
 		return
 	}
 
-	c.JSON(http.StatusOK, cfg)
+	outputJSON(c, cfg)
 }

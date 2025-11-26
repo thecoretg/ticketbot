@@ -7,6 +7,9 @@ build-cli: create-bin-dir
 gensql:
 	sqlc generate
 
+runserver:
+	go run ./cmd/server
+
 docker-build:
 	docker buildx build --platform=linux/amd64 -t ticketbot:latest --load .
 

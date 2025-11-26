@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/gin-gonic/gin"
@@ -21,7 +20,7 @@ func NewTicketbotHandler(svc *ticketbot.Service) *TicketbotHandler {
 func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
 	w := &psa.WebhookPayload{}
 	if err := c.ShouldBindJSON(w); err != nil {
-		c.Error(fmt.Errorf("bad json payload: %w", err))
+		badPayloadError(c, err)
 		return
 	}
 	id := w.ID
@@ -39,7 +38,7 @@ func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
 		slog.Warn("unknown ticket webhook action", "action", action, "ticket_id", id)
 	}
 
-	c.JSON(200, gin.H{"result": "ticket webhook received"})
+	resultJSON(c, "ticket payload received")
 }
 
 func (h *TicketbotHandler) processTicket(ctx context.Context, id int, isNew bool) {

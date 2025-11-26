@@ -2,9 +2,7 @@ package handler
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -28,7 +26,7 @@ func (h *SyncHandler) HandleSync(c *gin.Context) {
 	p := &models.SyncPayload{}
 
 	if err := c.ShouldBindJSON(p); err != nil {
-		c.Error(fmt.Errorf("bad json payload: %w", err))
+		badPayloadError(c, err)
 		return
 	}
 
@@ -45,7 +43,7 @@ func (h *SyncHandler) HandleSync(c *gin.Context) {
 		go h.syncTickets(ctx, p.BoardIDs, p.MaxConcurrentSyncs)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result": "sync started"})
+	resultJSON(c, "sync started")
 }
 
 func (h *SyncHandler) syncRooms(ctx context.Context) {
