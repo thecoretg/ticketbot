@@ -7,20 +7,20 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
-func (c *Client) ListNotifierRules() ([]models.Notifier, error) {
-	return GetMany[models.Notifier](c, "notifiers/rules", nil)
+func (c *Client) ListNotifierRules() ([]models.NotifierRule, error) {
+	return GetMany[models.NotifierRule](c, "notifiers/rules", nil)
 }
 
-func (c *Client) GetNotifierRule(id int) (*models.Notifier, error) {
+func (c *Client) GetNotifierRule(id int) (*models.NotifierRule, error) {
 	if id == 0 {
 		return nil, errors.New("no id provided")
 	}
 
-	return GetOne[models.Notifier](c, fmt.Sprintf("notifiers/rules/%d", id), nil)
+	return GetOne[models.NotifierRule](c, fmt.Sprintf("notifiers/rules/%d", id), nil)
 }
 
-func (c *Client) CreateNotifierRule(payload *models.Notifier) (*models.Notifier, error) {
-	n := &models.Notifier{}
+func (c *Client) CreateNotifierRule(payload *models.NotifierRule) (*models.NotifierRule, error) {
+	n := &models.NotifierRule{}
 	if err := c.Post("notifiers/rules", payload, n); err != nil {
 		return nil, fmt.Errorf("posting to server: %w", err)
 	}

@@ -6,7 +6,7 @@ type AllRepos struct {
 	Config        ConfigRepository
 	Notifications TicketNotificationRepository
 	Forwards      UserForwardRepository
-	Notifiers     NotifierRepository
+	NotifierRules NotifierRuleRepository
 	WebexRoom     WebexRoomRepository
 	CW            CWRepos
 }

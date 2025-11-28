@@ -8,7 +8,7 @@ import (
 type Service struct {
 	Cfg              *models.Config
 	Rooms            models.WebexRoomRepository
-	Notifiers        models.NotifierRepository
+	Notifiers        models.NotifierRuleRepository
 	Notifications    models.TicketNotificationRepository
 	Forwards         models.UserForwardRepository
 	Pool             *pgxpool.Pool
@@ -19,7 +19,7 @@ type Service struct {
 
 type Repos struct {
 	Rooms         models.WebexRoomRepository
-	Notifiers     models.NotifierRepository
+	Notifiers     models.NotifierRuleRepository
 	Notifications models.TicketNotificationRepository
 	Forwards      models.UserForwardRepository
 }

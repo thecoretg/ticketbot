@@ -10,28 +10,28 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
-type NotifierRepo struct {
+type NotifierRuleRepo struct {
 	queries *db.Queries
 }
 
-func NewNotifierRepo(pool *pgxpool.Pool) *NotifierRepo {
-	return &NotifierRepo{
+func NewNotifierRuleRepo(pool *pgxpool.Pool) *NotifierRuleRepo {
+	return &NotifierRuleRepo{
 		queries: db.New(pool),
 	}
 }
 
-func (p *NotifierRepo) WithTx(tx pgx.Tx) models.NotifierRepository {
-	return &NotifierRepo{
+func (p *NotifierRuleRepo) WithTx(tx pgx.Tx) models.NotifierRuleRepository {
+	return &NotifierRuleRepo{
 		queries: db.New(tx)}
 }
 
-func (p *NotifierRepo) ListAll(ctx context.Context) ([]models.Notifier, error) {
-	dm, err := p.queries.ListNotifierConnections(ctx)
+func (p *NotifierRuleRepo) ListAll(ctx context.Context) ([]models.NotifierRule, error) {
+	dm, err := p.queries.ListNotifierRules(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Notifier
+	var b []models.NotifierRule
 	for _, d := range dm {
 		n := notifierFromPG(d)
 		b = append(b, *n)
@@ -40,13 +40,13 @@ func (p *NotifierRepo) ListAll(ctx context.Context) ([]models.Notifier, error) {
 	return b, nil
 }
 
-func (p *NotifierRepo) ListByBoard(ctx context.Context, boardID int) ([]models.Notifier, error) {
-	dm, err := p.queries.ListNotifierConnectionsByBoard(ctx, boardID)
+func (p *NotifierRuleRepo) ListByBoard(ctx context.Context, boardID int) ([]models.NotifierRule, error) {
+	dm, err := p.queries.ListNotifierRulesByBoard(ctx, boardID)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Notifier
+	var b []models.NotifierRule
 	for _, d := range dm {
 		n := notifierFromPG(d)
 		b = append(b, *n)
@@ -55,13 +55,13 @@ func (p *NotifierRepo) ListByBoard(ctx context.Context, boardID int) ([]models.N
 	return b, nil
 }
 
-func (p *NotifierRepo) ListByRoom(ctx context.Context, roomID int) ([]models.Notifier, error) {
-	dm, err := p.queries.ListNotifierConnectionsByRoom(ctx, roomID)
+func (p *NotifierRuleRepo) ListByRoom(ctx context.Context, roomID int) ([]models.NotifierRule, error) {
+	dm, err := p.queries.ListNotifierRulesByRoom(ctx, roomID)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Notifier
+	var b []models.NotifierRule
 	for _, d := range dm {
 		n := notifierFromPG(d)
 		b = append(b, *n)
@@ -70,8 +70,8 @@ func (p *NotifierRepo) ListByRoom(ctx context.Context, roomID int) ([]models.Not
 	return b, nil
 }
 
-func (p *NotifierRepo) Get(ctx context.Context, id int) (*models.Notifier, error) {
-	d, err := p.queries.GetNotifierConnection(ctx, id)
+func (p *NotifierRuleRepo) Get(ctx context.Context, id int) (*models.NotifierRule, error) {
+	d, err := p.queries.GetNotifierRule(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, models.ErrNotifierNotFound
@@ -82,7 +82,7 @@ func (p *NotifierRepo) Get(ctx context.Context, id int) (*models.Notifier, error
 	return notifierFromPG(d), nil
 }
 
-func (p *NotifierRepo) Exists(ctx context.Context, boardID, roomID int) (bool, error) {
+func (p *NotifierRuleRepo) Exists(ctx context.Context, boardID, roomID int) (bool, error) {
 	ids := db.CheckNotifierExistsParams{
 		CwBoardID:   boardID,
 		WebexRoomID: roomID,
@@ -96,8 +96,8 @@ func (p *NotifierRepo) Exists(ctx context.Context, boardID, roomID int) (bool, e
 	return exists, nil
 }
 
-func (p *NotifierRepo) Insert(ctx context.Context, n *models.Notifier) (*models.Notifier, error) {
-	d, err := p.queries.InsertNotifierConnection(ctx, notifierToInsertParams(n))
+func (p *NotifierRuleRepo) Insert(ctx context.Context, n *models.NotifierRule) (*models.NotifierRule, error) {
+	d, err := p.queries.InsertNotifierRule(ctx, notifierToInsertParams(n))
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +105,8 @@ func (p *NotifierRepo) Insert(ctx context.Context, n *models.Notifier) (*models.
 	return notifierFromPG(d), nil
 }
 
-func (p *NotifierRepo) Update(ctx context.Context, n *models.Notifier) (*models.Notifier, error) {
-	d, err := p.queries.UpdateNotifierConnection(ctx, notifierToUpdateParams(n))
+func (p *NotifierRuleRepo) Update(ctx context.Context, n *models.NotifierRule) (*models.NotifierRule, error) {
+	d, err := p.queries.UpdateNotifierRule(ctx, notifierToUpdateParams(n))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, models.ErrNotifierNotFound
@@ -117,8 +117,8 @@ func (p *NotifierRepo) Update(ctx context.Context, n *models.Notifier) (*models.
 	return notifierFromPG(d), nil
 }
 
-func (p *NotifierRepo) Delete(ctx context.Context, id int) error {
-	if err := p.queries.DeleteNotifierConnection(ctx, id); err != nil {
+func (p *NotifierRuleRepo) Delete(ctx context.Context, id int) error {
+	if err := p.queries.DeleteNotifierRule(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.ErrNotifierNotFound
 		}
@@ -128,16 +128,16 @@ func (p *NotifierRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func notifierToInsertParams(n *models.Notifier) db.InsertNotifierConnectionParams {
-	return db.InsertNotifierConnectionParams{
+func notifierToInsertParams(n *models.NotifierRule) db.InsertNotifierRuleParams {
+	return db.InsertNotifierRuleParams{
 		CwBoardID:     n.CwBoardID,
 		WebexRoomID:   n.WebexRoomID,
 		NotifyEnabled: n.NotifyEnabled,
 	}
 }
 
-func notifierToUpdateParams(n *models.Notifier) db.UpdateNotifierConnectionParams {
-	return db.UpdateNotifierConnectionParams{
+func notifierToUpdateParams(n *models.NotifierRule) db.UpdateNotifierRuleParams {
+	return db.UpdateNotifierRuleParams{
 		ID:            n.ID,
 		CwBoardID:     n.CwBoardID,
 		WebexRoomID:   n.WebexRoomID,
@@ -145,8 +145,8 @@ func notifierToUpdateParams(n *models.Notifier) db.UpdateNotifierConnectionParam
 	}
 }
 
-func notifierFromPG(pg db.NotifierConnection) *models.Notifier {
-	return &models.Notifier{
+func notifierFromPG(pg db.NotifierRule) *models.NotifierRule {
+	return &models.NotifierRule{
 		ID:            pg.ID,
 		CwBoardID:     pg.CwBoardID,
 		WebexRoomID:   pg.WebexRoomID,

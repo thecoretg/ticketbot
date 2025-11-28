@@ -1,8 +1,6 @@
 package cwsvc
 
 import (
-	"sync"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -10,15 +8,14 @@ import (
 )
 
 type Service struct {
-	Boards      models.BoardRepository
-	Companies   models.CompanyRepository
-	Contacts    models.ContactRepository
-	Members     models.MemberRepository
-	Tickets     models.TicketRepository
-	Notes       models.TicketNoteRepository
-	pool        *pgxpool.Pool
-	cwClient    *psa.Client
-	ticketLocks sync.Map
+	Boards    models.BoardRepository
+	Companies models.CompanyRepository
+	Contacts  models.ContactRepository
+	Members   models.MemberRepository
+	Tickets   models.TicketRepository
+	Notes     models.TicketNoteRepository
+	pool      *pgxpool.Pool
+	cwClient  *psa.Client
 }
 
 type Repos struct {

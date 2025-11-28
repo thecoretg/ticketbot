@@ -95,7 +95,7 @@ type CwTicketNote struct {
 	Content   *string   `json:"content"`
 }
 
-type NotifierConnection struct {
+type NotifierRule struct {
 	ID            int       `json:"id"`
 	CwBoardID     int       `json:"cw_board_id"`
 	WebexRoomID   int       `json:"webex_room_id"`

@@ -106,7 +106,7 @@ func testNewService(t *testing.T, cfg models.Config) (*Service, error) {
 
 	notiRepos := notifier.Repos{
 		Rooms:         inmem.NewWebexRoomRepo(nil),
-		Notifiers:     inmem.NewNotifierRepo(nil),
+		Notifiers:     inmem.NewNotifierRuleRepo(nil),
 		Notifications: inmem.NewNotificationRepo(nil),
 		Forwards:      inmem.NewUserForwardRepo(nil),
 	}
@@ -159,7 +159,7 @@ func testSeedNotifiers(t *testing.T, ctx context.Context, s *Service) error {
 
 	for _, b := range testBoardIDs(t) {
 
-		n := &models.Notifier{
+		n := &models.NotifierRule{
 			CwBoardID:     b,
 			WebexRoomID:   room.ID,
 			NotifyEnabled: true,

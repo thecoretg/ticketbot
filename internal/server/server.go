@@ -83,7 +83,7 @@ func NewApp(ctx context.Context) (*App, error) {
 
 	nr := notifier.Repos{
 		Rooms:         r.WebexRoom,
-		Notifiers:     r.Notifiers,
+		Notifiers:     r.NotifierRules,
 		Notifications: r.Notifications,
 		Forwards:      r.Forwards,
 	}

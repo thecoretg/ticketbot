@@ -39,7 +39,7 @@ type UserForwardRepository interface {
 
 var ErrNotifierNotFound = errors.New("notifier not found")
 
-type Notifier struct {
+type NotifierRule struct {
 	ID            int       `json:"id"`
 	CwBoardID     int       `json:"cw_board_id"`
 	WebexRoomID   int       `json:"webex_room_id"`
@@ -47,15 +47,15 @@ type Notifier struct {
 	CreatedOn     time.Time `json:"created_on"`
 }
 
-type NotifierRepository interface {
-	WithTx(tx pgx.Tx) NotifierRepository
-	ListAll(ctx context.Context) ([]Notifier, error)
-	ListByBoard(ctx context.Context, boardID int) ([]Notifier, error)
-	ListByRoom(ctx context.Context, roomID int) ([]Notifier, error)
-	Get(ctx context.Context, id int) (*Notifier, error)
+type NotifierRuleRepository interface {
+	WithTx(tx pgx.Tx) NotifierRuleRepository
+	ListAll(ctx context.Context) ([]NotifierRule, error)
+	ListByBoard(ctx context.Context, boardID int) ([]NotifierRule, error)
+	ListByRoom(ctx context.Context, roomID int) ([]NotifierRule, error)
+	Get(ctx context.Context, id int) (*NotifierRule, error)
 	Exists(ctx context.Context, boardID, roomID int) (bool, error)
-	Insert(ctx context.Context, n *Notifier) (*Notifier, error)
-	Update(ctx context.Context, n *Notifier) (*Notifier, error)
+	Insert(ctx context.Context, n *NotifierRule) (*NotifierRule, error)
+	Update(ctx context.Context, n *NotifierRule) (*NotifierRule, error)
 	Delete(ctx context.Context, id int) error
 }
 

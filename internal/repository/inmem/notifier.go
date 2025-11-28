@@ -9,39 +9,39 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
-type NotifierRepo struct {
+type NotifierRuleRepo struct {
 	mu   sync.RWMutex
-	data map[int]models.Notifier
+	data map[int]models.NotifierRule
 	next int
 }
 
-func NewNotifierRepo(pool *pgxpool.Pool) *NotifierRepo {
-	return &NotifierRepo{
-		data: make(map[int]models.Notifier),
+func NewNotifierRuleRepo(pool *pgxpool.Pool) *NotifierRuleRepo {
+	return &NotifierRuleRepo{
+		data: make(map[int]models.NotifierRule),
 		next: 1,
 	}
 }
 
-func (p *NotifierRepo) WithTx(tx pgx.Tx) models.NotifierRepository {
+func (p *NotifierRuleRepo) WithTx(tx pgx.Tx) models.NotifierRuleRepository {
 	return p
 }
 
-func (p *NotifierRepo) ListAll(ctx context.Context) ([]models.Notifier, error) {
+func (p *NotifierRuleRepo) ListAll(ctx context.Context) ([]models.NotifierRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var out []models.Notifier
+	var out []models.NotifierRule
 	for _, v := range p.data {
 		out = append(out, v)
 	}
 	return out, nil
 }
 
-func (p *NotifierRepo) ListByBoard(ctx context.Context, boardID int) ([]models.Notifier, error) {
+func (p *NotifierRuleRepo) ListByBoard(ctx context.Context, boardID int) ([]models.NotifierRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var out []models.Notifier
+	var out []models.NotifierRule
 	for _, v := range p.data {
 		if v.CwBoardID == boardID {
 			out = append(out, v)
@@ -50,11 +50,11 @@ func (p *NotifierRepo) ListByBoard(ctx context.Context, boardID int) ([]models.N
 	return out, nil
 }
 
-func (p *NotifierRepo) ListByRoom(ctx context.Context, roomID int) ([]models.Notifier, error) {
+func (p *NotifierRuleRepo) ListByRoom(ctx context.Context, roomID int) ([]models.NotifierRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var out []models.Notifier
+	var out []models.NotifierRule
 	for _, v := range p.data {
 		if v.WebexRoomID == roomID {
 			out = append(out, v)
@@ -63,7 +63,7 @@ func (p *NotifierRepo) ListByRoom(ctx context.Context, roomID int) ([]models.Not
 	return out, nil
 }
 
-func (p *NotifierRepo) Get(ctx context.Context, id int) (*models.Notifier, error) {
+func (p *NotifierRuleRepo) Get(ctx context.Context, id int) (*models.NotifierRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -74,7 +74,7 @@ func (p *NotifierRepo) Get(ctx context.Context, id int) (*models.Notifier, error
 	return &v, nil
 }
 
-func (p *NotifierRepo) Exists(ctx context.Context, boardID, roomID int) (bool, error) {
+func (p *NotifierRuleRepo) Exists(ctx context.Context, boardID, roomID int) (bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -86,7 +86,7 @@ func (p *NotifierRepo) Exists(ctx context.Context, boardID, roomID int) (bool, e
 	return false, nil
 }
 
-func (p *NotifierRepo) Insert(ctx context.Context, n *models.Notifier) (*models.Notifier, error) {
+func (p *NotifierRuleRepo) Insert(ctx context.Context, n *models.NotifierRule) (*models.NotifierRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -96,7 +96,7 @@ func (p *NotifierRepo) Insert(ctx context.Context, n *models.Notifier) (*models.
 	return n, nil
 }
 
-func (p *NotifierRepo) Update(ctx context.Context, n *models.Notifier) (*models.Notifier, error) {
+func (p *NotifierRuleRepo) Update(ctx context.Context, n *models.NotifierRule) (*models.NotifierRule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -107,7 +107,7 @@ func (p *NotifierRepo) Update(ctx context.Context, n *models.Notifier) (*models.
 	return n, nil
 }
 
-func (p *NotifierRepo) Delete(ctx context.Context, id int) error {
+func (p *NotifierRuleRepo) Delete(ctx context.Context, id int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

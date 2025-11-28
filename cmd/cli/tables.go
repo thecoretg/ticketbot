@@ -45,7 +45,7 @@ func cwBoardsToTable(boards []models.Board) {
 	fmt.Println(t)
 }
 
-func notifierRulesTable(notifiers []models.Notifier) {
+func notifierRulesTable(notifiers []models.NotifierRule) {
 	t := defaultTable()
 	t.Headers("ID", "ROOM", "BOARD", "NOTIFY")
 	for _, n := range notifiers {

@@ -12,7 +12,7 @@ func AllRepos(pool *pgxpool.Pool) *models.AllRepos {
 		Config:        NewConfigRepo(pool),
 		Notifications: NewNotificationRepo(pool),
 		Forwards:      NewUserForwardRepo(pool),
-		Notifiers:     NewNotifierRepo(pool),
+		NotifierRules: NewNotifierRuleRepo(pool),
 		WebexRoom:     NewWebexRoomRepo(pool),
 		CW: models.CWRepos{
 			Board:   NewBoardRepo(pool),

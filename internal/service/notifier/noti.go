@@ -30,23 +30,30 @@ func newRequest(ticket *models.FullTicket) *Request {
 	}
 }
 
-func (s *Service) ProcessTicket(ctx context.Context, ticket *models.FullTicket, isNew bool) {
+func (s *Service) Run(ctx context.Context, ticket *models.FullTicket, isNew bool) error {
+	if err := s.processNotifications(ctx, ticket, isNew); err != nil {
+		return fmt.Errorf("processing notifications: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) processNotifications(ctx context.Context, ticket *models.FullTicket, isNew bool) (err error) {
 	req := newRequest(ticket)
 	logger := slog.Default().With("ticket_id", ticket.Ticket.ID)
 	defer func() {
-		logRequest(req, logger)
+		logRequest(req, err, logger)
 	}()
 
 	rules, err := s.Notifiers.ListByBoard(ctx, ticket.Board.ID)
 	if err != nil {
-		req.Error = fmt.Errorf("listing notifier rules for board: %w", err)
-		return
+		return fmt.Errorf("listing notifier rules for board: %w", err)
 	}
 	logger = logger.With(ruleLogGroup(rules))
 
 	if len(rules) == 0 {
 		req.NoNotiReason = "no notifier rules found for board"
-		return
+		return nil
 	}
 
 	if isNew {
@@ -58,8 +65,7 @@ func (s *Service) ProcessTicket(ctx context.Context, ticket *models.FullTicket, 
 
 			r, err := s.Rooms.Get(ctx, n.WebexRoomID)
 			if err != nil {
-				req.Error = fmt.Errorf("getting webex room from notifier rule: %w", err)
-				return
+				return fmt.Errorf("getting webex room from notifier rule: %w", err)
 			}
 
 			rooms = append(rooms, r)
@@ -70,25 +76,23 @@ func (s *Service) ProcessTicket(ctx context.Context, ticket *models.FullTicket, 
 
 		if ticket.LatestNote == nil {
 			req.NoNotiReason = "no note found for ticket"
-			return
+			return nil
 		}
 
 		exists, err := s.checkExistingNoti(ctx, ticket.LatestNote.ID)
 		if err != nil {
-			req.Error = fmt.Errorf("checking for existing notification for ticket note: %w", err)
-			req.NoNotiReason = "errored"
-			return
+			return fmt.Errorf("checking for existing notification for ticket note: %w", err)
 		}
 
 		if exists {
 			req.NoNotiReason = "note already notified"
-			return
+			return nil
 		}
 
 		emails := s.getRecipientEmails(ctx, ticket)
 		if len(emails) == 0 {
 			req.NoNotiReason = "no resources to notify"
-			return
+			return nil
 		}
 		req.MessagesToSend = s.makeUpdatedTicketMessages(ticket, emails)
 	}
@@ -111,9 +115,10 @@ func (s *Service) ProcessTicket(ctx context.Context, ticket *models.FullTicket, 
 
 	if len(req.MessagesErrored) > 0 {
 		logger = logger.With(msgsLogGroup("messages_errored", req.MessagesErrored))
+		return fmt.Errorf("errors occurred sending %d messages; see logs for details", len(req.MessagesErrored))
 	}
 
-	return
+	return nil
 }
 
 func (s *Service) checkExistingNoti(ctx context.Context, noteID int) (bool, error) {
@@ -142,7 +147,7 @@ func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
 	return m
 }
 
-func ruleLogGroup(rules []models.Notifier) slog.Attr {
+func ruleLogGroup(rules []models.NotifierRule) slog.Attr {
 	var attrs []any
 	for _, r := range rules {
 		g := slog.Group(
@@ -189,13 +194,13 @@ func msgsLogGroup(key string, msgs []Message) slog.Attr {
 	return slog.Group(key, msgGrps...)
 }
 
-func logRequest(req *Request, logger *slog.Logger) {
+func logRequest(req *Request, err error, logger *slog.Logger) {
 	if req.NoNotiReason != "" {
 		logger = logger.With("no_noti_reason", req.NoNotiReason)
 	}
 
-	if req.Error != nil {
-		logger.Error("error occured with notification", "error", req.Error)
+	if err != nil {
+		logger.Error("error occured with notification", "error", err)
 	} else {
 		logger.Info("notification processed")
 	}

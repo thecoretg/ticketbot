@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/charmbracelet/huh"
@@ -22,7 +23,7 @@ var (
 	forwardUserKeeps bool
 
 	notifiersCmd = &cobra.Command{
-		Use: "notifiers",
+		Use: "notifier",
 	}
 
 	rulesCmd = &cobra.Command{
@@ -70,17 +71,20 @@ var (
 		Use: "create",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var (
-				p   *models.Notifier
+				p   *models.NotifierRule
 				err error
 			)
 
 			if boardID == 0 || roomID == 0 {
 				p, err = createRuleParamsInteractive(client)
 				if err != nil {
+					if errors.Is(err, huh.ErrUserAborted) {
+						return nil
+					}
 					return err
 				}
 			} else {
-				p = &models.Notifier{
+				p = &models.NotifierRule{
 					CwBoardID:   boardID,
 					WebexRoomID: roomID,
 				}
@@ -209,7 +213,7 @@ var (
 	}
 )
 
-func createRuleParamsInteractive(cl *sdk.Client) (*models.Notifier, error) {
+func createRuleParamsInteractive(cl *sdk.Client) (*models.NotifierRule, error) {
 	boards, err := cl.ListBoards()
 	if err != nil {
 		return nil, fmt.Errorf("fetching boards: %w", err)
@@ -219,6 +223,17 @@ func createRuleParamsInteractive(cl *sdk.Client) (*models.Notifier, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetching rooms: %w", err)
 	}
+
+	// Webex's API returns "Empty Title" for users that have been suspended/deleted. No need to include them.
+	rooms = filterEmptyTitleRooms(rooms)
+
+	sort.SliceStable(boards, func(i, j int) bool {
+		return boards[i].Name < boards[j].Name
+	})
+
+	sort.SliceStable(rooms, func(i, j int) bool {
+		return rooms[i].Name < rooms[j].Name
+	})
 
 	var bo []huh.Option[models.Board]
 	for _, b := range boards {
@@ -231,7 +246,7 @@ func createRuleParamsInteractive(cl *sdk.Client) (*models.Notifier, error) {
 
 	var ro []huh.Option[models.WebexRoom]
 	for _, r := range rooms {
-		key := fmt.Sprintf("%d: %s (%s)", r.ID, r.Name, r.Type)
+		key := fmt.Sprintf("%s (%s)", r.Name, r.Type)
 		opt := huh.Option[models.WebexRoom]{
 			Key:   key,
 			Value: r,
@@ -244,32 +259,43 @@ func createRuleParamsInteractive(cl *sdk.Client) (*models.Notifier, error) {
 		roomChoice  models.WebexRoom
 	)
 
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[models.Board]().
-				Title("Select a board").
-				Options(bo...).
-				Value(&boardChoice),
-		),
-		huh.NewGroup(
-			huh.NewSelect[models.WebexRoom]().
-				Title("Select a Webex room").
-				Options(ro...).
-				Value(&roomChoice),
-		),
-	).WithTheme(huh.ThemeBase16())
+	bg := huh.NewGroup(
+		huh.NewSelect[models.Board]().
+			Title("Select a board").
+			Options(bo...).
+			Value(&boardChoice),
+	)
 
-	if err := form.Run(); err != nil {
+	rg := huh.NewGroup(
+		huh.NewSelect[models.WebexRoom]().
+			Title("Select a Webex room").
+			Options(ro...).
+			Value(&roomChoice),
+	)
+
+	f := form(bg, rg)
+	if err := f.Run(); err != nil {
 		return nil, fmt.Errorf("running form: %w", err)
 	}
 
-	n := &models.Notifier{
+	n := &models.NotifierRule{
 		CwBoardID:     boardChoice.ID,
 		WebexRoomID:   roomChoice.ID,
 		NotifyEnabled: true,
 	}
 
 	return n, nil
+}
+
+func filterEmptyTitleRooms(rooms []models.WebexRoom) []models.WebexRoom {
+	var f []models.WebexRoom
+	for _, r := range rooms {
+		if r.Name != "Empty Title" {
+			f = append(f, r)
+		}
+	}
+
+	return f
 }
 
 func init() {

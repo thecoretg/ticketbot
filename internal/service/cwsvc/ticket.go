@@ -6,15 +6,23 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
-type cwData struct {
+var (
+	ErrTicketWasDeleted = errors.New("ticket was deleted from connectwise")
+)
+
+type Request struct {
+	*models.FullTicket
+	NoProcReason string
+	cd           CWData
+}
+
+type CWData struct {
 	ticket *psa.Ticket
 	note   *psa.ServiceTicketNote
 }
@@ -26,68 +34,39 @@ func (s *Service) DeleteTicket(ctx context.Context, id int) error {
 	return nil
 }
 
-func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int) error {
-	start := time.Now()
-	slog.Info("cwsvc: beginning ticket sync", "board_ids", boardIDs)
-	con := "closedFlag = false"
-	if len(boardIDs) > 0 {
-		con += fmt.Sprintf(" AND %s", boardIDParam(boardIDs))
-	}
-
-	params := map[string]string{
-		"pageSize":   "100",
-		"conditions": con,
-	}
-
-	tix, err := s.cwClient.ListTickets(params)
+func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket, error) {
+	req, err := s.processTicket(ctx, id)
 	if err != nil {
-		return fmt.Errorf("getting open tickets from connectwise: %w", err)
-	}
-	slog.Info("cwsvc: open ticket sync: got open tickets from connectwise", "total_tickets", len(tix))
-	sem := make(chan struct{}, maxSyncs)
-	var wg sync.WaitGroup
-	errCh := make(chan error, len(tix))
-
-	for _, t := range tix {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(ticket psa.Ticket) {
-			defer func() { <-sem }()
-			defer wg.Done()
-			if _, err := s.ProcessTicket(ctx, t.ID); err != nil {
-				slog.Error("cwsvc: ticket sync error", "ticket_id", t.ID, "error", err)
-				errCh <- fmt.Errorf("error syncing ticket %d: %w", t.ID, err)
-			} else {
-				errCh <- nil
-			}
-		}(t)
+		return nil, err
 	}
 
-	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		if err != nil {
-			slog.Error("cwsvc: syncing ticket", "error", err)
-		}
-	}
-	slog.Info("cwsvc: syncing tickets complete", "took_time", time.Since(start))
-	return nil
+	return req.FullTicket, nil
 }
 
-func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket, error) {
+func (s *Service) processTicket(ctx context.Context, id int) (req *Request, err error) {
 	// TODO: make this less bad
+	req = &Request{
+		NoProcReason: "",
+		cd:           CWData{},
+	}
 
 	logger := slog.Default()
-	defer func() { logger.Info("ticket processed") }()
+	defer func() {
+		logRequest(req, err, logger)
+	}()
 
 	cd, err := s.getCwData(id)
 	if err != nil {
-		return nil, fmt.Errorf("getting ticket data from connectwise: %w", err)
+		if errors.Is(err, ErrTicketWasDeleted) {
+			req.NoProcReason = "ticket was deleted from connectwise"
+			return req, nil
+		}
+
+		return req, fmt.Errorf("getting ticket data from connectwise: %w", err)
 	}
 
 	if cd.ticket == nil {
-		return nil, fmt.Errorf("no data returned from connectwise for ticket %d", id)
+		return req, fmt.Errorf("no data returned from connectwise for ticket %d", id)
 	}
 
 	//TODO: this is a bandaid. Move this logic to the repo.
@@ -96,7 +75,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 	if s.pool != nil {
 		tx, err = s.pool.Begin(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("beginning tx: %w", err)
+			return req, fmt.Errorf("beginning tx: %w", err)
 		}
 
 		txSvc = s.withTX(tx)
@@ -111,7 +90,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 
 	board, err := txSvc.ensureBoard(ctx, cwt.Board.ID)
 	if err != nil {
-		return nil, fmt.Errorf("ensuring board in store: %w", err)
+		return req, fmt.Errorf("ensuring board in store: %w", err)
 	}
 	logger = logger.With(boardLogGrp(board))
 
@@ -184,7 +163,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 		ptrOwner = &owner
 	}
 
-	return &models.FullTicket{
+	req.FullTicket = &models.FullTicket{
 		Board:      board,
 		Ticket:     ticket,
 		Company:    company,
@@ -192,76 +171,26 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (*models.FullTicket
 		Owner:      ptrOwner,
 		LatestNote: note,
 		Resources:  rsc,
-	}, nil
-}
-
-func companyLogGrp(company models.Company) slog.Attr {
-	return slog.Group("company", "id", company.ID, "name", company.Name)
-}
-
-func boardLogGrp(board models.Board) slog.Attr {
-	return slog.Group("board", "id", board.ID, "name", board.Name)
-}
-
-func ownerLogGrp(owner models.Member) slog.Attr {
-	return slog.Group("owner",
-		"id", owner.ID,
-		"identifier", owner.Identifier,
-		"first_name", owner.FirstName,
-		"last_name", owner.LastName,
-	)
-}
-
-func contactLogGrp(contact models.Contact) slog.Attr {
-	ln := "None"
-	if contact.LastName != nil {
-		ln = *contact.LastName
 	}
 
-	return slog.Group("contact",
-		"id", contact.ID,
-		"first_name", contact.FirstName,
-		"last_name", ln,
-	)
+	return req, nil
 }
 
-func noteLogGrp(note *models.FullTicketNote) slog.Attr {
-	var (
-		senderID   int
-		senderType string
-	)
-
-	if note.Member != nil {
-		senderID = note.Member.ID
-		senderType = "member"
-	} else if note.Contact != nil {
-		senderID = note.Contact.ID
-		senderType = "contact"
-	}
-
-	return slog.Group("latest_note",
-		"id", note.ID,
-		"sender_id", senderID,
-		"sender_type", senderType,
-	)
-}
-
-func (s *Service) getTicketLock(id int) *sync.Mutex {
-	li, _ := s.ticketLocks.LoadOrStore(id, &sync.Mutex{})
-	return li.(*sync.Mutex)
-}
-func (s *Service) getCwData(ticketID int) (cwData, error) {
+func (s *Service) getCwData(ticketID int) (CWData, error) {
 	t, err := s.cwClient.GetTicket(ticketID, nil)
 	if err != nil {
-		return cwData{}, fmt.Errorf("getting ticket: %w", err)
+		if errors.Is(err, psa.ErrNotFound) {
+			return CWData{}, ErrTicketWasDeleted
+		}
+		return CWData{}, fmt.Errorf("getting ticket: %w", err)
 	}
 
 	n, err := s.cwClient.GetMostRecentTicketNote(ticketID)
-	if err != nil {
-		return cwData{}, fmt.Errorf("getting most recent ticket note: %w", err)
+	if err != nil && !errors.Is(err, psa.ErrNotFound) {
+		return CWData{}, fmt.Errorf("getting most recent ticket note: %w", err)
 	}
 
-	return cwData{ticket: t, note: n}, nil
+	return CWData{ticket: t, note: n}, nil
 }
 
 func (s *Service) ensureBoard(ctx context.Context, id int) (models.Board, error) {
@@ -518,4 +447,67 @@ func strToPtr(s string) *string {
 	}
 	val := s
 	return &val
+}
+
+func logRequest(req *Request, err error, logger *slog.Logger) {
+	if req.NoProcReason != "" {
+		logger = logger.With("no_process_reason", req.NoProcReason)
+	}
+
+	if err != nil {
+		logger.Error("error occured processing ticket", "error", err)
+	} else {
+		logger.Info("ticket processed")
+	}
+}
+
+func companyLogGrp(company models.Company) slog.Attr {
+	return slog.Group("company", "id", company.ID, "name", company.Name)
+}
+
+func boardLogGrp(board models.Board) slog.Attr {
+	return slog.Group("board", "id", board.ID, "name", board.Name)
+}
+
+func ownerLogGrp(owner models.Member) slog.Attr {
+	return slog.Group("owner",
+		"id", owner.ID,
+		"identifier", owner.Identifier,
+		"first_name", owner.FirstName,
+		"last_name", owner.LastName,
+	)
+}
+
+func contactLogGrp(contact models.Contact) slog.Attr {
+	ln := "None"
+	if contact.LastName != nil {
+		ln = *contact.LastName
+	}
+
+	return slog.Group("contact",
+		"id", contact.ID,
+		"first_name", contact.FirstName,
+		"last_name", ln,
+	)
+}
+
+func noteLogGrp(note *models.FullTicketNote) slog.Attr {
+	var (
+		senderID   int
+		senderType string
+	)
+
+	if note.Member != nil {
+		senderID = note.Member.ID
+		senderType = "member"
+	} else if note.Contact != nil {
+		senderID = note.Contact.ID
+		senderType = "contact"
+	}
+
+	return slog.Group("latest_note",
+		"id", note.ID,
+		"sender_id", senderID,
+		"sender_type", senderType,
+	)
 }

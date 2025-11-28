@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS ticket_notification (
     updated_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE notifier_connection RENAME TO notifier_rule;
+
 ALTER TABLE cw_ticket_note
 ADD content TEXT,
 DROP CONSTRAINT cw_ticket_note_ticket_id_fkey,
@@ -43,6 +45,8 @@ DROP TABLE IF EXISTS app_state;
 
 -- +goose Down
 -- +goose StatementBegin
+ALTER TABLE notifier_rule RENAME TO notifier_connection;
+
 CREATE TABLE IF NOT EXISTS app_state (
     id INT PRIMARY KEY DEFAULT 1,
     syncing_tickets BOOLEAN NOT NULL DEFAULT false,

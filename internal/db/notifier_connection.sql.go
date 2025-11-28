@@ -12,7 +12,7 @@ import (
 const checkNotifierExists = `-- name: CheckNotifierExists :one
 SELECT EXISTS (
     SELECT 1
-    FROM notifier_connection
+    FROM notifier_rule
     WHERE cw_board_id = $1 AND webex_room_id = $2
 ) AS exists
 `
@@ -29,24 +29,24 @@ func (q *Queries) CheckNotifierExists(ctx context.Context, arg CheckNotifierExis
 	return exists, err
 }
 
-const deleteNotifierConnection = `-- name: DeleteNotifierConnection :exec
-DELETE FROM notifier_connection
+const deleteNotifierRule = `-- name: DeleteNotifierRule :exec
+DELETE FROM notifier_rule
 WHERE id = $1
 `
 
-func (q *Queries) DeleteNotifierConnection(ctx context.Context, id int) error {
-	_, err := q.db.Exec(ctx, deleteNotifierConnection, id)
+func (q *Queries) DeleteNotifierRule(ctx context.Context, id int) error {
+	_, err := q.db.Exec(ctx, deleteNotifierRule, id)
 	return err
 }
 
-const getNotifierConnection = `-- name: GetNotifierConnection :one
-SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_connection
+const getNotifierRule = `-- name: GetNotifierRule :one
+SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_rule
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetNotifierConnection(ctx context.Context, id int) (NotifierConnection, error) {
-	row := q.db.QueryRow(ctx, getNotifierConnection, id)
-	var i NotifierConnection
+func (q *Queries) GetNotifierRule(ctx context.Context, id int) (NotifierRule, error) {
+	row := q.db.QueryRow(ctx, getNotifierRule, id)
+	var i NotifierRule
 	err := row.Scan(
 		&i.ID,
 		&i.CwBoardID,
@@ -57,21 +57,21 @@ func (q *Queries) GetNotifierConnection(ctx context.Context, id int) (NotifierCo
 	return i, err
 }
 
-const insertNotifierConnection = `-- name: InsertNotifierConnection :one
-INSERT INTO notifier_connection(cw_board_id, webex_room_id, notify_enabled)
+const insertNotifierRule = `-- name: InsertNotifierRule :one
+INSERT INTO notifier_rule(cw_board_id, webex_room_id, notify_enabled)
 VALUES ($1, $2, $3)
 RETURNING id, cw_board_id, webex_room_id, notify_enabled, created_on
 `
 
-type InsertNotifierConnectionParams struct {
+type InsertNotifierRuleParams struct {
 	CwBoardID     int  `json:"cw_board_id"`
 	WebexRoomID   int  `json:"webex_room_id"`
 	NotifyEnabled bool `json:"notify_enabled"`
 }
 
-func (q *Queries) InsertNotifierConnection(ctx context.Context, arg InsertNotifierConnectionParams) (NotifierConnection, error) {
-	row := q.db.QueryRow(ctx, insertNotifierConnection, arg.CwBoardID, arg.WebexRoomID, arg.NotifyEnabled)
-	var i NotifierConnection
+func (q *Queries) InsertNotifierRule(ctx context.Context, arg InsertNotifierRuleParams) (NotifierRule, error) {
+	row := q.db.QueryRow(ctx, insertNotifierRule, arg.CwBoardID, arg.WebexRoomID, arg.NotifyEnabled)
+	var i NotifierRule
 	err := row.Scan(
 		&i.ID,
 		&i.CwBoardID,
@@ -82,20 +82,20 @@ func (q *Queries) InsertNotifierConnection(ctx context.Context, arg InsertNotifi
 	return i, err
 }
 
-const listNotifierConnections = `-- name: ListNotifierConnections :many
-SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_connection
+const listNotifierRules = `-- name: ListNotifierRules :many
+SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_rule
 ORDER BY id
 `
 
-func (q *Queries) ListNotifierConnections(ctx context.Context) ([]NotifierConnection, error) {
-	rows, err := q.db.Query(ctx, listNotifierConnections)
+func (q *Queries) ListNotifierRules(ctx context.Context) ([]NotifierRule, error) {
+	rows, err := q.db.Query(ctx, listNotifierRules)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []NotifierConnection
+	var items []NotifierRule
 	for rows.Next() {
-		var i NotifierConnection
+		var i NotifierRule
 		if err := rows.Scan(
 			&i.ID,
 			&i.CwBoardID,
@@ -113,21 +113,21 @@ func (q *Queries) ListNotifierConnections(ctx context.Context) ([]NotifierConnec
 	return items, nil
 }
 
-const listNotifierConnectionsByBoard = `-- name: ListNotifierConnectionsByBoard :many
-SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_connection
+const listNotifierRulesByBoard = `-- name: ListNotifierRulesByBoard :many
+SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_rule
 WHERE cw_board_id = $1
 ORDER BY id
 `
 
-func (q *Queries) ListNotifierConnectionsByBoard(ctx context.Context, cwBoardID int) ([]NotifierConnection, error) {
-	rows, err := q.db.Query(ctx, listNotifierConnectionsByBoard, cwBoardID)
+func (q *Queries) ListNotifierRulesByBoard(ctx context.Context, cwBoardID int) ([]NotifierRule, error) {
+	rows, err := q.db.Query(ctx, listNotifierRulesByBoard, cwBoardID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []NotifierConnection
+	var items []NotifierRule
 	for rows.Next() {
-		var i NotifierConnection
+		var i NotifierRule
 		if err := rows.Scan(
 			&i.ID,
 			&i.CwBoardID,
@@ -145,21 +145,21 @@ func (q *Queries) ListNotifierConnectionsByBoard(ctx context.Context, cwBoardID 
 	return items, nil
 }
 
-const listNotifierConnectionsByRoom = `-- name: ListNotifierConnectionsByRoom :many
-SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_connection
+const listNotifierRulesByRoom = `-- name: ListNotifierRulesByRoom :many
+SELECT id, cw_board_id, webex_room_id, notify_enabled, created_on FROM notifier_rule
 WHERE webex_room_id = $1
 ORDER BY id
 `
 
-func (q *Queries) ListNotifierConnectionsByRoom(ctx context.Context, webexRoomID int) ([]NotifierConnection, error) {
-	rows, err := q.db.Query(ctx, listNotifierConnectionsByRoom, webexRoomID)
+func (q *Queries) ListNotifierRulesByRoom(ctx context.Context, webexRoomID int) ([]NotifierRule, error) {
+	rows, err := q.db.Query(ctx, listNotifierRulesByRoom, webexRoomID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []NotifierConnection
+	var items []NotifierRule
 	for rows.Next() {
-		var i NotifierConnection
+		var i NotifierRule
 		if err := rows.Scan(
 			&i.ID,
 			&i.CwBoardID,
@@ -177,21 +177,21 @@ func (q *Queries) ListNotifierConnectionsByRoom(ctx context.Context, webexRoomID
 	return items, nil
 }
 
-const softDeleteNotifierConnection = `-- name: SoftDeleteNotifierConnection :exec
-UPDATE notifier_connection
+const softDeleteNotifierRule = `-- name: SoftDeleteNotifierRule :exec
+UPDATE notifier_rule
 SET
     deleted = TRUE,
     updated_on = NOW()
 WHERE id = $1
 `
 
-func (q *Queries) SoftDeleteNotifierConnection(ctx context.Context, id int) error {
-	_, err := q.db.Exec(ctx, softDeleteNotifierConnection, id)
+func (q *Queries) SoftDeleteNotifierRule(ctx context.Context, id int) error {
+	_, err := q.db.Exec(ctx, softDeleteNotifierRule, id)
 	return err
 }
 
-const updateNotifierConnection = `-- name: UpdateNotifierConnection :one
-UPDATE notifier_connection
+const updateNotifierRule = `-- name: UpdateNotifierRule :one
+UPDATE notifier_rule
 SET
     cw_board_id = $2,
     webex_room_id = $3,
@@ -200,21 +200,21 @@ WHERE id = $1
 RETURNING id, cw_board_id, webex_room_id, notify_enabled, created_on
 `
 
-type UpdateNotifierConnectionParams struct {
+type UpdateNotifierRuleParams struct {
 	ID            int  `json:"id"`
 	CwBoardID     int  `json:"cw_board_id"`
 	WebexRoomID   int  `json:"webex_room_id"`
 	NotifyEnabled bool `json:"notify_enabled"`
 }
 
-func (q *Queries) UpdateNotifierConnection(ctx context.Context, arg UpdateNotifierConnectionParams) (NotifierConnection, error) {
-	row := q.db.QueryRow(ctx, updateNotifierConnection,
+func (q *Queries) UpdateNotifierRule(ctx context.Context, arg UpdateNotifierRuleParams) (NotifierRule, error) {
+	row := q.db.QueryRow(ctx, updateNotifierRule,
 		arg.ID,
 		arg.CwBoardID,
 		arg.WebexRoomID,
 		arg.NotifyEnabled,
 	)
-	var i NotifierConnection
+	var i NotifierRule
 	err := row.Scan(
 		&i.ID,
 		&i.CwBoardID,
