@@ -25,6 +25,70 @@ func TestNewService(t *testing.T) {
 	}
 }
 
+func TestService_ProcessTicket(t *testing.T) {
+	type params struct {
+		cfg       *models.Config
+		ticketIDs []int
+		runAgain  bool // for running on "existing" tickets
+	}
+	ids := testTicketIDs(t)
+
+	tests := []struct {
+		name    string
+		params  params
+		wantErr bool
+	}{
+		{
+			name: "attemptNotifyOffWithNewTickets",
+			params: params{
+				cfg: &models.Config{
+					Debug:              false,
+					AttemptNotify:      false,
+					MaxMessageLength:   300,
+					MaxConcurrentSyncs: 5,
+				},
+				ticketIDs: ids,
+				runAgain:  false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "attemptNotifyOnWithNewTickets",
+			params: params{
+				cfg:       &models.DefaultConfig,
+				ticketIDs: ids,
+				runAgain:  false,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		svc, err := testNewService(t, tt.params.cfg)
+		if err != nil {
+			t.Errorf("%s: creating service: %v", tt.name, err)
+			continue
+		}
+
+		ctx := context.Background()
+		for _, id := range tt.params.ticketIDs {
+			err := svc.ProcessTicket(ctx, id)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("%s: wantErr = %v; err = '%v'", tt.name, tt.wantErr, err)
+			}
+		}
+
+		if tt.params.runAgain {
+			for _, id := range tt.params.ticketIDs {
+				err := svc.ProcessTicket(ctx, id)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("%s (second run) wantErr = %v; err = '%v'", tt.name, tt.wantErr, err)
+				}
+			}
+		}
+	}
+}
+
 func TestService_ProcessNewTicket_AttemptNotifyOff(t *testing.T) {
 	ctx := context.Background()
 	s, err := testNewService(t, &models.DefaultConfig)
