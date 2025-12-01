@@ -19,7 +19,7 @@ var (
 				return err
 			}
 
-			if rooms == nil || len(rooms) == 0 {
+			if len(rooms) == 0 {
 				fmt.Println("No rooms found")
 				return nil
 			}

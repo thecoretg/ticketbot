@@ -19,7 +19,7 @@ var (
 				return err
 			}
 
-			if boards == nil || len(boards) == 0 {
+			if len(boards) == 0 {
 				fmt.Println("No boards found")
 				return nil
 			}

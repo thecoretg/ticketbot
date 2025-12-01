@@ -42,7 +42,7 @@ var (
 				return err
 			}
 
-			if ns == nil || len(ns) == 0 {
+			if len(ns) == 0 {
 				fmt.Println("No notifiers found")
 				return nil
 			}
@@ -122,7 +122,7 @@ var (
 				return err
 			}
 
-			if ufs == nil || len(ufs) == 0 {
+			if len(ufs) == 0 {
 				fmt.Println("No user forwards found")
 				return nil
 			}
