@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
@@ -27,6 +28,13 @@ func New(cfg *models.Config, cw *cwsvc.Service, ns *notifier.Service) *Service {
 }
 
 func (s *Service) ProcessTicket(ctx context.Context, id int) error {
+	start := time.Now()
+	slog.Debug("ticketbot: request received", "ticket_id", id)
+
+	defer func() {
+		took := time.Since(start).Seconds()
+		slog.Debug("ticketbot: request finished", "ticket_id", id, "took_seconds", took)
+	}()
 	// Prevent a ticket from processing multiple times to prevent duplicate notifications.
 	// Connectwise frequently sends multiple hooks for the same ticket simultaneously.
 	lock := s.getTicketLock(id)

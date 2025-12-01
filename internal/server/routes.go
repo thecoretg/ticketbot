@@ -60,6 +60,9 @@ func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
 	b := r.Group("boards")
 	b.GET("", h.ListBoards)
 	b.GET(":id", h.GetBoard)
+
+	m := r.Group("members")
+	m.GET("", h.ListMembers)
 }
 
 func registerWebexRoutes(r *gin.RouterGroup, h *handlers.WebexHandler) {

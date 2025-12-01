@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS ticket_notification (
     updated_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+ALTER TABLE app_config DROP COLUMN debug;
+
 ALTER TABLE notifier_connection RENAME TO notifier_rule;
 
 ALTER TABLE cw_ticket_note

@@ -13,20 +13,10 @@ import (
 // this is primarily for testing purposes.
 func loadConfigOverrides(current *models.Config) *models.Config {
 	var (
-		debug         *bool
 		attemptNotify *bool
 		maxLen        *int
 		maxConSyncs   *int
 	)
-
-	switch os.Getenv("DEBUG") {
-	case "true":
-		v := true
-		debug = &v
-	case "false":
-		v := false
-		debug = &v
-	}
 
 	switch os.Getenv("ATTEMPT_NOTIFY") {
 	case "true":
@@ -47,11 +37,6 @@ func loadConfigOverrides(current *models.Config) *models.Config {
 	if err == nil {
 		v := msInt
 		maxConSyncs = &v
-	}
-
-	if debug != nil {
-		slog.Info("DEBUG overridden via env", "value", *debug)
-		current.Debug = *debug
 	}
 
 	if attemptNotify != nil {

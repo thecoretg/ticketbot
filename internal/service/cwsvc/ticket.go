@@ -12,9 +12,7 @@ import (
 	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
-var (
-	ErrTicketWasDeleted = errors.New("ticket was deleted from connectwise")
-)
+var ErrTicketWasDeleted = errors.New("ticket was deleted from connectwise")
 
 type Request struct {
 	*models.FullTicket
@@ -69,7 +67,7 @@ func (s *Service) processTicket(ctx context.Context, id int) (req *Request, err 
 		return req, fmt.Errorf("no data returned from connectwise for ticket %d", id)
 	}
 
-	//TODO: this is a bandaid. Move this logic to the repo.
+	// TODO: this is a bandaid. Move this logic to the repo.
 	txSvc := s
 	var tx pgx.Tx
 	if s.pool != nil {
@@ -146,7 +144,7 @@ func (s *Service) processTicket(ctx context.Context, id int) (req *Request, err 
 		logger = logger.With(noteLogGrp(note))
 	}
 
-	//TODO: this is a bandaid. Move this logic to the repo.
+	// TODO: this is a bandaid. Move this logic to the repo.
 	if s.pool != nil {
 		if err := tx.Commit(ctx); err != nil {
 			return nil, fmt.Errorf("committing transaction: %w", err)
@@ -334,16 +332,7 @@ func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (models.Tic
 		return models.Ticket{}, errors.New("received nil ticket")
 	}
 
-	t, err := s.Tickets.Get(ctx, cwt.ID)
-	if err == nil {
-		return t, nil
-	}
-
-	if !errors.Is(err, models.ErrTicketNotFound) {
-		return models.Ticket{}, fmt.Errorf("getting ticket from store: %w", err)
-	}
-
-	t, err = s.Tickets.Upsert(ctx, models.Ticket{
+	t, err := s.Tickets.Upsert(ctx, models.Ticket{
 		ID:        cwt.ID,
 		Summary:   cwt.Summary,
 		BoardID:   cwt.Board.ID,
@@ -354,7 +343,7 @@ func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (models.Tic
 		UpdatedBy: &cwt.Info.UpdatedBy,
 	})
 	if err != nil {
-		return models.Ticket{}, fmt.Errorf("inserting ticket into store: %w", err)
+		return models.Ticket{}, fmt.Errorf("upserting ticket: %w", err)
 	}
 
 	return t, nil

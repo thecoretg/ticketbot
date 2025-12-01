@@ -3,7 +3,6 @@ package ticketbot
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -42,7 +41,6 @@ func TestService_ProcessTicket(t *testing.T) {
 			name: "attemptNotifyOffWithNewTickets",
 			params: params{
 				cfg: &models.Config{
-					Debug:              false,
 					AttemptNotify:      false,
 					MaxMessageLength:   300,
 					MaxConcurrentSyncs: 5,
@@ -151,7 +149,6 @@ func TestService_ProcessNewTicket_AttemptNotifyOn(t *testing.T) {
 
 func testNewService(t *testing.T, cfg *models.Config) (*Service, error) {
 	t.Helper()
-	slog.SetLogLoggerLevel(slog.LevelDebug)
 	if err := godotenv.Load("testing.env"); err != nil {
 		return nil, fmt.Errorf("loading .env")
 	}

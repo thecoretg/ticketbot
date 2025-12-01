@@ -27,7 +27,6 @@ type ApiUser struct {
 
 type AppConfig struct {
 	ID                 int  `json:"id"`
-	Debug              bool `json:"debug"`
 	AttemptNotify      bool `json:"attempt_notify"`
 	MaxMessageLength   int  `json:"max_message_length"`
 	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`

@@ -11,7 +11,6 @@ var ErrConfigNotFound = errors.New("config not found")
 
 type Config struct {
 	ID                 int  `json:"id"`
-	Debug              bool `json:"debug"`
 	AttemptNotify      bool `json:"attempt_notify"`
 	MaxMessageLength   int  `json:"max_message_length"`
 	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
@@ -19,7 +18,6 @@ type Config struct {
 
 var DefaultConfig = Config{
 	ID:                 1,
-	Debug:              true,
 	AttemptNotify:      false,
 	MaxMessageLength:   300,
 	MaxConcurrentSyncs: 5,

@@ -20,7 +20,14 @@ func main() {
 
 func Run() error {
 	ctx := context.Background()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+	level := slog.LevelInfo
+	if os.Getenv("DEBUG") == "true" {
+		level = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	})))
 
 	a, err := server.NewApp(ctx, currentMigVersion)
 	if err != nil {

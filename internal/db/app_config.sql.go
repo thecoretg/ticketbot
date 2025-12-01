@@ -10,7 +10,7 @@ import (
 )
 
 const getAppConfig = `-- name: GetAppConfig :one
-SELECT id, debug, attempt_notify, max_message_length, max_concurrent_syncs FROM app_config
+SELECT id, attempt_notify, max_message_length, max_concurrent_syncs FROM app_config
 WHERE id = 1
 `
 
@@ -19,7 +19,6 @@ func (q *Queries) GetAppConfig(ctx context.Context) (AppConfig, error) {
 	var i AppConfig
 	err := row.Scan(
 		&i.ID,
-		&i.Debug,
 		&i.AttemptNotify,
 		&i.MaxMessageLength,
 		&i.MaxConcurrentSyncs,
@@ -30,7 +29,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (AppConfig, error) {
 const insertDefaultAppConfig = `-- name: InsertDefaultAppConfig :one
 INSERT INTO app_config (id) VALUES (1)
 ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-RETURNING id, debug, attempt_notify, max_message_length, max_concurrent_syncs
+RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs
 `
 
 func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (AppConfig, error) {
@@ -38,7 +37,6 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (AppConfig, error)
 	var i AppConfig
 	err := row.Scan(
 		&i.ID,
-		&i.Debug,
 		&i.AttemptNotify,
 		&i.MaxMessageLength,
 		&i.MaxConcurrentSyncs,
@@ -47,34 +45,26 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (AppConfig, error)
 }
 
 const upsertAppConfig = `-- name: UpsertAppConfig :one
-INSERT INTO app_config(id, debug, attempt_notify, max_message_length, max_concurrent_syncs)
-VALUES(1, $1, $2, $3, $4)
+INSERT INTO app_config(id, attempt_notify, max_message_length, max_concurrent_syncs)
+VALUES(1, $1, $2, $3)
 ON CONFLICT (id) DO UPDATE SET
-    debug = EXCLUDED.debug,
     attempt_notify = EXCLUDED.attempt_notify,
     max_message_length = EXCLUDED.max_message_length,
     max_concurrent_syncs = EXCLUDED.max_concurrent_syncs
-RETURNING id, debug, attempt_notify, max_message_length, max_concurrent_syncs
+RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs
 `
 
 type UpsertAppConfigParams struct {
-	Debug              bool `json:"debug"`
 	AttemptNotify      bool `json:"attempt_notify"`
 	MaxMessageLength   int  `json:"max_message_length"`
 	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
 }
 
 func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams) (AppConfig, error) {
-	row := q.db.QueryRow(ctx, upsertAppConfig,
-		arg.Debug,
-		arg.AttemptNotify,
-		arg.MaxMessageLength,
-		arg.MaxConcurrentSyncs,
-	)
+	row := q.db.QueryRow(ctx, upsertAppConfig, arg.AttemptNotify, arg.MaxMessageLength, arg.MaxConcurrentSyncs)
 	var i AppConfig
 	err := row.Scan(
 		&i.ID,
-		&i.Debug,
 		&i.AttemptNotify,
 		&i.MaxMessageLength,
 		&i.MaxConcurrentSyncs,

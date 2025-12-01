@@ -8,7 +8,6 @@ import (
 )
 
 var (
-	cfgDebug         bool
 	cfgAttemptNotify bool
 	cfgMaxMsgLen     int
 	cfgMaxSyncs      int
@@ -39,10 +38,6 @@ var (
 				return fmt.Errorf("getting current config: %w", err)
 			}
 
-			if cmd.Flags().Changed("debug") {
-				cfg.Debug = cfgDebug
-			}
-
 			if cmd.Flags().Changed("attempt-notify") {
 				cfg.AttemptNotify = cfgAttemptNotify
 			}
@@ -68,16 +63,14 @@ var (
 )
 
 func printCfg(cfg *models.Config) {
-	fmt.Printf("Debug: %v\n"+
-		"Attempt Notify: %v\n"+
+	fmt.Printf("Attempt Notify: %v\n"+
 		"Max Msg Length: %d\n"+
 		"Max Concurrent Syncs: %d\n",
-		cfg.Debug, cfg.AttemptNotify, cfg.MaxMessageLength, cfg.MaxConcurrentSyncs)
+		cfg.AttemptNotify, cfg.MaxMessageLength, cfg.MaxConcurrentSyncs)
 }
 
 func init() {
 	cfgCmd.AddCommand(getCfgCmd, updateCfgCmd)
-	updateCfgCmd.Flags().BoolVarP(&cfgDebug, "debug", "d", false, "enable debug mode on server")
 	updateCfgCmd.Flags().BoolVarP(&cfgAttemptNotify, "attempt-notify", "n", false, "attempt notify on server")
 	updateCfgCmd.Flags().IntVarP(&cfgMaxMsgLen, "max-msg-length", "l", 300, "max webex message length")
 	updateCfgCmd.Flags().IntVarP(&cfgMaxSyncs, "max-concurrent-syncs", "s", 5, "max concurrent syncs")
