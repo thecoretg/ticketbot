@@ -207,7 +207,7 @@ func testTicketIDs(t *testing.T) []int {
 }
 
 func testSeedNotifiers(t *testing.T, ctx context.Context, s *Service) error {
-	r := models.WebexRoom{
+	r := models.WebexRecipient{
 		WebexID: "something",
 		Name:    "something",
 		Type:    "group",

@@ -11,57 +11,57 @@ import (
 
 type UserForwardRepo struct {
 	mu   sync.RWMutex
-	data map[int]models.UserForward
+	data map[int]models.NotifierForward
 	next int
 }
 
 func NewUserForwardRepo(pool *pgxpool.Pool) *UserForwardRepo {
 	return &UserForwardRepo{
-		data: make(map[int]models.UserForward),
+		data: make(map[int]models.NotifierForward),
 		next: 1,
 	}
 }
 
-func (p *UserForwardRepo) WithTx(tx pgx.Tx) models.UserForwardRepository {
+func (p *UserForwardRepo) WithTx(tx pgx.Tx) models.NotifierForwardRepository {
 	return p
 }
 
-func (p *UserForwardRepo) ListAll(ctx context.Context) ([]models.UserForward, error) {
+func (p *UserForwardRepo) ListAll(ctx context.Context) ([]models.NotifierForward, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var out []models.UserForward
+	var out []models.NotifierForward
 	for _, v := range p.data {
 		out = append(out, v)
 	}
 	return out, nil
 }
 
-func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]models.UserForward, error) {
+func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]models.NotifierForward, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	var out []models.UserForward
+	var out []models.NotifierForward
 	for _, v := range p.data {
-		if v.SourceRoomID == id {
+		if v.SourceID == id {
 			out = append(out, v)
 		}
 	}
 	return out, nil
 }
 
-func (p *UserForwardRepo) Get(ctx context.Context, id int) (models.UserForward, error) {
+func (p *UserForwardRepo) Get(ctx context.Context, id int) (models.NotifierForward, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	v, ok := p.data[id]
 	if !ok {
-		return models.UserForward{}, models.ErrUserForwardNotFound
+		return models.NotifierForward{}, models.ErrUserForwardNotFound
 	}
 	return v, nil
 }
 
-func (p *UserForwardRepo) Insert(ctx context.Context, b models.UserForward) (models.UserForward, error) {
+func (p *UserForwardRepo) Insert(ctx context.Context, b models.NotifierForward) (models.NotifierForward, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

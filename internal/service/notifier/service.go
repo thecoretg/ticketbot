@@ -7,10 +7,10 @@ import (
 
 type Service struct {
 	Cfg              *models.Config
-	Rooms            models.WebexRoomRepository
+	Rooms            models.WebexRecipientRepository
 	Notifiers        models.NotifierRuleRepository
 	Notifications    models.TicketNotificationRepository
-	Forwards         models.UserForwardRepository
+	Forwards         models.NotifierForwardRepository
 	Pool             *pgxpool.Pool
 	MessageSender    models.MessageSender
 	CWCompanyID      string
@@ -18,10 +18,10 @@ type Service struct {
 }
 
 type Repos struct {
-	Rooms         models.WebexRoomRepository
+	Rooms         models.WebexRecipientRepository
 	Notifiers     models.NotifierRuleRepository
 	Notifications models.TicketNotificationRepository
-	Forwards      models.UserForwardRepository
+	Forwards      models.NotifierForwardRepository
 }
 
 func New(cfg *models.Config, r Repos, ms models.MessageSender, cwCompanyID string, maxLen int) *Service {

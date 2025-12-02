@@ -49,7 +49,7 @@ func (s *Service) processFwds(ctx context.Context, email string) ([]int, error) 
 		return nil, ErrNoRoomsForEmail
 	}
 
-	var src models.WebexRoom
+	var src models.WebexRecipient
 	if len(rooms) > 1 {
 		sort.Slice(rooms, func(i, j int) bool {
 			return rooms[i].LastActivity.After(rooms[j].LastActivity)
@@ -79,7 +79,7 @@ func (s *Service) processFwds(ctx context.Context, email string) ([]int, error) 
 			keep = true
 		}
 
-		toNotify[f.DestRoomID] = struct{}{}
+		toNotify[f.DestID] = struct{}{}
 	}
 
 	if keep {
@@ -104,8 +104,8 @@ func memberSliceContains(members []models.Member, check models.Member) bool {
 	return false
 }
 
-func filterActiveFwds(fwds []models.UserForward) []models.UserForward {
-	var activeFwds []models.UserForward
+func filterActiveFwds(fwds []models.NotifierForward) []models.NotifierForward {
+	var activeFwds []models.NotifierForward
 	for _, f := range fwds {
 		if f.Enabled && dateRangeActive(f.StartDate, f.EndDate) {
 			activeFwds = append(activeFwds, f)

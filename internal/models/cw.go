@@ -121,9 +121,9 @@ var ErrTicketNoteNotFound = errors.New("ticket note not found")
 type TicketNote struct {
 	ID        int       `json:"id"`
 	TicketID  int       `json:"ticket_id"`
-	Content   *string   `json:"text"`
 	MemberID  *int      `json:"member_id"`
 	ContactID *int      `json:"contact_id"`
+	Content   *string   `json:"text"`
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
 }

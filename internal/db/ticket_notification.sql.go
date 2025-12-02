@@ -12,7 +12,7 @@ import (
 const checkNotificationsExistByNote = `-- name: CheckNotificationsExistByNote :one
 SELECT EXISTS (
     SELECT 1
-    FROM notifier_ticket_notification
+    FROM ticket_notification
     WHERE ticket_note_id = $1
 ) AS exists
 `
@@ -27,7 +27,7 @@ func (q *Queries) CheckNotificationsExistByNote(ctx context.Context, ticketNoteI
 const checkNotificationsExistByTicketID = `-- name: CheckNotificationsExistByTicketID :one
 SELECT EXISTS (
     SELECT 1
-    FROM notifier_ticket_notification
+    FROM ticket_notification
     WHERE ticket_id = $1
 ) AS exists
 `
@@ -40,7 +40,7 @@ func (q *Queries) CheckNotificationsExistByTicketID(ctx context.Context, ticketI
 }
 
 const deleteTicketNotification = `-- name: DeleteTicketNotification :exec
-DELETE FROM notifier_ticket_notification
+DELETE FROM ticket_notification
 WHERE id = $1
 `
 
@@ -50,13 +50,13 @@ func (q *Queries) DeleteTicketNotification(ctx context.Context, id int) error {
 }
 
 const getTicketNotification = `-- name: GetTicketNotification :one
-SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM notifier_ticket_notification
+SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM ticket_notification
 WHERE id = $1
 `
 
-func (q *Queries) GetTicketNotification(ctx context.Context, id int) (NotifierTicketNotification, error) {
+func (q *Queries) GetTicketNotification(ctx context.Context, id int) (TicketNotification, error) {
 	row := q.db.QueryRow(ctx, getTicketNotification, id)
-	var i NotifierTicketNotification
+	var i TicketNotification
 	err := row.Scan(
 		&i.ID,
 		&i.TicketID,
@@ -71,7 +71,7 @@ func (q *Queries) GetTicketNotification(ctx context.Context, id int) (NotifierTi
 }
 
 const insertTicketNotification = `-- name: InsertTicketNotification :one
-INSERT INTO notifier_ticket_notification
+INSERT INTO ticket_notification
 (ticket_id, ticket_note_id, recipient_id, sent, skipped)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on
@@ -85,7 +85,7 @@ type InsertTicketNotificationParams struct {
 	Skipped      bool `json:"skipped"`
 }
 
-func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicketNotificationParams) (NotifierTicketNotification, error) {
+func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicketNotificationParams) (TicketNotification, error) {
 	row := q.db.QueryRow(ctx, insertTicketNotification,
 		arg.TicketID,
 		arg.TicketNoteID,
@@ -93,7 +93,7 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 		arg.Sent,
 		arg.Skipped,
 	)
-	var i NotifierTicketNotification
+	var i TicketNotification
 	err := row.Scan(
 		&i.ID,
 		&i.TicketID,
@@ -108,19 +108,19 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 }
 
 const listTicketNotifications = `-- name: ListTicketNotifications :many
-SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM notifier_ticket_notification
+SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM ticket_notification
 ORDER BY created_on
 `
 
-func (q *Queries) ListTicketNotifications(ctx context.Context) ([]NotifierTicketNotification, error) {
+func (q *Queries) ListTicketNotifications(ctx context.Context) ([]TicketNotification, error) {
 	rows, err := q.db.Query(ctx, listTicketNotifications)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []NotifierTicketNotification
+	var items []TicketNotification
 	for rows.Next() {
-		var i NotifierTicketNotification
+		var i TicketNotification
 		if err := rows.Scan(
 			&i.ID,
 			&i.TicketID,
@@ -142,19 +142,19 @@ func (q *Queries) ListTicketNotifications(ctx context.Context) ([]NotifierTicket
 }
 
 const listTicketNotificationsByNoteID = `-- name: ListTicketNotificationsByNoteID :many
-SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM notifier_ticket_notification
+SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM ticket_notification
 WHERE ticket_note_id = $1
 `
 
-func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNoteID *int) ([]NotifierTicketNotification, error) {
+func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNoteID *int) ([]TicketNotification, error) {
 	rows, err := q.db.Query(ctx, listTicketNotificationsByNoteID, ticketNoteID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []NotifierTicketNotification
+	var items []TicketNotification
 	for rows.Next() {
-		var i NotifierTicketNotification
+		var i TicketNotification
 		if err := rows.Scan(
 			&i.ID,
 			&i.TicketID,

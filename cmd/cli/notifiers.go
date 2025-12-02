@@ -142,7 +142,7 @@ var (
 
 			fmt.Printf("ID: %d\nSource: %d\nForward To: %d\nStart Date: %s\nEnd Date: %s\n"+
 				"User Keeps Copy: %v\nEnabled: %v\n",
-				uf.ID, uf.SourceRoomID, uf.DestRoomID, uf.StartDate, uf.EndDate, uf.UserKeepsCopy, uf.Enabled)
+				uf.ID, uf.SourceID, uf.DestID, uf.StartDate, uf.EndDate, uf.UserKeepsCopy, uf.Enabled)
 
 			return nil
 		},
@@ -179,9 +179,9 @@ var (
 				end = &et
 			}
 
-			p := &models.UserForward{
-				SourceRoomID:  forwardSrcID,
-				DestRoomID:    forwardDestID,
+			p := &models.NotifierForward{
+				SourceID:      forwardSrcID,
+				DestID:        forwardDestID,
 				StartDate:     start,
 				EndDate:       end,
 				Enabled:       forwardEnabled,
@@ -194,7 +194,7 @@ var (
 			}
 
 			fmt.Printf("ID: %d\nSource: %d\nForward To: %d\nStart Date: %s\nEnd Date: %s\nUser Keeps Copy: %v\nEnabled: %v\n",
-				uf.ID, uf.SourceRoomID, uf.DestRoomID, uf.StartDate, uf.EndDate, uf.UserKeepsCopy, uf.Enabled)
+				uf.ID, uf.SourceID, uf.DestID, uf.StartDate, uf.EndDate, uf.UserKeepsCopy, uf.Enabled)
 
 			return nil
 		},
@@ -244,10 +244,10 @@ func createRuleParamsInteractive(cl *sdk.Client) (*models.NotifierRule, error) {
 		bo = append(bo, opt)
 	}
 
-	var ro []huh.Option[models.WebexRoom]
+	var ro []huh.Option[models.WebexRecipient]
 	for _, r := range rooms {
 		key := fmt.Sprintf("%s (%s)", r.Name, r.Type)
-		opt := huh.Option[models.WebexRoom]{
+		opt := huh.Option[models.WebexRecipient]{
 			Key:   key,
 			Value: r,
 		}
@@ -256,7 +256,7 @@ func createRuleParamsInteractive(cl *sdk.Client) (*models.NotifierRule, error) {
 
 	var (
 		boardChoice models.Board
-		roomChoice  models.WebexRoom
+		roomChoice  models.WebexRecipient
 	)
 
 	bg := huh.NewGroup(
@@ -267,7 +267,7 @@ func createRuleParamsInteractive(cl *sdk.Client) (*models.NotifierRule, error) {
 	)
 
 	rg := huh.NewGroup(
-		huh.NewSelect[models.WebexRoom]().
+		huh.NewSelect[models.WebexRecipient]().
 			Title("Select a Webex room").
 			Options(ro...).
 			Value(&roomChoice),
@@ -287,8 +287,8 @@ func createRuleParamsInteractive(cl *sdk.Client) (*models.NotifierRule, error) {
 	return n, nil
 }
 
-func filterEmptyTitleRooms(rooms []models.WebexRoom) []models.WebexRoom {
-	var f []models.WebexRoom
+func filterEmptyTitleRooms(rooms []models.WebexRecipient) []models.WebexRecipient {
+	var f []models.WebexRecipient
 	for _, r := range rooms {
 		if r.Name != "Empty Title" {
 			f = append(f, r)

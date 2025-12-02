@@ -7,13 +7,13 @@ import (
 
 func AllRepos(pool *pgxpool.Pool) *models.AllRepos {
 	return &models.AllRepos{
-		APIKey:        NewAPIKeyRepo(pool),
-		APIUser:       NewAPIUserRepo(pool),
-		Config:        NewConfigRepo(pool),
-		Notifications: NewNotificationRepo(pool),
-		Forwards:      NewUserForwardRepo(pool),
-		NotifierRules: NewNotifierRuleRepo(pool),
-		WebexRoom:     NewWebexRoomRepo(pool),
+		APIKey:              NewAPIKeyRepo(pool),
+		APIUser:             NewAPIUserRepo(pool),
+		Config:              NewConfigRepo(pool),
+		TicketNotifications: NewNotificationRepo(pool),
+		NotifierForwards:    NewUserForwardRepo(pool),
+		NotifierRules:       NewNotifierRuleRepo(pool),
+		WebexRecipients:     NewWebexRecipientRepo(pool),
 		CW: models.CWRepos{
 			Board:   NewBoardRepo(pool),
 			Company: NewCompanyRepo(pool),

@@ -83,15 +83,15 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	cfg = loadConfigOverrides(cfg)
 
 	nr := notifier.Repos{
-		Rooms:         r.WebexRoom,
+		Rooms:         r.WebexRecipients,
 		Notifiers:     r.NotifierRules,
-		Notifications: r.Notifications,
-		Forwards:      r.Forwards,
+		Notifications: r.TicketNotifications,
+		Forwards:      r.NotifierForwards,
 	}
 
 	us := user.New(r.APIUser, r.APIKey)
 	cws := cwsvc.New(s.Pool, r.CW, cw)
-	ws := webexsvc.New(s.Pool, r.WebexRoom, ms)
+	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms)
 	wh := webhooks.New(cw, cr.RootURL)
 
 	ns := notifier.New(cfg, nr, ms, cr.CWCreds.CompanyId, cfg.MaxMessageLength)

@@ -22,7 +22,8 @@ func NewNotifierRuleRepo(pool *pgxpool.Pool) *NotifierRuleRepo {
 
 func (p *NotifierRuleRepo) WithTx(tx pgx.Tx) models.NotifierRuleRepository {
 	return &NotifierRuleRepo{
-		queries: db.New(tx)}
+		queries: db.New(tx),
+	}
 }
 
 func (p *NotifierRuleRepo) ListAll(ctx context.Context) ([]models.NotifierRule, error) {
@@ -84,8 +85,8 @@ func (p *NotifierRuleRepo) Get(ctx context.Context, id int) (*models.NotifierRul
 
 func (p *NotifierRuleRepo) Exists(ctx context.Context, boardID, roomID int) (bool, error) {
 	ids := db.CheckNotifierExistsParams{
-		CwBoardID:   boardID,
-		WebexRoomID: roomID,
+		CwBoardID:        boardID,
+		WebexRecipientID: roomID,
 	}
 
 	exists, err := p.queries.CheckNotifierExists(ctx, ids)
@@ -130,18 +131,18 @@ func (p *NotifierRuleRepo) Delete(ctx context.Context, id int) error {
 
 func notifierToInsertParams(n *models.NotifierRule) db.InsertNotifierRuleParams {
 	return db.InsertNotifierRuleParams{
-		CwBoardID:     n.CwBoardID,
-		WebexRoomID:   n.WebexRoomID,
-		NotifyEnabled: n.NotifyEnabled,
+		CwBoardID:        n.CwBoardID,
+		WebexRecipientID: n.WebexRoomID,
+		NotifyEnabled:    n.NotifyEnabled,
 	}
 }
 
 func notifierToUpdateParams(n *models.NotifierRule) db.UpdateNotifierRuleParams {
 	return db.UpdateNotifierRuleParams{
-		ID:            n.ID,
-		CwBoardID:     n.CwBoardID,
-		WebexRoomID:   n.WebexRoomID,
-		NotifyEnabled: n.NotifyEnabled,
+		ID:               n.ID,
+		CwBoardID:        n.CwBoardID,
+		WebexRecipientID: n.WebexRoomID,
+		NotifyEnabled:    n.NotifyEnabled,
 	}
 }
 
@@ -149,7 +150,7 @@ func notifierFromPG(pg db.NotifierRule) *models.NotifierRule {
 	return &models.NotifierRule{
 		ID:            pg.ID,
 		CwBoardID:     pg.CwBoardID,
-		WebexRoomID:   pg.WebexRoomID,
+		WebexRoomID:   pg.WebexRecipientID,
 		NotifyEnabled: pg.NotifyEnabled,
 		CreatedOn:     pg.CreatedOn,
 	}

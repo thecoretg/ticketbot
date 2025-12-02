@@ -1,14 +1,14 @@
 package models
 
 type AllRepos struct {
-	APIKey        APIKeyRepository
-	APIUser       APIUserRepository
-	Config        ConfigRepository
-	Notifications TicketNotificationRepository
-	Forwards      UserForwardRepository
-	NotifierRules NotifierRuleRepository
-	WebexRoom     WebexRoomRepository
-	CW            CWRepos
+	APIKey              APIKeyRepository
+	APIUser             APIUserRepository
+	Config              ConfigRepository
+	TicketNotifications TicketNotificationRepository
+	NotifierForwards    NotifierForwardRepository
+	NotifierRules       NotifierRuleRepository
+	WebexRecipients     WebexRecipientRepository
+	CW                  CWRepos
 }
 
 type CWRepos struct {

@@ -7,12 +7,12 @@ import (
 )
 
 type Service struct {
-	Rooms       models.WebexRoomRepository
+	Rooms       models.WebexRecipientRepository
 	pool        *pgxpool.Pool
 	webexClient models.MessageSender
 }
 
-func New(pool *pgxpool.Pool, r models.WebexRoomRepository, cl models.MessageSender) *Service {
+func New(pool *pgxpool.Pool, r models.WebexRecipientRepository, cl models.MessageSender) *Service {
 	return &Service{
 		Rooms:       r,
 		pool:        pool,

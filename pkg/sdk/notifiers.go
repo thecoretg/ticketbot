@@ -36,20 +36,20 @@ func (c *Client) DeleteNotifierRule(id int) error {
 	return c.Delete(fmt.Sprintf("notifiers/rules/%d", id))
 }
 
-func (c *Client) ListUserForwards() ([]models.UserForward, error) {
-	return GetMany[models.UserForward](c, "notifiers/forwards", nil)
+func (c *Client) ListUserForwards() ([]models.NotifierForward, error) {
+	return GetMany[models.NotifierForward](c, "notifiers/forwards", nil)
 }
 
-func (c *Client) GetUserForward(id int) (*models.UserForward, error) {
+func (c *Client) GetUserForward(id int) (*models.NotifierForward, error) {
 	if id == 0 {
 		return nil, errors.New("no id provided")
 	}
 
-	return GetOne[models.UserForward](c, fmt.Sprintf("notifiers/forwards/%d", id), nil)
+	return GetOne[models.NotifierForward](c, fmt.Sprintf("notifiers/forwards/%d", id), nil)
 }
 
-func (c *Client) CreateUserForward(payload *models.UserForward) (*models.UserForward, error) {
-	uf := &models.UserForward{}
+func (c *Client) CreateUserForward(payload *models.NotifierForward) (*models.NotifierForward, error) {
+	uf := &models.NotifierForward{}
 	if err := c.Post("notifiers/forwards", payload, uf); err != nil {
 		return nil, fmt.Errorf("posting to server: %w", err)
 	}

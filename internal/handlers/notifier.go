@@ -11,12 +11,12 @@ import (
 
 type NotifierHandler struct {
 	BoardRepo    models.BoardRepository
-	RoomRepo     models.WebexRoomRepository
+	RoomRepo     models.WebexRecipientRepository
 	RulesRepo    models.NotifierRuleRepository
-	ForwardsRepo models.UserForwardRepository
+	ForwardsRepo models.NotifierForwardRepository
 }
 
-func NewNotifierHandler(r models.NotifierRuleRepository, br models.BoardRepository, wr models.WebexRoomRepository, fr models.UserForwardRepository) *NotifierHandler {
+func NewNotifierHandler(r models.NotifierRuleRepository, br models.BoardRepository, wr models.WebexRecipientRepository, fr models.NotifierForwardRepository) *NotifierHandler {
 	return &NotifierHandler{
 		BoardRepo:    br,
 		RoomRepo:     wr,
@@ -152,7 +152,7 @@ func (h *NotifierHandler) GetForward(c *gin.Context) {
 }
 
 func (h *NotifierHandler) AddUserForward(c *gin.Context) {
-	p := &models.UserForward{}
+	p := &models.NotifierForward{}
 	if err := c.ShouldBindJSON(p); err != nil {
 		badPayloadError(c, err)
 		return

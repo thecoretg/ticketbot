@@ -106,7 +106,7 @@ type NotifierRule struct {
 	CreatedOn        time.Time `json:"created_on"`
 }
 
-type NotifierTicketNotification struct {
+type TicketNotification struct {
 	ID           int       `json:"id"`
 	TicketID     int       `json:"ticket_id"`
 	TicketNoteID *int      `json:"ticket_note_id"`

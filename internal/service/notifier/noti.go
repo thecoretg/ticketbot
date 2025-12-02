@@ -57,7 +57,7 @@ func (s *Service) processNotifications(ctx context.Context, ticket *models.FullT
 	}
 
 	if isNew {
-		var rooms []models.WebexRoom
+		var rooms []models.WebexRecipient
 		for _, n := range rules {
 			if !n.NotifyEnabled {
 				continue
@@ -95,7 +95,7 @@ func (s *Service) processNotifications(ctx context.Context, ticket *models.FullT
 			return nil
 		}
 
-		var recips []models.WebexRoom
+		var recips []models.WebexRecipient
 		for _, i := range roomIDs {
 			r, err := s.Rooms.Get(ctx, i)
 			if err != nil {

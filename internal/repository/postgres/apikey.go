@@ -38,7 +38,7 @@ func (p *APIKeyRepo) List(ctx context.Context) ([]models.APIKey, error) {
 }
 
 func (p *APIKeyRepo) Get(ctx context.Context, id int) (*models.APIKey, error) {
-	d, err := p.queries.GetAPILKey(ctx, id)
+	d, err := p.queries.GetAPIKey(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, models.ErrAPIKeyNotFound

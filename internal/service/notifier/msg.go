@@ -12,12 +12,12 @@ import (
 type Message struct {
 	MsgType      string
 	WebexMsg     webex.Message
-	WebexRoom    models.WebexRoom
+	WebexRoom    models.WebexRecipient
 	Notification models.TicketNotification
 	SendError    error
 }
 
-func newMessage(msgType string, wm webex.Message, wr models.WebexRoom, n models.TicketNotification) Message {
+func newMessage(msgType string, wm webex.Message, wr models.WebexRecipient, n models.TicketNotification) Message {
 	return Message{
 		MsgType:      msgType,
 		WebexMsg:     wm,
@@ -26,7 +26,7 @@ func newMessage(msgType string, wm webex.Message, wr models.WebexRoom, n models.
 	}
 }
 
-func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models.FullTicket) []Message {
+func (s *Service) makeNewTicketMessages(rooms []models.WebexRecipient, ticket *models.FullTicket) []Message {
 	header := fmt.Sprintf("**New Ticket:** %s %s", psa.MarkdownInternalTicketLink(ticket.Ticket.ID, s.CWCompanyID), ticket.Ticket.Summary)
 	body := makeMessageBody(ticket, header, s.MaxMessageLength)
 
@@ -36,7 +36,7 @@ func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models
 
 		n := &models.TicketNotification{
 			TicketID:    ticket.Ticket.ID,
-			WebexRoomID: r.ID,
+			RecipientID: r.ID,
 			Sent:        true,
 		}
 
@@ -50,7 +50,7 @@ func (s *Service) makeNewTicketMessages(rooms []models.WebexRoom, ticket *models
 	return msgs
 }
 
-func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket, recips []models.WebexRoom) []Message {
+func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket, recips []models.WebexRecipient) []Message {
 	header := fmt.Sprintf("**Ticket Updated:** %s %s", psa.MarkdownInternalTicketLink(ticket.Ticket.ID, s.CWCompanyID), ticket.Ticket.Summary)
 	body := makeMessageBody(ticket, header, s.MaxMessageLength)
 
@@ -60,7 +60,7 @@ func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket, recips []
 
 		n := &models.TicketNotification{
 			TicketID:    ticket.Ticket.ID,
-			WebexRoomID: r.ID,
+			RecipientID: r.ID,
 			Sent:        true,
 		}
 

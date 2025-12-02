@@ -15,7 +15,7 @@ var (
 	cellStyle   = lipgloss.NewStyle().Padding(0, 1)
 )
 
-func webexRoomsToTable(rooms []models.WebexRoom) {
+func webexRoomsToTable(rooms []models.WebexRecipient) {
 	sort.SliceStable(rooms, func(i, j int) bool {
 		return rooms[i].Name < rooms[j].Name
 	})
@@ -55,14 +55,14 @@ func notifierRulesTable(notifiers []models.NotifierRule) {
 	fmt.Println(t)
 }
 
-func userForwardsTable(forwards []models.UserForward) {
+func userForwardsTable(forwards []models.NotifierForward) {
 	t := defaultTable()
 	t.Headers("ID", "SRC ID", "DEST ID", "START DATE", "END DATE", "ENABLED", "USER KEEPS COPY")
 	for _, uf := range forwards {
 		t.Row(
 			strconv.Itoa(uf.ID),
-			strconv.Itoa(uf.SourceRoomID),
-			strconv.Itoa(uf.DestRoomID),
+			strconv.Itoa(uf.SourceID),
+			strconv.Itoa(uf.DestID),
 			uf.StartDate.Format("2006-01-02"),
 			uf.EndDate.Format("2006-01-02"),
 			fmt.Sprintf("%v", uf.Enabled),

@@ -11,11 +11,11 @@ import (
 	"github.com/thecoretg/ticketbot/pkg/webex"
 )
 
-func (s *Service) ListRooms(ctx context.Context) ([]models.WebexRoom, error) {
+func (s *Service) ListRooms(ctx context.Context) ([]models.WebexRecipient, error) {
 	return s.Rooms.List(ctx)
 }
 
-func (s *Service) GetRoom(ctx context.Context, id int) (models.WebexRoom, error) {
+func (s *Service) GetRoom(ctx context.Context, id int) (models.WebexRecipient, error) {
 	return s.Rooms.Get(ctx, id)
 }
 
@@ -72,16 +72,14 @@ func (s *Service) SyncRooms(ctx context.Context) error {
 	return nil
 }
 
-func roomsToUpsert(webexRooms []webex.Room) []models.WebexRoom {
-	var toUpsert []models.WebexRoom
+func roomsToUpsert(webexRooms []webex.Room) []models.WebexRecipient {
+	var toUpsert []models.WebexRecipient
 	for _, w := range webexRooms {
-		r := models.WebexRoom{
+		r := models.WebexRecipient{
 			WebexID:      w.Id,
 			Name:         w.Title,
 			Type:         w.Type,
-			Email:        "something",
-			LastActivity: time.Time{},
-			ID:           0,
+			LastActivity: w.LastActivity,
 		}
 		toUpsert = append(toUpsert, r)
 	}

@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS notifier_forward (
     CHECK (start_date < end_date)
 );
 
-CREATE TABLE IF NOT EXISTS notifier_ticket_notification (
+CREATE TABLE IF NOT EXISTS ticket_notification (
     id SERIAL PRIMARY KEY,
     ticket_id INT NOT NULL REFERENCES cw_ticket(id) ON DELETE CASCADE,
     ticket_note_id INT REFERENCES cw_ticket_note(id) ON DELETE CASCADE,
@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS cw_ticket_note (
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TABLE IF EXISTS notifier_ticket_notification;
+DROP TABLE IF EXISTS ticket_notification;
 DROP TABLE IF EXISTS notifier_forward;
 DROP TABLE IF EXISTS notifier_rule;
 DROP TABLE IF EXISTS cw_ticket_note;

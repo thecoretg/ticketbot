@@ -16,24 +16,24 @@ type MessageSender interface {
 
 var ErrUserForwardNotFound = errors.New("forward rule not found")
 
-type UserForward struct {
+type NotifierForward struct {
 	ID            int        `json:"id"`
-	SourceRoomID  int        `json:"user_email"`
-	DestRoomID    int        `json:"dest_email"`
+	SourceID      int        `json:"user_email"`
+	DestID        int        `json:"dest_email"`
 	StartDate     *time.Time `json:"start_date"`
 	EndDate       *time.Time `json:"end_date"`
 	Enabled       bool       `json:"enabled"`
 	UserKeepsCopy bool       `json:"user_keeps_copy"`
+	CreatedOn     time.Time  `json:"added_on"`
 	UpdatedOn     time.Time  `json:"updated_on"`
-	AddedOn       time.Time  `json:"added_on"`
 }
 
-type UserForwardRepository interface {
-	WithTx(tx pgx.Tx) UserForwardRepository
-	ListAll(ctx context.Context) ([]UserForward, error)
-	ListBySourceRoomID(ctx context.Context, id int) ([]UserForward, error)
-	Get(ctx context.Context, id int) (UserForward, error)
-	Insert(ctx context.Context, c UserForward) (UserForward, error)
+type NotifierForwardRepository interface {
+	WithTx(tx pgx.Tx) NotifierForwardRepository
+	ListAll(ctx context.Context) ([]NotifierForward, error)
+	ListBySourceRoomID(ctx context.Context, id int) ([]NotifierForward, error)
+	Get(ctx context.Context, id int) (NotifierForward, error)
+	Insert(ctx context.Context, c NotifierForward) (NotifierForward, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -65,7 +65,7 @@ type TicketNotification struct {
 	ID           int       `json:"id"`
 	TicketID     int       `json:"ticket_id"`
 	TicketNoteID *int      `json:"ticket_note_id"`
-	WebexRoomID  int       `json:"webex_room_id"`
+	RecipientID  int       `json:"webex_room_id"`
 	Sent         bool      `json:"sent"`
 	Skipped      bool      `json:"skipped"`
 	CreatedOn    time.Time `json:"created_on"`
