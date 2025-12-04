@@ -26,22 +26,30 @@ func newMessage(msgType string, wm webex.Message, wr models.WebexRecipient, n mo
 	}
 }
 
-func (s *Service) makeNewTicketMessages(rooms []models.WebexRecipient, ticket *models.FullTicket) []Message {
-	header := fmt.Sprintf("**New Ticket:** %s %s", psa.MarkdownInternalTicketLink(ticket.Ticket.ID, s.CWCompanyID), ticket.Ticket.Summary)
-	body := makeMessageBody(ticket, header, s.MaxMessageLength)
+func (s *Service) makeTicketMessages(t *models.FullTicket, recips []models.WebexRecipient, isNew bool) []Message {
+	if isNew {
+		return s.makeNewTicketMessages(t, recips)
+	}
+
+	return s.makeUpdatedTicketMessages(t, recips)
+}
+
+func (s *Service) makeNewTicketMessages(t *models.FullTicket, recips []models.WebexRecipient) []Message {
+	header := fmt.Sprintf("**New Ticket:** %s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, s.CWCompanyID), t.Ticket.Summary)
+	body := makeMessageBody(t, header, s.MaxMessageLength)
 
 	var msgs []Message
-	for _, r := range rooms {
+	for _, r := range recips {
 		wm := webex.NewMessageToRoom(r.WebexID, r.Name, body)
 
 		n := &models.TicketNotification{
-			TicketID:    ticket.Ticket.ID,
+			TicketID:    t.Ticket.ID,
 			RecipientID: r.ID,
 			Sent:        true,
 		}
 
-		if ticket.LatestNote != nil {
-			n.TicketNoteID = &ticket.LatestNote.ID
+		if t.LatestNote != nil {
+			n.TicketNoteID = &t.LatestNote.ID
 		}
 
 		msgs = append(msgs, newMessage("new_ticket", wm, r, *n))
@@ -50,22 +58,22 @@ func (s *Service) makeNewTicketMessages(rooms []models.WebexRecipient, ticket *m
 	return msgs
 }
 
-func (s *Service) makeUpdatedTicketMessages(ticket *models.FullTicket, recips []models.WebexRecipient) []Message {
-	header := fmt.Sprintf("**Ticket Updated:** %s %s", psa.MarkdownInternalTicketLink(ticket.Ticket.ID, s.CWCompanyID), ticket.Ticket.Summary)
-	body := makeMessageBody(ticket, header, s.MaxMessageLength)
+func (s *Service) makeUpdatedTicketMessages(t *models.FullTicket, recips []models.WebexRecipient) []Message {
+	header := fmt.Sprintf("**Ticket Updated:** %s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, s.CWCompanyID), t.Ticket.Summary)
+	body := makeMessageBody(t, header, s.MaxMessageLength)
 
 	var msgs []Message
 	for _, r := range recips {
 		wm := webex.NewMessageToRoom(r.WebexID, r.Name, body)
 
 		n := &models.TicketNotification{
-			TicketID:    ticket.Ticket.ID,
+			TicketID:    t.Ticket.ID,
 			RecipientID: r.ID,
 			Sent:        true,
 		}
 
-		if ticket.LatestNote != nil {
-			n.TicketNoteID = &ticket.LatestNote.ID
+		if t.LatestNote != nil {
+			n.TicketNoteID = &t.LatestNote.ID
 		}
 
 		msgs = append(msgs, newMessage("updated_ticket", wm, r, *n))

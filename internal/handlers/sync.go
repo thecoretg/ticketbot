@@ -29,7 +29,7 @@ func (h *SyncHandler) HandleSync(c *gin.Context) {
 
 	ctx := context.WithoutCancel(c.Request.Context())
 	if p.WebexRecipients {
-		go h.syncRooms(ctx, p.MaxConcurrentSyncs)
+		go h.syncWebexRecipients(ctx, p.MaxConcurrentSyncs)
 	}
 
 	if p.CWBoards {
@@ -43,7 +43,7 @@ func (h *SyncHandler) HandleSync(c *gin.Context) {
 	resultJSON(c, "sync started")
 }
 
-func (h *SyncHandler) syncRooms(ctx context.Context, maxConcurrent int) {
+func (h *SyncHandler) syncWebexRecipients(ctx context.Context, maxConcurrent int) {
 	if err := h.Svc.SyncWebexRecipients(ctx, maxConcurrent); err != nil {
 		slog.Error("syncing webex rooms", "error", err)
 	}

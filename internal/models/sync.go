@@ -1,7 +1,7 @@
 package models
 
 type SyncPayload struct {
-	WebexRecipients    bool  `json:"webex_rooms"`
+	WebexRecipients    bool  `json:"webex_recipients"`
 	CWBoards           bool  `json:"cw_boards"`
 	CWTickets          bool  `json:"cw_tickets"`
 	BoardIDs           []int `json:"board_ids"`

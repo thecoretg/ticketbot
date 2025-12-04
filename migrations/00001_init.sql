@@ -65,17 +65,6 @@ CREATE TABLE IF NOT EXISTS notifier_forward (
     CHECK (start_date < end_date)
 );
 
-CREATE TABLE IF NOT EXISTS ticket_notification (
-    id SERIAL PRIMARY KEY,
-    ticket_id INT NOT NULL REFERENCES cw_ticket(id) ON DELETE CASCADE,
-    ticket_note_id INT REFERENCES cw_ticket_note(id) ON DELETE CASCADE,
-    recipient_id INT NOT NULL REFERENCES webex_recipient(id) ON DELETE CASCADE,
-    sent BOOLEAN NOT NULL DEFAULT FALSE,
-    skipped BOOLEAN NOT NULL DEFAULT TRUE,
-    created_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS cw_company (
     id INT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -123,6 +112,17 @@ CREATE TABLE IF NOT EXISTS cw_ticket_note (
     content TEXT,
     updated_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     added_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ticket_notification (
+    id SERIAL PRIMARY KEY,
+    ticket_id INT NOT NULL REFERENCES cw_ticket(id) ON DELETE CASCADE,
+    ticket_note_id INT REFERENCES cw_ticket_note(id) ON DELETE CASCADE,
+    recipient_id INT NOT NULL REFERENCES webex_recipient(id) ON DELETE CASCADE,
+    sent BOOLEAN NOT NULL DEFAULT FALSE,
+    skipped BOOLEAN NOT NULL DEFAULT TRUE,
+    created_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 -- +goose StatementEnd
 

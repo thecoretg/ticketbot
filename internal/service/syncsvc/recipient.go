@@ -19,6 +19,8 @@ func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
 		err error
 	)
 
+	slog.Info("beginning webex room sync")
+	start := time.Now()
 	txSvc := s
 	if s.pool != nil {
 		tx, err = s.pool.Begin(ctx)
@@ -47,13 +49,12 @@ func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
 		}
 	}
 
+	slog.Info("full webex recipient sync complete", "took_time", time.Since(start).Seconds())
 	return nil
 }
 
 func (s *Service) syncWebexRooms(ctx context.Context) error {
 	start := time.Now()
-	slog.Info("beginning webex room sync")
-
 	// get rooms from webex as source of truth
 	wr, err := s.Webex.WebexClient.ListRooms(nil)
 	if err != nil {
@@ -79,6 +80,7 @@ func (s *Service) syncWebexRooms(ctx context.Context) error {
 }
 
 func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
+	start := time.Now()
 	cwm, err := s.CW.CWClient.ListMembers(nil)
 	if err != nil {
 		return fmt.Errorf("getting members from connectwise: %w", err)
@@ -108,6 +110,7 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 		}
 	}
 
+	slog.Info("webex people sync complete", "took_time", time.Since(start).Seconds())
 	return nil
 }
 

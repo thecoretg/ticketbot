@@ -9,19 +9,19 @@ import (
 )
 
 var (
-	syncAll, syncBoards, syncRooms, syncTickets bool
-	syncBoardIDs                                []int
-	maxConcurrentSyncs                          int
-	syncCmd                                     = &cobra.Command{
+	syncAll, syncBoards, syncWebexRecipients, syncTickets bool
+	syncBoardIDs                                          []int
+	maxConcurrentSyncs                                    int
+	syncCmd                                               = &cobra.Command{
 		Use: "sync",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if syncAll {
 				syncBoards = true
-				syncRooms = true
+				syncWebexRecipients = true
 				syncTickets = true
 			}
 
-			if !syncBoards && !syncRooms && !syncTickets {
+			if !syncBoards && !syncWebexRecipients && !syncTickets {
 				return errors.New("at least one sync target must be set")
 			}
 
@@ -30,7 +30,7 @@ var (
 			}
 
 			p := &models.SyncPayload{
-				WebexRecipients:    syncRooms,
+				WebexRecipients:    syncWebexRecipients,
 				CWBoards:           syncBoards,
 				CWTickets:          syncTickets,
 				BoardIDs:           syncBoardIDs,
@@ -47,9 +47,9 @@ var (
 )
 
 func init() {
-	syncCmd.Flags().BoolVar(&syncAll, "all", false, "sync boards, rooms, and tickets (will sync all boards for tickets unless specified)")
+	syncCmd.Flags().BoolVar(&syncAll, "all", false, "sync boards, recipients, and tickets (will sync all boards for tickets unless specified)")
 	syncCmd.Flags().BoolVarP(&syncBoards, "boards", "b", false, "sync connectwise boards")
-	syncCmd.Flags().BoolVarP(&syncRooms, "rooms", "r", false, "sync webex rooms")
+	syncCmd.Flags().BoolVarP(&syncWebexRecipients, "recipients", "r", false, "sync webex rooms")
 	syncCmd.Flags().BoolVarP(&syncTickets, "tickets", "t", false, "sync connectwise tickets; this will take a while")
 	syncCmd.Flags().IntSliceVarP(&syncBoardIDs, "sync-boards", "i", nil, "board ids to sync")
 	syncCmd.Flags().IntVar(&maxConcurrentSyncs, "max-syncs", 5, "max amount of concurrent syncs to run")

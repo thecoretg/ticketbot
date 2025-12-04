@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
 	"time"
 
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -13,179 +12,106 @@ import (
 
 var ErrNoRoomsForEmail = errors.New("no rooms found for this email")
 
-func (s *Service) processFwdsNew(ctx context.Context, recips []models.WebexRecipient) ([]models.WebexRecipient, error) {
-	lookup := makeRecipLookup(recips) // reduce db calls
-	processed := make(map[int]models.WebexRecipient)
-	for _, r := range recips {
-		if _, ok := checkedRecs[r.ID]; ok {
-			continue
+type recipMap map[int]models.WebexRecipient
+
+func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, rules []models.NotifierRule, isNew bool) ([]models.WebexRecipient, error) {
+	// for connectwise member emails
+	excludedEmails := make(map[string]struct{})
+	includedEmails := make(map[string]struct{})
+	recips := make(recipMap)
+
+	if t.LatestNote != nil && t.LatestNote.Member != nil {
+		excludedEmails[t.LatestNote.Member.PrimaryEmail] = struct{}{}
+	}
+
+	for _, m := range t.Resources {
+		if m.PrimaryEmail != "" {
+			if _, excl := excludedEmails[m.PrimaryEmail]; excl {
+				continue
+			}
+			includedEmails[m.PrimaryEmail] = struct{}{}
 		}
-
-		recIDs, err := s.processFwdsForRec(ctx, r)
-		if err != nil {
-			recIDs = []int{r.ID}
-		}
-
-		for _, i := range recIDs {
-			// TODO: come back to this in the morning when my brain is no longer liquified by this project
-		}
-	}
-}
-
-func (s *Service) processFwdsForRec(ctx context.Context, src models.WebexRecipient) ([]int, error) {
-	fwds, err := s.Forwards.ListBySourceRoomID(ctx, src.ID)
-	if err != nil {
-		return nil, fmt.Errorf("checking forwards: %w", err)
-	}
-
-	fwds = filterActiveFwds(fwds)
-
-	if len(fwds) == 0 {
-		return []int{src.ID}, nil
-	}
-
-	var recIDs []int
-	keep := false
-	for _, f := range fwds {
-		if f.UserKeepsCopy {
-			keep = true
-		}
-
-		recIDs = append(recIDs, f.DestID)
-	}
-
-	if keep {
-		recIDs = append(recIDs, src.ID)
-	}
-
-	return filterDuplicateInts(recIDs), nil
-}
-
-func (s *Service) getRecipients(ctx context.Context, ticket *models.FullTicket, rule models.NotifierRule, isNew bool) ([]models.WebexRecipient, error) {
-	var recips []models.WebexRecipient
-	if !rule.NotifyEnabled {
-		return nil, nil
 	}
 
 	if isNew {
-		r, err := s.WebexSvc.GetRecipient(ctx, rule.WebexRoomID)
+		for _, nr := range rules {
+			r, err := s.WebexSvc.GetRecipient(ctx, nr.WebexRoomID)
+			if err != nil {
+				// TODO: once done testing, this should warn and not exit
+				return nil, fmt.Errorf("getting room for notifier rule %d: %w", nr.ID, err)
+			}
+
+			recips[r.ID] = r
+		}
+	}
+
+	for e := range includedEmails {
+		r, err := s.WebexSvc.EnsurePersonRecipientByEmail(ctx, e)
 		if err != nil {
-			return nil, fmt.Errorf("getting recipient info for new ticket notification: %w", err)
+			return nil, fmt.Errorf("ensuring recipient by email %s: %w", e, err)
 		}
 
-		recips = append(recips, r)
+		recips[r.ID] = r
 	}
 
-	excluded := make(map[int]struct{})
-	if ticket.LatestNote != nil && ticket.LatestNote.Member != nil {
-		excluded[ticket.LatestNote.Member.ID] = struct{}{}
+	fwdProcd, err := s.processAllFwds(ctx, recips)
+	if err != nil {
+		// return pre-fwd processing
+		slog.Error("forward processing failed; using original recipients", "ticket_id", t.Ticket.ID, "error", err)
+		return recips.toSlice(), nil
 	}
 
-	for _, tr := range ticket.Resources {
-		if _, ok := excluded[tr.ID]; ok {
+	return fwdProcd.toSlice(), nil
+}
+
+func (s *Service) processAllFwds(ctx context.Context, recips recipMap) (recipMap, error) {
+	keys := make([]int, 0, len(recips))
+	for id := range recips {
+		keys = append(keys, id)
+	}
+
+	for _, id := range keys {
+		r, ok := recips[id]
+		if !ok {
+			continue // was deleted somewhere in this loop
+		}
+
+		fwds, err := s.Forwards.ListBySourceRoomID(ctx, r.ID)
+		if err != nil {
+			// TODO: once done...you get the point
+			return nil, fmt.Errorf("checking forwards for recipient id %d: %w", r.ID, err)
+		}
+
+		fwds = filterActiveFwds(fwds)
+		if len(fwds) == 0 {
 			continue
 		}
 
-		r, err := s.WebexSvc.EnsurePersonRecipientByEmail(ctx, tr.PrimaryEmail)
-		if err != nil {
-			return nil, fmt.Errorf("ensuring recipient by email: %w", err)
+		keep := false
+		for _, f := range fwds {
+			if f.UserKeepsCopy {
+				keep = true
+			}
+
+			if _, ok := recips[f.DestID]; ok {
+				continue
+			}
+
+			fm, err := s.WebexSvc.GetRecipient(ctx, f.DestID)
+			if err != nil {
+				// TODO: once done...
+				return nil, fmt.Errorf("getting recipient info for forward destination %d: %w", f.DestID, err)
+			}
+
+			recips[f.DestID] = fm
 		}
 
-		recips = append(recips, r)
+		if !keep {
+			delete(recips, r.ID)
+		}
 	}
 
 	return recips, nil
-}
-
-func (s *Service) getRecipientRoomIDs(ctx context.Context, ticket *models.FullTicket) []int {
-	var excluded []models.Member
-
-	// if the sender of the note is a member, exclude them from messages;
-	// they don't need a notification for their own note
-	if ticket.LatestNote != nil && ticket.LatestNote.Member != nil {
-		excluded = append(excluded, *ticket.LatestNote.Member)
-	}
-
-	var rscIDs []int
-	for _, r := range ticket.Resources {
-		if memberSliceContains(excluded, r) {
-			continue
-		}
-
-		e, err := s.processFwds(ctx, r.PrimaryEmail)
-		if err != nil {
-			slog.Error("notifier: error checking forwards for email", "ticket_id", ticket.Ticket.ID, "email", r.PrimaryEmail, "error", err)
-		}
-
-		rscIDs = append(rscIDs, e...)
-	}
-
-	return filterDuplicateInts(rscIDs)
-}
-
-func (s *Service) processFwds(ctx context.Context, email string) ([]int, error) {
-	rooms, err := s.WebexSvc.ListByEmail(ctx, email)
-	if err != nil {
-		return nil, fmt.Errorf("listing webex rooms by email %s: %w", email, err)
-	}
-
-	if len(rooms) == 0 {
-		return nil, ErrNoRoomsForEmail
-	}
-
-	var src models.WebexRecipient
-	if len(rooms) > 1 {
-		sort.Slice(rooms, func(i, j int) bool {
-			return rooms[i].LastActivity.After(rooms[j].LastActivity)
-		})
-	}
-	src = rooms[0]
-
-	noFwds := []int{src.ID}
-	fwds, err := s.Forwards.ListBySourceRoomID(ctx, src.ID)
-	if err != nil {
-		return noFwds, fmt.Errorf("checking forwards: %w", err)
-	}
-
-	if len(fwds) == 0 {
-		return noFwds, nil
-	}
-
-	activeFwds := filterActiveFwds(fwds)
-	if len(activeFwds) == 0 {
-		return noFwds, nil
-	}
-
-	toNotify := make(map[int]struct{})
-	keep := false
-	for _, f := range activeFwds {
-		if f.UserKeepsCopy {
-			keep = true
-		}
-
-		toNotify[f.DestID] = struct{}{}
-	}
-
-	if keep {
-		toNotify[src.ID] = struct{}{}
-	}
-
-	var tn []int
-	for k := range toNotify {
-		tn = append(tn, k)
-	}
-
-	return tn, nil
-}
-
-func memberSliceContains(members []models.Member, check models.Member) bool {
-	for _, x := range members {
-		if x.ID == check.ID {
-			return true
-		}
-	}
-
-	return false
 }
 
 func filterActiveFwds(fwds []models.NotifierForward) []models.NotifierForward {
@@ -212,29 +138,11 @@ func dateRangeActive(start, end *time.Time) bool {
 	return now.After(*start) && now.Before(*end)
 }
 
-func filterDuplicateInts(ids []int) []int {
-	seenIDs := make(map[int]struct{})
-	for _, i := range ids {
-		if _, ok := seenIDs[i]; !ok {
-			seenIDs[i] = struct{}{}
-		}
+func (m recipMap) toSlice() []models.WebexRecipient {
+	out := make([]models.WebexRecipient, 0, len(m))
+	for _, r := range m {
+		out = append(out, r)
 	}
 
-	var uniqueIDs []int
-	for e := range seenIDs {
-		uniqueIDs = append(uniqueIDs, e)
-	}
-
-	return uniqueIDs
-}
-
-func makeRecipLookup(recips []models.WebexRecipient) map[int]models.WebexRecipient {
-	l := make(map[int]models.WebexRecipient)
-	for _, r := range recips {
-		if _, ok := l[r.ID]; !ok {
-			l[r.ID] = r
-		}
-	}
-
-	return l
+	return out
 }

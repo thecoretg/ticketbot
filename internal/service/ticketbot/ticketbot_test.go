@@ -213,7 +213,7 @@ func testSeedNotifiers(t *testing.T, ctx context.Context, s *Service) error {
 		Type:    "group",
 	}
 
-	room, err := s.Notifier.Recipients.Upsert(ctx, r)
+	room, err := s.Notifier.WebexSvc.Recipients.Upsert(ctx, r)
 	if err != nil {
 		return fmt.Errorf("inserting mock room: %w", err)
 	}
