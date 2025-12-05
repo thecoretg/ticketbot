@@ -50,7 +50,7 @@ func (q *Queries) DeleteTicketNotification(ctx context.Context, id int) error {
 }
 
 const getTicketNotification = `-- name: GetTicketNotification :one
-SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM ticket_notification
+SELECT id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, skipped, created_on, updated_on FROM ticket_notification
 WHERE id = $1
 `
 
@@ -62,6 +62,7 @@ func (q *Queries) GetTicketNotification(ctx context.Context, id int) (TicketNoti
 		&i.TicketID,
 		&i.TicketNoteID,
 		&i.RecipientID,
+		&i.ForwardedFromID,
 		&i.Sent,
 		&i.Skipped,
 		&i.CreatedOn,
@@ -72,17 +73,18 @@ func (q *Queries) GetTicketNotification(ctx context.Context, id int) (TicketNoti
 
 const insertTicketNotification = `-- name: InsertTicketNotification :one
 INSERT INTO ticket_notification
-(ticket_id, ticket_note_id, recipient_id, sent, skipped)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on
+(ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, skipped)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, skipped, created_on, updated_on
 `
 
 type InsertTicketNotificationParams struct {
-	TicketID     int  `json:"ticket_id"`
-	TicketNoteID *int `json:"ticket_note_id"`
-	RecipientID  int  `json:"recipient_id"`
-	Sent         bool `json:"sent"`
-	Skipped      bool `json:"skipped"`
+	TicketID        int  `json:"ticket_id"`
+	TicketNoteID    *int `json:"ticket_note_id"`
+	RecipientID     int  `json:"recipient_id"`
+	ForwardedFromID *int `json:"forwarded_from_id"`
+	Sent            bool `json:"sent"`
+	Skipped         bool `json:"skipped"`
 }
 
 func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicketNotificationParams) (TicketNotification, error) {
@@ -90,6 +92,7 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 		arg.TicketID,
 		arg.TicketNoteID,
 		arg.RecipientID,
+		arg.ForwardedFromID,
 		arg.Sent,
 		arg.Skipped,
 	)
@@ -99,6 +102,7 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 		&i.TicketID,
 		&i.TicketNoteID,
 		&i.RecipientID,
+		&i.ForwardedFromID,
 		&i.Sent,
 		&i.Skipped,
 		&i.CreatedOn,
@@ -108,7 +112,7 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 }
 
 const listTicketNotifications = `-- name: ListTicketNotifications :many
-SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM ticket_notification
+SELECT id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, skipped, created_on, updated_on FROM ticket_notification
 ORDER BY created_on
 `
 
@@ -126,6 +130,7 @@ func (q *Queries) ListTicketNotifications(ctx context.Context) ([]TicketNotifica
 			&i.TicketID,
 			&i.TicketNoteID,
 			&i.RecipientID,
+			&i.ForwardedFromID,
 			&i.Sent,
 			&i.Skipped,
 			&i.CreatedOn,
@@ -142,7 +147,7 @@ func (q *Queries) ListTicketNotifications(ctx context.Context) ([]TicketNotifica
 }
 
 const listTicketNotificationsByNoteID = `-- name: ListTicketNotificationsByNoteID :many
-SELECT id, ticket_id, ticket_note_id, recipient_id, sent, skipped, created_on, updated_on FROM ticket_notification
+SELECT id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, skipped, created_on, updated_on FROM ticket_notification
 WHERE ticket_note_id = $1
 `
 
@@ -160,6 +165,7 @@ func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNot
 			&i.TicketID,
 			&i.TicketNoteID,
 			&i.RecipientID,
+			&i.ForwardedFromID,
 			&i.Sent,
 			&i.Skipped,
 			&i.CreatedOn,

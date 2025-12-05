@@ -12,72 +12,80 @@ import (
 type Message struct {
 	MsgType        string
 	WebexMsg       webex.Message
-	WebexRecipient models.WebexRecipient
+	WebexRecipient recipData
 	Notification   models.TicketNotification
 	SendError      error
 }
 
-func newMessage(msgType string, wm webex.Message, wr models.WebexRecipient, n models.TicketNotification) Message {
+func newMessage(wm webex.Message, r recipData, n models.TicketNotification, isNew bool) Message {
+	mt := "updated_ticket"
+	if isNew {
+		mt = "new_ticket"
+	}
+
 	return Message{
-		MsgType:        msgType,
+		MsgType:        mt,
 		WebexMsg:       wm,
-		WebexRecipient: wr,
+		WebexRecipient: r,
 		Notification:   n,
 	}
 }
 
-func (s *Service) makeTicketMessages(t *models.FullTicket, recips []models.WebexRecipient, isNew bool) []Message {
+func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, isNew bool) []Message {
+	mainHeader := s.notificationHeader(t, isNew)
+
+	var msgs []Message
+	for _, r := range recips {
+		var h string
+		if !r.isNaturalRecipient() {
+			h += fmt.Sprintf("%s\n", fwdChainStr(r.recipient, r.forwardChain))
+		}
+
+		h += mainHeader
+		body := makeMessageBody(t, h, s.MaxMessageLength)
+
+		wm := newWebexMsg(r.recipient, body)
+		n := &models.TicketNotification{
+			TicketID:    t.Ticket.ID,
+			RecipientID: r.recipient.ID,
+			Sent:        true,
+		}
+
+		if t.LatestNote != nil {
+			n.TicketNoteID = &t.LatestNote.ID
+		}
+
+		if r.forwardChain != nil {
+			n.ForwardedFromID = &r.forwardChain[len(r.forwardChain)-1].ID
+		}
+
+		msgs = append(msgs, newMessage(wm, r, *n, isNew))
+	}
+
+	return msgs
+}
+
+func fwdChainStr(recip models.WebexRecipient, fwdChain []models.WebexRecipient) string {
+	names := make([]string, 0, len(fwdChain))
+	for _, f := range fwdChain {
+		names = append(names, f.Name)
+	}
+
+	rn := "You"
+	if recip.Type == models.RecipientTypeRoom {
+		rn = recip.Name
+	}
+
+	ch := strings.Join(names, " > ")
+	return fmt.Sprintf("**FWD:** %s > %s", ch, rn)
+}
+
+func (s *Service) notificationHeader(t *models.FullTicket, isNew bool) string {
 	if isNew {
-		return s.makeNewTicketMessages(t, recips)
+		return fmt.Sprintf("**New Ticket:** %s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, s.CWCompanyID), t.Ticket.Summary)
 	}
 
-	return s.makeUpdatedTicketMessages(t, recips)
-}
-
-func (s *Service) makeNewTicketMessages(t *models.FullTicket, recips []models.WebexRecipient) []Message {
-	header := fmt.Sprintf("**New Ticket:** %s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, s.CWCompanyID), t.Ticket.Summary)
-	body := makeMessageBody(t, header, s.MaxMessageLength)
-
-	var msgs []Message
-	for _, r := range recips {
-		wm := newWebexMsg(r, body)
-		n := &models.TicketNotification{
-			TicketID:    t.Ticket.ID,
-			RecipientID: r.ID,
-			Sent:        true,
-		}
-
-		if t.LatestNote != nil {
-			n.TicketNoteID = &t.LatestNote.ID
-		}
-
-		msgs = append(msgs, newMessage("new_ticket", wm, r, *n))
-	}
-
-	return msgs
-}
-
-func (s *Service) makeUpdatedTicketMessages(t *models.FullTicket, recips []models.WebexRecipient) []Message {
-	header := fmt.Sprintf("**Ticket Updated:** %s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, s.CWCompanyID), t.Ticket.Summary)
-	body := makeMessageBody(t, header, s.MaxMessageLength)
-
-	var msgs []Message
-	for _, r := range recips {
-		wm := newWebexMsg(r, body)
-		n := &models.TicketNotification{
-			TicketID:    t.Ticket.ID,
-			RecipientID: r.ID,
-			Sent:        true,
-		}
-
-		if t.LatestNote != nil {
-			n.TicketNoteID = &t.LatestNote.ID
-		}
-
-		msgs = append(msgs, newMessage("updated_ticket", wm, r, *n))
-	}
-
-	return msgs
+	return fmt.Sprintf("**Ticket Updated:** %s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, s.CWCompanyID), t.Ticket.Summary)
 }
 
 func newWebexMsg(r models.WebexRecipient, body string) webex.Message {

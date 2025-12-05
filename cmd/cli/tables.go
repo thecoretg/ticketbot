@@ -59,12 +59,17 @@ func userForwardsTable(forwards []models.NotifierForward) {
 	t := defaultTable()
 	t.Headers("ID", "SRC ID", "DEST ID", "START DATE", "END DATE", "ENABLED", "USER KEEPS COPY")
 	for _, uf := range forwards {
+		ed := "NA"
+		if uf.EndDate != nil {
+			ed = uf.EndDate.Format("2006-01-02")
+		}
+
 		t.Row(
 			strconv.Itoa(uf.ID),
 			strconv.Itoa(uf.SourceID),
 			strconv.Itoa(uf.DestID),
 			uf.StartDate.Format("2006-01-02"),
-			uf.EndDate.Format("2006-01-02"),
+			ed,
 			fmt.Sprintf("%v", uf.Enabled),
 			fmt.Sprintf("%v", uf.UserKeepsCopy),
 		)

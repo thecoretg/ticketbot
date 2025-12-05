@@ -63,14 +63,15 @@ type NotifierRuleRepository interface {
 var ErrNotificationNotFound = errors.New("notification not found")
 
 type TicketNotification struct {
-	ID           int       `json:"id"`
-	TicketID     int       `json:"ticket_id"`
-	TicketNoteID *int      `json:"ticket_note_id"`
-	RecipientID  int       `json:"webex_room_id"`
-	Sent         bool      `json:"sent"`
-	Skipped      bool      `json:"skipped"`
-	CreatedOn    time.Time `json:"created_on"`
-	UpdatedOn    time.Time `json:"updated_on"`
+	ID              int       `json:"id"`
+	TicketID        int       `json:"ticket_id"`
+	TicketNoteID    *int      `json:"ticket_note_id"`
+	RecipientID     int       `json:"webex_room_id"`
+	ForwardedFromID *int      `json:"forwarded_from_id"`
+	Sent            bool      `json:"sent"`
+	Skipped         bool      `json:"skipped"`
+	CreatedOn       time.Time `json:"created_on"`
+	UpdatedOn       time.Time `json:"updated_on"`
 }
 
 type TicketNotificationRepository interface {

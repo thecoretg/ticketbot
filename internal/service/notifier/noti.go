@@ -108,7 +108,7 @@ func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
 	logger := slog.Default().With(
 		slog.Int("ticket_id", n.TicketID),
 		slog.Int("ticket_note_id", ptrToInt(n.TicketNoteID)),
-		slog.String("recipient", m.WebexRecipient.Name),
+		slog.String("recipient", m.WebexRecipient.recipient.Name),
 	)
 
 	logger.Debug("notifier: sending notification")
@@ -160,12 +160,14 @@ func msgsLogGroup(key string, msgs []Message) slog.Attr {
 			slog.String("type", m.MsgType),
 		}
 
-		if m.WebexRecipient.ID != 0 {
+		// TODO: add logging for if it was a forward
+
+		if m.WebexRecipient.recipient.ID != 0 {
 			g := slog.Group(
 				"webex_room",
-				slog.Int("id", m.WebexRecipient.ID),
-				slog.String("name", m.WebexRecipient.Name),
-				slog.String("type", string(m.WebexRecipient.Type)),
+				slog.Int("id", m.WebexRecipient.recipient.ID),
+				slog.String("name", m.WebexRecipient.recipient.Name),
+				slog.String("type", string(m.WebexRecipient.recipient.Name)),
 			)
 			attrs = append(attrs, g)
 		}

@@ -102,23 +102,25 @@ func (p NotificationRepo) Delete(ctx context.Context, id int) error {
 
 func notificationToInsertParams(n models.TicketNotification) db.InsertTicketNotificationParams {
 	return db.InsertTicketNotificationParams{
-		TicketID:     n.TicketID,
-		TicketNoteID: n.TicketNoteID,
-		RecipientID:  n.RecipientID,
-		Sent:         n.Sent,
-		Skipped:      n.Skipped,
+		TicketID:        n.TicketID,
+		TicketNoteID:    n.TicketNoteID,
+		RecipientID:     n.RecipientID,
+		ForwardedFromID: n.ForwardedFromID,
+		Sent:            n.Sent,
+		Skipped:         n.Skipped,
 	}
 }
 
 func notificationFromPG(pg db.TicketNotification) models.TicketNotification {
 	return models.TicketNotification{
-		ID:           pg.ID,
-		TicketID:     pg.TicketID,
-		TicketNoteID: pg.TicketNoteID,
-		RecipientID:  pg.RecipientID,
-		Sent:         pg.Sent,
-		Skipped:      pg.Skipped,
-		CreatedOn:    pg.CreatedOn,
-		UpdatedOn:    pg.UpdatedOn,
+		ID:              pg.ID,
+		TicketID:        pg.TicketID,
+		TicketNoteID:    pg.TicketNoteID,
+		RecipientID:     pg.RecipientID,
+		ForwardedFromID: pg.ForwardedFromID,
+		Sent:            pg.Sent,
+		Skipped:         pg.Skipped,
+		CreatedOn:       pg.CreatedOn,
+		UpdatedOn:       pg.UpdatedOn,
 	}
 }

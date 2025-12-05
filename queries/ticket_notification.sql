@@ -26,8 +26,8 @@ SELECT EXISTS (
 
 -- name: InsertTicketNotification :one
 INSERT INTO ticket_notification
-(ticket_id, ticket_note_id, recipient_id, sent, skipped)
-VALUES ($1, $2, $3, $4, $5)
+(ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, skipped)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: DeleteTicketNotification :exec

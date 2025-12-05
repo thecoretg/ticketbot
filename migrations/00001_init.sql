@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS ticket_notification (
     ticket_id INT NOT NULL REFERENCES cw_ticket(id) ON DELETE CASCADE,
     ticket_note_id INT REFERENCES cw_ticket_note(id) ON DELETE CASCADE,
     recipient_id INT NOT NULL REFERENCES webex_recipient(id) ON DELETE CASCADE,
+    forwarded_from_id INT REFERENCES webex_recipient(id) ON DELETE CASCADE,
     sent BOOLEAN NOT NULL DEFAULT FALSE,
     skipped BOOLEAN NOT NULL DEFAULT TRUE,
     created_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

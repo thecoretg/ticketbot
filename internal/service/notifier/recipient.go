@@ -5,16 +5,39 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
 var ErrNoRoomsForEmail = errors.New("no rooms found for this email")
 
-type recipMap map[int]models.WebexRecipient
+type (
+	recipData struct {
+		recipient    models.WebexRecipient
+		forwardChain []models.WebexRecipient
+	}
 
-func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, rules []models.NotifierRule, isNew bool) ([]models.WebexRecipient, error) {
+	recipMap map[int]recipData
+)
+
+func newRecip(rec models.WebexRecipient) recipData {
+	return recipData{recipient: rec}
+}
+
+func newRecipWithFwd(rec models.WebexRecipient, parent recipData) recipData {
+	chain := append([]models.WebexRecipient{}, parent.forwardChain...)
+	chain = append(chain, parent.recipient)
+	return recipData{
+		recipient:    rec,
+		forwardChain: chain,
+	}
+}
+
+func (r recipData) isNaturalRecipient() bool {
+	return len(r.forwardChain) == 0
+}
+
+func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, rules []models.NotifierRule, isNew bool) ([]recipData, error) {
 	// for connectwise member emails
 	excludedEmails := make(map[string]struct{})
 	includedEmails := make(map[string]struct{})
@@ -42,7 +65,7 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 				return nil, fmt.Errorf("getting room for notifier rule %d: %w", nr.ID, err)
 			}
 
-			recips[r.ID] = r
+			recips[r.ID] = newRecip(r)
 		}
 	}
 
@@ -52,7 +75,7 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 			return nil, fmt.Errorf("ensuring recipient by email %s: %w", e, err)
 		}
 
-		recips[r.ID] = r
+		recips[r.ID] = newRecip(r)
 	}
 
 	fwdProcd, err := s.processAllFwds(ctx, recips)
@@ -65,82 +88,8 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 	return fwdProcd.toSlice(), nil
 }
 
-func (s *Service) processAllFwds(ctx context.Context, recips recipMap) (recipMap, error) {
-	keys := make([]int, 0, len(recips))
-	for id := range recips {
-		keys = append(keys, id)
-	}
-
-	for _, id := range keys {
-		r, ok := recips[id]
-		if !ok {
-			continue // was deleted somewhere in this loop
-		}
-
-		fwds, err := s.Forwards.ListBySourceRoomID(ctx, r.ID)
-		if err != nil {
-			// TODO: once done...you get the point
-			return nil, fmt.Errorf("checking forwards for recipient id %d: %w", r.ID, err)
-		}
-
-		fwds = filterActiveFwds(fwds)
-		if len(fwds) == 0 {
-			continue
-		}
-
-		keep := false
-		for _, f := range fwds {
-			if f.UserKeepsCopy {
-				keep = true
-			}
-
-			if _, ok := recips[f.DestID]; ok {
-				continue
-			}
-
-			fm, err := s.WebexSvc.GetRecipient(ctx, f.DestID)
-			if err != nil {
-				// TODO: once done...
-				return nil, fmt.Errorf("getting recipient info for forward destination %d: %w", f.DestID, err)
-			}
-
-			recips[f.DestID] = fm
-		}
-
-		if !keep {
-			delete(recips, r.ID)
-		}
-	}
-
-	return recips, nil
-}
-
-func filterActiveFwds(fwds []models.NotifierForward) []models.NotifierForward {
-	var activeFwds []models.NotifierForward
-	for _, f := range fwds {
-		if f.Enabled && dateRangeActive(f.StartDate, f.EndDate) {
-			activeFwds = append(activeFwds, f)
-		}
-	}
-
-	return activeFwds
-}
-
-func dateRangeActive(start, end *time.Time) bool {
-	now := time.Now()
-	if start == nil {
-		return false
-	}
-
-	if end == nil {
-		return now.After(*start)
-	}
-
-	return now.After(*start) && now.Before(*end)
-}
-
-func (m recipMap) toSlice() []models.WebexRecipient {
-	out := make([]models.WebexRecipient, 0, len(m))
+func (m recipMap) toSlice() []recipData {
+	out := make([]recipData, 0, len(m))
 	for _, r := range m {
 		out = append(out, r)
 	}

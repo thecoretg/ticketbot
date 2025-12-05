@@ -107,14 +107,15 @@ type NotifierRule struct {
 }
 
 type TicketNotification struct {
-	ID           int       `json:"id"`
-	TicketID     int       `json:"ticket_id"`
-	TicketNoteID *int      `json:"ticket_note_id"`
-	RecipientID  int       `json:"recipient_id"`
-	Sent         bool      `json:"sent"`
-	Skipped      bool      `json:"skipped"`
-	CreatedOn    time.Time `json:"created_on"`
-	UpdatedOn    time.Time `json:"updated_on"`
+	ID              int       `json:"id"`
+	TicketID        int       `json:"ticket_id"`
+	TicketNoteID    *int      `json:"ticket_note_id"`
+	RecipientID     int       `json:"recipient_id"`
+	ForwardedFromID *int      `json:"forwarded_from_id"`
+	Sent            bool      `json:"sent"`
+	Skipped         bool      `json:"skipped"`
+	CreatedOn       time.Time `json:"created_on"`
+	UpdatedOn       time.Time `json:"updated_on"`
 }
 
 type WebexRecipient struct {
