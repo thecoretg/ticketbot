@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	boardID int
-	roomID  int
+	boardID     int
+	recipientID int
 
 	client  *sdk.Client
 	rootCmd = &cobra.Command{

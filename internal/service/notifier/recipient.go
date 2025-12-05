@@ -58,8 +58,8 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 
 	if isNew {
 		for _, nr := range rules {
-			slog.Debug("getAllRecipients: calling webexsvc.GetRecipient", "room_id", nr.WebexRoomID)
-			r, err := s.WebexSvc.GetRecipient(ctx, nr.WebexRoomID)
+			slog.Debug("getAllRecipients: calling webexsvc.GetRecipient", "room_id", nr.WebexRecipientID)
+			r, err := s.WebexSvc.GetRecipient(ctx, nr.WebexRecipientID)
 			if err != nil {
 				// TODO: once done testing, this should warn and not exit
 				return nil, fmt.Errorf("getting room for notifier rule %d: %w", nr.ID, err)

@@ -41,11 +41,11 @@ type NotifierForwardRepository interface {
 var ErrNotifierNotFound = errors.New("notifier not found")
 
 type NotifierRule struct {
-	ID            int       `json:"id"`
-	CwBoardID     int       `json:"cw_board_id"`
-	WebexRoomID   int       `json:"webex_room_id"`
-	NotifyEnabled bool      `json:"notify_enabled"`
-	CreatedOn     time.Time `json:"created_on"`
+	ID               int       `json:"id"`
+	CwBoardID        int       `json:"cw_board_id"`
+	WebexRecipientID int       `json:"webex_room_id"`
+	NotifyEnabled    bool      `json:"notify_enabled"`
+	CreatedOn        time.Time `json:"created_on"`
 }
 
 type NotifierRuleRepository interface {

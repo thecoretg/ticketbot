@@ -67,7 +67,7 @@ func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
 
 func registerWebexRoutes(r *gin.RouterGroup, h *handlers.WebexHandler) {
 	ro := r.Group("rooms")
-	ro.GET("", h.ListRooms)
+	ro.GET("", h.ListRecipients)
 	ro.GET(":id", h.GetRoom)
 }
 

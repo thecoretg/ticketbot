@@ -117,14 +117,14 @@ func (q *Queries) ListNotifierForwards(ctx context.Context) ([]NotifierForward, 
 	return items, nil
 }
 
-const listNotifierForwardsBySourceRoomID = `-- name: ListNotifierForwardsBySourceRoomID :many
+const listNotifierForwardsBySourceRecipientID = `-- name: ListNotifierForwardsBySourceRecipientID :many
 SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
 WHERE source_id = $1
 ORDER BY id
 `
 
-func (q *Queries) ListNotifierForwardsBySourceRoomID(ctx context.Context, sourceID int) ([]NotifierForward, error) {
-	rows, err := q.db.Query(ctx, listNotifierForwardsBySourceRoomID, sourceID)
+func (q *Queries) ListNotifierForwardsBySourceRecipientID(ctx context.Context, sourceID int) ([]NotifierForward, error) {
+	rows, err := q.db.Query(ctx, listNotifierForwardsBySourceRecipientID, sourceID)
 	if err != nil {
 		return nil, err
 	}

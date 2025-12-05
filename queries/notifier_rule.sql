@@ -18,7 +18,7 @@ SELECT * FROM notifier_rule
 WHERE cw_board_id = $1
 ORDER BY id;
 
--- name: ListNotifierRulesByRoom :many
+-- name: ListNotifierRulesByRecipient :many
 SELECT * FROM notifier_rule
 WHERE webex_recipient_id = $1
 ORDER BY id;

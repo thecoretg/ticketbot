@@ -47,9 +47,9 @@ func cwBoardsToTable(boards []models.Board) {
 
 func notifierRulesTable(notifiers []models.NotifierRule) {
 	t := defaultTable()
-	t.Headers("ID", "ROOM", "BOARD", "NOTIFY")
+	t.Headers("ID", "BOARD", "RECIPIENT", "NOTIFY")
 	for _, n := range notifiers {
-		t.Row(strconv.Itoa(n.ID), strconv.Itoa(n.WebexRoomID), strconv.Itoa(n.CwBoardID), fmt.Sprintf("%v", n.NotifyEnabled))
+		t.Row(strconv.Itoa(n.ID), strconv.Itoa(n.CwBoardID), strconv.Itoa(n.WebexRecipientID), fmt.Sprintf("%v", n.NotifyEnabled))
 	}
 
 	fmt.Println(t)

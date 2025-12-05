@@ -41,7 +41,7 @@ func (p *UserForwardRepo) ListAll(ctx context.Context) ([]models.NotifierForward
 }
 
 func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]models.NotifierForward, error) {
-	dm, err := p.queries.ListNotifierForwardsBySourceRoomID(ctx, id)
+	dm, err := p.queries.ListNotifierForwardsBySourceRecipientID(ctx, id)
 	if err != nil {
 		return nil, err
 	}

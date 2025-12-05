@@ -56,7 +56,7 @@ func (p *NotifierRuleRepo) ListByRoom(ctx context.Context, roomID int) ([]models
 
 	var out []models.NotifierRule
 	for _, v := range p.data {
-		if v.WebexRoomID == roomID {
+		if v.WebexRecipientID == roomID {
 			out = append(out, v)
 		}
 	}
@@ -79,7 +79,7 @@ func (p *NotifierRuleRepo) Exists(ctx context.Context, boardID, roomID int) (boo
 	defer p.mu.Unlock()
 
 	for _, v := range p.data {
-		if v.CwBoardID == boardID && v.WebexRoomID == roomID {
+		if v.CwBoardID == boardID && v.WebexRecipientID == roomID {
 			return true, nil
 		}
 	}

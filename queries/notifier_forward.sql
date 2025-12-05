@@ -6,7 +6,7 @@ ORDER BY id;
 SELECT * FROM notifier_forward
 WHERE id = $1 LIMIT 1;
 
--- name: ListNotifierForwardsBySourceRoomID :many
+-- name: ListNotifierForwardsBySourceRecipientID :many
 SELECT * FROM notifier_forward
 WHERE source_id = $1
 ORDER BY id;

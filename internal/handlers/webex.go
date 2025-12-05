@@ -16,7 +16,7 @@ func NewWebexHandler(svc *webexsvc.Service) *WebexHandler {
 	return &WebexHandler{Service: svc}
 }
 
-func (h *WebexHandler) ListRooms(c *gin.Context) {
+func (h *WebexHandler) ListRecipients(c *gin.Context) {
 	r, err := h.Service.ListRecipient(c.Request.Context())
 	if err != nil {
 		internalServerError(c, err)

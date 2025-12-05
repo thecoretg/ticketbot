@@ -63,14 +63,14 @@ func (h *NotifierHandler) AddNotifierRule(c *gin.Context) {
 		return
 	}
 
-	exists, err := h.RulesRepo.Exists(ctx, p.CwBoardID, p.WebexRoomID)
+	exists, err := h.RulesRepo.Exists(ctx, p.CwBoardID, p.WebexRecipientID)
 	if err != nil {
 		internalServerError(c, err)
 		return
 	}
 
 	if exists {
-		err = fmt.Errorf("notifier with board id %d and room id %d already exists", p.CwBoardID, p.WebexRoomID)
+		err = fmt.Errorf("notifier with board id %d and room id %d already exists", p.CwBoardID, p.WebexRecipientID)
 		conflictError(c, err)
 		return
 	}
@@ -84,7 +84,7 @@ func (h *NotifierHandler) AddNotifierRule(c *gin.Context) {
 		return
 	}
 
-	if _, err = h.RoomRepo.Get(ctx, p.WebexRoomID); err != nil {
+	if _, err = h.RoomRepo.Get(ctx, p.WebexRecipientID); err != nil {
 		if errors.Is(err, models.ErrWebexRecipientNotFound) {
 			notFoundError(c, err)
 			return

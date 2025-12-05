@@ -57,7 +57,7 @@ func (p *NotifierRuleRepo) ListByBoard(ctx context.Context, boardID int) ([]mode
 }
 
 func (p *NotifierRuleRepo) ListByRoom(ctx context.Context, roomID int) ([]models.NotifierRule, error) {
-	dm, err := p.queries.ListNotifierRulesByRoom(ctx, roomID)
+	dm, err := p.queries.ListNotifierRulesByRecipient(ctx, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (p *NotifierRuleRepo) Delete(ctx context.Context, id int) error {
 func notifierToInsertParams(n *models.NotifierRule) db.InsertNotifierRuleParams {
 	return db.InsertNotifierRuleParams{
 		CwBoardID:        n.CwBoardID,
-		WebexRecipientID: n.WebexRoomID,
+		WebexRecipientID: n.WebexRecipientID,
 		NotifyEnabled:    n.NotifyEnabled,
 	}
 }
@@ -141,17 +141,17 @@ func notifierToUpdateParams(n *models.NotifierRule) db.UpdateNotifierRuleParams 
 	return db.UpdateNotifierRuleParams{
 		ID:               n.ID,
 		CwBoardID:        n.CwBoardID,
-		WebexRecipientID: n.WebexRoomID,
+		WebexRecipientID: n.WebexRecipientID,
 		NotifyEnabled:    n.NotifyEnabled,
 	}
 }
 
 func notifierFromPG(pg db.NotifierRule) *models.NotifierRule {
 	return &models.NotifierRule{
-		ID:            pg.ID,
-		CwBoardID:     pg.CwBoardID,
-		WebexRoomID:   pg.WebexRecipientID,
-		NotifyEnabled: pg.NotifyEnabled,
-		CreatedOn:     pg.CreatedOn,
+		ID:               pg.ID,
+		CwBoardID:        pg.CwBoardID,
+		WebexRecipientID: pg.WebexRecipientID,
+		NotifyEnabled:    pg.NotifyEnabled,
+		CreatedOn:        pg.CreatedOn,
 	}
 }

@@ -38,7 +38,6 @@ func (c *Client) Ping() error {
 	res, err := c.restClient.R().
 		SetError(&apiErr).
 		Get("")
-
 	if err != nil {
 		return err
 	}
@@ -55,7 +54,6 @@ func (c *Client) AuthTest() error {
 	res, err := c.restClient.R().
 		SetError(&apiErr).
 		Get("authtest")
-
 	if err != nil {
 		return err
 	}
@@ -78,7 +76,6 @@ func GetOne[T any](c *Client, endpoint string, params map[string]string) (*T, er
 		SetResult(&target).
 		SetError(&apiErr).
 		Get(endpoint)
-
 	if err != nil {
 		return nil, err
 	}
@@ -112,9 +109,7 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 			return nil, &apiErr
 		}
 
-		for _, item := range target {
-			allItems = append(allItems, item)
-		}
+		allItems = append(allItems, target...)
 
 		params = nil
 		endpoint = parseLinkHeader(res.Header().Get("Link"), "next")
@@ -172,7 +167,6 @@ func (c *Client) Delete(endpoint string) error {
 	res, err := c.restClient.R().
 		SetError(&apiErr).
 		Delete(endpoint)
-
 	if err != nil {
 		return err
 	}
@@ -185,8 +179,7 @@ func (c *Client) Delete(endpoint string) error {
 }
 
 func parseLinkHeader(linkHeader, rel string) string {
-	links := strings.Split(linkHeader, ",")
-	for _, link := range links {
+	for link := range strings.SplitSeq(linkHeader, ",") {
 		parts := strings.Split(strings.TrimSpace(link), ";")
 		if len(parts) < 2 {
 			continue

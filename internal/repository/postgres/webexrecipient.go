@@ -34,7 +34,7 @@ func (p *WebexRecipientRepo) List(ctx context.Context) ([]models.WebexRecipient,
 
 	var r []models.WebexRecipient
 	for _, d := range dbr {
-		r = append(r, roomFromPG(d))
+		r = append(r, recipFromPG(d))
 	}
 
 	return r, nil
@@ -48,7 +48,7 @@ func (p *WebexRecipientRepo) ListRooms(ctx context.Context) ([]models.WebexRecip
 
 	var r []models.WebexRecipient
 	for _, d := range dbr {
-		r = append(r, roomFromPG(d))
+		r = append(r, recipFromPG(d))
 	}
 
 	return r, nil
@@ -62,7 +62,7 @@ func (p *WebexRecipientRepo) ListPeople(ctx context.Context) ([]models.WebexReci
 
 	var r []models.WebexRecipient
 	for _, d := range dbr {
-		r = append(r, roomFromPG(d))
+		r = append(r, recipFromPG(d))
 	}
 
 	return r, nil
@@ -76,7 +76,7 @@ func (p *WebexRecipientRepo) ListByEmail(ctx context.Context, email string) ([]m
 
 	var r []models.WebexRecipient
 	for _, d := range dbr {
-		r = append(r, roomFromPG(d))
+		r = append(r, recipFromPG(d))
 	}
 
 	return r, nil
@@ -91,7 +91,7 @@ func (p *WebexRecipientRepo) Get(ctx context.Context, id int) (models.WebexRecip
 		return models.WebexRecipient{}, err
 	}
 
-	return roomFromPG(d), nil
+	return recipFromPG(d), nil
 }
 
 func (p *WebexRecipientRepo) GetByWebexID(ctx context.Context, webexID string) (models.WebexRecipient, error) {
@@ -103,7 +103,7 @@ func (p *WebexRecipientRepo) GetByWebexID(ctx context.Context, webexID string) (
 		return models.WebexRecipient{}, err
 	}
 
-	return roomFromPG(d), nil
+	return recipFromPG(d), nil
 }
 
 func (p *WebexRecipientRepo) Upsert(ctx context.Context, r models.WebexRecipient) (models.WebexRecipient, error) {
@@ -112,7 +112,7 @@ func (p *WebexRecipientRepo) Upsert(ctx context.Context, r models.WebexRecipient
 		return models.WebexRecipient{}, err
 	}
 
-	return roomFromPG(d), nil
+	return recipFromPG(d), nil
 }
 
 func (p *WebexRecipientRepo) Delete(ctx context.Context, id int) error {
@@ -136,7 +136,7 @@ func webexRoomToUpsertParams(r models.WebexRecipient) db.UpsertWebexRecipientPar
 	}
 }
 
-func roomFromPG(pg db.WebexRecipient) models.WebexRecipient {
+func recipFromPG(pg db.WebexRecipient) models.WebexRecipient {
 	return models.WebexRecipient{
 		ID:           pg.ID,
 		WebexID:      pg.WebexID,

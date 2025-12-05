@@ -145,7 +145,7 @@ func ruleLogGroup(rules []models.NotifierRule) slog.Attr {
 		g := slog.Group(
 			strconv.Itoa(r.ID),
 			slog.Int("board_id", r.CwBoardID),
-			slog.Int("webex_room_id", r.WebexRoomID),
+			slog.Int("webex_recipient_id", r.WebexRecipientID),
 		)
 		attrs = append(attrs, g)
 	}
@@ -164,7 +164,7 @@ func msgsLogGroup(key string, msgs []Message) slog.Attr {
 
 		if m.WebexRecipient.recipient.ID != 0 {
 			g := slog.Group(
-				"webex_room",
+				"webex_recipient",
 				slog.Int("id", m.WebexRecipient.recipient.ID),
 				slog.String("name", m.WebexRecipient.recipient.Name),
 				slog.String("type", string(m.WebexRecipient.recipient.Name)),

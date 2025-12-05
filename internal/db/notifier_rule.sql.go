@@ -145,14 +145,14 @@ func (q *Queries) ListNotifierRulesByBoard(ctx context.Context, cwBoardID int) (
 	return items, nil
 }
 
-const listNotifierRulesByRoom = `-- name: ListNotifierRulesByRoom :many
+const listNotifierRulesByRecipient = `-- name: ListNotifierRulesByRecipient :many
 SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on FROM notifier_rule
 WHERE webex_recipient_id = $1
 ORDER BY id
 `
 
-func (q *Queries) ListNotifierRulesByRoom(ctx context.Context, webexRecipientID int) ([]NotifierRule, error) {
-	rows, err := q.db.Query(ctx, listNotifierRulesByRoom, webexRecipientID)
+func (q *Queries) ListNotifierRulesByRecipient(ctx context.Context, webexRecipientID int) ([]NotifierRule, error) {
+	rows, err := q.db.Query(ctx, listNotifierRulesByRecipient, webexRecipientID)
 	if err != nil {
 		return nil, err
 	}
