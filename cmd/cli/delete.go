@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -36,10 +37,42 @@ var (
 			return nil
 		},
 	}
+
+	deleteUserCmd = &cobra.Command{
+		Use: "user",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if id == 0 {
+				return errors.New("user id is required")
+			}
+
+			if err := client.DeleteUser(id); err != nil {
+				return err
+			}
+
+			fmt.Printf("User %d successfully deleted\n", id)
+			return nil
+		},
+	}
+
+	deleteAPIKeyCmd = &cobra.Command{
+		Use:     "api-key",
+		Aliases: []string{"key"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if id == 0 {
+				return errors.New("api key id is required")
+			}
+
+			if err := client.DeleteAPIKey(id); err != nil {
+				return err
+			}
+
+			fmt.Printf("API key %d successfully deleted\n", id)
+			return nil
+		},
+	}
 )
 
 func init() {
-	deleteCmd.AddCommand(deleteNotifierRuleCmd, deleteForwardCmd)
-	deleteNotifierRuleCmd.Flags().IntVar(&id, "id", 0, "id of the rule to delete")
-	deleteForwardCmd.Flags().IntVar(&id, "id", 0, "id of the forward to delete")
+	deleteCmd.AddCommand(deleteNotifierRuleCmd, deleteForwardCmd, deleteUserCmd, deleteAPIKeyCmd)
+	deleteCmd.PersistentFlags().IntVar(&id, "id", 0, "id of the item to delete")
 }

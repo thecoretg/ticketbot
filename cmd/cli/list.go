@@ -87,10 +87,48 @@ var (
 			return nil
 		},
 	}
+
+	listUsersCmd = &cobra.Command{
+		Use: "users",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			users, err := client.ListUsers()
+			if err != nil {
+				return err
+			}
+
+			if len(users) == 0 {
+				fmt.Println("No users found")
+				return nil
+			}
+
+			apiUsersTable(users)
+			return nil
+		},
+	}
+
+	listAPIKeysCmd = &cobra.Command{
+		Use:     "api-keys",
+		Aliases: []string{"keys"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			keys, err := client.ListAPIKeys()
+			if err != nil {
+				return err
+			}
+
+			if len(keys) == 0 {
+				fmt.Println("No keys found")
+				return nil
+			}
+
+			apiKeysTable(keys)
+			return nil
+		},
+	}
 )
 
 func init() {
-	listCmd.AddCommand(listBoardsCmd, listNotifierRulesCmd, listForwardsCmd, listWebexRecipientsCmd)
+	listCmd.AddCommand(listBoardsCmd, listNotifierRulesCmd, listForwardsCmd,
+		listWebexRecipientsCmd, listUsersCmd, listAPIKeysCmd)
 }
 
 func filterEmptyTitleRooms(rooms []models.WebexRecipient) []models.WebexRecipient {

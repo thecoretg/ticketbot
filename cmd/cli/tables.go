@@ -31,6 +31,34 @@ func webexRoomsToTable(rooms []models.WebexRecipient) {
 	fmt.Println(t)
 }
 
+func apiUsersTable(users []models.APIUser) {
+	sort.SliceStable(users, func(i, j int) bool {
+		return users[i].EmailAddress < users[j].EmailAddress
+	})
+
+	t := defaultTable()
+	t.Headers("ID", "EMAIL", "CREATED ON")
+	for _, u := range users {
+		t.Row(strconv.Itoa(u.ID), u.EmailAddress, u.CreatedOn.Format("2006-01-02"))
+	}
+
+	fmt.Println(t)
+}
+
+func apiKeysTable(keys []models.APIKey) {
+	sort.SliceStable(keys, func(i, j int) bool {
+		return keys[i].UserID < keys[j].UserID
+	})
+
+	t := defaultTable()
+	t.Headers("USER ID", "KEY ID", "CREATED ON")
+	for _, k := range keys {
+		t.Row(strconv.Itoa(k.UserID), strconv.Itoa(k.ID), k.CreatedOn.Format("2006-01-02"))
+	}
+
+	fmt.Println(t)
+}
+
 func cwBoardsToTable(boards []models.Board) {
 	sort.SliceStable(boards, func(i, j int) bool {
 		return boards[i].Name < boards[j].Name

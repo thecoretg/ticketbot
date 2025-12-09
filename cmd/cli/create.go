@@ -104,10 +104,45 @@ var (
 			return nil
 		},
 	}
+
+	createUserCmd = &cobra.Command{
+		Use: "user",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if emailAddress == "" {
+				return errors.New("no email address provided - pass with flag --email or -e")
+			}
+
+			u, err := client.CreateUser(emailAddress)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("User created:\nID:%d\nEmail:%s\n", u.ID, u.EmailAddress)
+			return nil
+		},
+	}
+
+	createAPIKeyCmd = &cobra.Command{
+		Use:     "api-key",
+		Aliases: []string{"key"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if emailAddress == "" {
+				return errors.New("no email address provided - pass with flag --email or -e")
+			}
+
+			k, err := client.CreateAPIKey(emailAddress)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("API key created for %s\nCopy and save this key, it won't be shown again:\n%s\n", emailAddress, k)
+			return nil
+		},
+	}
 )
 
 func init() {
-	createCmd.AddCommand(createNotifierRuleCmd)
+	createCmd.AddCommand(createNotifierRuleCmd, createUserCmd, createAPIKeyCmd)
 	createNotifierRuleCmd.Flags().IntVarP(&boardID, "board-id", "b", 0, "board id to use")
 	createNotifierRuleCmd.Flags().IntVarP(&recipientID, "recipient-id", "r", 0, "recipient id to use")
 	createForwardCmd.Flags().BoolVarP(&forwardUserKeeps, "user-keeps-copy", "k", false, "user keeps a copy of forwarded emails")
@@ -116,4 +151,6 @@ func init() {
 	createForwardCmd.Flags().StringVarP(&forwardStartDate, "start-date", "a", "", "start date for forward (YYYY-MM-DD)")
 	createForwardCmd.Flags().StringVarP(&forwardEndDate, "end-date", "e", "", "end date for forward (YYYY-MM-DD)")
 	createForwardCmd.Flags().BoolVarP(&forwardEnabled, "enabled", "x", true, "enable the forward")
+	createUserCmd.Flags().StringVarP(&emailAddress, "email", "e", "", "email address to create a user for")
+	createAPIKeyCmd.Flags().StringVarP(&emailAddress, "email", "e", "", "email address to create an api key for")
 }

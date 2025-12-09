@@ -42,6 +42,7 @@ func AddRoutes(a *App, g *gin.Engine) {
 func registerUserRoutes(r *gin.RouterGroup, h *handlers.UserHandler) {
 	r.GET("", h.ListUsers)
 	r.GET(":id", h.GetUser)
+	r.POST("", h.CreateUser)
 	r.DELETE(":id")
 
 	k := r.Group("keys")

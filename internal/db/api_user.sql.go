@@ -9,6 +9,21 @@ import (
 	"context"
 )
 
+const checkUserExists = `-- name: CheckUserExists :one
+SELECT EXISTS(
+    SELECT 1
+    FROM api_user
+    WHERE email_address = $1
+) as exists
+`
+
+func (q *Queries) CheckUserExists(ctx context.Context, emailAddress string) (bool, error) {
+	row := q.db.QueryRow(ctx, checkUserExists, emailAddress)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM api_user
 WHERE id = $1

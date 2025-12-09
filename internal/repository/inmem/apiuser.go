@@ -48,6 +48,18 @@ func (p *APIUserRepo) Get(ctx context.Context, id int) (*models.APIUser, error) 
 	return &v, nil
 }
 
+func (p *APIUserRepo) Exists(ctx context.Context, email string) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, v := range p.data {
+		if v.EmailAddress == email {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (p *APIUserRepo) GetByEmail(ctx context.Context, email string) (*models.APIUser, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

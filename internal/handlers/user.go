@@ -47,6 +47,26 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	outputJSON(c, u)
 }
 
+func (h *UserHandler) CreateUser(c *gin.Context) {
+	p := &models.APIUser{}
+	if err := c.ShouldBindJSON(p); err != nil {
+		badPayloadError(c, err)
+		return
+	}
+
+	u, err := h.Service.InsertUser(c.Request.Context(), p.EmailAddress)
+	if err != nil {
+		if errors.Is(err, user.ErrUserAlreadyExists{Email: p.EmailAddress}) {
+			conflictError(c, err)
+			return
+		}
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, u)
+}
+
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	id, err := convertID(c)
 	if err != nil {
@@ -97,10 +117,7 @@ func (h *UserHandler) GetAPIKey(c *gin.Context) {
 }
 
 func (h *UserHandler) AddAPIKey(c *gin.Context) {
-	p := &struct {
-		Email string `json:"email"`
-	}{}
-
+	p := &models.CreateAPIKeyPayload{}
 	if err := c.ShouldBindJSON(p); err != nil {
 		badPayloadError(c, err)
 		return
@@ -112,7 +129,12 @@ func (h *UserHandler) AddAPIKey(c *gin.Context) {
 		return
 	}
 
-	outputJSON(c, k)
+	o := models.CreateAPIKeyResponse{
+		Email: p.Email,
+		Key:   k,
+	}
+
+	outputJSON(c, o)
 }
 
 func (h *UserHandler) DeleteAPIKey(c *gin.Context) {

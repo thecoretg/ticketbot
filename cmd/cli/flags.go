@@ -21,6 +21,8 @@ var (
 	forwardEnabled   bool
 	forwardUserKeeps bool
 
+	emailAddress string
+
 	syncAll, syncBoards, syncWebexRecipients, syncTickets bool
 	syncBoardIDs                                          []int
 	maxConcurrentSyncs                                    int

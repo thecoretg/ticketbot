@@ -10,6 +10,15 @@ import (
 
 var ErrAPIKeyNotFound = errors.New("api key not found")
 
+type CreateAPIKeyPayload struct {
+	Email string `json:"email"`
+}
+
+type CreateAPIKeyResponse struct {
+	Email string `json:"email"`
+	Key   string `json:"key"`
+}
+
 type APIKey struct {
 	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`
@@ -40,6 +49,7 @@ type APIUserRepository interface {
 	List(ctx context.Context) ([]APIUser, error)
 	Get(ctx context.Context, id int) (*APIUser, error)
 	GetByEmail(ctx context.Context, email string) (*APIUser, error)
+	Exists(ctx context.Context, email string) (bool, error)
 	Insert(ctx context.Context, email string) (*APIUser, error)
 	Delete(ctx context.Context, id int) error
 }

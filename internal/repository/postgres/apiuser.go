@@ -61,6 +61,10 @@ func (p *APIUserRepo) GetByEmail(ctx context.Context, email string) (*models.API
 	return userFromPG(d), nil
 }
 
+func (p *APIUserRepo) Exists(ctx context.Context, email string) (bool, error) {
+	return p.queries.CheckUserExists(ctx, email)
+}
+
 func (p *APIUserRepo) Insert(ctx context.Context, email string) (*models.APIUser, error) {
 	d, err := p.queries.InsertUser(ctx, email)
 	if err != nil {

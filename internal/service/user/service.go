@@ -2,9 +2,18 @@ package user
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 )
+
+type ErrUserAlreadyExists struct {
+	Email string
+}
+
+func (e ErrUserAlreadyExists) Error() string {
+	return fmt.Sprintf("user with email '%s' already exists", e.Email)
+}
 
 type Service struct {
 	Users models.APIUserRepository
@@ -24,6 +33,19 @@ func (s *Service) ListUsers(ctx context.Context) ([]models.APIUser, error) {
 
 func (s *Service) GetUser(ctx context.Context, id int) (*models.APIUser, error) {
 	return s.Users.Get(ctx, id)
+}
+
+func (s *Service) InsertUser(ctx context.Context, email string) (*models.APIUser, error) {
+	exists, err := s.Users.Exists(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("checking if user exists: %w", err)
+	}
+
+	if exists {
+		return nil, ErrUserAlreadyExists{Email: email}
+	}
+
+	return s.Users.Insert(ctx, email)
 }
 
 func (s *Service) DeleteUser(ctx context.Context, id int) error {
