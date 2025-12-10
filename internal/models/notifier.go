@@ -29,9 +29,24 @@ type NotifierForward struct {
 	UpdatedOn     time.Time  `json:"updated_on"`
 }
 
+type NotifierForwardFull struct {
+	ID              int        `json:"id"`
+	Enabled         bool       `json:"enabled"`
+	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	StartDate       *time.Time `json:"start_date"`
+	EndDate         *time.Time `json:"end_date"`
+	SourceID        int        `json:"source_id"`
+	SourceName      string     `json:"source_name"`
+	SourceType      string     `json:"source_type"`
+	DestinationID   int        `json:"destination_id"`
+	DestinationName string     `json:"destination_name"`
+	DestinationType string     `json:"destination_type"`
+}
+
 type NotifierForwardRepository interface {
 	WithTx(tx pgx.Tx) NotifierForwardRepository
 	ListAll(ctx context.Context) ([]NotifierForward, error)
+	ListAllFull(ctx context.Context) ([]NotifierForwardFull, error)
 	ListBySourceRoomID(ctx context.Context, id int) ([]NotifierForward, error)
 	Get(ctx context.Context, id int) (NotifierForward, error)
 	Insert(ctx context.Context, c NotifierForward) (NotifierForward, error)
@@ -48,9 +63,20 @@ type NotifierRule struct {
 	CreatedOn        time.Time `json:"created_on"`
 }
 
+type NotifierRuleFull struct {
+	ID            int    `json:"id"`
+	Enabled       bool   `json:"enabled"`
+	BoardID       int    `json:"board_id"`
+	BoardName     string `json:"board_name"`
+	RecipientID   int    `json:"recipient_id"`
+	RecipientName string `json:"recipient_name"`
+	RecipientType string `json:"recipient_type"`
+}
+
 type NotifierRuleRepository interface {
 	WithTx(tx pgx.Tx) NotifierRuleRepository
 	ListAll(ctx context.Context) ([]NotifierRule, error)
+	ListAllFull(ctx context.Context) ([]NotifierRuleFull, error)
 	ListByBoard(ctx context.Context, boardID int) ([]NotifierRule, error)
 	ListByRoom(ctx context.Context, roomID int) ([]NotifierRule, error)
 	Get(ctx context.Context, id int) (*NotifierRule, error)

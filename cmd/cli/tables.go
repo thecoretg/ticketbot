@@ -12,7 +12,7 @@ import (
 
 var (
 	headerStyle = lipgloss.NewStyle().Align(lipgloss.Center)
-	cellStyle   = lipgloss.NewStyle().Padding(0, 1)
+	cellStyle   = lipgloss.NewStyle().Padding(0, 1).Align(lipgloss.Center)
 )
 
 func webexRoomsToTable(rooms []models.WebexRecipient) {
@@ -73,19 +73,19 @@ func cwBoardsToTable(boards []models.Board) {
 	fmt.Println(t)
 }
 
-func notifierRulesTable(notifiers []models.NotifierRule) {
+func notifierRulesTable(notifiers []models.NotifierRuleFull) {
 	t := defaultTable()
-	t.Headers("ID", "BOARD", "RECIPIENT", "NOTIFY")
+	t.Headers("ID", "ENABLED", "BOARD", "RECIPIENT")
 	for _, n := range notifiers {
-		t.Row(strconv.Itoa(n.ID), strconv.Itoa(n.CwBoardID), strconv.Itoa(n.WebexRecipientID), fmt.Sprintf("%v", n.NotifyEnabled))
+		t.Row(strconv.Itoa(n.ID), boolToIcon(n.Enabled), n.BoardName, fmt.Sprintf("%s (%s)", n.RecipientName, n.RecipientType))
 	}
 
 	fmt.Println(t)
 }
 
-func userForwardsTable(forwards []models.NotifierForward) {
+func userForwardsTable(forwards []models.NotifierForwardFull) {
 	t := defaultTable()
-	t.Headers("ID", "SRC ID", "DEST ID", "START DATE", "END DATE", "ENABLED", "USER KEEPS COPY")
+	t.Headers("ID", "ENABLED", "START", "END", "KEEP COPY", "SOURCE", "DESTINATION")
 	for _, uf := range forwards {
 		ed := "NA"
 		if uf.EndDate != nil {
@@ -94,12 +94,12 @@ func userForwardsTable(forwards []models.NotifierForward) {
 
 		t.Row(
 			strconv.Itoa(uf.ID),
-			strconv.Itoa(uf.SourceID),
-			strconv.Itoa(uf.DestID),
+			boolToIcon(uf.Enabled),
 			uf.StartDate.Format("2006-01-02"),
 			ed,
-			fmt.Sprintf("%v", uf.Enabled),
-			fmt.Sprintf("%v", uf.UserKeepsCopy),
+			boolToIcon(uf.UserKeepsCopy),
+			fmt.Sprintf("%s (%s)", uf.SourceName, uf.SourceType),
+			fmt.Sprintf("%s (%s)", uf.DestinationName, uf.DestinationType),
 		)
 	}
 
@@ -108,7 +108,7 @@ func userForwardsTable(forwards []models.NotifierForward) {
 
 func defaultTable() *table.Table {
 	return table.New().
-		Border(lipgloss.NormalBorder()).BorderTop(false).BorderBottom(false).
+		Border(lipgloss.NormalBorder()).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return headerStyle
@@ -116,4 +116,13 @@ func defaultTable() *table.Table {
 				return cellStyle
 			}
 		})
+}
+
+func boolToIcon(b bool) string {
+	i := "✗"
+	if b {
+		i = "✓"
+	}
+
+	return i
 }

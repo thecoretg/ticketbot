@@ -42,7 +42,6 @@ type Creds struct {
 }
 
 type TestFlags struct {
-	InMemory        bool
 	APIKey          *string
 	SkipAuth        bool
 	SkipHooks       bool
@@ -71,7 +70,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	cw := psa.NewClient(cr.CWCreds)
 	ms := makeMessageSender(tf.MockWebex, cr.WebexSecret)
 
-	s, err := CreateStores(ctx, cr, tf.InMemory, migVersion)
+	s, err := CreateStores(ctx, cr, migVersion)
 	if err != nil {
 		return nil, fmt.Errorf("initializing stores: %w", err)
 	}
@@ -162,7 +161,7 @@ func (c *Creds) validate(tf *TestFlags) error {
 		}
 	}
 
-	if c.PostgresDSN == "" && !tf.InMemory {
+	if c.PostgresDSN == "" {
 		empty = append(empty, "POSTGRES_DSN")
 	}
 
@@ -212,7 +211,6 @@ func getTestFlags() *TestFlags {
 	}
 
 	return &TestFlags{
-		InMemory:        os.Getenv("IN_MEMORY_STORE") == "true",
 		APIKey:          apiKey,
 		SkipAuth:        os.Getenv("SKIP_AUTH") == "true",
 		SkipHooks:       os.Getenv("SKIP_HOOKS") == "true",

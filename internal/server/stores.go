@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/thecoretg/ticketbot/internal/models"
-	"github.com/thecoretg/ticketbot/internal/repository/inmem"
 	"github.com/thecoretg/ticketbot/internal/repository/postgres"
 	"github.com/thecoretg/ticketbot/migrations"
 )
@@ -21,12 +20,7 @@ type Stores struct {
 	Pool  *pgxpool.Pool
 }
 
-func CreateStores(ctx context.Context, creds *Creds, inMemory bool, targetMigVersion int64) (*Stores, error) {
-	if inMemory {
-		slog.Info("running with in-memory store")
-		return InitInMemStores(), nil
-	}
-
+func CreateStores(ctx context.Context, creds *Creds, targetMigVersion int64) (*Stores, error) {
 	slog.Info("running with postgres store")
 	return InitPostgresStores(ctx, creds, targetMigVersion)
 }
@@ -77,11 +71,4 @@ func GooseMigrate(d *sql.DB, target int64) error {
 	}
 
 	return err
-}
-
-func InitInMemStores() *Stores {
-	return &Stores{
-		Repos: inmem.AllRepos(nil),
-		Pool:  nil,
-	}
 }

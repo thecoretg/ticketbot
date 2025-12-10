@@ -2,6 +2,22 @@
 SELECT * FROM notifier_rule
 ORDER BY id;
 
+-- name: ListNotifierRulesFull :many
+SELECT
+    r.id AS id,
+    r.notify_enabled AS enabled,
+    b.id AS board_id,
+    b.name AS board_name,
+    wr.id AS recipient_id,
+    wr.name AS recipient_name,
+    wr.type AS recipient_type
+FROM notifier_rule AS r
+JOIN webex_recipient AS wr
+ON wr.id = r.webex_recipient_id
+JOIN cw_board AS b
+ON b.id = r.cw_board_id
+ORDER BY r.id;
+
 -- name: GetNotifierRule :one
 SELECT * FROM notifier_rule
 WHERE id = $1 LIMIT 1;

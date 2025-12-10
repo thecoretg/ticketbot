@@ -1,3 +1,22 @@
+-- name: ListNotifierForwardsFull :many
+SELECT 
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src
+ON src.id = f.source_id
+JOIN webex_recipient AS dst
+ON dst.id = f.destination_id;
+
 -- name: ListNotifierForwards :many
 SELECT * FROM notifier_forward
 ORDER BY id;

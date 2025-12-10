@@ -7,8 +7,8 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
-func (c *Client) ListNotifierRules() ([]models.NotifierRule, error) {
-	return GetMany[models.NotifierRule](c, "notifiers/rules", nil)
+func (c *Client) ListNotifierRules() ([]models.NotifierRuleFull, error) {
+	return GetMany[models.NotifierRuleFull](c, "notifiers/rules", nil)
 }
 
 func (c *Client) GetNotifierRule(id int) (*models.NotifierRule, error) {
@@ -36,8 +36,8 @@ func (c *Client) DeleteNotifierRule(id int) error {
 	return c.Delete(fmt.Sprintf("notifiers/rules/%d", id))
 }
 
-func (c *Client) ListUserForwards() ([]models.NotifierForward, error) {
-	return GetMany[models.NotifierForward](c, "notifiers/forwards", nil)
+func (c *Client) ListUserForwards() ([]models.NotifierForwardFull, error) {
+	return GetMany[models.NotifierForwardFull](c, "notifiers/forwards", nil)
 }
 
 func (c *Client) GetUserForward(id int) (*models.NotifierForward, error) {
