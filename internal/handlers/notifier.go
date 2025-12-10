@@ -26,7 +26,7 @@ func NewNotifierHandler(r models.NotifierRuleRepository, br models.BoardReposito
 }
 
 func (h *NotifierHandler) ListNotifierRules(c *gin.Context) {
-	n, err := h.RulesRepo.ListAll(c.Request.Context())
+	n, err := h.RulesRepo.ListAllFull(c.Request.Context())
 	if err != nil {
 		internalServerError(c, err)
 		return
@@ -122,7 +122,7 @@ func (h *NotifierHandler) DeleteNotifierRule(c *gin.Context) {
 }
 
 func (h *NotifierHandler) ListForwards(c *gin.Context) {
-	n, err := h.ForwardsRepo.ListAll(c.Request.Context())
+	n, err := h.ForwardsRepo.ListAllFull(c.Request.Context())
 	if err != nil {
 		internalServerError(c, err)
 		return

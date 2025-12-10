@@ -41,6 +41,20 @@ func (p *NotifierRuleRepo) ListAll(ctx context.Context) ([]models.NotifierRule, 
 	return b, nil
 }
 
+func (p *NotifierRuleRepo) ListAllFull(ctx context.Context) ([]models.NotifierRuleFull, error) {
+	dr, err := p.queries.ListNotifierRulesFull(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var f []models.NotifierRuleFull
+	for _, r := range dr {
+		f = append(f, fullRuleFromDB(r))
+	}
+
+	return f, nil
+}
+
 func (p *NotifierRuleRepo) ListByBoard(ctx context.Context, boardID int) ([]models.NotifierRule, error) {
 	dm, err := p.queries.ListNotifierRulesByBoard(ctx, boardID)
 	if err != nil {
@@ -153,5 +167,17 @@ func notifierFromPG(pg db.NotifierRule) *models.NotifierRule {
 		WebexRecipientID: pg.WebexRecipientID,
 		NotifyEnabled:    pg.NotifyEnabled,
 		CreatedOn:        pg.CreatedOn,
+	}
+}
+
+func fullRuleFromDB(pg db.ListNotifierRulesFullRow) models.NotifierRuleFull {
+	return models.NotifierRuleFull{
+		ID:            pg.ID,
+		Enabled:       pg.Enabled,
+		BoardID:       pg.BoardID,
+		BoardName:     pg.BoardName,
+		RecipientID:   pg.RecipientID,
+		RecipientName: pg.RecipientName,
+		RecipientType: pg.RecipientType,
 	}
 }

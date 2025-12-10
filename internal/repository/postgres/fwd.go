@@ -40,6 +40,20 @@ func (p *UserForwardRepo) ListAll(ctx context.Context) ([]models.NotifierForward
 	return b, nil
 }
 
+func (p *UserForwardRepo) ListAllFull(ctx context.Context) ([]models.NotifierForwardFull, error) {
+	df, err := p.queries.ListNotifierForwardsFull(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var f []models.NotifierForwardFull
+	for _, d := range df {
+		f = append(f, fullForwardFromPG(d))
+	}
+
+	return f, nil
+}
+
 func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]models.NotifierForward, error) {
 	dm, err := p.queries.ListNotifierForwardsBySourceRecipientID(ctx, id)
 	if err != nil {
@@ -108,5 +122,21 @@ func forwardFromPG(pg db.NotifierForward) models.NotifierForward {
 		UserKeepsCopy: pg.UserKeepsCopy,
 		UpdatedOn:     pg.UpdatedOn,
 		CreatedOn:     pg.CreatedOn,
+	}
+}
+
+func fullForwardFromPG(pg db.ListNotifierForwardsFullRow) models.NotifierForwardFull {
+	return models.NotifierForwardFull{
+		ID:              pg.ID,
+		Enabled:         pg.Enabled,
+		UserKeepsCopy:   pg.UserKeepsCopy,
+		StartDate:       pg.StartDate,
+		EndDate:         pg.EndDate,
+		SourceID:        pg.SourceID,
+		SourceName:      pg.SourceName,
+		SourceType:      pg.SourceType,
+		DestinationID:   pg.DestinationID,
+		DestinationName: pg.DestinationName,
+		DestinationType: pg.DestinationType,
 	}
 }

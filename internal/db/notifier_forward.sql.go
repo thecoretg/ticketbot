@@ -152,3 +152,69 @@ func (q *Queries) ListNotifierForwardsBySourceRecipientID(ctx context.Context, s
 	}
 	return items, nil
 }
+
+const listNotifierForwardsFull = `-- name: ListNotifierForwardsFull :many
+SELECT 
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src
+ON src.id = f.source_id
+JOIN webex_recipient AS dst
+ON dst.id = f.destination_id
+`
+
+type ListNotifierForwardsFullRow struct {
+	ID              int        `json:"id"`
+	Enabled         bool       `json:"enabled"`
+	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	StartDate       *time.Time `json:"start_date"`
+	EndDate         *time.Time `json:"end_date"`
+	SourceID        int        `json:"source_id"`
+	SourceName      string     `json:"source_name"`
+	SourceType      string     `json:"source_type"`
+	DestinationID   int        `json:"destination_id"`
+	DestinationName string     `json:"destination_name"`
+	DestinationType string     `json:"destination_type"`
+}
+
+func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]ListNotifierForwardsFullRow, error) {
+	rows, err := q.db.Query(ctx, listNotifierForwardsFull)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNotifierForwardsFullRow
+	for rows.Next() {
+		var i ListNotifierForwardsFullRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Enabled,
+			&i.UserKeepsCopy,
+			&i.StartDate,
+			&i.EndDate,
+			&i.SourceID,
+			&i.SourceName,
+			&i.SourceType,
+			&i.DestinationID,
+			&i.DestinationName,
+			&i.DestinationType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

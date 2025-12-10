@@ -177,6 +177,61 @@ func (q *Queries) ListNotifierRulesByRecipient(ctx context.Context, webexRecipie
 	return items, nil
 }
 
+const listNotifierRulesFull = `-- name: ListNotifierRulesFull :many
+SELECT
+    r.id AS id,
+    r.notify_enabled AS enabled,
+    b.id AS board_id,
+    b.name AS board_name,
+    wr.id AS recipient_id,
+    wr.name AS recipient_name,
+    wr.type AS recipient_type
+FROM notifier_rule AS r
+JOIN webex_recipient AS wr
+ON wr.id = r.webex_recipient_id
+JOIN cw_board AS b
+ON b.id = r.cw_board_id
+ORDER BY r.id
+`
+
+type ListNotifierRulesFullRow struct {
+	ID            int    `json:"id"`
+	Enabled       bool   `json:"enabled"`
+	BoardID       int    `json:"board_id"`
+	BoardName     string `json:"board_name"`
+	RecipientID   int    `json:"recipient_id"`
+	RecipientName string `json:"recipient_name"`
+	RecipientType string `json:"recipient_type"`
+}
+
+func (q *Queries) ListNotifierRulesFull(ctx context.Context) ([]ListNotifierRulesFullRow, error) {
+	rows, err := q.db.Query(ctx, listNotifierRulesFull)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNotifierRulesFullRow
+	for rows.Next() {
+		var i ListNotifierRulesFullRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Enabled,
+			&i.BoardID,
+			&i.BoardName,
+			&i.RecipientID,
+			&i.RecipientName,
+			&i.RecipientType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteNotifierRule = `-- name: SoftDeleteNotifierRule :exec
 UPDATE notifier_rule
 SET
