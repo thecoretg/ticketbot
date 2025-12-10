@@ -38,11 +38,15 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 		go func(ticket psa.Ticket) {
 			defer func() { <-sem }()
 			defer wg.Done()
-			if _, err := s.CW.ProcessTicket(ctx, t.ID, "sync"); err != nil {
-				slog.Error("cwsvc: ticket sync error", "ticket_id", t.ID, "error", err)
-				errCh <- fmt.Errorf("error syncing ticket %d: %w", t.ID, err)
-			} else {
-				errCh <- nil
+			ft, err := s.CW.ProcessTicket(ctx, ticket.ID, "sync")
+			if err != nil {
+				errCh <- fmt.Errorf("error syncing ticket %d: %w", ticket.ID, err)
+				return
+			}
+
+			if err := s.Notifier.AddSkippedNotification(ctx, ft, "ticket sync"); err != nil {
+				errCh <- fmt.Errorf("skipping notification for ticket %d note %d: %w", ft.Ticket.ID, ft.LatestNote.ID, err)
+				return
 			}
 		}(t)
 	}

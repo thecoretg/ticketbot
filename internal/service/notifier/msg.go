@@ -47,7 +47,7 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 		wm := newWebexMsg(r.recipient, body)
 		n := &models.TicketNotification{
 			TicketID:    t.Ticket.ID,
-			RecipientID: r.recipient.ID,
+			RecipientID: &r.recipient.ID,
 			Sent:        true,
 		}
 

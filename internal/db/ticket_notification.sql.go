@@ -81,7 +81,7 @@ RETURNING id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, 
 type InsertTicketNotificationParams struct {
 	TicketID        int  `json:"ticket_id"`
 	TicketNoteID    *int `json:"ticket_note_id"`
-	RecipientID     int  `json:"recipient_id"`
+	RecipientID     *int `json:"recipient_id"`
 	ForwardedFromID *int `json:"forwarded_from_id"`
 	Sent            bool `json:"sent"`
 	Skipped         bool `json:"skipped"`

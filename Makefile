@@ -7,8 +7,13 @@ build-cli: create-bin-dir
 gensql:
 	sqlc generate
 
-runserver:
-	go run ./cmd/server
+runserver: test-db-down test-db-up
+	op run --env-file="./testing.env" --no-masking -- go run ./cmd/server
+
+create-test-rule: build-cli
+	op run --env-file="./testing.env" --no-masking -- tbot sync -r -b -t -i 38
+	sleep 10
+	op run --env-file="./testing.env" --no-masking -- tbot create rule -b 38 -r 1
 
 test-db-up:
 	docker compose -f ./docker/docker-compose-db.yml up -d
@@ -17,14 +22,14 @@ test-db-down:
 	docker compose -f ./docker/docker-compose-db.yml down -v
 
 docker-build:
-	docker buildx build --platform=linux/amd64 -t ticketbot:v1.2 --load -f ./docker/DockerfileMain .
+	docker buildx build --platform=linux/amd64 -t ticketbot:v1.2.1 --load -f ./docker/DockerfileMain .
 
 deploy-lightsail: docker-build
 	aws lightsail push-container-image \
 	--region us-west-2 \
 	--service-name ticketbot \
 	--label ticketbot-server \
-	--image ticketbot:latest
+	--image ticketbot:v1.2.1
 
 lightsail-logs:
 	aws lightsail get-container-log \
