@@ -12,8 +12,6 @@ import (
 	"github.com/thecoretg/ticketbot/internal/server"
 )
 
-const currentMigVersion = 1
-
 func main() {
 	if err := Run(); err != nil {
 		fmt.Println("An error occured:", err)
@@ -36,7 +34,7 @@ func Run() error {
 		Level: level,
 	})))
 
-	a, err := server.NewApp(ctx, currentMigVersion)
+	a, err := server.NewApp(ctx, common.GooseMigrationVersion)
 	if err != nil {
 		return fmt.Errorf("initializing app: %w", err)
 	}

@@ -2,17 +2,20 @@ package config
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
 type Service struct {
-	Config models.ConfigRepository
+	Config    models.ConfigRepository
+	ConfigRef *models.Config
 }
 
-func New(c models.ConfigRepository) *Service {
+func New(c models.ConfigRepository, cfg *models.Config) *Service {
 	return &Service{
-		Config: c,
+		Config:    c,
+		ConfigRef: cfg,
 	}
 }
 
@@ -21,5 +24,18 @@ func (s *Service) Get(ctx context.Context) (*models.Config, error) {
 }
 
 func (s *Service) Update(ctx context.Context, p *models.Config) (*models.Config, error) {
-	return s.Config.Upsert(ctx, p)
+	updated, err := s.Config.Upsert(ctx, p)
+	if err != nil {
+		return nil, fmt.Errorf("upserting config in store: %w", err)
+	}
+
+	s.applyChanges(updated)
+	return s.ConfigRef, nil
+}
+
+func (s *Service) applyChanges(src *models.Config) {
+	cfg := s.ConfigRef
+	cfg.AttemptNotify = src.AttemptNotify
+	cfg.MaxConcurrentSyncs = src.MaxConcurrentSyncs
+	cfg.MaxMessageLength = src.MaxMessageLength
 }

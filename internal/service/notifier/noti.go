@@ -29,6 +29,45 @@ func (s *Service) Run(ctx context.Context, t *models.FullTicket, isNew bool) err
 	return s.processNotifications(ctx, t, isNew)
 }
 
+func (s *Service) AddSkippedNotification(ctx context.Context, t *models.FullTicket, source string) error {
+	if t == nil {
+		return errors.New("received nil ticket")
+	}
+
+	if t.LatestNote != nil && t.LatestNote.ID != 0 {
+		ti := t.Ticket.ID
+		ni := t.LatestNote.ID
+
+		// Check if notification was already sent/skipped for this note
+		exists, err := s.Notifications.ExistsForNote(ctx, ni)
+		if err != nil {
+			return fmt.Errorf("checking if notification exists for note: %w", err)
+		}
+
+		if exists {
+			slog.Debug("notification skipper: notification already exists", "ticket_id", ti, "note_id", ni)
+			return nil
+		}
+
+		n := models.TicketNotification{
+			TicketID:     ti,
+			TicketNoteID: &ni,
+			Skipped:      true,
+		}
+
+		n, err = s.Notifications.Insert(ctx, n)
+		if err != nil {
+			return fmt.Errorf("inserting notification: %w", err)
+		}
+
+		slog.Debug("notification skipper: inserted skipped notification", "source", source, "ticket_id", ti, "note_id", ni, "notification_id", n.ID)
+		return nil
+	}
+
+	slog.Debug("notification skipper: no note to notify", "ticket_id", t.Ticket.ID)
+	return nil
+}
+
 func (s *Service) processNotifications(ctx context.Context, t *models.FullTicket, isNew bool) (err error) {
 	if t == nil {
 		return errors.New("nil ticket received")

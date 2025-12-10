@@ -11,7 +11,8 @@ import (
 func (s *Service) ensureConfig(ctx context.Context) (*models.Config, error) {
 	c, err := s.Config.Get(ctx)
 	if err == nil {
-		return c, nil
+		s.applyChanges(c)
+		return s.ConfigRef, nil
 	}
 
 	if !errors.Is(err, models.ErrConfigNotFound) {
@@ -24,5 +25,6 @@ func (s *Service) ensureConfig(ctx context.Context) (*models.Config, error) {
 		return nil, fmt.Errorf("creating default config: %w", err)
 	}
 
-	return c, nil
+	s.applyChanges(c)
+	return s.ConfigRef, nil
 }

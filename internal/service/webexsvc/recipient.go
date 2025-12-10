@@ -44,6 +44,10 @@ func (s *Service) EnsurePersonRecipientByEmail(ctx context.Context, email string
 		return models.WebexRecipient{}, fmt.Errorf("fetching people from webex api: %w", err)
 	}
 
+	if len(wxr) == 0 {
+		return models.WebexRecipient{}, fmt.Errorf("no webex recipients found for email %s", email)
+	}
+
 	r := getMostActive(peopleToRecipients(wxr))
 	r, err = s.Recipients.Upsert(ctx, r)
 	if err != nil {

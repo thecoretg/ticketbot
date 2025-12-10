@@ -3,7 +3,6 @@ package notifier
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -61,8 +60,8 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 			slog.Debug("getAllRecipients: calling webexsvc.GetRecipient", "room_id", nr.WebexRecipientID)
 			r, err := s.WebexSvc.GetRecipient(ctx, nr.WebexRecipientID)
 			if err != nil {
-				// TODO: once done testing, this should warn and not exit
-				return nil, fmt.Errorf("getting room for notifier rule %d: %w", nr.ID, err)
+				slog.Error("getting stored webex recipient for notifier rule", "rule_id", nr.ID, "recipient_id", nr.WebexRecipientID, "error", err)
+				continue
 			}
 
 			recips[r.ID] = newRecip(r)
@@ -72,7 +71,8 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 	for e := range includedEmails {
 		r, err := s.WebexSvc.EnsurePersonRecipientByEmail(ctx, e)
 		if err != nil {
-			return nil, fmt.Errorf("ensuring recipient by email %s: %w", e, err)
+			slog.Error("notifier: ensuring webex person by email", "ticket_id", t.Ticket.ID, "email", e, "error", err)
+			continue
 		}
 
 		recips[r.ID] = newRecip(r)

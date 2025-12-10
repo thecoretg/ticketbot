@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
@@ -39,36 +38,15 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 		go func(ticket psa.Ticket) {
 			defer func() { <-sem }()
 			defer wg.Done()
-			ft, err := s.CW.ProcessTicket(ctx, t.ID, "sync")
+			ft, err := s.CW.ProcessTicket(ctx, ticket.ID, "sync")
 			if err != nil {
-				errCh <- fmt.Errorf("error syncing ticket %d: %w", t.ID, err)
+				errCh <- fmt.Errorf("error syncing ticket %d: %w", ticket.ID, err)
 				return
 			}
 
-			if ft.LatestNote != nil && ft.LatestNote.ID != 0 {
-				ti := ft.Ticket.ID
-				i := ft.LatestNote.ID
-				exists, err := s.Notifications.ExistsForNote(ctx, i)
-				if err != nil {
-					errCh <- fmt.Errorf("checking if notification for ticket %d note %d exists: %w", ti, i, err)
-					return
-				}
-
-				if !exists {
-					nt := models.TicketNotification{
-						TicketID:     ti,
-						TicketNoteID: &i,
-						Skipped:      true,
-					}
-
-					nt, err = s.Notifications.Insert(ctx, nt)
-					if err != nil {
-						errCh <- fmt.Errorf("inserting skipped ticket notification for ticket %d note %d: %w", ti, i, err)
-					}
-					slog.Debug("ticket sync: inserted skipped notification", "notification_id", nt.ID, "ticket_id", ti, "note_id", i)
-					return
-				}
-				slog.Debug("ticket sync: notification already exists for ticket note", "ticket_id", ti, "note_id", i)
+			if err := s.Notifier.AddSkippedNotification(ctx, ft, "ticket sync"); err != nil {
+				errCh <- fmt.Errorf("skipping notification for ticket %d note %d: %w", ft.Ticket.ID, ft.LatestNote.ID, err)
+				return
 			}
 		}(t)
 	}

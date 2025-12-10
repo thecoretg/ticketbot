@@ -65,6 +65,10 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (err error) {
 	}
 
 	slog.Debug("ticketbot: attempt notify disabled", "ticket_id", id)
+	if err := s.Notifier.AddSkippedNotification(ctx, ticket, "ticketbot"); err != nil {
+		return fmt.Errorf("skipping notification for ticket %d note %d: %w", ticket.Ticket.ID, ticket.LatestNote.ID, err)
+	}
+
 	return nil
 }
 

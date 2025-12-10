@@ -77,12 +77,14 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	}
 	r := s.Repos
 
-	cs := config.New(r.Config)
-	cfg, err := cs.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting initial config: %w", err)
+	cfg, _ := r.Config.Get(ctx)
+	if cfg == nil {
+		cfg = &models.DefaultConfig
 	}
+
 	cfg = loadConfigOverrides(cfg)
+
+	cs := config.New(r.Config, cfg)
 
 	us := user.New(r.APIUser, r.APIKey)
 	cws := cwsvc.New(s.Pool, r.CW, cw)
@@ -101,8 +103,9 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 		MaxMessageLength: cfg.MaxMessageLength,
 	}
 
-	sns := syncsvc.New(s.Pool, cws, ws, r.TicketNotifications)
 	ns := notifier.New(nr)
+	sns := syncsvc.New(s.Pool, cws, ws, ns)
+
 	tb := ticketbot.New(cfg, cws, ns)
 	return &App{
 		Creds:         cr,
