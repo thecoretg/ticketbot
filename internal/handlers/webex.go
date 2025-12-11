@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"log/slog"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -18,16 +19,21 @@ func NewWebexHandler(svc *webexsvc.Service) *WebexHandler {
 	return &WebexHandler{Service: svc}
 }
 
-func (h *WebexHandler) HandleMessages(c *gin.Context) {
+func (h *WebexHandler) HandleMessageToBot(c *gin.Context) {
 	w := &webex.MessageHookPayload{}
 	if err := c.ShouldBindJSON(w); err != nil {
 		badPayloadError(c, err)
 		return
 	}
-	id := w.Data.ID
 
-	msg, err := h.Service.GetMessage(c.Request.Context(), id)
+	msg, err := h.Service.GetMessage(c.Request.Context(), w)
 	if err != nil {
+		if errors.Is(err, webexsvc.ErrMessageFromBot) {
+			// messages the bot sends, sends a hook payload. No need to do anything
+			// with these.
+			c.Status(http.StatusOK)
+			return
+		}
 		internalServerError(c, err)
 		return
 	}

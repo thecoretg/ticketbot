@@ -38,6 +38,7 @@ type Creds struct {
 	InitialAdminEmail string
 	PostgresDSN       string
 	WebexAPISecret    string
+	WebexBotEmail     string
 	WebexHooksSecret  string
 	CWCreds           *psa.Creds
 }
@@ -89,7 +90,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 
 	us := user.New(r.APIUser, r.APIKey)
 	cws := cwsvc.New(s.Pool, r.CW, cw)
-	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms)
+	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms, cr.WebexBotEmail)
 	wh := webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL)
 
 	nr := notifier.SvcParams{
@@ -135,6 +136,7 @@ func getCreds() *Creds {
 		InitialAdminEmail: os.Getenv("INITIAL_ADMIN_EMAIL"),
 		PostgresDSN:       os.Getenv("POSTGRES_DSN"),
 		WebexAPISecret:    os.Getenv("WEBEX_SECRET"),
+		WebexBotEmail:     os.Getenv("WEBEX_BOT_EMAIL"),
 		WebexHooksSecret:  os.Getenv("WEBEX_HOOKS_SECRET"),
 		CWCreds: &psa.Creds{
 			PublicKey:  os.Getenv("CW_PUB_KEY"),
