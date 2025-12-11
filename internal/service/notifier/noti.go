@@ -206,7 +206,7 @@ func msgsLogGroup(key string, msgs []Message) slog.Attr {
 				"webex_recipient",
 				slog.Int("id", m.WebexRecipient.recipient.ID),
 				slog.String("name", m.WebexRecipient.recipient.Name),
-				slog.String("type", string(m.WebexRecipient.recipient.Name)),
+				slog.String("type", m.WebexRecipient.recipient.Name),
 			)
 			attrs = append(attrs, g)
 		}

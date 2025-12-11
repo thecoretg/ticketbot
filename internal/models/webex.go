@@ -24,9 +24,9 @@ type WebexRecipient struct {
 type WebexRecipientType string
 
 const (
-	RecipientTypeRoom    WebexRecipientType = "room"
-	RecipientTypePerson  WebexRecipientType = "person"
-	RecipientTypeUnknown WebexRecipientType = "unknown"
+	RecipientTypeRoom   WebexRecipientType = "room"
+	RecipientTypePerson WebexRecipientType = "person"
+	// RecipientTypeUnknown WebexRecipientType = "unknown"
 )
 
 type WebexRecipientRepository interface {

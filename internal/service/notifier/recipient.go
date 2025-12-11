@@ -2,13 +2,10 @@ package notifier
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 )
-
-var ErrNoRoomsForEmail = errors.New("no rooms found for this email")
 
 type (
 	recipData struct {

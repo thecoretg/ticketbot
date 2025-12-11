@@ -11,9 +11,6 @@ var (
 	boardID     int
 	recipientID int
 
-	notifierID int
-
-	forwardID        int
 	forwardSrcID     int
 	forwardDestID    int
 	forwardStartDate string
