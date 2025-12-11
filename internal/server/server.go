@@ -37,7 +37,8 @@ type Creds struct {
 	RootURL           string
 	InitialAdminEmail string
 	PostgresDSN       string
-	WebexSecret       string
+	WebexAPISecret    string
+	WebexHooksSecret  string
 	CWCreds           *psa.Creds
 }
 
@@ -68,7 +69,8 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	}
 
 	cw := psa.NewClient(cr.CWCreds)
-	ms := makeMessageSender(tf.MockWebex, cr.WebexSecret)
+	wx := webex.NewClient(cr.WebexAPISecret)
+	ms := makeMessageSender(tf.MockWebex, cr.WebexAPISecret)
 
 	s, err := CreateStores(ctx, cr, migVersion)
 	if err != nil {
@@ -88,7 +90,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	us := user.New(r.APIUser, r.APIKey)
 	cws := cwsvc.New(s.Pool, r.CW, cw)
 	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms)
-	wh := webhooks.New(cw, cr.RootURL)
+	wh := webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL)
 
 	nr := notifier.SvcParams{
 		Cfg:              cfg,
@@ -112,8 +114,8 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 		TestFlags:     tf,
 		Stores:        r,
 		Pool:          s.Pool,
-		CWClient:      psa.NewClient(cr.CWCreds),
-		MessageSender: webex.NewClient(cr.WebexSecret),
+		CWClient:      cw,
+		MessageSender: wx,
 		Svc: &Services{
 			Config:    cs,
 			User:      us,
@@ -132,7 +134,8 @@ func getCreds() *Creds {
 		RootURL:           os.Getenv("ROOT_URL"),
 		InitialAdminEmail: os.Getenv("INITIAL_ADMIN_EMAIL"),
 		PostgresDSN:       os.Getenv("POSTGRES_DSN"),
-		WebexSecret:       os.Getenv("WEBEX_SECRET"),
+		WebexAPISecret:    os.Getenv("WEBEX_SECRET"),
+		WebexHooksSecret:  os.Getenv("WEBEX_HOOKS_SECRET"),
 		CWCreds: &psa.Creds{
 			PublicKey:  os.Getenv("CW_PUB_KEY"),
 			PrivateKey: os.Getenv("CW_PRIV_KEY"),
@@ -173,7 +176,7 @@ func (c *Creds) validate(tf *TestFlags) error {
 		}
 	}
 
-	if c.WebexSecret == "" {
+	if c.WebexAPISecret == "" {
 		empty = append(empty, "WEBEX_SECRET")
 	}
 

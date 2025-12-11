@@ -49,7 +49,7 @@ func Run() error {
 	}
 
 	if !a.TestFlags.SkipHooks {
-		if err := a.Svc.Hooks.ProcessCWHooks(); err != nil {
+		if err := a.Svc.Hooks.ProcessAllHooks(); err != nil {
 			return fmt.Errorf("processing connectwise hooks: %w", err)
 		}
 	}

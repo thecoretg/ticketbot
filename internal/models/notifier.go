@@ -10,6 +10,7 @@ import (
 )
 
 type MessageSender interface {
+	GetMessage(id string, prams map[string]string) (*webex.Message, error)
 	PostMessage(message *webex.Message) (*webex.Message, error)
 	ListRooms(params map[string]string) ([]webex.Room, error)
 	ListPeople(email string) ([]webex.Person, error)

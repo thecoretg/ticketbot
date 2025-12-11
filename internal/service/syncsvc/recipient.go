@@ -190,7 +190,7 @@ func roomsToRecipients(webexRooms []webex.Room) []models.WebexRecipient {
 		}
 
 		r := models.WebexRecipient{
-			WebexID:      w.Id,
+			WebexID:      w.ID,
 			Name:         w.Title,
 			Type:         "room",
 			LastActivity: w.LastActivity,

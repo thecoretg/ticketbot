@@ -3,20 +3,72 @@ package webhooks
 import (
 	"fmt"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/thecoretg/ticketbot/pkg/psa"
+	"github.com/thecoretg/ticketbot/pkg/webex"
 )
 
 type Service struct {
-	CWClient *psa.Client
-	RootURL  string
+	CWClient        *psa.Client
+	WebexClient     *webex.Client
+	WebexHookSecret string
+	RootURL         string
 }
 
-func New(cw *psa.Client, rootURL string) *Service {
+func New(cw *psa.Client, wx *webex.Client, wxSecret, rootURL string) *Service {
 	return &Service{
-		CWClient: cw,
-		RootURL:  rootURL,
+		CWClient:        cw,
+		WebexClient:     wx,
+		WebexHookSecret: wxSecret,
+		RootURL:         rootURL,
 	}
+}
+
+func (s *Service) ProcessAllHooks() error {
+	start := time.Now()
+	errored := false
+	defer func() {
+		if errored {
+			slog.Error("hook sync complete with errors, see logs", "took_seconds", time.Since(start).Seconds())
+		} else {
+			slog.Info("hook sync complete", "took_seconds", time.Since(start).Seconds())
+		}
+	}()
+
+	errch := make(chan error, 2)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := s.ProcessCWHooks(); err != nil {
+			errch <- fmt.Errorf("processing connectwise hooks: %w", err)
+			return
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := s.ProcessWebexHooks(); err != nil {
+			errch <- fmt.Errorf("processing webex hooks: %w", err)
+			return
+		}
+	}()
+
+	wg.Wait()
+	close(errch)
+
+	for err := range errch {
+		if err != nil {
+			errored = true
+			slog.Error("hook sync", "error", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) ProcessCWHooks() error {
@@ -37,6 +89,21 @@ func (s *Service) ProcessCWHooks() error {
 	return nil
 }
 
+func (s *Service) ProcessWebexHooks() error {
+	hs, err := s.WebexClient.GetWebhooks(nil)
+	if err != nil {
+		return fmt.Errorf("listing webex webhooks: %w", err)
+	}
+	slog.Debug("webex hook sync: got existing webex hooks", "total", len(hs))
+
+	u := fmt.Sprintf("%s/hooks/webex/messages", s.RootURL)
+	if err := s.processWebexHook("Received Messages", u, "messages", "created", "", hs); err != nil {
+		return fmt.Errorf("processing webex received messages hook: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Service) processCWHook(url, entity, level string, objectID int, currentHooks []psa.Callback) error {
 	expected := psa.Callback{
 		URL:      fmt.Sprintf("https://%s", url),
@@ -48,8 +115,7 @@ func (s *Service) processCWHook(url, entity, level string, objectID int, current
 	found := false
 	for _, h := range currentHooks {
 		if h.URL == expected.URL {
-			slog.Debug("found matching url for webhook")
-			if hooksMatch(expected, h) && !found {
+			if cwHooksMatch(expected, h) && !found {
 				slog.Debug("found existing callback", "id", h.ID, "entity", entity, "level", level, "url", url)
 				found = true
 				continue
@@ -72,8 +138,65 @@ func (s *Service) processCWHook(url, entity, level string, objectID int, current
 	return nil
 }
 
-func hooksMatch(expected, existing psa.Callback) bool {
+func (s *Service) processWebexHook(name, url, resource, event, filter string, currentHooks []webex.Webhook) error {
+	expected := webex.Webhook{
+		Name:      name,
+		TargetURL: fmt.Sprintf("https://%s", url),
+		Resource:  resource,
+		Event:     event,
+		Filter:    filter,
+		Secret:    s.WebexHookSecret,
+	}
+
+	found := false
+	for _, h := range currentHooks {
+		if h.TargetURL == expected.TargetURL {
+			if wxHooksMatch(expected, h) && !found {
+				slog.Debug("found existing webex webhook", "id", h.ID, "resource", h.Resource, "event", h.Event, "filter", h.Filter, "url", h.TargetURL)
+				found = true
+				continue
+			} else {
+				if err := s.WebexClient.DeleteWebhook(h.ID); err != nil {
+					return fmt.Errorf("deleting webex hook: %w", err)
+				}
+				slog.Info("webex webhook deleted", "id", h.ID, "url", h.TargetURL)
+			}
+		}
+	}
+
+	if !found {
+		nh, err := s.WebexClient.CreateWebhook(&expected)
+		if err != nil {
+			return fmt.Errorf("posting webex webhook: %w", err)
+		}
+		slog.Info("added new webex hook", "id", nh.ID, "url", nh.TargetURL, "resource", nh.Resource, "event", nh.Event, "filter", nh.Filter)
+	}
+
+	return nil
+}
+
+func cwHooksMatch(expected, existing psa.Callback) bool {
 	return expected.Type == existing.Type && expected.Level == existing.Level && expected.InactiveFlag == existing.InactiveFlag
+}
+
+func wxHooksMatch(expected, existing webex.Webhook) bool {
+	if expected.Resource != existing.Resource {
+		return false
+	}
+
+	if expected.Event != existing.Event {
+		return false
+	}
+
+	if expected.Filter != existing.Filter {
+		return false
+	}
+
+	if expected.Secret != existing.Secret {
+		return false
+	}
+
+	return true
 }
 
 func ticketsWebhookURL(rootURL string) string {

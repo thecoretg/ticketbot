@@ -8,8 +8,8 @@ func NewMessageToPerson(email, text string) Message {
 	return Message{ToPersonEmail: email, Markdown: text, RecipientName: email, RecipientType: "person"}
 }
 
-func NewMessageToRoom(roomId, roomName, text string) Message {
-	return Message{RoomId: roomId, Markdown: text, RecipientName: roomName, RecipientType: "room"}
+func NewMessageToRoom(roomID, roomName, text string) Message {
+	return Message{RoomID: roomID, Markdown: text, RecipientName: roomName, RecipientType: "room"}
 }
 
 func (c *Client) GetMessage(messageID string, params map[string]string) (*Message, error) {

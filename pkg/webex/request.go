@@ -8,20 +8,17 @@ import (
 )
 
 const (
-	baseUrl = "https://webexapis.com/v1"
+	baseURL = "https://webexapis.com/v1"
 )
 
-var (
-	ErrNotFound = errors.New("404 status received")
-)
+var ErrNotFound = errors.New("404 status received")
 
 func GetOne[T any](c *Client, endpoint string, params map[string]string) (*T, error) {
 	var target T
 	res, err := c.restClient.R().
 		SetQueryParams(params).
 		SetResult(&target).
-		Get(fullURL(baseUrl, endpoint))
-
+		Get(fullURL(baseURL, endpoint))
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +36,7 @@ func GetOne[T any](c *Client, endpoint string, params map[string]string) (*T, er
 func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, error) {
 	var allItems []T
 
-	endpoint = fullURL(baseUrl, endpoint)
+	endpoint = fullURL(baseURL, endpoint)
 	for endpoint != "" {
 		var target []T
 		req := c.restClient.R().
@@ -58,9 +55,7 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 			return nil, fmt.Errorf("error response from Webex API: %s", res.String())
 		}
 
-		for _, item := range target {
-			allItems = append(allItems, item)
-		}
+		allItems = append(allItems, target...)
 
 		params = nil
 		endpoint = parseLinkHeader(res.Header().Get("Link"), "next")
@@ -74,8 +69,7 @@ func Put[T any](c *Client, endpoint string, body any) (*T, error) {
 	res, err := c.restClient.R().
 		SetBody(body).
 		SetResult(target).
-		Put(fullURL(baseUrl, endpoint))
-
+		Put(fullURL(baseURL, endpoint))
 	if err != nil {
 		return nil, err
 	}
@@ -95,8 +89,7 @@ func Post[T any](c *Client, endpoint string, body any) (*T, error) {
 	res, err := c.restClient.R().
 		SetBody(body).
 		SetResult(target).
-		Post(fullURL(baseUrl, endpoint))
-
+		Post(fullURL(baseURL, endpoint))
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +103,7 @@ func Post[T any](c *Client, endpoint string, body any) (*T, error) {
 
 func Delete(c *Client, endpoint string) error {
 	res, err := c.restClient.R().
-		Delete(fullURL(baseUrl, endpoint))
-
+		Delete(fullURL(baseURL, endpoint))
 	if err != nil {
 		return err
 	}
@@ -131,8 +123,7 @@ func fullURL(base, endpoint string) string {
 }
 
 func parseLinkHeader(linkHeader, rel string) string {
-	links := strings.Split(linkHeader, ",")
-	for _, link := range links {
+	for link := range strings.SplitSeq(linkHeader, ",") {
 		parts := strings.Split(strings.TrimSpace(link), ";")
 		if len(parts) < 2 {
 			continue
