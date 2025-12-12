@@ -35,6 +35,10 @@ func (s *Service) GetUser(ctx context.Context, id int) (*models.APIUser, error) 
 	return s.Users.Get(ctx, id)
 }
 
+func (s *Service) GetUserByEmail(ctx context.Context, email string) (*models.APIUser, error) {
+	return s.Users.GetByEmail(ctx, email)
+}
+
 func (s *Service) InsertUser(ctx context.Context, email string) (*models.APIUser, error) {
 	exists, err := s.Users.Exists(ctx, email)
 	if err != nil {

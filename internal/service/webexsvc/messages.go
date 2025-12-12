@@ -23,3 +23,7 @@ func (s *Service) GetMessage(ctx context.Context, payload *webex.MessageHookPayl
 
 	return msg, nil
 }
+
+func (s *Service) PostMessage(msg *webex.Message) (*webex.Message, error) {
+	return s.WebexClient.PostMessage(msg)
+}
