@@ -1,6 +1,7 @@
 package webhooks
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -40,23 +41,21 @@ func (s *Service) ProcessAllHooks() error {
 	errch := make(chan error, 2)
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		defer wg.Done()
 		if err := s.ProcessCWHooks(); err != nil {
 			errch <- fmt.Errorf("processing connectwise hooks: %w", err)
 			return
 		}
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		defer wg.Done()
 		if err := s.ProcessWebexHooks(); err != nil {
 			errch <- fmt.Errorf("processing webex hooks: %w", err)
 			return
 		}
-	}()
+	})
 
 	wg.Wait()
 	close(errch)
@@ -90,15 +89,42 @@ func (s *Service) ProcessCWHooks() error {
 }
 
 func (s *Service) ProcessWebexHooks() error {
+	errored := false
 	hs, err := s.WebexClient.GetWebhooks(nil)
 	if err != nil {
 		return fmt.Errorf("listing webex webhooks: %w", err)
 	}
 	slog.Debug("webex hook sync: got existing webex hooks", "total", len(hs))
 
-	u := fmt.Sprintf("%s/hooks/webex/messages", s.RootURL)
-	if err := s.processWebexHook("Received Messages", u, "messages", "created", "", hs); err != nil {
-		return fmt.Errorf("processing webex received messages hook: %w", err)
+	mURL := fmt.Sprintf("%s/hooks/webex/messages", s.RootURL)
+	aURL := fmt.Sprintf("%s/hooks/webex/attachmentActions", s.RootURL)
+	errch := make(chan error, 2)
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := s.processWebexHook("TicketBot: Received Messages", mURL, "messages", "created", "", hs); err != nil {
+			errch <- fmt.Errorf("processing webex received messages hook: %w", err)
+		}
+	})
+
+	wg.Go(func() {
+		if err := s.processWebexHook("TicketBot: Received Attachment Actions", aURL, "attachmentActions", "created", "", hs); err != nil {
+			errch <- fmt.Errorf("processing webex attachment actions hook: %w", err)
+		}
+	})
+
+	wg.Wait()
+	close(errch)
+
+	for err := range errch {
+		if err != nil {
+			errored = true
+			slog.Error("webex hook sync", "error", err)
+		}
+	}
+
+	if errored {
+		return errors.New("webex hook sync finished with errors, see logs")
 	}
 
 	return nil
