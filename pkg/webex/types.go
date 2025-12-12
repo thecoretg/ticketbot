@@ -21,11 +21,12 @@ type MessageHookPayload struct {
 }
 
 type Message struct {
-	ID       string `json:"id,omitempty"`
-	RoomID   string `json:"roomId,omitempty"`
-	RoomType string `json:"roomType,omitempty"`
-	Text     string `json:"text,omitempty"`
-	Markdown string `json:"markdown,omitempty"`
+	ID          string         `json:"id,omitempty"`
+	RoomID      string         `json:"roomId,omitempty"`
+	RoomType    string         `json:"roomType,omitempty"`
+	Text        string         `json:"text,omitempty"`
+	Markdown    string         `json:"markdown,omitempty"`
+	Attachments []AdaptiveCard `json:"attachments,omitempty"`
 
 	// Use ToPersonEmail for posts. PersonEmail (no to) is returned in gets.
 	// I don't make the rules. Thanks Webex <3

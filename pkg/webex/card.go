@@ -1,11 +1,57 @@
 package webex
 
 type AdaptiveCard struct {
-	Body []Element `json:"body"`
+	ContentType string              `json:"contentType"`
+	Content     AdaptiveCardContent `json:"content"`
+}
+
+const (
+	cardContentType = "application/vnd.microsoft.card.adaptive"
+	cardSchema      = "http://adaptivecards.io/schemas/adaptive-card.json"
+	cardVersion     = "1.3"
+	cardType        = "AdaptiveCard"
+)
+
+type AdaptiveCardContent struct {
+	Schema  string    `json:"$schema"`
+	Type    string    `json:"type"`
+	Version string    `json:"version"`
+	Body    []Element `json:"body"`
+}
+
+func NewAdaptiveCard() *AdaptiveCard {
+	return &AdaptiveCard{
+		ContentType: cardContentType,
+		Content: AdaptiveCardContent{
+			Schema:  cardSchema,
+			Type:    cardType,
+			Version: cardVersion,
+			Body:    []Element{},
+		},
+	}
+}
+
+func (c *AdaptiveCard) AddTextBlock(t *TextBlock) *AdaptiveCard {
+	t.Type = t.typeString()
+	c.Content.Body = append(c.Content.Body, t)
+	return c
+}
+
+func (c *AdaptiveCard) AddInputChoiceSet(i *InputChoiceSet) *AdaptiveCard {
+	i.Type = i.typeString()
+	c.Content.Body = append(c.Content.Body, i)
+	return c
+}
+
+func (c *AdaptiveCard) AddActionSet(a *ActionSet) *AdaptiveCard {
+	a.Type = a.typeString()
+	c.Content.Body = append(c.Content.Body, a)
+	return c
 }
 
 type Element interface {
 	cardElement()
+	typeString() string
 }
 
 type (
@@ -73,6 +119,9 @@ type TextBlock struct {
 	Wrap                bool       `json:"wrap,omitempty"`
 }
 
+func (t TextBlock) cardElement()       {}
+func (t TextBlock) typeString() string { return "TextBlock" }
+
 type InputChoiceSet struct {
 	ElementBase
 	ID            string        `json:"id"`
@@ -85,8 +134,8 @@ type InputChoice struct {
 	Value string `json:"value"`
 }
 
-func (i InputChoiceSet) cardElement() {}
-func (t TextBlock) cardElement()      {}
+func (i InputChoiceSet) cardElement()       {}
+func (i InputChoiceSet) typeString() string { return "Input.ChoiceSet" }
 
 type ActionSet struct {
 	ElementBase
@@ -97,7 +146,8 @@ type Action interface {
 	cardAction()
 }
 
-func (a ActionSet) cardElement() {}
+func (a ActionSet) cardElement()       {}
+func (a ActionSet) typeString() string { return "ActionSet" }
 
 type ActionOpenURL struct {
 	ElementBase
