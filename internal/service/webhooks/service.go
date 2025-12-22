@@ -42,7 +42,6 @@ func (s *Service) ProcessAllHooks() error {
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
-		defer wg.Done()
 		if err := s.ProcessCWHooks(); err != nil {
 			errch <- fmt.Errorf("processing connectwise hooks: %w", err)
 			return
@@ -50,7 +49,6 @@ func (s *Service) ProcessAllHooks() error {
 	})
 
 	wg.Go(func() {
-		defer wg.Done()
 		if err := s.ProcessWebexHooks(); err != nil {
 			errch <- fmt.Errorf("processing webex hooks: %w", err)
 			return

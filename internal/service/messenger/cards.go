@@ -9,7 +9,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
-// sweet, man-made horros beyond my comprehension
+// sweet, man-made horrors beyond my comprehension
 
 func createNotifierRulePayload(boards []models.Board, recips []models.WebexRecipient) json.RawMessage {
 	return json.RawMessage(fmt.Sprintf(`{
