@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ type CloudwatchHandlerParams struct {
 	GroupName       string
 	StreamName      string
 	LogLevel        slog.Level
+	RetentionDays   int32 // Number of days to retain logs (0 = never expire)
 }
 
 func NewCloudwatchLogger(ctx context.Context, params CloudwatchHandlerParams) (*CloudwatchHandler, error) {
@@ -67,19 +69,35 @@ func NewCloudwatchLogger(ctx context.Context, params CloudwatchHandlerParams) (*
 		slog.Info("cloudwatch log group already exists", "group_name", params.GroupName)
 	}
 
-	// create log stream if it doesn't exist
+	// set retention policy if specified
+	if params.RetentionDays > 0 {
+		_, err = client.PutRetentionPolicy(ctx, &cloudwatchlogs.PutRetentionPolicyInput{
+			LogGroupName:    aws.String(params.GroupName),
+			RetentionInDays: aws.Int32(params.RetentionDays),
+		})
+		if err != nil {
+			slog.Warn("failed to set retention policy", "error", err)
+		} else {
+			slog.Info("cloudwatch retention policy set", "days", params.RetentionDays)
+		}
+	}
+
+	// create log stream with the current timestamp
+	streamTime := fmt.Sprintf("%s-%s", params.StreamName, time.Now().Format("2006-01-02-15-04-05"))
 	_, err = client.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
 		LogGroupName:  aws.String(params.GroupName),
-		LogStreamName: aws.String(params.StreamName),
+		LogStreamName: aws.String(streamTime),
 	})
 	if err != nil {
-		slog.Info("cloudwatch log stream already exists", "group_name", params.GroupName, "stream_name", params.StreamName)
+		slog.Error("creating log stream", "group_name", params.GroupName, "stream_name", streamTime)
+	} else {
+		slog.Info("created log stream", "group_name", params.GroupName, "stream_name", streamTime)
 	}
 
 	return &CloudwatchHandler{
 		client:        client,
 		logGroupName:  params.GroupName,
-		logStreamName: params.StreamName,
+		logStreamName: streamTime,
 		logLevel:      params.LogLevel,
 	}, nil
 }
@@ -96,11 +114,11 @@ func (h *CloudwatchHandler) Handle(ctx context.Context, record slog.Record) erro
 	}
 
 	for _, attr := range h.attrs {
-		logEntry[attr.Key] = attr.Value.Any()
+		addAttrToMap(logEntry, attr)
 	}
 
 	record.Attrs(func(attr slog.Attr) bool {
-		logEntry[attr.Key] = attr.Value.Any()
+		addAttrToMap(logEntry, attr)
 		return true
 	})
 
@@ -178,14 +196,21 @@ func GetCloudwatchParamsFromEnv() CloudwatchHandlerParams {
 		GroupName:       "lightsail/ticketbot",
 		StreamName:      "container-logs",
 		LogLevel:        slog.LevelInfo,
+		RetentionDays:   7,
 	}
 
-	if os.Getenv("CLOUDWATCH_GROUP_NAME") != "" {
-		p.GroupName = os.Getenv("CLOUDWATCH_GROUP_NAME")
+	if groupEnv := os.Getenv("CLOUDWATCH_GROUP_NAME"); groupEnv != "" {
+		p.GroupName = groupEnv
 	}
 
-	if os.Getenv("CLOUDWATCH_STREAM_NAME") != "" {
-		p.StreamName = os.Getenv("CLOUDWATCH_STREAM_NAME")
+	if streamEnv := os.Getenv("CLOUDWATCH_STREAM_NAME"); streamEnv != "" {
+		p.StreamName = streamEnv
+	}
+
+	if retentionEnv := os.Getenv("CLOUDWATCH_RETENTION_DAYS"); retentionEnv != "" {
+		if days, err := strconv.Atoi(retentionEnv); err == nil {
+			p.RetentionDays = int32(days)
+		}
 	}
 
 	if os.Getenv("DEBUG") == "true" {
@@ -202,4 +227,17 @@ func CloudwatchVarsSet() bool {
 		}
 	}
 	return true
+}
+
+func addAttrToMap(m map[string]any, attr slog.Attr) {
+	if attr.Value.Kind() == slog.KindGroup {
+		// Handle group attributes by creating a nested map
+		groupMap := make(map[string]any)
+		for _, groupAttr := range attr.Value.Group() {
+			addAttrToMap(groupMap, groupAttr)
+		}
+		m[attr.Key] = groupMap
+	} else {
+		m[attr.Key] = attr.Value.Any()
+	}
 }
