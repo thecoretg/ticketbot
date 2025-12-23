@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/cmd/common"
+	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/server"
 )
 
@@ -30,9 +31,27 @@ func Run() error {
 	if os.Getenv("DEBUG") == "true" {
 		level = slog.LevelDebug
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
-	})))
+
+	var cwHandler *logging.CloudwatchHandler
+	if logging.CloudwatchVarsSet() {
+		var err error
+		p := logging.GetCloudwatchParamsFromEnv()
+		cwHandler, err = logging.NewCloudwatchLogger(ctx, p)
+		if err != nil {
+			return fmt.Errorf("creating cloudwatch logger: %w", err)
+		}
+	}
+
+	if cwHandler != nil {
+		slog.Info("using AWS log handler")
+		logger := slog.New(cwHandler)
+		slog.SetDefault(logger)
+	} else {
+		slog.Info("using stdout json handler")
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: level,
+		})))
+	}
 
 	a, err := server.NewApp(ctx, common.GooseMigrationVersion)
 	if err != nil {
