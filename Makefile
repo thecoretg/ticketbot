@@ -22,14 +22,14 @@ test-db-down:
 	docker compose -f ./docker/docker-compose-db.yml down -v
 
 docker-build:
-	docker buildx build --platform=linux/amd64 -t ticketbot:v1.2.2 --load -f ./docker/DockerfileMain .
+	docker buildx build --platform=linux/amd64 -t ticketbot:v1.3.0 --load -f ./docker/DockerfileMain .
 
 deploy-lightsail: docker-build
 	aws lightsail push-container-image \
 	--region us-west-2 \
 	--service-name ticketbot \
 	--label ticketbot-server \
-	--image ticketbot:v1.2.2
+	--image ticketbot:v1.3.0
 
 lightsail-logs:
 	aws lightsail get-container-log \

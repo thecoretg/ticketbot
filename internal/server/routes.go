@@ -9,8 +9,8 @@ import (
 func AddRoutes(a *App, g *gin.Engine) {
 	auth := middleware.APIKeyAuth(a.Svc.User.Keys)
 
-	g.GET("", handlers.HandlePing) // authless ping for lightsail health checks
-	g.GET("authtest", auth, handlers.HandlePing)
+	g.GET("healthcheck", handlers.HandleHealthCheck) // authless ping for lightsail health checks
+	g.GET("authtest", auth, handlers.HandleHealthCheck)
 
 	sh := handlers.NewSyncHandler(a.Svc.Sync)
 	g.POST("sync", auth, sh.HandleSync)
