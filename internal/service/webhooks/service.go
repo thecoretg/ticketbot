@@ -94,17 +94,10 @@ func (s *Service) ProcessWebexHooks() error {
 	}
 	slog.Debug("webex hook sync: got existing webex hooks", "total", len(hs))
 
-	mURL := fmt.Sprintf("%s/hooks/webex/messages", s.RootURL)
 	aURL := fmt.Sprintf("%s/hooks/webex/attachmentActions", s.RootURL)
 	errch := make(chan error, 2)
 
 	var wg sync.WaitGroup
-	wg.Go(func() {
-		if err := s.processWebexHook("TicketBot: Received Messages", mURL, "messages", "created", "", hs); err != nil {
-			errch <- fmt.Errorf("processing webex received messages hook: %w", err)
-		}
-	})
-
 	wg.Go(func() {
 		if err := s.processWebexHook("TicketBot: Received Attachment Actions", aURL, "attachmentActions", "created", "", hs); err != nil {
 			errch <- fmt.Errorf("processing webex attachment actions hook: %w", err)

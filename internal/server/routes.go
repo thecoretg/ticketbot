@@ -28,7 +28,7 @@ func AddRoutes(a *App, g *gin.Engine) {
 	registerCWRoutes(cw, cwh)
 
 	wx := g.Group("webex", auth)
-	wh := handlers.NewWebexHandler(a.Svc.Webex, a.Svc.Messenger)
+	wh := handlers.NewWebexHandler(a.Svc.Webex)
 	registerWebexRoutes(wx, wh)
 
 	n := g.Group("notifiers", auth)
@@ -37,7 +37,7 @@ func AddRoutes(a *App, g *gin.Engine) {
 
 	tb := handlers.NewTicketbotHandler(a.Svc.Ticketbot)
 	hh := g.Group("hooks")
-	registerHookRoutes(hh, tb, wh, a.Creds.WebexHooksSecret)
+	registerHookRoutes(hh, tb)
 }
 
 func registerUserRoutes(r *gin.RouterGroup, h *handlers.UserHandler) {
@@ -87,8 +87,6 @@ func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
 	fw.DELETE(":id", h.DeleteUserForward)
 }
 
-func registerHookRoutes(r *gin.RouterGroup, tb *handlers.TicketbotHandler, wx *handlers.WebexHandler, wxSecret string) {
+func registerHookRoutes(r *gin.RouterGroup, tb *handlers.TicketbotHandler) {
 	r.POST("cw/tickets", middleware.RequireConnectwiseSignature(), tb.ProcessTicket)
-	r.POST("webex/messages", middleware.RequireWebexSignature(wxSecret), wx.HandleMessageToBot)
-	r.POST("webex/attachmentActions", middleware.RequireWebexSignature(wxSecret), wx.HandleAttachmentActions)
 }

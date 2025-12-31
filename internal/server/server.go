@@ -11,7 +11,6 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
-	"github.com/thecoretg/ticketbot/internal/service/messenger"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
@@ -60,7 +59,6 @@ type Services struct {
 	Webex     *webexsvc.Service
 	Sync      *syncsvc.Service
 	Notifier  *notifier.Service
-	Messenger *messenger.Service
 	Ticketbot *ticketbot.Service
 }
 
@@ -108,7 +106,6 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	}
 
 	ns := notifier.New(nr)
-	mgs := messenger.New(us, cws, ws, ns)
 	sns := syncsvc.New(s.Pool, cws, ws, ns)
 
 	tb := ticketbot.New(cfg, cws, ns)
@@ -128,7 +125,6 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 			Webex:     ws,
 			Sync:      sns,
 			Notifier:  ns,
-			Messenger: mgs,
 			Ticketbot: tb,
 		},
 	}, nil
