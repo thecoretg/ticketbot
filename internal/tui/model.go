@@ -8,63 +8,57 @@ import (
 )
 
 type Model struct {
-	SDKClient *sdk.Client
-	data      *data
-	keys      keyMap
+	SDKClient   *sdk.Client
+	activeModel tea.Model
+	allModels   allModels
+	data        *data
+	keys        keyMap
+}
 
-	dimensions
-	initFlags
+type allModels struct {
+	rules *rulesModel
 }
 
 type data struct {
-	boards []*models.Board
-	recips []*models.WebexRecipient
-	rules  []*models.NotifierRuleFull
-	fwds   []*models.NotifierForwardFull
-}
-
-type initFlags struct {
-	gotDimensions bool
-	gotData       bool
+	rules []models.NotifierRuleFull
 }
 
 func NewModel(sl *sdk.Client) *Model {
+	rm := newRulesModel()
 	return &Model{
-		SDKClient: sl,
-		keys:      defaultKeyMap,
+		SDKClient:   sl,
+		keys:        defaultKeyMap,
+		activeModel: rm,
+		allModels: allModels{
+			rules: rm,
+		},
 		data: &data{
-			boards: []*models.Board{},
-			recips: []*models.WebexRecipient{},
-			rules:  []*models.NotifierRuleFull{},
-			fwds:   []*models.NotifierForwardFull{},
+			rules: []models.NotifierRuleFull{},
 		},
 	}
 }
 
 func (m *Model) Init() tea.Cmd {
-	return nil
+	return m.getRules()
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		return m, m.calculateDimensions(msg.Width, msg.Height)
-	case dimensionsCalculatedMsg:
-		m.dimensions = msg.dimensions
-		m.gotDimensions = true
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.quit):
 			return m, tea.Quit
 		}
 	}
-	return m, nil
+
+	rules, cmd := m.allModels.rules.Update(msg)
+	if r, ok := rules.(*rulesModel); ok {
+		m.allModels.rules = r
+	}
+
+	return m, cmd
 }
 
 func (m *Model) View() string {
-	if !m.gotDimensions {
-		return "Initializing..."
-	}
-
-	return m.mainFlexbox().Render(m.windowW, m.windowH)
+	return m.activeModel.View()
 }
