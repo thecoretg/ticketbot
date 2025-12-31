@@ -238,6 +238,12 @@ func addAttrToMap(m map[string]any, attr slog.Attr) {
 		}
 		m[attr.Key] = groupMap
 	} else {
+		val := attr.Value.Any()
+		if err, ok := val.(error); ok {
+			m[attr.Key] = err.Error()
+		} else {
+			m[attr.Key] = val
+		}
 		m[attr.Key] = attr.Value.Any()
 	}
 }
