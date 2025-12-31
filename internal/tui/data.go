@@ -8,6 +8,7 @@ import (
 type (
 	sdkErr      struct{ error error }
 	gotRulesMsg struct{ rules []models.NotifierRuleFull }
+	gotFwdsMsg  struct{ fwds []models.NotifierForwardFull }
 )
 
 func (m *Model) getRules() tea.Cmd {
@@ -18,5 +19,16 @@ func (m *Model) getRules() tea.Cmd {
 		}
 
 		return gotRulesMsg{rules: rules}
+	}
+}
+
+func (m *Model) getFwds() tea.Cmd {
+	return func() tea.Msg {
+		fwds, err := m.SDKClient.ListUserForwards()
+		if err != nil {
+			return sdkErr{error: err}
+		}
+
+		return gotFwdsMsg{fwds: fwds}
 	}
 }

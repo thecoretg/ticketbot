@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strconv"
-
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -115,7 +113,7 @@ func (rm *rulesModel) rulesTable(w int) string {
 func rulesToRows(rules []models.NotifierRuleFull) [][]string {
 	var rows [][]string
 	for _, r := range rules {
-		rows = append(rows, []string{strconv.FormatBool(r.Enabled), r.BoardName, r.RecipientName})
+		rows = append(rows, []string{boolToIcon(r.Enabled), r.BoardName, r.RecipientName})
 	}
 
 	return rows
