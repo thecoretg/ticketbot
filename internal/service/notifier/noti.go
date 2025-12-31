@@ -12,7 +12,7 @@ import (
 
 type Request struct {
 	Ticket          *models.FullTicket
-	Notifications   []models.TicketNotification
+	Notifications   []*models.TicketNotification
 	MessagesToSend  []Message
 	MessagesSent    []Message
 	MessagesErrored []Message
@@ -49,7 +49,7 @@ func (s *Service) AddSkippedNotification(ctx context.Context, t *models.FullTick
 			return nil
 		}
 
-		n := models.TicketNotification{
+		n := &models.TicketNotification{
 			TicketID:     ti,
 			TicketNoteID: &ni,
 			Skipped:      true,
@@ -167,8 +167,8 @@ func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
 	return m
 }
 
-func filterActiveRules(rules []models.NotifierRule) []models.NotifierRule {
-	var active []models.NotifierRule
+func filterActiveRules(rules []*models.NotifierRule) []*models.NotifierRule {
+	var active []*models.NotifierRule
 	for _, r := range rules {
 		if r.NotifyEnabled {
 			active = append(active, r)
@@ -178,7 +178,7 @@ func filterActiveRules(rules []models.NotifierRule) []models.NotifierRule {
 	return active
 }
 
-func ruleLogGroup(rules []models.NotifierRule) slog.Attr {
+func ruleLogGroup(rules []*models.NotifierRule) slog.Attr {
 	var attrs []any
 	for _, r := range rules {
 		g := slog.Group(

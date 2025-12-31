@@ -25,13 +25,13 @@ func (p *MemberRepo) WithTx(tx pgx.Tx) models.MemberRepository {
 		queries: db.New(tx)}
 }
 
-func (p *MemberRepo) List(ctx context.Context) ([]models.Member, error) {
+func (p *MemberRepo) List(ctx context.Context) ([]*models.Member, error) {
 	dm, err := p.queries.ListMembers(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Member
+	var b []*models.Member
 	for _, d := range dm {
 		b = append(b, memberFromPG(d))
 	}
@@ -39,34 +39,34 @@ func (p *MemberRepo) List(ctx context.Context) ([]models.Member, error) {
 	return b, nil
 }
 
-func (p *MemberRepo) Get(ctx context.Context, id int) (models.Member, error) {
+func (p *MemberRepo) Get(ctx context.Context, id int) (*models.Member, error) {
 	d, err := p.queries.GetMember(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Member{}, models.ErrMemberNotFound
+			return nil, models.ErrMemberNotFound
 		}
-		return models.Member{}, err
+		return nil, err
 	}
 
 	return memberFromPG(d), nil
 }
 
-func (p *MemberRepo) GetByIdentifier(ctx context.Context, identifier string) (models.Member, error) {
+func (p *MemberRepo) GetByIdentifier(ctx context.Context, identifier string) (*models.Member, error) {
 	d, err := p.queries.GetMemberByIdentifier(ctx, identifier)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Member{}, models.ErrMemberNotFound
+			return nil, models.ErrMemberNotFound
 		}
-		return models.Member{}, err
+		return nil, err
 	}
 
 	return memberFromPG(d), nil
 }
 
-func (p *MemberRepo) Upsert(ctx context.Context, b models.Member) (models.Member, error) {
+func (p *MemberRepo) Upsert(ctx context.Context, b *models.Member) (*models.Member, error) {
 	d, err := p.queries.UpsertMember(ctx, memberToUpsertParams(b))
 	if err != nil {
-		return models.Member{}, err
+		return nil, err
 	}
 
 	return memberFromPG(d), nil
@@ -83,7 +83,7 @@ func (p *MemberRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func memberToUpsertParams(m models.Member) db.UpsertMemberParams {
+func memberToUpsertParams(m *models.Member) db.UpsertMemberParams {
 	return db.UpsertMemberParams{
 		ID:           m.ID,
 		Identifier:   m.Identifier,
@@ -93,8 +93,8 @@ func memberToUpsertParams(m models.Member) db.UpsertMemberParams {
 	}
 }
 
-func memberFromPG(pg db.CwMember) models.Member {
-	return models.Member{
+func memberFromPG(pg *db.CwMember) *models.Member {
+	return &models.Member{
 		ID:           pg.ID,
 		Identifier:   pg.Identifier,
 		FirstName:    pg.FirstName,

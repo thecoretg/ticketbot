@@ -54,7 +54,7 @@ SELECT id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, ski
 WHERE id = $1
 `
 
-func (q *Queries) GetTicketNotification(ctx context.Context, id int) (TicketNotification, error) {
+func (q *Queries) GetTicketNotification(ctx context.Context, id int) (*TicketNotification, error) {
 	row := q.db.QueryRow(ctx, getTicketNotification, id)
 	var i TicketNotification
 	err := row.Scan(
@@ -68,7 +68,7 @@ func (q *Queries) GetTicketNotification(ctx context.Context, id int) (TicketNoti
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const insertTicketNotification = `-- name: InsertTicketNotification :one
@@ -87,7 +87,7 @@ type InsertTicketNotificationParams struct {
 	Skipped         bool `json:"skipped"`
 }
 
-func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicketNotificationParams) (TicketNotification, error) {
+func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicketNotificationParams) (*TicketNotification, error) {
 	row := q.db.QueryRow(ctx, insertTicketNotification,
 		arg.TicketID,
 		arg.TicketNoteID,
@@ -108,7 +108,7 @@ func (q *Queries) InsertTicketNotification(ctx context.Context, arg InsertTicket
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listTicketNotifications = `-- name: ListTicketNotifications :many
@@ -116,13 +116,13 @@ SELECT id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, ski
 ORDER BY created_on
 `
 
-func (q *Queries) ListTicketNotifications(ctx context.Context) ([]TicketNotification, error) {
+func (q *Queries) ListTicketNotifications(ctx context.Context) ([]*TicketNotification, error) {
 	rows, err := q.db.Query(ctx, listTicketNotifications)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TicketNotification
+	var items []*TicketNotification
 	for rows.Next() {
 		var i TicketNotification
 		if err := rows.Scan(
@@ -138,7 +138,7 @@ func (q *Queries) ListTicketNotifications(ctx context.Context) ([]TicketNotifica
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -151,13 +151,13 @@ SELECT id, ticket_id, ticket_note_id, recipient_id, forwarded_from_id, sent, ski
 WHERE ticket_note_id = $1
 `
 
-func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNoteID *int) ([]TicketNotification, error) {
+func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNoteID *int) ([]*TicketNotification, error) {
 	rows, err := q.db.Query(ctx, listTicketNotificationsByNoteID, ticketNoteID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TicketNotification
+	var items []*TicketNotification
 	for rows.Next() {
 		var i TicketNotification
 		if err := rows.Scan(
@@ -173,7 +173,7 @@ func (q *Queries) ListTicketNotificationsByNoteID(ctx context.Context, ticketNot
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

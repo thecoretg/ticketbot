@@ -25,6 +25,13 @@ ORDER BY id;
 SELECT * FROM notifier_forward
 WHERE id = $1 LIMIT 1;
 
+-- name: CheckNotifierForwardExists :one
+SELECT EXISTS (
+    SELECT 1
+    FROM notifier_forward
+    WHERE id = $1
+) AS exists;
+
 -- name: ListNotifierForwardsBySourceRecipientID :many
 SELECT * FROM notifier_forward
 WHERE source_id = $1

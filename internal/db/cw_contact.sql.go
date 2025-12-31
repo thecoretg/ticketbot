@@ -24,7 +24,7 @@ SELECT id, first_name, last_name, company_id, updated_on, added_on FROM cw_conta
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetContact(ctx context.Context, id int) (CwContact, error) {
+func (q *Queries) GetContact(ctx context.Context, id int) (*CwContact, error) {
 	row := q.db.QueryRow(ctx, getContact, id)
 	var i CwContact
 	err := row.Scan(
@@ -35,7 +35,7 @@ func (q *Queries) GetContact(ctx context.Context, id int) (CwContact, error) {
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listContacts = `-- name: ListContacts :many
@@ -43,13 +43,13 @@ SELECT id, first_name, last_name, company_id, updated_on, added_on FROM cw_conta
 ORDER BY id
 `
 
-func (q *Queries) ListContacts(ctx context.Context) ([]CwContact, error) {
+func (q *Queries) ListContacts(ctx context.Context) ([]*CwContact, error) {
 	rows, err := q.db.Query(ctx, listContacts)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CwContact
+	var items []*CwContact
 	for rows.Next() {
 		var i CwContact
 		if err := rows.Scan(
@@ -62,7 +62,7 @@ func (q *Queries) ListContacts(ctx context.Context) ([]CwContact, error) {
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ type UpsertContactParams struct {
 	CompanyID *int    `json:"company_id"`
 }
 
-func (q *Queries) UpsertContact(ctx context.Context, arg UpsertContactParams) (CwContact, error) {
+func (q *Queries) UpsertContact(ctx context.Context, arg UpsertContactParams) (*CwContact, error) {
 	row := q.db.QueryRow(ctx, upsertContact,
 		arg.ID,
 		arg.FirstName,
@@ -105,5 +105,5 @@ func (q *Queries) UpsertContact(ctx context.Context, arg UpsertContactParams) (C
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }

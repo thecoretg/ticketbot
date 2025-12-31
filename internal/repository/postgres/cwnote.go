@@ -25,13 +25,13 @@ func (p *TicketNoteRepo) WithTx(tx pgx.Tx) models.TicketNoteRepository {
 		queries: db.New(tx)}
 }
 
-func (p *TicketNoteRepo) ListByTicketID(ctx context.Context, ticketID int) ([]models.TicketNote, error) {
+func (p *TicketNoteRepo) ListByTicketID(ctx context.Context, ticketID int) ([]*models.TicketNote, error) {
 	dm, err := p.queries.ListTicketNotesByTicket(ctx, ticketID)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.TicketNote
+	var b []*models.TicketNote
 	for _, d := range dm {
 		b = append(b, ticketNoteFromPG(d))
 	}
@@ -39,13 +39,13 @@ func (p *TicketNoteRepo) ListByTicketID(ctx context.Context, ticketID int) ([]mo
 	return b, nil
 }
 
-func (p *TicketNoteRepo) ListAll(ctx context.Context) ([]models.TicketNote, error) {
+func (p *TicketNoteRepo) ListAll(ctx context.Context) ([]*models.TicketNote, error) {
 	dm, err := p.queries.ListAllTicketNotes(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.TicketNote
+	var b []*models.TicketNote
 	for _, d := range dm {
 		b = append(b, ticketNoteFromPG(d))
 	}
@@ -53,22 +53,22 @@ func (p *TicketNoteRepo) ListAll(ctx context.Context) ([]models.TicketNote, erro
 	return b, nil
 }
 
-func (p *TicketNoteRepo) Get(ctx context.Context, id int) (models.TicketNote, error) {
+func (p *TicketNoteRepo) Get(ctx context.Context, id int) (*models.TicketNote, error) {
 	d, err := p.queries.GetTicketNote(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.TicketNote{}, models.ErrTicketNoteNotFound
+			return nil, models.ErrTicketNoteNotFound
 		}
-		return models.TicketNote{}, err
+		return nil, err
 	}
 
 	return ticketNoteFromPG(d), nil
 }
 
-func (p *TicketNoteRepo) Upsert(ctx context.Context, b models.TicketNote) (models.TicketNote, error) {
+func (p *TicketNoteRepo) Upsert(ctx context.Context, b *models.TicketNote) (*models.TicketNote, error) {
 	d, err := p.queries.UpsertTicketNote(ctx, ticketNoteToUpsertParams(b))
 	if err != nil {
-		return models.TicketNote{}, err
+		return nil, err
 	}
 
 	return ticketNoteFromPG(d), nil
@@ -85,7 +85,7 @@ func (p *TicketNoteRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func ticketNoteToUpsertParams(t models.TicketNote) db.UpsertTicketNoteParams {
+func ticketNoteToUpsertParams(t *models.TicketNote) db.UpsertTicketNoteParams {
 	return db.UpsertTicketNoteParams{
 		ID:        t.ID,
 		TicketID:  t.TicketID,
@@ -95,8 +95,8 @@ func ticketNoteToUpsertParams(t models.TicketNote) db.UpsertTicketNoteParams {
 	}
 }
 
-func ticketNoteFromPG(pg db.CwTicketNote) models.TicketNote {
-	return models.TicketNote{
+func ticketNoteFromPG(pg *db.CwTicketNote) *models.TicketNote {
+	return &models.TicketNote{
 		ID:        pg.ID,
 		TicketID:  pg.TicketID,
 		Content:   pg.Content,

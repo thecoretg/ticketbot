@@ -24,7 +24,7 @@ SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on FROM 
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetTicketNote(ctx context.Context, id int) (CwTicketNote, error) {
+func (q *Queries) GetTicketNote(ctx context.Context, id int) (*CwTicketNote, error) {
 	row := q.db.QueryRow(ctx, getTicketNote, id)
 	var i CwTicketNote
 	err := row.Scan(
@@ -36,7 +36,7 @@ func (q *Queries) GetTicketNote(ctx context.Context, id int) (CwTicketNote, erro
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listAllTicketNotes = `-- name: ListAllTicketNotes :many
@@ -44,13 +44,13 @@ SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on FROM 
 ORDER BY id
 `
 
-func (q *Queries) ListAllTicketNotes(ctx context.Context) ([]CwTicketNote, error) {
+func (q *Queries) ListAllTicketNotes(ctx context.Context) ([]*CwTicketNote, error) {
 	rows, err := q.db.Query(ctx, listAllTicketNotes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CwTicketNote
+	var items []*CwTicketNote
 	for rows.Next() {
 		var i CwTicketNote
 		if err := rows.Scan(
@@ -64,7 +64,7 @@ func (q *Queries) ListAllTicketNotes(ctx context.Context) ([]CwTicketNote, error
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -78,13 +78,13 @@ WHERE ticket_id = $1
 ORDER BY id
 `
 
-func (q *Queries) ListTicketNotesByTicket(ctx context.Context, ticketID int) ([]CwTicketNote, error) {
+func (q *Queries) ListTicketNotesByTicket(ctx context.Context, ticketID int) ([]*CwTicketNote, error) {
 	rows, err := q.db.Query(ctx, listTicketNotesByTicket, ticketID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CwTicketNote
+	var items []*CwTicketNote
 	for rows.Next() {
 		var i CwTicketNote
 		if err := rows.Scan(
@@ -98,7 +98,7 @@ func (q *Queries) ListTicketNotesByTicket(ctx context.Context, ticketID int) ([]
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ type UpsertTicketNoteParams struct {
 	ContactID *int    `json:"contact_id"`
 }
 
-func (q *Queries) UpsertTicketNote(ctx context.Context, arg UpsertTicketNoteParams) (CwTicketNote, error) {
+func (q *Queries) UpsertTicketNote(ctx context.Context, arg UpsertTicketNoteParams) (*CwTicketNote, error) {
 	row := q.db.QueryRow(ctx, upsertTicketNote,
 		arg.ID,
 		arg.TicketID,
@@ -156,5 +156,5 @@ func (q *Queries) UpsertTicketNote(ctx context.Context, arg UpsertTicketNotePara
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }

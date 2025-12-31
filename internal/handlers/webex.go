@@ -9,15 +9,17 @@ import (
 )
 
 type WebexHandler struct {
-	Service *webexsvc.Service
+	WebexSvc *webexsvc.Service
 }
 
-func NewWebexHandler(svc *webexsvc.Service) *WebexHandler {
-	return &WebexHandler{Service: svc}
+func NewWebexHandler(wx *webexsvc.Service) *WebexHandler {
+	return &WebexHandler{
+		WebexSvc: wx,
+	}
 }
 
 func (h *WebexHandler) ListRecipients(c *gin.Context) {
-	r, err := h.Service.ListRecipient(c.Request.Context())
+	r, err := h.WebexSvc.ListRecipients(c.Request.Context())
 	if err != nil {
 		internalServerError(c, err)
 		return
@@ -33,7 +35,7 @@ func (h *WebexHandler) GetRoom(c *gin.Context) {
 		return
 	}
 
-	r, err := h.Service.GetRecipient(c.Request.Context(), id)
+	r, err := h.WebexSvc.GetRecipient(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrWebexRecipientNotFound) {
 			notFoundError(c, err)

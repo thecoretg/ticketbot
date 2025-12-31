@@ -13,11 +13,11 @@ type Message struct {
 	MsgType        string
 	WebexMsg       webex.Message
 	WebexRecipient recipData
-	Notification   models.TicketNotification
+	Notification   *models.TicketNotification
 	SendError      error
 }
 
-func newMessage(wm webex.Message, r recipData, n models.TicketNotification, isNew bool) Message {
+func newMessage(wm webex.Message, r recipData, n *models.TicketNotification, isNew bool) Message {
 	mt := "updated_ticket"
 	if isNew {
 		mt = "new_ticket"
@@ -59,13 +59,13 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 			n.ForwardedFromID = &r.forwardChain[len(r.forwardChain)-1].ID
 		}
 
-		msgs = append(msgs, newMessage(wm, r, *n, isNew))
+		msgs = append(msgs, newMessage(wm, r, n, isNew))
 	}
 
 	return msgs
 }
 
-func fwdChainStr(recip models.WebexRecipient, fwdChain []models.WebexRecipient) string {
+func fwdChainStr(recip *models.WebexRecipient, fwdChain []*models.WebexRecipient) string {
 	names := make([]string, 0, len(fwdChain))
 	for _, f := range fwdChain {
 		names = append(names, f.Name)
@@ -88,7 +88,7 @@ func (s *Service) notificationHeader(t *models.FullTicket, isNew bool) string {
 	return fmt.Sprintf("**Ticket Updated:** %s %s", psa.MarkdownInternalTicketLink(t.Ticket.ID, s.CWCompanyID), t.Ticket.Summary)
 }
 
-func newWebexMsg(r models.WebexRecipient, body string) webex.Message {
+func newWebexMsg(r *models.WebexRecipient, body string) webex.Message {
 	if r.Type == models.RecipientTypePerson && r.Email != nil {
 		return webex.NewMessageToPerson(*r.Email, body)
 	}

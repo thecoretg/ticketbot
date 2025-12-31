@@ -39,7 +39,7 @@ SELECT id, email_address, created_on, updated_on FROM api_user
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetUser(ctx context.Context, id int) (ApiUser, error) {
+func (q *Queries) GetUser(ctx context.Context, id int) (*ApiUser, error) {
 	row := q.db.QueryRow(ctx, getUser, id)
 	var i ApiUser
 	err := row.Scan(
@@ -48,7 +48,7 @@ func (q *Queries) GetUser(ctx context.Context, id int) (ApiUser, error) {
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -56,7 +56,7 @@ SELECT id, email_address, created_on, updated_on FROM api_user
 WHERE email_address = $1 LIMIT 1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, emailAddress string) (ApiUser, error) {
+func (q *Queries) GetUserByEmail(ctx context.Context, emailAddress string) (*ApiUser, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, emailAddress)
 	var i ApiUser
 	err := row.Scan(
@@ -65,7 +65,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, emailAddress string) (ApiU
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const insertUser = `-- name: InsertUser :one
@@ -75,7 +75,7 @@ VALUES ($1)
 RETURNING id, email_address, created_on, updated_on
 `
 
-func (q *Queries) InsertUser(ctx context.Context, emailAddress string) (ApiUser, error) {
+func (q *Queries) InsertUser(ctx context.Context, emailAddress string) (*ApiUser, error) {
 	row := q.db.QueryRow(ctx, insertUser, emailAddress)
 	var i ApiUser
 	err := row.Scan(
@@ -84,7 +84,7 @@ func (q *Queries) InsertUser(ctx context.Context, emailAddress string) (ApiUser,
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listUsers = `-- name: ListUsers :many
@@ -92,13 +92,13 @@ SELECT id, email_address, created_on, updated_on FROM api_user
 ORDER BY email_address
 `
 
-func (q *Queries) ListUsers(ctx context.Context) ([]ApiUser, error) {
+func (q *Queries) ListUsers(ctx context.Context) ([]*ApiUser, error) {
 	rows, err := q.db.Query(ctx, listUsers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ApiUser
+	var items []*ApiUser
 	for rows.Next() {
 		var i ApiUser
 		if err := rows.Scan(
@@ -109,7 +109,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ApiUser, error) {
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ WHERE id = $1
 RETURNING id, email_address, created_on, updated_on
 `
 
-func (q *Queries) SoftDeleteUser(ctx context.Context, id int) (ApiUser, error) {
+func (q *Queries) SoftDeleteUser(ctx context.Context, id int) (*ApiUser, error) {
 	row := q.db.QueryRow(ctx, softDeleteUser, id)
 	var i ApiUser
 	err := row.Scan(
@@ -135,7 +135,7 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id int) (ApiUser, error) {
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const updateUser = `-- name: UpdateUser :one
@@ -152,7 +152,7 @@ type UpdateUserParams struct {
 	EmailAddress string `json:"email_address"`
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (ApiUser, error) {
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (*ApiUser, error) {
 	row := q.db.QueryRow(ctx, updateUser, arg.ID, arg.EmailAddress)
 	var i ApiUser
 	err := row.Scan(
@@ -161,5 +161,5 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (ApiUser
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }

@@ -161,14 +161,14 @@ func (s *Service) getWxPeopleFromCwMembers(members []psa.Member, maxSyncs int) (
 	return wp, nil
 }
 
-func peopleToRecipients(webexPpl []webex.Person) []models.WebexRecipient {
-	var toUpsert []models.WebexRecipient
+func peopleToRecipients(webexPpl []webex.Person) []*models.WebexRecipient {
+	var toUpsert []*models.WebexRecipient
 	for _, p := range webexPpl {
 		if len(p.Emails) == 0 {
 			continue
 		}
 
-		r := models.WebexRecipient{
+		r := &models.WebexRecipient{
 			WebexID:      p.ID,
 			Name:         p.DisplayName,
 			Email:        &p.Emails[0],
@@ -182,15 +182,15 @@ func peopleToRecipients(webexPpl []webex.Person) []models.WebexRecipient {
 	return toUpsert
 }
 
-func roomsToRecipients(webexRooms []webex.Room) []models.WebexRecipient {
-	var toUpsert []models.WebexRecipient
+func roomsToRecipients(webexRooms []webex.Room) []*models.WebexRecipient {
+	var toUpsert []*models.WebexRecipient
 	for _, w := range webexRooms {
 		if w.Type != "group" {
 			continue
 		}
 
-		r := models.WebexRecipient{
-			WebexID:      w.Id,
+		r := &models.WebexRecipient{
+			WebexID:      w.ID,
 			Name:         w.Title,
 			Type:         "room",
 			LastActivity: w.LastActivity,
@@ -201,13 +201,13 @@ func roomsToRecipients(webexRooms []webex.Room) []models.WebexRecipient {
 	return toUpsert
 }
 
-func peopleToDelete(cwMembers []psa.Member, storedPpl []models.WebexRecipient) []models.WebexRecipient {
+func peopleToDelete(cwMembers []psa.Member, storedPpl []*models.WebexRecipient) []*models.WebexRecipient {
 	l := make(map[string]struct{})
 	for _, m := range cwMembers {
 		l[m.PrimaryEmail] = struct{}{}
 	}
 
-	var toDelete []models.WebexRecipient
+	var toDelete []*models.WebexRecipient
 	for _, p := range storedPpl {
 		if _, ok := l[*p.Email]; !ok {
 			toDelete = append(toDelete, p)

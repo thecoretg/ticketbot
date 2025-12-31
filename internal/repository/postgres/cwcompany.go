@@ -25,13 +25,13 @@ func (p *CompanyRepo) WithTx(tx pgx.Tx) models.CompanyRepository {
 		queries: db.New(tx)}
 }
 
-func (p *CompanyRepo) List(ctx context.Context) ([]models.Company, error) {
+func (p *CompanyRepo) List(ctx context.Context) ([]*models.Company, error) {
 	dbs, err := p.queries.ListCompanies(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Company
+	var b []*models.Company
 	for _, d := range dbs {
 		b = append(b, companyFromPG(d))
 	}
@@ -39,22 +39,22 @@ func (p *CompanyRepo) List(ctx context.Context) ([]models.Company, error) {
 	return b, nil
 }
 
-func (p *CompanyRepo) Get(ctx context.Context, id int) (models.Company, error) {
+func (p *CompanyRepo) Get(ctx context.Context, id int) (*models.Company, error) {
 	d, err := p.queries.GetCompany(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Company{}, models.ErrCompanyNotFound
+			return nil, models.ErrCompanyNotFound
 		}
-		return models.Company{}, err
+		return nil, err
 	}
 
 	return companyFromPG(d), nil
 }
 
-func (p *CompanyRepo) Upsert(ctx context.Context, b models.Company) (models.Company, error) {
+func (p *CompanyRepo) Upsert(ctx context.Context, b *models.Company) (*models.Company, error) {
 	d, err := p.queries.UpsertCompany(ctx, companyToUpsertParams(b))
 	if err != nil {
-		return models.Company{}, err
+		return nil, err
 	}
 
 	return companyFromPG(d), nil
@@ -71,15 +71,15 @@ func (p *CompanyRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func companyToUpsertParams(c models.Company) db.UpsertCompanyParams {
+func companyToUpsertParams(c *models.Company) db.UpsertCompanyParams {
 	return db.UpsertCompanyParams{
 		ID:   c.ID,
 		Name: c.Name,
 	}
 }
 
-func companyFromPG(pg db.CwCompany) models.Company {
-	return models.Company{
+func companyFromPG(pg *db.CwCompany) *models.Company {
+	return &models.Company{
 		ID:        pg.ID,
 		Name:      pg.Name,
 		UpdatedOn: pg.UpdatedOn,

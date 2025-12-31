@@ -25,13 +25,13 @@ func (p *ContactRepo) WithTx(tx pgx.Tx) models.ContactRepository {
 		queries: db.New(tx)}
 }
 
-func (p *ContactRepo) List(ctx context.Context) ([]models.Contact, error) {
+func (p *ContactRepo) List(ctx context.Context) ([]*models.Contact, error) {
 	dbs, err := p.queries.ListContacts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Contact
+	var b []*models.Contact
 	for _, d := range dbs {
 		b = append(b, contactFromPG(d))
 	}
@@ -39,22 +39,22 @@ func (p *ContactRepo) List(ctx context.Context) ([]models.Contact, error) {
 	return b, nil
 }
 
-func (p *ContactRepo) Get(ctx context.Context, id int) (models.Contact, error) {
+func (p *ContactRepo) Get(ctx context.Context, id int) (*models.Contact, error) {
 	d, err := p.queries.GetContact(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Contact{}, models.ErrContactNotFound
+			return nil, models.ErrContactNotFound
 		}
-		return models.Contact{}, err
+		return nil, err
 	}
 
 	return contactFromPG(d), nil
 }
 
-func (p *ContactRepo) Upsert(ctx context.Context, b models.Contact) (models.Contact, error) {
+func (p *ContactRepo) Upsert(ctx context.Context, b *models.Contact) (*models.Contact, error) {
 	d, err := p.queries.UpsertContact(ctx, contactToUpsertParams(b))
 	if err != nil {
-		return models.Contact{}, err
+		return nil, err
 	}
 
 	return contactFromPG(d), nil
@@ -71,7 +71,7 @@ func (p *ContactRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func contactToUpsertParams(c models.Contact) db.UpsertContactParams {
+func contactToUpsertParams(c *models.Contact) db.UpsertContactParams {
 	return db.UpsertContactParams{
 		ID:        c.ID,
 		FirstName: c.FirstName,
@@ -80,8 +80,8 @@ func contactToUpsertParams(c models.Contact) db.UpsertContactParams {
 	}
 }
 
-func contactFromPG(pg db.CwContact) models.Contact {
-	return models.Contact{
+func contactFromPG(pg *db.CwContact) *models.Contact {
+	return &models.Contact{
 		ID:        pg.ID,
 		FirstName: pg.FirstName,
 		LastName:  pg.LastName,

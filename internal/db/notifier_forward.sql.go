@@ -10,6 +10,21 @@ import (
 	"time"
 )
 
+const checkNotifierForwardExists = `-- name: CheckNotifierForwardExists :one
+SELECT EXISTS (
+    SELECT 1
+    FROM notifier_forward
+    WHERE id = $1
+) AS exists
+`
+
+func (q *Queries) CheckNotifierForwardExists(ctx context.Context, id int) (bool, error) {
+	row := q.db.QueryRow(ctx, checkNotifierForwardExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const deleteNotifierForward = `-- name: DeleteNotifierForward :exec
 DELETE FROM notifier_forward
 WHERE id = $1
@@ -25,7 +40,7 @@ SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetNotifierForward(ctx context.Context, id int) (NotifierForward, error) {
+func (q *Queries) GetNotifierForward(ctx context.Context, id int) (*NotifierForward, error) {
 	row := q.db.QueryRow(ctx, getNotifierForward, id)
 	var i NotifierForward
 	err := row.Scan(
@@ -39,7 +54,7 @@ func (q *Queries) GetNotifierForward(ctx context.Context, id int) (NotifierForwa
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const insertNotifierForward = `-- name: InsertNotifierForward :one
@@ -58,7 +73,7 @@ type InsertNotifierForwardParams struct {
 	UserKeepsCopy bool       `json:"user_keeps_copy"`
 }
 
-func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierForwardParams) (NotifierForward, error) {
+func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierForwardParams) (*NotifierForward, error) {
 	row := q.db.QueryRow(ctx, insertNotifierForward,
 		arg.SourceID,
 		arg.DestinationID,
@@ -79,7 +94,7 @@ func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierF
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listNotifierForwards = `-- name: ListNotifierForwards :many
@@ -87,13 +102,13 @@ SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_
 ORDER BY id
 `
 
-func (q *Queries) ListNotifierForwards(ctx context.Context) ([]NotifierForward, error) {
+func (q *Queries) ListNotifierForwards(ctx context.Context) ([]*NotifierForward, error) {
 	rows, err := q.db.Query(ctx, listNotifierForwards)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []NotifierForward
+	var items []*NotifierForward
 	for rows.Next() {
 		var i NotifierForward
 		if err := rows.Scan(
@@ -109,7 +124,7 @@ func (q *Queries) ListNotifierForwards(ctx context.Context) ([]NotifierForward, 
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -123,13 +138,13 @@ WHERE source_id = $1
 ORDER BY id
 `
 
-func (q *Queries) ListNotifierForwardsBySourceRecipientID(ctx context.Context, sourceID int) ([]NotifierForward, error) {
+func (q *Queries) ListNotifierForwardsBySourceRecipientID(ctx context.Context, sourceID int) ([]*NotifierForward, error) {
 	rows, err := q.db.Query(ctx, listNotifierForwardsBySourceRecipientID, sourceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []NotifierForward
+	var items []*NotifierForward
 	for rows.Next() {
 		var i NotifierForward
 		if err := rows.Scan(
@@ -145,7 +160,7 @@ func (q *Queries) ListNotifierForwardsBySourceRecipientID(ctx context.Context, s
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -187,13 +202,13 @@ type ListNotifierForwardsFullRow struct {
 	DestinationType string     `json:"destination_type"`
 }
 
-func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]ListNotifierForwardsFullRow, error) {
+func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]*ListNotifierForwardsFullRow, error) {
 	rows, err := q.db.Query(ctx, listNotifierForwardsFull)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListNotifierForwardsFullRow
+	var items []*ListNotifierForwardsFullRow
 	for rows.Next() {
 		var i ListNotifierForwardsFullRow
 		if err := rows.Scan(
@@ -211,7 +226,7 @@ func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]ListNotifierF
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

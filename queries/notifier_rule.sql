@@ -26,6 +26,13 @@ WHERE id = $1 LIMIT 1;
 SELECT EXISTS (
     SELECT 1
     FROM notifier_rule
+    WHERE id = $1
+) AS exists;
+
+-- name: CheckNotifierExistsByBoardAndRecipient :one
+SELECT EXISTS (
+    SELECT 1
+    FROM notifier_rule
     WHERE cw_board_id = $1 AND webex_recipient_id = $2
 ) AS exists;
 

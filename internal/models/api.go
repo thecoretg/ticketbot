@@ -29,7 +29,7 @@ type APIKey struct {
 
 type APIKeyRepository interface {
 	WithTx(tx pgx.Tx) APIKeyRepository
-	List(ctx context.Context) ([]APIKey, error)
+	List(ctx context.Context) ([]*APIKey, error)
 	Get(ctx context.Context, id int) (*APIKey, error)
 	Insert(ctx context.Context, a *APIKey) (*APIKey, error)
 	Delete(ctx context.Context, id int) error
@@ -46,7 +46,7 @@ type APIUser struct {
 
 type APIUserRepository interface {
 	WithTx(tx pgx.Tx) APIUserRepository
-	List(ctx context.Context) ([]APIUser, error)
+	List(ctx context.Context) ([]*APIUser, error)
 	Get(ctx context.Context, id int) (*APIUser, error)
 	GetByEmail(ctx context.Context, email string) (*APIUser, error)
 	Exists(ctx context.Context, email string) (bool, error)

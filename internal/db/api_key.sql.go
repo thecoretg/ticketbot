@@ -24,7 +24,7 @@ SELECT id, user_id, key_hash, created_on, updated_on FROM api_key
 WHERE id = $1
 `
 
-func (q *Queries) GetAPIKey(ctx context.Context, id int) (ApiKey, error) {
+func (q *Queries) GetAPIKey(ctx context.Context, id int) (*ApiKey, error) {
 	row := q.db.QueryRow(ctx, getAPIKey, id)
 	var i ApiKey
 	err := row.Scan(
@@ -34,7 +34,7 @@ func (q *Queries) GetAPIKey(ctx context.Context, id int) (ApiKey, error) {
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const insertAPIKey = `-- name: InsertAPIKey :one
@@ -49,7 +49,7 @@ type InsertAPIKeyParams struct {
 	KeyHash []byte `json:"key_hash"`
 }
 
-func (q *Queries) InsertAPIKey(ctx context.Context, arg InsertAPIKeyParams) (ApiKey, error) {
+func (q *Queries) InsertAPIKey(ctx context.Context, arg InsertAPIKeyParams) (*ApiKey, error) {
 	row := q.db.QueryRow(ctx, insertAPIKey, arg.UserID, arg.KeyHash)
 	var i ApiKey
 	err := row.Scan(
@@ -59,7 +59,7 @@ func (q *Queries) InsertAPIKey(ctx context.Context, arg InsertAPIKeyParams) (Api
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listAPIKeys = `-- name: ListAPIKeys :many
@@ -67,13 +67,13 @@ SELECT id, user_id, key_hash, created_on, updated_on FROM api_key
 ORDER BY created_on
 `
 
-func (q *Queries) ListAPIKeys(ctx context.Context) ([]ApiKey, error) {
+func (q *Queries) ListAPIKeys(ctx context.Context) ([]*ApiKey, error) {
 	rows, err := q.db.Query(ctx, listAPIKeys)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ApiKey
+	var items []*ApiKey
 	for rows.Next() {
 		var i ApiKey
 		if err := rows.Scan(
@@ -85,7 +85,7 @@ func (q *Queries) ListAPIKeys(ctx context.Context) ([]ApiKey, error) {
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ WHERE id = $1
 RETURNING id, user_id, key_hash, created_on, updated_on
 `
 
-func (q *Queries) SoftDeleteAPIKey(ctx context.Context, id int) (ApiKey, error) {
+func (q *Queries) SoftDeleteAPIKey(ctx context.Context, id int) (*ApiKey, error) {
 	row := q.db.QueryRow(ctx, softDeleteAPIKey, id)
 	var i ApiKey
 	err := row.Scan(
@@ -112,5 +112,5 @@ func (q *Queries) SoftDeleteAPIKey(ctx context.Context, id int) (ApiKey, error) 
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }

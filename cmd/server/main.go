@@ -11,6 +11,7 @@ import (
 	"github.com/thecoretg/ticketbot/cmd/common"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/middleware"
+	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/internal/server"
 )
 
@@ -58,6 +59,20 @@ func Run() error {
 		return fmt.Errorf("initializing app: %w", err)
 	}
 
+	if !a.Config.SkipLaunchSyncs {
+		slog.Info("syncing webex rooms and connectwise boards")
+		p := &models.SyncPayload{
+			WebexRecipients:    true,
+			CWBoards:           true,
+			MaxConcurrentSyncs: 10,
+		}
+
+		if err := a.Svc.Sync.Sync(ctx, p); err != nil {
+			// just log but continue
+			slog.Error("error syncing webex recipients and connectwise boards", "error", err)
+		}
+	}
+
 	if !a.TestFlags.SkipAuth {
 		slog.Info("attempting to bootstrap admin")
 		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, a.TestFlags.APIKey); err != nil {
@@ -68,7 +83,7 @@ func Run() error {
 	}
 
 	if !a.TestFlags.SkipHooks {
-		if err := a.Svc.Hooks.ProcessCWHooks(); err != nil {
+		if err := a.Svc.Hooks.ProcessAllHooks(); err != nil {
 			return fmt.Errorf("processing connectwise hooks: %w", err)
 		}
 	}

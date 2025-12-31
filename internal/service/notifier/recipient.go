@@ -9,19 +9,19 @@ import (
 
 type (
 	recipData struct {
-		recipient    models.WebexRecipient
-		forwardChain []models.WebexRecipient
+		recipient    *models.WebexRecipient
+		forwardChain []*models.WebexRecipient
 	}
 
 	recipMap map[int]recipData
 )
 
-func newRecip(rec models.WebexRecipient) recipData {
+func newRecip(rec *models.WebexRecipient) recipData {
 	return recipData{recipient: rec}
 }
 
-func newRecipWithFwd(rec models.WebexRecipient, parent recipData) recipData {
-	chain := append([]models.WebexRecipient{}, parent.forwardChain...)
+func newRecipWithFwd(rec *models.WebexRecipient, parent recipData) recipData {
+	chain := append([]*models.WebexRecipient{}, parent.forwardChain...)
 	chain = append(chain, parent.recipient)
 	return recipData{
 		recipient:    rec,
@@ -33,7 +33,7 @@ func (r recipData) isNaturalRecipient() bool {
 	return len(r.forwardChain) == 0
 }
 
-func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, rules []models.NotifierRule, isNew bool) ([]recipData, error) {
+func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, rules []*models.NotifierRule, isNew bool) ([]recipData, error) {
 	// for connectwise member emails
 	excludedEmails := make(map[string]struct{})
 	includedEmails := make(map[string]struct{})

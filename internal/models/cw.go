@@ -19,9 +19,9 @@ type Board struct {
 
 type BoardRepository interface {
 	WithTx(tx pgx.Tx) BoardRepository
-	List(ctx context.Context) ([]Board, error)
-	Get(ctx context.Context, id int) (Board, error)
-	Upsert(ctx context.Context, b Board) (Board, error)
+	List(ctx context.Context) ([]*Board, error)
+	Get(ctx context.Context, id int) (*Board, error)
+	Upsert(ctx context.Context, b *Board) (*Board, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -36,9 +36,9 @@ type Company struct {
 
 type CompanyRepository interface {
 	WithTx(tx pgx.Tx) CompanyRepository
-	List(ctx context.Context) ([]Company, error)
-	Get(ctx context.Context, id int) (Company, error)
-	Upsert(ctx context.Context, c Company) (Company, error)
+	List(ctx context.Context) ([]*Company, error)
+	Get(ctx context.Context, id int) (*Company, error)
+	Upsert(ctx context.Context, c *Company) (*Company, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -55,9 +55,9 @@ type Contact struct {
 
 type ContactRepository interface {
 	WithTx(tx pgx.Tx) ContactRepository
-	List(ctx context.Context) ([]Contact, error)
-	Get(ctx context.Context, id int) (Contact, error)
-	Upsert(ctx context.Context, c Contact) (Contact, error)
+	List(ctx context.Context) ([]*Contact, error)
+	Get(ctx context.Context, id int) (*Contact, error)
+	Upsert(ctx context.Context, c *Contact) (*Contact, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -75,10 +75,10 @@ type Member struct {
 
 type MemberRepository interface {
 	WithTx(tx pgx.Tx) MemberRepository
-	List(ctx context.Context) ([]Member, error)
-	Get(ctx context.Context, id int) (Member, error)
-	GetByIdentifier(ctx context.Context, identifier string) (Member, error)
-	Upsert(ctx context.Context, c Member) (Member, error)
+	List(ctx context.Context) ([]*Member, error)
+	Get(ctx context.Context, id int) (*Member, error)
+	GetByIdentifier(ctx context.Context, identifier string) (*Member, error)
+	Upsert(ctx context.Context, c *Member) (*Member, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -99,10 +99,10 @@ type Ticket struct {
 
 type TicketRepository interface {
 	WithTx(tx pgx.Tx) TicketRepository
-	List(ctx context.Context) ([]Ticket, error)
-	Get(ctx context.Context, id int) (Ticket, error)
+	List(ctx context.Context) ([]*Ticket, error)
+	Get(ctx context.Context, id int) (*Ticket, error)
 	Exists(ctx context.Context, id int) (bool, error)
-	Upsert(ctx context.Context, c Ticket) (Ticket, error)
+	Upsert(ctx context.Context, c *Ticket) (*Ticket, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -113,7 +113,7 @@ type FullTicket struct {
 	Contact    *Contact
 	Owner      *Member
 	LatestNote *FullTicketNote
-	Resources  []Member
+	Resources  []*Member
 }
 
 var ErrTicketNoteNotFound = errors.New("ticket note not found")
@@ -130,10 +130,10 @@ type TicketNote struct {
 
 type TicketNoteRepository interface {
 	WithTx(tx pgx.Tx) TicketNoteRepository
-	ListByTicketID(ctx context.Context, ticketID int) ([]TicketNote, error)
-	ListAll(ctx context.Context) ([]TicketNote, error)
-	Get(ctx context.Context, id int) (TicketNote, error)
-	Upsert(ctx context.Context, c TicketNote) (TicketNote, error)
+	ListByTicketID(ctx context.Context, ticketID int) ([]*TicketNote, error)
+	ListAll(ctx context.Context) ([]*TicketNote, error)
+	Get(ctx context.Context, id int) (*TicketNote, error)
+	Upsert(ctx context.Context, c *TicketNote) (*TicketNote, error)
 	Delete(ctx context.Context, id int) error
 }
 
@@ -143,30 +143,29 @@ type FullTicketNote struct {
 	Contact *Contact
 }
 
-func TicketNoteToFullTicketNote(ctx context.Context, note TicketNote, m MemberRepository, c ContactRepository) (*FullTicketNote, error) {
+func TicketNoteToFullTicketNote(ctx context.Context, note *TicketNote, m MemberRepository, c ContactRepository) (*FullTicketNote, error) {
 	var (
 		member  *Member
 		contact *Contact
+		err     error
 	)
 
 	if note.MemberID != nil {
-		r, err := m.Get(ctx, *note.MemberID)
+		member, err = m.Get(ctx, *note.MemberID)
 		if err != nil {
 			return nil, err
 		}
-		member = &r
 	}
 
 	if note.ContactID != nil {
-		r, err := c.Get(ctx, *note.ContactID)
+		contact, err = c.Get(ctx, *note.ContactID)
 		if err != nil {
 			return nil, err
 		}
-		contact = &r
 	}
 
 	return &FullTicketNote{
-		TicketNote: note,
+		TicketNote: *note,
 		Member:     member,
 		Contact:    contact,
 	}, nil

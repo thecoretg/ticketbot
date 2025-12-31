@@ -25,13 +25,13 @@ func (p *TicketRepo) WithTx(tx pgx.Tx) models.TicketRepository {
 		queries: db.New(tx)}
 }
 
-func (p *TicketRepo) List(ctx context.Context) ([]models.Ticket, error) {
+func (p *TicketRepo) List(ctx context.Context) ([]*models.Ticket, error) {
 	dm, err := p.queries.ListTickets(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Ticket
+	var b []*models.Ticket
 	for _, d := range dm {
 		b = append(b, ticketFromPG(d))
 	}
@@ -39,13 +39,13 @@ func (p *TicketRepo) List(ctx context.Context) ([]models.Ticket, error) {
 	return b, nil
 }
 
-func (p *TicketRepo) Get(ctx context.Context, id int) (models.Ticket, error) {
+func (p *TicketRepo) Get(ctx context.Context, id int) (*models.Ticket, error) {
 	d, err := p.queries.GetTicket(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Ticket{}, models.ErrTicketNotFound
+			return nil, models.ErrTicketNotFound
 		}
-		return models.Ticket{}, err
+		return nil, err
 	}
 
 	return ticketFromPG(d), nil
@@ -55,10 +55,10 @@ func (p *TicketRepo) Exists(ctx context.Context, id int) (bool, error) {
 	return p.queries.CheckTicketExists(ctx, id)
 }
 
-func (p *TicketRepo) Upsert(ctx context.Context, b models.Ticket) (models.Ticket, error) {
+func (p *TicketRepo) Upsert(ctx context.Context, b *models.Ticket) (*models.Ticket, error) {
 	d, err := p.queries.UpsertTicket(ctx, ticketToUpsertParams(b))
 	if err != nil {
-		return models.Ticket{}, err
+		return nil, err
 	}
 
 	return ticketFromPG(d), nil
@@ -75,7 +75,7 @@ func (p *TicketRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func ticketToUpsertParams(t models.Ticket) db.UpsertTicketParams {
+func ticketToUpsertParams(t *models.Ticket) db.UpsertTicketParams {
 	return db.UpsertTicketParams{
 		ID:        t.ID,
 		Summary:   t.Summary,
@@ -88,8 +88,8 @@ func ticketToUpsertParams(t models.Ticket) db.UpsertTicketParams {
 	}
 }
 
-func ticketFromPG(pg db.CwTicket) models.Ticket {
-	return models.Ticket{
+func ticketFromPG(pg *db.CwTicket) *models.Ticket {
+	return &models.Ticket{
 		ID:        pg.ID,
 		Summary:   pg.Summary,
 		BoardID:   pg.BoardID,

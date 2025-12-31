@@ -28,6 +28,7 @@ type AppConfig struct {
 	AttemptNotify      bool `json:"attempt_notify"`
 	MaxMessageLength   int  `json:"max_message_length"`
 	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
+	SkipLaunchSyncs    bool `json:"skip_launch_syncs"`
 }
 
 type CwBoard struct {

@@ -15,7 +15,13 @@ func (c *Client) CreateWebhook(webhook *Webhook) (*Webhook, error) {
 }
 
 func (c *Client) GetWebhooks(params map[string]string) ([]Webhook, error) {
-	return GetMany[Webhook](c, "webhooks", params)
+	resp, err := GetOne[ListWebhooksResp](c, "webhooks", params)
+	if err != nil {
+		return nil, fmt.Errorf("getting list of webhooks: %w", err)
+	}
+
+	w := append([]Webhook{}, resp.Items...)
+	return w, nil
 }
 
 func (c *Client) GetWebhook(webhookID string, params map[string]string) (*Webhook, error) {
@@ -57,7 +63,7 @@ func ValidateWebhook(r *http.Request, secret string) (bool, error) {
 func splitHeaderVals(s string) (string, string) {
 	// shortened values as to not collide with packages
 	var sh2, sh5 string
-	for _, part := range strings.Split(s, ",") {
+	for part := range strings.SplitSeq(s, ",") {
 		part = strings.TrimSpace(part)
 		if strings.HasPrefix(part, "SHA-256=") {
 			sh2 = strings.TrimPrefix(part, "SHA-256=")

@@ -2,31 +2,25 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/internal/service/notifier"
 )
 
 type NotifierHandler struct {
-	BoardRepo    models.BoardRepository
-	RoomRepo     models.WebexRecipientRepository
-	RulesRepo    models.NotifierRuleRepository
-	ForwardsRepo models.NotifierForwardRepository
+	Svc notifier.Service
 }
 
-func NewNotifierHandler(r models.NotifierRuleRepository, br models.BoardRepository, wr models.WebexRecipientRepository, fr models.NotifierForwardRepository) *NotifierHandler {
+func NewNotifierHandler(svc *notifier.Service) *NotifierHandler {
 	return &NotifierHandler{
-		BoardRepo:    br,
-		RoomRepo:     wr,
-		RulesRepo:    r,
-		ForwardsRepo: fr,
+		Svc: *svc,
 	}
 }
 
 func (h *NotifierHandler) ListNotifierRules(c *gin.Context) {
-	n, err := h.RulesRepo.ListAllFull(c.Request.Context())
+	n, err := h.Svc.ListNotifierRules(c.Request.Context())
 	if err != nil {
 		internalServerError(c, err)
 		return
@@ -42,7 +36,7 @@ func (h *NotifierHandler) GetNotifierRule(c *gin.Context) {
 		return
 	}
 
-	n, err := h.RulesRepo.Get(c.Request.Context(), id)
+	n, err := h.Svc.GetNotifierRule(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrNotifierNotFound) {
 			notFoundError(c, err)
@@ -63,38 +57,12 @@ func (h *NotifierHandler) AddNotifierRule(c *gin.Context) {
 		return
 	}
 
-	exists, err := h.RulesRepo.Exists(ctx, p.CwBoardID, p.WebexRecipientID)
+	n, err := h.Svc.AddNotifierRule(ctx, p)
 	if err != nil {
-		internalServerError(c, err)
-		return
-	}
-
-	if exists {
-		err = fmt.Errorf("notifier with board id %d and room id %d already exists", p.CwBoardID, p.WebexRecipientID)
-		conflictError(c, err)
-		return
-	}
-
-	if _, err = h.BoardRepo.Get(ctx, p.CwBoardID); err != nil {
-		if errors.Is(err, models.ErrBoardNotFound) {
-			notFoundError(c, err)
+		if errors.Is(err, notifier.ErrNotifierConflict) {
+			conflictError(c, err)
 			return
 		}
-		internalServerError(c, err)
-		return
-	}
-
-	if _, err = h.RoomRepo.Get(ctx, p.WebexRecipientID); err != nil {
-		if errors.Is(err, models.ErrWebexRecipientNotFound) {
-			notFoundError(c, err)
-			return
-		}
-		internalServerError(c, err)
-		return
-	}
-
-	n, err := h.RulesRepo.Insert(c.Request.Context(), p)
-	if err != nil {
 		internalServerError(c, err)
 		return
 	}
@@ -109,7 +77,7 @@ func (h *NotifierHandler) DeleteNotifierRule(c *gin.Context) {
 		return
 	}
 
-	if err := h.RulesRepo.Delete(c.Request.Context(), id); err != nil {
+	if err := h.Svc.DeleteNotifierRule(c.Request.Context(), id); err != nil {
 		if errors.Is(err, models.ErrNotifierNotFound) {
 			notFoundError(c, err)
 			return
@@ -122,7 +90,7 @@ func (h *NotifierHandler) DeleteNotifierRule(c *gin.Context) {
 }
 
 func (h *NotifierHandler) ListForwards(c *gin.Context) {
-	n, err := h.ForwardsRepo.ListAllFull(c.Request.Context())
+	n, err := h.Svc.ListForwardsFull(c.Request.Context())
 	if err != nil {
 		internalServerError(c, err)
 		return
@@ -138,7 +106,7 @@ func (h *NotifierHandler) GetForward(c *gin.Context) {
 		return
 	}
 
-	f, err := h.ForwardsRepo.Get(c.Request.Context(), id)
+	f, err := h.Svc.GetForward(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrUserForwardNotFound) {
 			notFoundError(c, err)
@@ -158,7 +126,7 @@ func (h *NotifierHandler) AddUserForward(c *gin.Context) {
 		return
 	}
 
-	f, err := h.ForwardsRepo.Insert(c.Request.Context(), *p)
+	f, err := h.Svc.AddForward(c.Request.Context(), p)
 	if err != nil {
 		internalServerError(c, err)
 		return
@@ -174,7 +142,7 @@ func (h *NotifierHandler) DeleteUserForward(c *gin.Context) {
 		return
 	}
 
-	if err := h.ForwardsRepo.Delete(c.Request.Context(), id); err != nil {
+	if err := h.Svc.DeleteForward(c.Request.Context(), id); err != nil {
 		if errors.Is(err, models.ErrUserForwardNotFound) {
 			notFoundError(c, err)
 			return

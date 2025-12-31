@@ -24,7 +24,7 @@ SELECT id, name, updated_on, added_on FROM cw_board
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetBoard(ctx context.Context, id int) (CwBoard, error) {
+func (q *Queries) GetBoard(ctx context.Context, id int) (*CwBoard, error) {
 	row := q.db.QueryRow(ctx, getBoard, id)
 	var i CwBoard
 	err := row.Scan(
@@ -33,7 +33,7 @@ func (q *Queries) GetBoard(ctx context.Context, id int) (CwBoard, error) {
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listBoards = `-- name: ListBoards :many
@@ -41,13 +41,13 @@ SELECT id, name, updated_on, added_on FROM cw_board
 ORDER BY id
 `
 
-func (q *Queries) ListBoards(ctx context.Context) ([]CwBoard, error) {
+func (q *Queries) ListBoards(ctx context.Context) ([]*CwBoard, error) {
 	rows, err := q.db.Query(ctx, listBoards)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CwBoard
+	var items []*CwBoard
 	for rows.Next() {
 		var i CwBoard
 		if err := rows.Scan(
@@ -58,7 +58,7 @@ func (q *Queries) ListBoards(ctx context.Context) ([]CwBoard, error) {
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ type UpsertBoardParams struct {
 	Name string `json:"name"`
 }
 
-func (q *Queries) UpsertBoard(ctx context.Context, arg UpsertBoardParams) (CwBoard, error) {
+func (q *Queries) UpsertBoard(ctx context.Context, arg UpsertBoardParams) (*CwBoard, error) {
 	row := q.db.QueryRow(ctx, upsertBoard, arg.ID, arg.Name)
 	var i CwBoard
 	err := row.Scan(
@@ -103,5 +103,5 @@ func (q *Queries) UpsertBoard(ctx context.Context, arg UpsertBoardParams) (CwBoa
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }

@@ -22,16 +22,16 @@ func (p *APIKeyRepo) WithTx(tx pgx.Tx) models.APIKeyRepository {
 	return &APIKeyRepo{queries: db.New(tx)}
 }
 
-func (p *APIKeyRepo) List(ctx context.Context) ([]models.APIKey, error) {
+func (p *APIKeyRepo) List(ctx context.Context) ([]*models.APIKey, error) {
 	dk, err := p.queries.ListAPIKeys(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var k []models.APIKey
+	var k []*models.APIKey
 	for _, d := range dk {
 		u := keyFromPG(d)
-		k = append(k, *u)
+		k = append(k, u)
 	}
 
 	return k, nil
@@ -76,7 +76,7 @@ func insertParamsFromAPIKey(a *models.APIKey) db.InsertAPIKeyParams {
 	}
 }
 
-func keyFromPG(pg db.ApiKey) *models.APIKey {
+func keyFromPG(pg *db.ApiKey) *models.APIKey {
 	return &models.APIKey{
 		ID:        pg.ID,
 		UserID:    pg.UserID,

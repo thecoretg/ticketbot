@@ -28,39 +28,9 @@ func (h *SyncHandler) HandleSync(c *gin.Context) {
 	}
 
 	ctx := context.WithoutCancel(c.Request.Context())
-	if p.WebexRecipients {
-		go h.syncWebexRecipients(ctx, p.MaxConcurrentSyncs)
-	}
-
-	if p.CWBoards {
-		go h.syncBoards(ctx)
-	}
-
-	if p.CWTickets {
-		go h.syncTickets(ctx, p.BoardIDs, p.MaxConcurrentSyncs)
+	if err := h.Svc.Sync(ctx, p); err != nil {
+		slog.Error("syncing", "error", err)
 	}
 
 	resultJSON(c, "sync started")
-}
-
-func (h *SyncHandler) syncWebexRecipients(ctx context.Context, maxConcurrent int) {
-	if err := h.Svc.SyncWebexRecipients(ctx, maxConcurrent); err != nil {
-		slog.Error("syncing webex rooms", "error", err)
-	}
-}
-
-func (h *SyncHandler) syncBoards(ctx context.Context) {
-	if err := h.Svc.SyncBoards(ctx); err != nil {
-		slog.Error("syncing connectwise boards", "error", err)
-	}
-}
-
-func (h *SyncHandler) syncTickets(ctx context.Context, boardIDs []int, maxConcurrent int) {
-	if maxConcurrent == 0 || maxConcurrent > 10 {
-		maxConcurrent = 5
-	}
-
-	if err := h.Svc.SyncOpenTickets(ctx, boardIDs, maxConcurrent); err != nil {
-		slog.Error("syncing connectwise tickets", "error", err)
-	}
 }

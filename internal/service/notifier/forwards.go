@@ -8,6 +8,39 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
+func (s *Service) ListForwardsFull(ctx context.Context) ([]*models.NotifierForwardFull, error) {
+	return s.Forwards.ListAllFull(ctx)
+}
+
+func (s *Service) ListForwards(ctx context.Context) ([]*models.NotifierForward, error) {
+	return s.Forwards.ListAll(ctx)
+}
+
+func (s *Service) ListForwardsBySourceID(ctx context.Context, id int) ([]*models.NotifierForward, error) {
+	return s.Forwards.ListBySourceRoomID(ctx, id)
+}
+
+func (s *Service) GetForward(ctx context.Context, id int) (*models.NotifierForward, error) {
+	return s.Forwards.Get(ctx, id)
+}
+
+func (s *Service) AddForward(ctx context.Context, f *models.NotifierForward) (*models.NotifierForward, error) {
+	return s.Forwards.Insert(ctx, f)
+}
+
+func (s *Service) DeleteForward(ctx context.Context, id int) error {
+	exists, err := s.Forwards.Exists(ctx, id)
+	if err != nil {
+		return fmt.Errorf("checking if notifier exists: %w", err)
+	}
+
+	if !exists {
+		return models.ErrUserForwardNotFound
+	}
+
+	return s.Forwards.Delete(ctx, id)
+}
+
 func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, error) {
 	queue := make([]int, 0, len(in))
 	seen := make(map[int]struct{})
@@ -79,8 +112,8 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 }
 
 // filterActiveFwds returns all forwards that are enabled if the current time is within the date range
-func filterActiveFwds(fwds []models.NotifierForward) []models.NotifierForward {
-	var activeFwds []models.NotifierForward
+func filterActiveFwds(fwds []*models.NotifierForward) []*models.NotifierForward {
+	var activeFwds []*models.NotifierForward
 	for _, f := range fwds {
 		if f.Enabled && dateRangeActive(f.StartDate, f.EndDate) {
 			activeFwds = append(activeFwds, f)

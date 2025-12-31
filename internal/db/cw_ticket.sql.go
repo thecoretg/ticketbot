@@ -39,7 +39,7 @@ SELECT id, summary, board_id, owner_id, company_id, contact_id, resources, updat
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetTicket(ctx context.Context, id int) (CwTicket, error) {
+func (q *Queries) GetTicket(ctx context.Context, id int) (*CwTicket, error) {
 	row := q.db.QueryRow(ctx, getTicket, id)
 	var i CwTicket
 	err := row.Scan(
@@ -54,7 +54,7 @@ func (q *Queries) GetTicket(ctx context.Context, id int) (CwTicket, error) {
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listTickets = `-- name: ListTickets :many
@@ -62,13 +62,13 @@ SELECT id, summary, board_id, owner_id, company_id, contact_id, resources, updat
 ORDER BY id
 `
 
-func (q *Queries) ListTickets(ctx context.Context) ([]CwTicket, error) {
+func (q *Queries) ListTickets(ctx context.Context) ([]*CwTicket, error) {
 	rows, err := q.db.Query(ctx, listTickets)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CwTicket
+	var items []*CwTicket
 	for rows.Next() {
 		var i CwTicket
 		if err := rows.Scan(
@@ -85,7 +85,7 @@ func (q *Queries) ListTickets(ctx context.Context) ([]CwTicket, error) {
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ type UpsertTicketParams struct {
 	UpdatedBy *string `json:"updated_by"`
 }
 
-func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (CwTicket, error) {
+func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (*CwTicket, error) {
 	row := q.db.QueryRow(ctx, upsertTicket,
 		arg.ID,
 		arg.Summary,
@@ -157,5 +157,5 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (CwT
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }

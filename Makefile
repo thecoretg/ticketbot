@@ -10,10 +10,8 @@ gensql:
 runserver: test-db-down test-db-up
 	op run --env-file="./testing.env" --no-masking -- go run ./cmd/server
 
-create-test-rule: build-cli
-	op run --env-file="./testing.env" --no-masking -- tbot sync -r -b -t -i 38
-	sleep 10
-	op run --env-file="./testing.env" --no-masking -- tbot create rule -b 38 -r 1
+sync:
+	op run --env-file="./testing.env" --no-masking -- tbot-admin sync -b -r
 
 test-db-up:
 	docker compose -f ./docker/docker-compose-db.yml up -d

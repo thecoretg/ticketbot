@@ -31,12 +31,12 @@ const (
 
 type WebexRecipientRepository interface {
 	WithTx(tx pgx.Tx) WebexRecipientRepository
-	List(ctx context.Context) ([]WebexRecipient, error)
-	ListRooms(ctx context.Context) ([]WebexRecipient, error)
-	ListPeople(ctx context.Context) ([]WebexRecipient, error)
-	ListByEmail(ctx context.Context, email string) ([]WebexRecipient, error)
-	Get(ctx context.Context, id int) (WebexRecipient, error)
-	GetByWebexID(ctx context.Context, webexID string) (WebexRecipient, error)
-	Upsert(ctx context.Context, r WebexRecipient) (WebexRecipient, error)
+	List(ctx context.Context) ([]*WebexRecipient, error)
+	ListRooms(ctx context.Context) ([]*WebexRecipient, error)
+	ListPeople(ctx context.Context) ([]*WebexRecipient, error)
+	ListByEmail(ctx context.Context, email string) ([]*WebexRecipient, error)
+	Get(ctx context.Context, id int) (*WebexRecipient, error)
+	GetByWebexID(ctx context.Context, webexID string) (*WebexRecipient, error)
+	Upsert(ctx context.Context, r *WebexRecipient) (*WebexRecipient, error)
 	Delete(ctx context.Context, id int) error
 }

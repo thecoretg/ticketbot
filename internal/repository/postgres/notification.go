@@ -22,13 +22,13 @@ func (p NotificationRepo) WithTx(tx pgx.Tx) models.TicketNotificationRepository 
 	return &NotificationRepo{queries: db.New(tx)}
 }
 
-func (p NotificationRepo) ListAll(ctx context.Context) ([]models.TicketNotification, error) {
+func (p NotificationRepo) ListAll(ctx context.Context) ([]*models.TicketNotification, error) {
 	dn, err := p.queries.ListTicketNotifications(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var n []models.TicketNotification
+	var n []*models.TicketNotification
 	for _, d := range dn {
 		n = append(n, notificationFromPG(d))
 	}
@@ -36,13 +36,13 @@ func (p NotificationRepo) ListAll(ctx context.Context) ([]models.TicketNotificat
 	return n, nil
 }
 
-func (p NotificationRepo) ListByNoteID(ctx context.Context, noteID int) ([]models.TicketNotification, error) {
+func (p NotificationRepo) ListByNoteID(ctx context.Context, noteID int) ([]*models.TicketNotification, error) {
 	dn, err := p.queries.ListTicketNotificationsByNoteID(ctx, &noteID)
 	if err != nil {
 		return nil, err
 	}
 
-	var n []models.TicketNotification
+	var n []*models.TicketNotification
 	for _, d := range dn {
 		n = append(n, notificationFromPG(d))
 	}
@@ -68,22 +68,22 @@ func (p NotificationRepo) ExistsForNote(ctx context.Context, noteID int) (bool, 
 	return exists, nil
 }
 
-func (p NotificationRepo) Get(ctx context.Context, id int) (models.TicketNotification, error) {
+func (p NotificationRepo) Get(ctx context.Context, id int) (*models.TicketNotification, error) {
 	d, err := p.queries.GetTicketNotification(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.TicketNotification{}, models.ErrNotificationNotFound
+			return nil, models.ErrNotificationNotFound
 		}
-		return models.TicketNotification{}, nil
+		return nil, nil
 	}
 
 	return notificationFromPG(d), nil
 }
 
-func (p NotificationRepo) Insert(ctx context.Context, n models.TicketNotification) (models.TicketNotification, error) {
+func (p NotificationRepo) Insert(ctx context.Context, n *models.TicketNotification) (*models.TicketNotification, error) {
 	d, err := p.queries.InsertTicketNotification(ctx, notificationToInsertParams(n))
 	if err != nil {
-		return models.TicketNotification{}, err
+		return nil, err
 	}
 
 	return notificationFromPG(d), nil
@@ -100,7 +100,7 @@ func (p NotificationRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func notificationToInsertParams(n models.TicketNotification) db.InsertTicketNotificationParams {
+func notificationToInsertParams(n *models.TicketNotification) db.InsertTicketNotificationParams {
 	return db.InsertTicketNotificationParams{
 		TicketID:        n.TicketID,
 		TicketNoteID:    n.TicketNoteID,
@@ -111,8 +111,8 @@ func notificationToInsertParams(n models.TicketNotification) db.InsertTicketNoti
 	}
 }
 
-func notificationFromPG(pg db.TicketNotification) models.TicketNotification {
-	return models.TicketNotification{
+func notificationFromPG(pg *db.TicketNotification) *models.TicketNotification {
+	return &models.TicketNotification{
 		ID:              pg.ID,
 		TicketID:        pg.TicketID,
 		TicketNoteID:    pg.TicketNoteID,

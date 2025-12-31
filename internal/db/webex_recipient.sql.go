@@ -25,7 +25,7 @@ SELECT id, webex_id, name, email, type, last_activity, created_on, updated_on FR
 WHERE id = $1
 `
 
-func (q *Queries) GetWebexRecipient(ctx context.Context, id int) (WebexRecipient, error) {
+func (q *Queries) GetWebexRecipient(ctx context.Context, id int) (*WebexRecipient, error) {
 	row := q.db.QueryRow(ctx, getWebexRecipient, id)
 	var i WebexRecipient
 	err := row.Scan(
@@ -38,7 +38,7 @@ func (q *Queries) GetWebexRecipient(ctx context.Context, id int) (WebexRecipient
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const getWebexRecipientByWebexID = `-- name: GetWebexRecipientByWebexID :one
@@ -46,7 +46,7 @@ SELECT id, webex_id, name, email, type, last_activity, created_on, updated_on FR
 WHERE webex_id = $1
 `
 
-func (q *Queries) GetWebexRecipientByWebexID(ctx context.Context, webexID string) (WebexRecipient, error) {
+func (q *Queries) GetWebexRecipientByWebexID(ctx context.Context, webexID string) (*WebexRecipient, error) {
 	row := q.db.QueryRow(ctx, getWebexRecipientByWebexID, webexID)
 	var i WebexRecipient
 	err := row.Scan(
@@ -59,7 +59,7 @@ func (q *Queries) GetWebexRecipientByWebexID(ctx context.Context, webexID string
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listByEmail = `-- name: ListByEmail :many
@@ -67,13 +67,13 @@ SELECT id, webex_id, name, email, type, last_activity, created_on, updated_on FR
 WHERE email = $1
 `
 
-func (q *Queries) ListByEmail(ctx context.Context, email *string) ([]WebexRecipient, error) {
+func (q *Queries) ListByEmail(ctx context.Context, email *string) ([]*WebexRecipient, error) {
 	rows, err := q.db.Query(ctx, listByEmail, email)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []WebexRecipient
+	var items []*WebexRecipient
 	for rows.Next() {
 		var i WebexRecipient
 		if err := rows.Scan(
@@ -88,7 +88,7 @@ func (q *Queries) ListByEmail(ctx context.Context, email *string) ([]WebexRecipi
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -101,13 +101,13 @@ SELECT id, webex_id, name, email, type, last_activity, created_on, updated_on FR
 WHERE type = 'person'
 `
 
-func (q *Queries) ListWebexPeople(ctx context.Context) ([]WebexRecipient, error) {
+func (q *Queries) ListWebexPeople(ctx context.Context) ([]*WebexRecipient, error) {
 	rows, err := q.db.Query(ctx, listWebexPeople)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []WebexRecipient
+	var items []*WebexRecipient
 	for rows.Next() {
 		var i WebexRecipient
 		if err := rows.Scan(
@@ -122,7 +122,7 @@ func (q *Queries) ListWebexPeople(ctx context.Context) ([]WebexRecipient, error)
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -135,13 +135,13 @@ SELECT id, webex_id, name, email, type, last_activity, created_on, updated_on FR
 ORDER BY id
 `
 
-func (q *Queries) ListWebexRecipients(ctx context.Context) ([]WebexRecipient, error) {
+func (q *Queries) ListWebexRecipients(ctx context.Context) ([]*WebexRecipient, error) {
 	rows, err := q.db.Query(ctx, listWebexRecipients)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []WebexRecipient
+	var items []*WebexRecipient
 	for rows.Next() {
 		var i WebexRecipient
 		if err := rows.Scan(
@@ -156,7 +156,7 @@ func (q *Queries) ListWebexRecipients(ctx context.Context) ([]WebexRecipient, er
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -169,13 +169,13 @@ SELECT id, webex_id, name, email, type, last_activity, created_on, updated_on FR
 WHERE type = 'room'
 `
 
-func (q *Queries) ListWebexRooms(ctx context.Context) ([]WebexRecipient, error) {
+func (q *Queries) ListWebexRooms(ctx context.Context) ([]*WebexRecipient, error) {
 	rows, err := q.db.Query(ctx, listWebexRooms)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []WebexRecipient
+	var items []*WebexRecipient
 	for rows.Next() {
 		var i WebexRecipient
 		if err := rows.Scan(
@@ -190,7 +190,7 @@ func (q *Queries) ListWebexRooms(ctx context.Context) ([]WebexRecipient, error) 
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -232,7 +232,7 @@ type UpsertWebexRecipientParams struct {
 	LastActivity time.Time `json:"last_activity"`
 }
 
-func (q *Queries) UpsertWebexRecipient(ctx context.Context, arg UpsertWebexRecipientParams) (WebexRecipient, error) {
+func (q *Queries) UpsertWebexRecipient(ctx context.Context, arg UpsertWebexRecipientParams) (*WebexRecipient, error) {
 	row := q.db.QueryRow(ctx, upsertWebexRecipient,
 		arg.WebexID,
 		arg.Name,
@@ -251,5 +251,5 @@ func (q *Queries) UpsertWebexRecipient(ctx context.Context, arg UpsertWebexRecip
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
-	return i, err
+	return &i, err
 }

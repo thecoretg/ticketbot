@@ -24,7 +24,7 @@ SELECT id, name, updated_on, added_on FROM cw_company
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetCompany(ctx context.Context, id int) (CwCompany, error) {
+func (q *Queries) GetCompany(ctx context.Context, id int) (*CwCompany, error) {
 	row := q.db.QueryRow(ctx, getCompany, id)
 	var i CwCompany
 	err := row.Scan(
@@ -33,7 +33,7 @@ func (q *Queries) GetCompany(ctx context.Context, id int) (CwCompany, error) {
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listCompanies = `-- name: ListCompanies :many
@@ -41,13 +41,13 @@ SELECT id, name, updated_on, added_on FROM cw_company
 ORDER BY id
 `
 
-func (q *Queries) ListCompanies(ctx context.Context) ([]CwCompany, error) {
+func (q *Queries) ListCompanies(ctx context.Context) ([]*CwCompany, error) {
 	rows, err := q.db.Query(ctx, listCompanies)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CwCompany
+	var items []*CwCompany
 	for rows.Next() {
 		var i CwCompany
 		if err := rows.Scan(
@@ -58,7 +58,7 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]CwCompany, error) {
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ type UpdateCompanyParams struct {
 	Name string `json:"name"`
 }
 
-func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (CwCompany, error) {
+func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (*CwCompany, error) {
 	row := q.db.QueryRow(ctx, updateCompany, arg.ID, arg.Name)
 	var i CwCompany
 	err := row.Scan(
@@ -100,7 +100,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const upsertCompany = `-- name: UpsertCompany :one
@@ -118,7 +118,7 @@ type UpsertCompanyParams struct {
 	Name string `json:"name"`
 }
 
-func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (CwCompany, error) {
+func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (*CwCompany, error) {
 	row := q.db.QueryRow(ctx, upsertCompany, arg.ID, arg.Name)
 	var i CwCompany
 	err := row.Scan(
@@ -127,5 +127,5 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (C
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }

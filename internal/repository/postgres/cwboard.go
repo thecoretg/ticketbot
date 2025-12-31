@@ -26,13 +26,13 @@ func (p *BoardRepo) WithTx(tx pgx.Tx) models.BoardRepository {
 	}
 }
 
-func (p *BoardRepo) List(ctx context.Context) ([]models.Board, error) {
+func (p *BoardRepo) List(ctx context.Context) ([]*models.Board, error) {
 	dbs, err := p.queries.ListBoards(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.Board
+	var b []*models.Board
 	for _, d := range dbs {
 		b = append(b, boardFromPG(d))
 	}
@@ -40,22 +40,22 @@ func (p *BoardRepo) List(ctx context.Context) ([]models.Board, error) {
 	return b, nil
 }
 
-func (p *BoardRepo) Get(ctx context.Context, id int) (models.Board, error) {
+func (p *BoardRepo) Get(ctx context.Context, id int) (*models.Board, error) {
 	d, err := p.queries.GetBoard(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.Board{}, models.ErrBoardNotFound
+			return nil, models.ErrBoardNotFound
 		}
-		return models.Board{}, err
+		return nil, err
 	}
 
 	return boardFromPG(d), nil
 }
 
-func (p *BoardRepo) Upsert(ctx context.Context, b models.Board) (models.Board, error) {
+func (p *BoardRepo) Upsert(ctx context.Context, b *models.Board) (*models.Board, error) {
 	d, err := p.queries.UpsertBoard(ctx, boardToUpsertParams(b))
 	if err != nil {
-		return models.Board{}, err
+		return nil, err
 	}
 
 	return boardFromPG(d), nil
@@ -72,15 +72,15 @@ func (p *BoardRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func boardToUpsertParams(b models.Board) db.UpsertBoardParams {
+func boardToUpsertParams(b *models.Board) db.UpsertBoardParams {
 	return db.UpsertBoardParams{
 		ID:   b.ID,
 		Name: b.Name,
 	}
 }
 
-func boardFromPG(pg db.CwBoard) models.Board {
-	return models.Board{
+func boardFromPG(pg *db.CwBoard) *models.Board {
+	return &models.Board{
 		ID:        pg.ID,
 		Name:      pg.Name,
 		UpdatedOn: pg.UpdatedOn,

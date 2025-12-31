@@ -22,16 +22,16 @@ func (p *APIUserRepo) WithTx(tx pgx.Tx) models.APIUserRepository {
 	return &APIUserRepo{queries: db.New(tx)}
 }
 
-func (p *APIUserRepo) List(ctx context.Context) ([]models.APIUser, error) {
+func (p *APIUserRepo) List(ctx context.Context) ([]*models.APIUser, error) {
 	dk, err := p.queries.ListUsers(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var k []models.APIUser
+	var k []*models.APIUser
 	for _, d := range dk {
 		u := userFromPG(d)
-		k = append(k, *u)
+		k = append(k, u)
 	}
 
 	return k, nil
@@ -104,7 +104,7 @@ func apiUserToUpdateParams(u *models.APIUser) db.UpdateUserParams {
 	}
 }
 
-func userFromPG(pg db.ApiUser) *models.APIUser {
+func userFromPG(pg *db.ApiUser) *models.APIUser {
 	return &models.APIUser{
 		ID:           pg.ID,
 		EmailAddress: pg.EmailAddress,

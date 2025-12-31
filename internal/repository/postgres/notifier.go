@@ -26,28 +26,28 @@ func (p *NotifierRuleRepo) WithTx(tx pgx.Tx) models.NotifierRuleRepository {
 	}
 }
 
-func (p *NotifierRuleRepo) ListAll(ctx context.Context) ([]models.NotifierRule, error) {
+func (p *NotifierRuleRepo) ListAll(ctx context.Context) ([]*models.NotifierRule, error) {
 	dm, err := p.queries.ListNotifierRules(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.NotifierRule
+	var b []*models.NotifierRule
 	for _, d := range dm {
 		n := notifierFromPG(d)
-		b = append(b, *n)
+		b = append(b, n)
 	}
 
 	return b, nil
 }
 
-func (p *NotifierRuleRepo) ListAllFull(ctx context.Context) ([]models.NotifierRuleFull, error) {
+func (p *NotifierRuleRepo) ListAllFull(ctx context.Context) ([]*models.NotifierRuleFull, error) {
 	dr, err := p.queries.ListNotifierRulesFull(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var f []models.NotifierRuleFull
+	var f []*models.NotifierRuleFull
 	for _, r := range dr {
 		f = append(f, fullRuleFromDB(r))
 	}
@@ -55,31 +55,31 @@ func (p *NotifierRuleRepo) ListAllFull(ctx context.Context) ([]models.NotifierRu
 	return f, nil
 }
 
-func (p *NotifierRuleRepo) ListByBoard(ctx context.Context, boardID int) ([]models.NotifierRule, error) {
+func (p *NotifierRuleRepo) ListByBoard(ctx context.Context, boardID int) ([]*models.NotifierRule, error) {
 	dm, err := p.queries.ListNotifierRulesByBoard(ctx, boardID)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.NotifierRule
+	var b []*models.NotifierRule
 	for _, d := range dm {
 		n := notifierFromPG(d)
-		b = append(b, *n)
+		b = append(b, n)
 	}
 
 	return b, nil
 }
 
-func (p *NotifierRuleRepo) ListByRoom(ctx context.Context, roomID int) ([]models.NotifierRule, error) {
+func (p *NotifierRuleRepo) ListByRoom(ctx context.Context, roomID int) ([]*models.NotifierRule, error) {
 	dm, err := p.queries.ListNotifierRulesByRecipient(ctx, roomID)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.NotifierRule
+	var b []*models.NotifierRule
 	for _, d := range dm {
 		n := notifierFromPG(d)
-		b = append(b, *n)
+		b = append(b, n)
 	}
 
 	return b, nil
@@ -97,13 +97,18 @@ func (p *NotifierRuleRepo) Get(ctx context.Context, id int) (*models.NotifierRul
 	return notifierFromPG(d), nil
 }
 
-func (p *NotifierRuleRepo) Exists(ctx context.Context, boardID, roomID int) (bool, error) {
-	ids := db.CheckNotifierExistsParams{
+func (p *NotifierRuleRepo) Exists(ctx context.Context, id int) (bool, error) {
+	return p.queries.CheckNotifierExists(ctx, id)
+}
+
+func (p *NotifierRuleRepo) ExistsByBoardAndRecipient(ctx context.Context, boardID, roomID int) (bool, error) {
+	// say that five times fast
+	ids := db.CheckNotifierExistsByBoardAndRecipientParams{
 		CwBoardID:        boardID,
 		WebexRecipientID: roomID,
 	}
 
-	exists, err := p.queries.CheckNotifierExists(ctx, ids)
+	exists, err := p.queries.CheckNotifierExistsByBoardAndRecipient(ctx, ids)
 	if err != nil {
 		return false, err
 	}
@@ -160,7 +165,7 @@ func notifierToUpdateParams(n *models.NotifierRule) db.UpdateNotifierRuleParams 
 	}
 }
 
-func notifierFromPG(pg db.NotifierRule) *models.NotifierRule {
+func notifierFromPG(pg *db.NotifierRule) *models.NotifierRule {
 	return &models.NotifierRule{
 		ID:               pg.ID,
 		CwBoardID:        pg.CwBoardID,
@@ -170,8 +175,8 @@ func notifierFromPG(pg db.NotifierRule) *models.NotifierRule {
 	}
 }
 
-func fullRuleFromDB(pg db.ListNotifierRulesFullRow) models.NotifierRuleFull {
-	return models.NotifierRuleFull{
+func fullRuleFromDB(pg *db.ListNotifierRulesFullRow) *models.NotifierRuleFull {
+	return &models.NotifierRuleFull{
 		ID:            pg.ID,
 		Enabled:       pg.Enabled,
 		BoardID:       pg.BoardID,

@@ -61,14 +61,16 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		AttemptNotify:      c.AttemptNotify,
 		MaxMessageLength:   c.MaxMessageLength,
 		MaxConcurrentSyncs: c.MaxConcurrentSyncs,
+		SkipLaunchSyncs:    c.SkipLaunchSyncs,
 	}
 }
 
-func configFromPG(pg db.AppConfig) *models.Config {
+func configFromPG(pg *db.AppConfig) *models.Config {
 	return &models.Config{
 		ID:                 pg.ID,
 		AttemptNotify:      pg.AttemptNotify,
 		MaxMessageLength:   pg.MaxMessageLength,
 		MaxConcurrentSyncs: pg.MaxConcurrentSyncs,
+		SkipLaunchSyncs:    pg.SkipLaunchSyncs,
 	}
 }

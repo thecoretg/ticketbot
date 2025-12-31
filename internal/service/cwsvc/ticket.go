@@ -98,7 +98,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	}
 	logger = logger.With(companyLogGrp(company))
 
-	contact := models.Contact{}
+	var contact *models.Contact
 	if cwt.Contact.ID != 0 {
 		contact, err = txSvc.ensureContact(ctx, cwt.Contact.ID)
 		if err != nil {
@@ -107,7 +107,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		logger = logger.With(contactLogGrp(contact))
 	}
 
-	owner := models.Member{}
+	var owner *models.Member
 	if cwt.Owner.ID != 0 {
 		owner, err = txSvc.ensureMember(ctx, cwt.Owner.ID)
 		if err != nil {
@@ -121,7 +121,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
-	var rsc []models.Member
+	var rsc []*models.Member
 	if ticket.Resources != nil && *ticket.Resources != "" {
 		logger = logger.With(slog.String("resources", *ticket.Resources))
 		ids := resourceStringToSlice(*ticket.Resources)
@@ -152,22 +152,12 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		}
 	}
 
-	var ptrContact *models.Contact
-	if contact.ID != 0 {
-		ptrContact = &contact
-	}
-
-	var ptrOwner *models.Member
-	if owner.ID != 0 {
-		ptrOwner = &owner
-	}
-
 	req.FullTicket = &models.FullTicket{
-		Board:      board,
-		Ticket:     ticket,
-		Company:    company,
-		Contact:    ptrContact,
-		Owner:      ptrOwner,
+		Board:      *board,
+		Ticket:     *ticket,
+		Company:    *company,
+		Contact:    contact,
+		Owner:      owner,
 		LatestNote: note,
 		Resources:  rsc,
 	}
@@ -192,129 +182,129 @@ func (s *Service) getCwData(ticketID int) (CWData, error) {
 	return CWData{ticket: t, note: n}, nil
 }
 
-func (s *Service) ensureBoard(ctx context.Context, id int) (models.Board, error) {
+func (s *Service) ensureBoard(ctx context.Context, id int) (*models.Board, error) {
 	b, err := s.Boards.Get(ctx, id)
 	if err == nil {
 		return b, nil
 	}
 
 	if !errors.Is(err, models.ErrBoardNotFound) {
-		return models.Board{}, fmt.Errorf("getting board from store: %w", err)
+		return nil, fmt.Errorf("getting board from store: %w", err)
 	}
 
 	cw, err := s.CWClient.GetBoard(id, nil)
 	if err != nil {
-		return models.Board{}, fmt.Errorf("getting board from cw: %w", err)
+		return nil, fmt.Errorf("getting board from cw: %w", err)
 	}
 
-	b, err = s.Boards.Upsert(ctx, models.Board{
+	b, err = s.Boards.Upsert(ctx, &models.Board{
 		ID:   cw.ID,
 		Name: cw.Name,
 	})
 	if err != nil {
-		return models.Board{}, fmt.Errorf("inserting board into store: %w", err)
+		return nil, fmt.Errorf("inserting board into store: %w", err)
 	}
 
 	return b, nil
 }
 
-func (s *Service) ensureCompany(ctx context.Context, id int) (models.Company, error) {
+func (s *Service) ensureCompany(ctx context.Context, id int) (*models.Company, error) {
 	c, err := s.Companies.Get(ctx, id)
 	if err == nil {
 		return c, nil
 	}
 
 	if !errors.Is(err, models.ErrCompanyNotFound) {
-		return models.Company{}, fmt.Errorf("getting company from store: %w", err)
+		return nil, fmt.Errorf("getting company from store: %w", err)
 	}
 
 	cw, err := s.CWClient.GetCompany(id, nil)
 	if err != nil {
-		return models.Company{}, fmt.Errorf("getting company from cw: %w", err)
+		return nil, fmt.Errorf("getting company from cw: %w", err)
 	}
 
-	c, err = s.Companies.Upsert(ctx, models.Company{
+	c, err = s.Companies.Upsert(ctx, &models.Company{
 		ID:   cw.Id,
 		Name: cw.Name,
 	})
 	if err != nil {
-		return models.Company{}, fmt.Errorf("inserting company into store: %w", err)
+		return nil, fmt.Errorf("inserting company into store: %w", err)
 	}
 
 	return c, nil
 }
 
-func (s *Service) ensureContact(ctx context.Context, id int) (models.Contact, error) {
+func (s *Service) ensureContact(ctx context.Context, id int) (*models.Contact, error) {
 	c, err := s.Contacts.Get(ctx, id)
 	if err == nil {
 		return c, nil
 	}
 
 	if !errors.Is(err, models.ErrContactNotFound) {
-		return models.Contact{}, fmt.Errorf("getting contact from store: %w", err)
+		return nil, fmt.Errorf("getting contact from store: %w", err)
 	}
 
 	cw, err := s.CWClient.GetContact(id, nil)
 	if err != nil {
-		return models.Contact{}, fmt.Errorf("getting contact from cw: %w", err)
+		return nil, fmt.Errorf("getting contact from cw: %w", err)
 	}
 
 	var compID *int
 	if cw.Company.ID != 0 {
 		comp, err := s.ensureCompany(ctx, cw.Company.ID)
 		if err != nil {
-			return models.Contact{}, fmt.Errorf("ensuring contact's company is in store: %w", err)
+			return nil, fmt.Errorf("ensuring contact's company is in store: %w", err)
 		}
 		compID = intToPtr(comp.ID)
 	}
 
-	c, err = s.Contacts.Upsert(ctx, models.Contact{
+	c, err = s.Contacts.Upsert(ctx, &models.Contact{
 		ID:        cw.ID,
 		FirstName: cw.FirstName,
 		LastName:  strToPtr(cw.LastName),
 		CompanyID: compID,
 	})
 	if err != nil {
-		return models.Contact{}, fmt.Errorf("inserting contact into store: %w", err)
+		return nil, fmt.Errorf("inserting contact into store: %w", err)
 	}
 
 	return c, nil
 }
 
-func (s *Service) ensureMemberByIdentifier(ctx context.Context, identifier string) (models.Member, error) {
+func (s *Service) ensureMemberByIdentifier(ctx context.Context, identifier string) (*models.Member, error) {
 	m, err := s.Members.GetByIdentifier(ctx, identifier)
 	if err == nil {
 		return m, nil
 	}
 
 	if !errors.Is(err, models.ErrMemberNotFound) {
-		return models.Member{}, fmt.Errorf("getting member from store: %w", err)
+		return nil, fmt.Errorf("getting member from store: %w", err)
 	}
 
 	cw, err := s.CWClient.GetMemberByIdentifier(identifier)
 	if err != nil {
-		return models.Member{}, fmt.Errorf("getting member from cw by identifier: %w", err)
+		return nil, fmt.Errorf("getting member from cw by identifier: %w", err)
 	}
 
 	return s.ensureMember(ctx, cw.ID)
 }
 
-func (s *Service) ensureMember(ctx context.Context, id int) (models.Member, error) {
+func (s *Service) ensureMember(ctx context.Context, id int) (*models.Member, error) {
 	m, err := s.Members.Get(ctx, id)
 	if err == nil {
 		return m, nil
 	}
 
 	if !errors.Is(err, models.ErrMemberNotFound) {
-		return models.Member{}, fmt.Errorf("getting member from store: %w", err)
+		return nil, fmt.Errorf("getting member from store: %w", err)
 	}
 
 	cw, err := s.CWClient.GetMember(id, nil)
 	if err != nil {
-		return models.Member{}, fmt.Errorf("getting member from cw: %w", err)
+		return nil, fmt.Errorf("getting member from cw: %w", err)
 	}
 
-	m, err = s.Members.Upsert(ctx, models.Member{
+	m, err = s.Members.Upsert(ctx, &models.Member{
 		ID:           cw.ID,
 		Identifier:   cw.Identifier,
 		FirstName:    cw.FirstName,
@@ -322,18 +312,18 @@ func (s *Service) ensureMember(ctx context.Context, id int) (models.Member, erro
 		PrimaryEmail: cw.PrimaryEmail,
 	})
 	if err != nil {
-		return models.Member{}, fmt.Errorf("inserting member into store: %w", err)
+		return nil, fmt.Errorf("inserting member into store: %w", err)
 	}
 
 	return m, nil
 }
 
-func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (models.Ticket, error) {
+func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (*models.Ticket, error) {
 	if cwt == nil {
-		return models.Ticket{}, errors.New("received nil ticket")
+		return nil, errors.New("received nil ticket")
 	}
 
-	t, err := s.Tickets.Upsert(ctx, models.Ticket{
+	t, err := s.Tickets.Upsert(ctx, &models.Ticket{
 		ID:        cwt.ID,
 		Summary:   cwt.Summary,
 		BoardID:   cwt.Board.ID,
@@ -344,7 +334,7 @@ func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (models.Tic
 		UpdatedBy: &cwt.Info.UpdatedBy,
 	})
 	if err != nil {
-		return models.Ticket{}, fmt.Errorf("upserting ticket: %w", err)
+		return nil, fmt.Errorf("upserting ticket: %w", err)
 	}
 
 	return t, nil
@@ -374,7 +364,7 @@ func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNo
 		return nil, fmt.Errorf("getting note from store: %w", err)
 	}
 
-	n, err = s.Notes.Upsert(ctx, models.TicketNote{
+	n, err = s.Notes.Upsert(ctx, &models.TicketNote{
 		ID:        cwn.ID,
 		TicketID:  cwn.TicketId,
 		Content:   strToPtr(cwn.Text),
@@ -451,15 +441,15 @@ func logRequest(req *Request, err error, logger *slog.Logger) {
 	}
 }
 
-func companyLogGrp(company models.Company) slog.Attr {
+func companyLogGrp(company *models.Company) slog.Attr {
 	return slog.Group("company", "id", company.ID, "name", company.Name)
 }
 
-func boardLogGrp(board models.Board) slog.Attr {
+func boardLogGrp(board *models.Board) slog.Attr {
 	return slog.Group("board", "id", board.ID, "name", board.Name)
 }
 
-func ownerLogGrp(owner models.Member) slog.Attr {
+func ownerLogGrp(owner *models.Member) slog.Attr {
 	return slog.Group("owner",
 		"id", owner.ID,
 		"identifier", owner.Identifier,
@@ -468,7 +458,7 @@ func ownerLogGrp(owner models.Member) slog.Attr {
 	)
 }
 
-func contactLogGrp(contact models.Contact) slog.Attr {
+func contactLogGrp(contact *models.Contact) slog.Attr {
 	ln := "None"
 	if contact.LastName != nil {
 		ln = *contact.LastName

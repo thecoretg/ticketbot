@@ -67,10 +67,10 @@ func (s *Service) SyncBoards(ctx context.Context) error {
 	return nil
 }
 
-func boardsToUpsert(cwBoards []psa.Board) []models.Board {
-	var toUpsert []models.Board
+func boardsToUpsert(cwBoards []psa.Board) []*models.Board {
+	var toUpsert []*models.Board
 	for _, c := range cwBoards {
-		b := models.Board{
+		b := &models.Board{
 			ID:   c.ID,
 			Name: c.Name,
 		}
@@ -80,13 +80,13 @@ func boardsToUpsert(cwBoards []psa.Board) []models.Board {
 	return toUpsert
 }
 
-func boardsToDelete(cwBoards []psa.Board, storeBoards []models.Board) []models.Board {
+func boardsToDelete(cwBoards []psa.Board, storeBoards []*models.Board) []*models.Board {
 	ci := make(map[int]psa.Board)
 	for _, c := range cwBoards {
 		ci[c.ID] = c
 	}
 
-	var toDelete []models.Board
+	var toDelete []*models.Board
 	for _, b := range storeBoards {
 		if _, ok := ci[b.ID]; !ok {
 			toDelete = append(toDelete, b)

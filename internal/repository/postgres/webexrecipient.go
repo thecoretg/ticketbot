@@ -26,13 +26,13 @@ func (p *WebexRecipientRepo) WithTx(tx pgx.Tx) models.WebexRecipientRepository {
 	}
 }
 
-func (p *WebexRecipientRepo) List(ctx context.Context) ([]models.WebexRecipient, error) {
+func (p *WebexRecipientRepo) List(ctx context.Context) ([]*models.WebexRecipient, error) {
 	dbr, err := p.queries.ListWebexRecipients(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var r []models.WebexRecipient
+	var r []*models.WebexRecipient
 	for _, d := range dbr {
 		r = append(r, recipFromPG(d))
 	}
@@ -40,13 +40,13 @@ func (p *WebexRecipientRepo) List(ctx context.Context) ([]models.WebexRecipient,
 	return r, nil
 }
 
-func (p *WebexRecipientRepo) ListRooms(ctx context.Context) ([]models.WebexRecipient, error) {
+func (p *WebexRecipientRepo) ListRooms(ctx context.Context) ([]*models.WebexRecipient, error) {
 	dbr, err := p.queries.ListWebexRooms(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var r []models.WebexRecipient
+	var r []*models.WebexRecipient
 	for _, d := range dbr {
 		r = append(r, recipFromPG(d))
 	}
@@ -54,13 +54,13 @@ func (p *WebexRecipientRepo) ListRooms(ctx context.Context) ([]models.WebexRecip
 	return r, nil
 }
 
-func (p *WebexRecipientRepo) ListPeople(ctx context.Context) ([]models.WebexRecipient, error) {
+func (p *WebexRecipientRepo) ListPeople(ctx context.Context) ([]*models.WebexRecipient, error) {
 	dbr, err := p.queries.ListWebexPeople(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var r []models.WebexRecipient
+	var r []*models.WebexRecipient
 	for _, d := range dbr {
 		r = append(r, recipFromPG(d))
 	}
@@ -68,13 +68,13 @@ func (p *WebexRecipientRepo) ListPeople(ctx context.Context) ([]models.WebexReci
 	return r, nil
 }
 
-func (p *WebexRecipientRepo) ListByEmail(ctx context.Context, email string) ([]models.WebexRecipient, error) {
+func (p *WebexRecipientRepo) ListByEmail(ctx context.Context, email string) ([]*models.WebexRecipient, error) {
 	dbr, err := p.queries.ListByEmail(ctx, &email)
 	if err != nil {
 		return nil, err
 	}
 
-	var r []models.WebexRecipient
+	var r []*models.WebexRecipient
 	for _, d := range dbr {
 		r = append(r, recipFromPG(d))
 	}
@@ -82,34 +82,34 @@ func (p *WebexRecipientRepo) ListByEmail(ctx context.Context, email string) ([]m
 	return r, nil
 }
 
-func (p *WebexRecipientRepo) Get(ctx context.Context, id int) (models.WebexRecipient, error) {
+func (p *WebexRecipientRepo) Get(ctx context.Context, id int) (*models.WebexRecipient, error) {
 	d, err := p.queries.GetWebexRecipient(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.WebexRecipient{}, models.ErrWebexRecipientNotFound
+			return nil, models.ErrWebexRecipientNotFound
 		}
-		return models.WebexRecipient{}, err
+		return nil, err
 	}
 
 	return recipFromPG(d), nil
 }
 
-func (p *WebexRecipientRepo) GetByWebexID(ctx context.Context, webexID string) (models.WebexRecipient, error) {
+func (p *WebexRecipientRepo) GetByWebexID(ctx context.Context, webexID string) (*models.WebexRecipient, error) {
 	d, err := p.queries.GetWebexRecipientByWebexID(ctx, webexID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.WebexRecipient{}, models.ErrWebexRecipientNotFound
+			return nil, models.ErrWebexRecipientNotFound
 		}
-		return models.WebexRecipient{}, err
+		return nil, err
 	}
 
 	return recipFromPG(d), nil
 }
 
-func (p *WebexRecipientRepo) Upsert(ctx context.Context, r models.WebexRecipient) (models.WebexRecipient, error) {
+func (p *WebexRecipientRepo) Upsert(ctx context.Context, r *models.WebexRecipient) (*models.WebexRecipient, error) {
 	d, err := p.queries.UpsertWebexRecipient(ctx, webexRoomToUpsertParams(r))
 	if err != nil {
-		return models.WebexRecipient{}, err
+		return nil, err
 	}
 
 	return recipFromPG(d), nil
@@ -126,7 +126,7 @@ func (p *WebexRecipientRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func webexRoomToUpsertParams(r models.WebexRecipient) db.UpsertWebexRecipientParams {
+func webexRoomToUpsertParams(r *models.WebexRecipient) db.UpsertWebexRecipientParams {
 	return db.UpsertWebexRecipientParams{
 		WebexID:      r.WebexID,
 		Name:         r.Name,
@@ -136,8 +136,8 @@ func webexRoomToUpsertParams(r models.WebexRecipient) db.UpsertWebexRecipientPar
 	}
 }
 
-func recipFromPG(pg db.WebexRecipient) models.WebexRecipient {
-	return models.WebexRecipient{
+func recipFromPG(pg *db.WebexRecipient) *models.WebexRecipient {
+	return &models.WebexRecipient{
 		ID:           pg.ID,
 		WebexID:      pg.WebexID,
 		Name:         pg.Name,

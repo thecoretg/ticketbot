@@ -24,7 +24,7 @@ SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_o
 WHERE id = $1 LIMIT 1
 `
 
-func (q *Queries) GetMember(ctx context.Context, id int) (CwMember, error) {
+func (q *Queries) GetMember(ctx context.Context, id int) (*CwMember, error) {
 	row := q.db.QueryRow(ctx, getMember, id)
 	var i CwMember
 	err := row.Scan(
@@ -36,7 +36,7 @@ func (q *Queries) GetMember(ctx context.Context, id int) (CwMember, error) {
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const getMemberByIdentifier = `-- name: GetMemberByIdentifier :one
@@ -44,7 +44,7 @@ SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_o
 WHERE identifier = $1 LIMIT 1
 `
 
-func (q *Queries) GetMemberByIdentifier(ctx context.Context, identifier string) (CwMember, error) {
+func (q *Queries) GetMemberByIdentifier(ctx context.Context, identifier string) (*CwMember, error) {
 	row := q.db.QueryRow(ctx, getMemberByIdentifier, identifier)
 	var i CwMember
 	err := row.Scan(
@@ -56,7 +56,7 @@ func (q *Queries) GetMemberByIdentifier(ctx context.Context, identifier string) 
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }
 
 const listMembers = `-- name: ListMembers :many
@@ -64,13 +64,13 @@ SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_o
 ORDER BY id
 `
 
-func (q *Queries) ListMembers(ctx context.Context) ([]CwMember, error) {
+func (q *Queries) ListMembers(ctx context.Context) ([]*CwMember, error) {
 	rows, err := q.db.Query(ctx, listMembers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CwMember
+	var items []*CwMember
 	for rows.Next() {
 		var i CwMember
 		if err := rows.Scan(
@@ -84,7 +84,7 @@ func (q *Queries) ListMembers(ctx context.Context) ([]CwMember, error) {
 		); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, &i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ type UpsertMemberParams struct {
 	PrimaryEmail string `json:"primary_email"`
 }
 
-func (q *Queries) UpsertMember(ctx context.Context, arg UpsertMemberParams) (CwMember, error) {
+func (q *Queries) UpsertMember(ctx context.Context, arg UpsertMemberParams) (*CwMember, error) {
 	row := q.db.QueryRow(ctx, upsertMember,
 		arg.ID,
 		arg.Identifier,
@@ -142,5 +142,5 @@ func (q *Queries) UpsertMember(ctx context.Context, arg UpsertMemberParams) (CwM
 		&i.UpdatedOn,
 		&i.AddedOn,
 	)
-	return i, err
+	return &i, err
 }

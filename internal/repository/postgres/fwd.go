@@ -26,13 +26,13 @@ func (p *UserForwardRepo) WithTx(tx pgx.Tx) models.NotifierForwardRepository {
 	}
 }
 
-func (p *UserForwardRepo) ListAll(ctx context.Context) ([]models.NotifierForward, error) {
+func (p *UserForwardRepo) ListAll(ctx context.Context) ([]*models.NotifierForward, error) {
 	dm, err := p.queries.ListNotifierForwards(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.NotifierForward
+	var b []*models.NotifierForward
 	for _, d := range dm {
 		b = append(b, forwardFromPG(d))
 	}
@@ -40,13 +40,13 @@ func (p *UserForwardRepo) ListAll(ctx context.Context) ([]models.NotifierForward
 	return b, nil
 }
 
-func (p *UserForwardRepo) ListAllFull(ctx context.Context) ([]models.NotifierForwardFull, error) {
+func (p *UserForwardRepo) ListAllFull(ctx context.Context) ([]*models.NotifierForwardFull, error) {
 	df, err := p.queries.ListNotifierForwardsFull(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var f []models.NotifierForwardFull
+	var f []*models.NotifierForwardFull
 	for _, d := range df {
 		f = append(f, fullForwardFromPG(d))
 	}
@@ -54,13 +54,13 @@ func (p *UserForwardRepo) ListAllFull(ctx context.Context) ([]models.NotifierFor
 	return f, nil
 }
 
-func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]models.NotifierForward, error) {
+func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]*models.NotifierForward, error) {
 	dm, err := p.queries.ListNotifierForwardsBySourceRecipientID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []models.NotifierForward
+	var b []*models.NotifierForward
 	for _, d := range dm {
 		b = append(b, forwardFromPG(d))
 	}
@@ -68,22 +68,26 @@ func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]mod
 	return b, nil
 }
 
-func (p *UserForwardRepo) Get(ctx context.Context, id int) (models.NotifierForward, error) {
+func (p *UserForwardRepo) Get(ctx context.Context, id int) (*models.NotifierForward, error) {
 	d, err := p.queries.GetNotifierForward(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return models.NotifierForward{}, models.ErrUserForwardNotFound
+			return nil, models.ErrUserForwardNotFound
 		}
-		return models.NotifierForward{}, err
+		return nil, err
 	}
 
 	return forwardFromPG(d), nil
 }
 
-func (p *UserForwardRepo) Insert(ctx context.Context, b models.NotifierForward) (models.NotifierForward, error) {
+func (p *UserForwardRepo) Exists(ctx context.Context, id int) (bool, error) {
+	return p.queries.CheckNotifierForwardExists(ctx, id)
+}
+
+func (p *UserForwardRepo) Insert(ctx context.Context, b *models.NotifierForward) (*models.NotifierForward, error) {
 	d, err := p.queries.InsertNotifierForward(ctx, forwardToInsertParams(b))
 	if err != nil {
-		return models.NotifierForward{}, err
+		return nil, err
 	}
 
 	return forwardFromPG(d), nil
@@ -100,7 +104,7 @@ func (p *UserForwardRepo) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func forwardToInsertParams(t models.NotifierForward) db.InsertNotifierForwardParams {
+func forwardToInsertParams(t *models.NotifierForward) db.InsertNotifierForwardParams {
 	return db.InsertNotifierForwardParams{
 		SourceID:      t.SourceID,
 		DestinationID: t.DestID,
@@ -111,8 +115,8 @@ func forwardToInsertParams(t models.NotifierForward) db.InsertNotifierForwardPar
 	}
 }
 
-func forwardFromPG(pg db.NotifierForward) models.NotifierForward {
-	return models.NotifierForward{
+func forwardFromPG(pg *db.NotifierForward) *models.NotifierForward {
+	return &models.NotifierForward{
 		ID:            pg.ID,
 		SourceID:      pg.SourceID,
 		DestID:        pg.DestinationID,
@@ -125,8 +129,8 @@ func forwardFromPG(pg db.NotifierForward) models.NotifierForward {
 	}
 }
 
-func fullForwardFromPG(pg db.ListNotifierForwardsFullRow) models.NotifierForwardFull {
-	return models.NotifierForwardFull{
+func fullForwardFromPG(pg *db.ListNotifierForwardsFullRow) *models.NotifierForwardFull {
+	return &models.NotifierForwardFull{
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,
 		UserKeepsCopy:   pg.UserKeepsCopy,
