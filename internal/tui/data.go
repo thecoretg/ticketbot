@@ -11,17 +11,6 @@ type (
 	gotFwdsMsg  struct{ fwds []models.NotifierForwardFull }
 )
 
-func (m *Model) getRules() tea.Cmd {
-	return func() tea.Msg {
-		rules, err := m.SDKClient.ListNotifierRules()
-		if err != nil {
-			return sdkErr{error: err}
-		}
-
-		return gotRulesMsg{rules: rules}
-	}
-}
-
 func (m *Model) getFwds() tea.Cmd {
 	return func() tea.Msg {
 		fwds, err := m.SDKClient.ListUserForwards()

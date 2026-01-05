@@ -5,7 +5,6 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/pkg/sdk"
 )
@@ -13,21 +12,20 @@ import (
 type rulesModel struct {
 	SDKClient     *sdk.Client
 	gotDimensions bool
+	width         int
+	height        int
 	rulesLoaded   bool
 	table         table.Model
 	help          help.Model
 	form          *huh.Form
-	formResult    *rulesFormResult
 	entryMode     bool
 
-	availWidth  int
-	availHeight int
-	rules       []models.NotifierRuleFull
+	rules []models.NotifierRuleFull
 }
 
 type rulesFormResult struct {
-	board models.Board
-	recip models.WebexRecipient
+	board *models.Board
+	recip *models.WebexRecipient
 }
 
 func newRulesModel(cl *sdk.Client) *rulesModel {
@@ -35,11 +33,10 @@ func newRulesModel(cl *sdk.Client) *rulesModel {
 	h.Styles.ShortDesc = helpStyle
 	h.Styles.ShortKey = helpStyle
 	return &rulesModel{
-		SDKClient:  cl,
-		rules:      []models.NotifierRuleFull{},
-		table:      newTable(),
-		help:       h,
-		formResult: &rulesFormResult{},
+		SDKClient: cl,
+		rules:     []models.NotifierRuleFull{},
+		table:     newTable(),
+		help:      h,
 	}
 }
 
@@ -50,61 +47,37 @@ func (rm *rulesModel) Init() tea.Cmd {
 func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		rm.width = msg.Width
+		rm.height = msg.Height
 		rm.gotDimensions = true
 	case gotRulesMsg:
 		rm.rules = msg.rules
 		rm.rulesLoaded = true
 		rm.table.SetRows(rulesToRows(rm.rules))
-
-	case resizeModelsMsg:
-		rm.availWidth = msg.w
-		rm.availHeight = msg.h
-		if rm.entryMode {
-			rm.setTableDimensions(rm.availWidth, (rm.availHeight/2)-dividerHeight())
-			rm.form.WithHeight(rm.availHeight / 2)
-		} else {
-			rm.setTableDimensions(msg.w, msg.h)
-		}
-
-	case ruleFormDataMsg:
-		rm.form = ruleEntryForm(msg.boards, msg.recips, rm.formResult)
-		rm.form.WithHeight(rm.table.Height())
-		return rm, tea.Sequence(rm.form.Init(), updateEntryMode(true))
-
+	case resizeTablesMsg:
+		rm.setTableDimensions(msg.w, msg.h)
 	case updateEntryModeMsg:
-		if rm.entryMode != msg.enable {
-			rm.entryMode = msg.enable
-
-			return rm, resizeModels(rm.availWidth, rm.availHeight)
-		}
+		rm.entryMode = msg.enable
 	}
 
-	switch rm.entryMode {
-	case true:
+	if rm.entryMode {
 		switch rm.form.State {
-		case huh.StateAborted:
-			return rm, updateEntryMode(false)
-		case huh.StateCompleted:
-			res := rm.formResult
-			rule := &models.NotifierRule{
-				CwBoardID:        res.board.ID,
-				WebexRecipientID: res.recip.ID,
-				NotifyEnabled:    true,
-			}
-			return rm, tea.Sequence(rm.submitRule(rule), updateEntryMode(false))
-		default:
+		case huh.StateNormal:
 			form, cmd := rm.form.Update(msg)
 			if f, ok := form.(*huh.Form); ok {
 				rm.form = f
 			}
 
 			return rm, cmd
+		case huh.StateAborted:
+			return rm, updateEntryMode(false)
+		case huh.StateCompleted:
+
 		}
-	default:
-		var cmd tea.Cmd
-		rm.table, cmd = rm.table.Update(msg)
-		return rm, cmd
 	}
+	rm.table, cmd = rm.table.Update(msg)
+
+	return rm, cmd
 }
 
 func (rm *rulesModel) View() string {
@@ -114,10 +87,6 @@ func (rm *rulesModel) View() string {
 
 	if !rm.rulesLoaded {
 		return "Loading rules..."
-	}
-
-	if rm.entryMode {
-		return lipgloss.JoinVertical(lipgloss.Top, rm.table.View(), divider(rm.availWidth), rm.form.View())
 	}
 
 	return rm.table.View()
@@ -134,8 +103,6 @@ func (rm *rulesModel) setTableDimensions(w, h int) {
 		{Title: "BOARD", Width: boardW},
 		{Title: "RECIPIENT", Width: recipW},
 	})
-
-	t.SetRows(rulesToRows(rm.rules))
 	t.SetHeight(h)
 }
 
@@ -149,19 +116,16 @@ func rulesToRows(rules []models.NotifierRuleFull) []table.Row {
 }
 
 func ruleEntryForm(boards []models.Board, recips []models.WebexRecipient, result *rulesFormResult) *huh.Form {
-	kb := huh.NewDefaultKeyMap()
-	kb.Quit.SetKeys("q")
-
 	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[models.Board]().
 				Title("Connectwise Board").
 				Options(boardsToFormOpts(boards)...).
-				Value(&result.board),
+				Value(result.board),
 			huh.NewSelect[models.WebexRecipient]().
 				Title("Webex Recipient").
 				Options(recipsToFormOpts(recips)...).
-				Value(&result.recip),
+				Key("recips"),
 		),
-	).WithTheme(huh.ThemeBase16()).WithKeyMap(kb)
+	).WithTheme(huh.ThemeBase16())
 }

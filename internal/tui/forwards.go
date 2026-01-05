@@ -4,16 +4,12 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
 type fwdsModel struct {
-	keys          fwdsModelKeys
-	help          help.Model
 	gotDimensions bool
 	width         int
 	height        int
@@ -28,10 +24,8 @@ func newFwdsModel() *fwdsModel {
 	h.Styles.ShortDesc = helpStyle
 	h.Styles.ShortKey = helpStyle
 	return &fwdsModel{
-		keys:  defaultFwdsKeys,
 		fwds:  []models.NotifierForwardFull{},
 		table: newTable(),
-		help:  h,
 	}
 }
 
@@ -45,17 +39,12 @@ func (fm *fwdsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		fm.width = msg.Width
 		fm.height = msg.Height
 		fm.gotDimensions = true
-		hh := lipgloss.Height(fm.helpView())
-		setFwdsTableDimensions(&fm.table, fm.width, fm.height-hh)
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, fm.keys.switchRules):
-			return fm, switchModel(modelTypeRules)
-		}
 	case gotFwdsMsg:
 		fm.fwds = msg.fwds
 		fm.fwdsLoaded = true
 		fm.table.SetRows(fwdsToRows(fm.fwds))
+	case resizeModelsMsg:
+		fm.setTableDimensions(msg.w, msg.h)
 	}
 
 	var cmd tea.Cmd
@@ -73,14 +62,11 @@ func (fm *fwdsModel) View() string {
 		return "Loading forwards..."
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Top, fm.table.View(), fm.helpView())
+	return fm.table.View()
 }
 
-func (fm *fwdsModel) helpView() string {
-	return fm.help.ShortHelpView(fm.keys.ShortHelp())
-}
-
-func setFwdsTableDimensions(t *table.Model, w, h int) {
+func (fm *fwdsModel) setTableDimensions(w, h int) {
+	t := &fm.table
 	enableW := 8
 	keepW := 8
 	datesW := 13

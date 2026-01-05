@@ -1,9 +1,17 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/lipgloss"
+)
 
 type keyMap struct {
-	quit key.Binding
+	quit             key.Binding
+	switchModelRules key.Binding
+	switchModelFwds  key.Binding
+	newItem          key.Binding
+	deleteItem       key.Binding
 }
 
 var defaultKeyMap = keyMap{
@@ -11,56 +19,68 @@ var defaultKeyMap = keyMap{
 		key.WithKeys("q"),
 		key.WithHelp("q", "quit"),
 	),
-}
-
-func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.quit}
-}
-
-func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.quit},
-	}
-}
-
-type rulesModelKeys struct {
-	switchFwds key.Binding
-}
-
-var defaultRulesKeys = rulesModelKeys{
-	switchFwds: key.NewBinding(
-		key.WithKeys("ctrl+f"),
-		key.WithHelp("ctrl+f", "switch to forwards"),
-	),
-}
-
-func (rk rulesModelKeys) ShortHelp() []key.Binding {
-	return []key.Binding{rk.switchFwds}
-}
-
-func (rk rulesModelKeys) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{rk.switchFwds},
-	}
-}
-
-type fwdsModelKeys struct {
-	switchRules key.Binding
-}
-
-var defaultFwdsKeys = fwdsModelKeys{
-	switchRules: key.NewBinding(
+	switchModelRules: key.NewBinding(
 		key.WithKeys("ctrl+r"),
-		key.WithHelp("ctrl+r", "switch to rules"),
+		key.WithHelp("ctrl+r", "rules"),
+	),
+	switchModelFwds: key.NewBinding(
+		key.WithKeys("ctrl+f"),
+		key.WithHelp("ctrl+f", "forwards"),
+	),
+	newItem: key.NewBinding(
+		key.WithKeys("n"),
+		key.WithHelp("n", "new"),
+	),
+	deleteItem: key.NewBinding(
+		key.WithKeys("x"),
+		key.WithHelp("x", "delete"),
 	),
 }
 
-func (fk fwdsModelKeys) ShortHelp() []key.Binding {
-	return []key.Binding{fk.switchRules}
+// ShortHelp() is here to satisfy an interface
+func (k keyMap) ShortHelp() []key.Binding {
+	return []key.Binding{}
 }
 
-func (fk fwdsModelKeys) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{fk.switchRules},
+// FullHelp() is here to satisfy an interface
+func (k keyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{}
+}
+
+func (m *Model) helpKeys() []key.Binding {
+	var keys []key.Binding
+	keys = append(keys, m.keys.quit, m.keys.newItem)
+
+	if !m.entryMode {
+		switch m.activeModel {
+		case m.allModels.rules:
+			if len(m.allModels.rules.rules) > 0 {
+				keys = append(keys, m.keys.deleteItem)
+			}
+			keys = append(keys, m.keys.switchModelFwds)
+		case m.allModels.fwds:
+			if len(m.allModels.fwds.fwds) > 0 {
+				keys = append(keys, m.keys.deleteItem)
+			}
+			keys = append(keys, m.keys.switchModelRules)
+		}
 	}
+
+	return keys
+}
+
+func newHelp() help.Model {
+	h := help.New()
+	h.Styles.ShortDesc = helpStyle
+	h.Styles.ShortKey = helpStyle
+	return h
+}
+
+func (m *Model) helpViewSize() (int, int) {
+	hv := m.helpView()
+	return lipgloss.Width(hv), lipgloss.Height(hv)
+}
+
+func (m *Model) helpView() string {
+	return m.help.ShortHelpView(m.helpKeys())
 }
