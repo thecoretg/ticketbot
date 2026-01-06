@@ -29,7 +29,7 @@ type allModels struct {
 
 func NewModel(sl *sdk.Client) *Model {
 	rm := newRulesModel(sl)
-	fm := newFwdsModel()
+	fm := newFwdsModel(sl)
 	return &Model{
 		SDKClient:   sl,
 		help:        help.New(),
@@ -42,7 +42,7 @@ func NewModel(sl *sdk.Client) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.allModels.rules.Init(), m.getFwds())
+	return tea.Batch(m.allModels.rules.Init())
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

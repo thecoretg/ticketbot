@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -47,6 +48,11 @@ type (
 	fwdsModelStatus   int
 )
 
+var (
+	errInvalidDateInput    = errors.New("valid date in format YYYY-MM-DD required")
+	errEndEarlierThanStart = errors.New("end time cannot be before start time")
+)
+
 const (
 	fwdStatusInitializing fwdsModelStatus = iota
 	fwdStatusTable
@@ -63,7 +69,7 @@ func newFwdsModel(cl *sdk.Client) *fwdsModel {
 		SDKClient:  cl,
 		fwds:       []models.NotifierForwardFull{},
 		table:      newTable(),
-		formResult: &fwdsFormResult,
+		formResult: &fwdsFormResult{},
 		spinner:    s,
 	}
 }
@@ -119,7 +125,7 @@ func (fm *fwdsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case huh.StateCompleted:
 			res := fm.formResult
-			fwd := formResToForm(res)
+			fwd := fwdFormResToForm(res)
 			cmds = append(cmds, fm.submitFwd(fwd), updateFwdsStatus(fwdStatusRefreshing))
 		}
 
@@ -236,8 +242,12 @@ func fwdsToRows(fwds []models.NotifierForwardFull) []table.Row {
 	for _, f := range fwds {
 		src := fmt.Sprintf("%s (%s)", f.SourceName, shortenSourceType(f.SourceType))
 		dst := fmt.Sprintf("%s (%s)", f.DestinationName, shortenSourceType(f.DestinationType))
-		sd := f.StartDate.Format("01-02")
+		sd := "N/A"
 		ed := "N/A"
+		if f.StartDate != nil {
+			sd = f.StartDate.Format("01-02")
+		}
+
 		if f.EndDate != nil {
 			ed = f.EndDate.Format("01-02")
 		}
@@ -281,13 +291,63 @@ func fwdEntryForm(recips []models.WebexRecipient, result *fwdsFormResult, height
 					}
 
 					if !isValidDate(t) {
-						return errors.New("valid date in format YYYY-MM-DD required")
+						return errInvalidDateInput
 					}
 
 					return nil
 				}),
+			huh.NewInput().
+				Title("End Date").
+				Description("YYYY-MM-DD format. Leave blank for indefinite.").
+				Value(&result.end).
+				Validate(func(s string) error {
+					t := strings.TrimSpace(s)
+					if t == "" {
+						return nil
+					}
+
+					if !isValidDate(t) {
+						return errInvalidDateInput
+					}
+
+					if result.start != "" {
+						st, _ := time.Parse("2006-01-02", result.start)
+						et, _ := time.Parse("2006-01-02", t)
+						if st.After(et) {
+							return errEndEarlierThanStart
+						}
+					}
+
+					return nil
+				}),
+			huh.NewConfirm().
+				Title("Source User Keeps Copy").
+				Negative("No").
+				Affirmative("Yes").
+				Value(&result.userKeeps),
 		),
-	)
+	).WithTheme(huh.ThemeBase()).WithHeight(height + 1).WithShowHelp(false) // add +1 to height to account for not showing help
+}
+
+func fwdFormResToForm(res *fwdsFormResult) *models.NotifierForward {
+	fwd := &models.NotifierForward{
+		SourceID:      res.src.ID,
+		DestID:        res.dst.ID,
+		UserKeepsCopy: res.userKeeps,
+		Enabled:       true,
+	}
+
+	if strings.TrimSpace(res.start) != "" {
+		p, _ := time.Parse("2006-01-02", res.start)
+		fwd.StartDate = &p
+	}
+
+	if strings.TrimSpace(res.end) != "" {
+		p, _ := time.Parse("2006-01-02", res.end)
+		fwd.EndDate = &p
+	}
+
+	return fwd
 }
 
 func updateFwdsStatus(status fwdsModelStatus) tea.Cmd {
