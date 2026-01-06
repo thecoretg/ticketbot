@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -20,9 +19,6 @@ type fwdsModel struct {
 }
 
 func newFwdsModel() *fwdsModel {
-	h := help.New()
-	h.Styles.ShortDesc = helpStyle
-	h.Styles.ShortKey = helpStyle
 	return &fwdsModel{
 		fwds:  []models.NotifierForwardFull{},
 		table: newTable(),

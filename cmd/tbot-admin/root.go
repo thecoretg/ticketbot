@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"github.com/thecoretg/ticketbot/cmd/common"
 	"github.com/thecoretg/ticketbot/pkg/sdk"
@@ -36,6 +37,8 @@ func init() {
 }
 
 func createClient(cmd *cobra.Command, args []string) error {
+	_ = godotenv.Load()
+
 	var err error
 	key := os.Getenv("TBOT_API_KEY")
 	base := os.Getenv("TBOT_BASE_URL")

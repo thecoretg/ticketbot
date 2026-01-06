@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -14,7 +13,7 @@ type keyMap struct {
 	deleteItem       key.Binding
 }
 
-var defaultKeyMap = keyMap{
+var allKeys = keyMap{
 	quit: key.NewBinding(
 		key.WithKeys("q"),
 		key.WithHelp("q", "quit"),
@@ -49,31 +48,24 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 func (m *Model) helpKeys() []key.Binding {
 	var keys []key.Binding
-	keys = append(keys, m.keys.quit, m.keys.newItem)
+	keys = append(keys, allKeys.quit, allKeys.newItem)
 
 	if !m.entryMode {
 		switch m.activeModel {
 		case m.allModels.rules:
 			if len(m.allModels.rules.rules) > 0 {
-				keys = append(keys, m.keys.deleteItem)
+				keys = append(keys, allKeys.deleteItem)
 			}
-			keys = append(keys, m.keys.switchModelFwds)
+			keys = append(keys, allKeys.switchModelFwds)
 		case m.allModels.fwds:
 			if len(m.allModels.fwds.fwds) > 0 {
-				keys = append(keys, m.keys.deleteItem)
+				keys = append(keys, allKeys.deleteItem)
 			}
-			keys = append(keys, m.keys.switchModelRules)
+			keys = append(keys, allKeys.switchModelRules)
 		}
 	}
 
 	return keys
-}
-
-func newHelp() help.Model {
-	h := help.New()
-	h.Styles.ShortDesc = helpStyle
-	h.Styles.ShortKey = helpStyle
-	return h
 }
 
 func (m *Model) helpViewSize() (int, int) {
@@ -82,5 +74,9 @@ func (m *Model) helpViewSize() (int, int) {
 }
 
 func (m *Model) helpView() string {
+	if m.activeModel == m.allModels.rules && m.allModels.rules.status == rmStatusEntry {
+		f := m.allModels.rules.form
+		return f.Help().ShortHelpView(f.KeyBinds())
+	}
 	return m.help.ShortHelpView(m.helpKeys())
 }

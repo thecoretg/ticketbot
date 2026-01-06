@@ -14,7 +14,6 @@ type Model struct {
 	allModels   allModels
 	entryMode   bool
 
-	keys keyMap
 	help help.Model
 
 	width  int
@@ -32,8 +31,7 @@ func NewModel(sl *sdk.Client) *Model {
 	fm := newFwdsModel()
 	return &Model{
 		SDKClient:   sl,
-		keys:        defaultKeyMap,
-		help:        newHelp(),
+		help:        help.New(),
 		activeModel: rm,
 		allModels: allModels{
 			rules: rm,
@@ -57,21 +55,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, resizeModels(m.width, m.height-hv-ev))
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, m.keys.quit):
+		case key.Matches(msg, allKeys.quit):
 			switch m.activeModel {
 			case m.allModels.rules:
-				if !m.allModels.rules.entryMode {
+				if m.allModels.rules.status != rmStatusEntry {
 					return m, tea.Quit
 				}
 			}
-		case key.Matches(msg, m.keys.switchModelRules):
+		case key.Matches(msg, allKeys.switchModelRules):
 			return m, switchModel(modelTypeRules)
-		case key.Matches(msg, m.keys.switchModelFwds):
+		case key.Matches(msg, allKeys.switchModelFwds):
 			return m, switchModel(modelTypeFwds)
-		case key.Matches(msg, m.keys.newItem):
-			if m.activeModel == m.allModels.rules {
-				return m, m.allModels.rules.prepareForm()
-			}
 		}
 	case switchModelMsg:
 		switch msg.modelType {
