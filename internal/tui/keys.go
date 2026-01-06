@@ -7,6 +7,7 @@ import (
 
 type keyMap struct {
 	quit             key.Binding
+	clearErr         key.Binding
 	switchModelRules key.Binding
 	switchModelFwds  key.Binding
 	newItem          key.Binding
@@ -15,8 +16,12 @@ type keyMap struct {
 
 var allKeys = keyMap{
 	quit: key.NewBinding(
-		key.WithKeys("q"),
-		key.WithHelp("q", "quit"),
+		key.WithKeys("ctrl+c"),
+		key.WithHelp("ctrl+c", "quit"),
+	),
+	clearErr: key.NewBinding(
+		key.WithKeys("ctrl+e"),
+		key.WithHelp("ctrl+e", "clear error"),
 	),
 	switchModelRules: key.NewBinding(
 		key.WithKeys("ctrl+r"),
@@ -65,6 +70,10 @@ func (m *Model) helpKeys() []key.Binding {
 		}
 	}
 
+	if currentErr != nil {
+		keys = append(keys, allKeys.clearErr)
+	}
+
 	return keys
 }
 
@@ -75,8 +84,10 @@ func (m *Model) helpViewSize() (int, int) {
 
 func (m *Model) helpView() string {
 	if m.activeModel == m.allModels.rules && m.allModels.rules.status == rmStatusEntry {
+		// add quit bind to form help
 		f := m.allModels.rules.form
-		return f.Help().ShortHelpView(f.KeyBinds())
+		k := append(f.KeyBinds(), allKeys.quit)
+		return f.Help().ShortHelpView(k)
 	}
 	return m.help.ShortHelpView(m.helpKeys())
 }

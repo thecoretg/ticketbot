@@ -32,6 +32,9 @@ type (
 		recips []models.WebexRecipient
 	}
 
+	refreshRulesMsg struct{}
+	gotRulesMsg     struct{ rules []models.NotifierRuleFull }
+
 	updateRmStatusMsg struct{ status rulesModelStatus }
 )
 type rulesModelStatus int
@@ -69,9 +72,9 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, allKeys.newItem):
+		case key.Matches(msg, allKeys.newItem) && rm.status == rmStatusTable:
 			return rm, tea.Batch(updateRulesStatus(rmStatusLoadingData), rm.prepareForm())
-		case key.Matches(msg, allKeys.deleteItem):
+		case key.Matches(msg, allKeys.deleteItem) && rm.status == rmStatusTable:
 			rule := rm.rules[rm.table.Cursor()]
 			return rm, tea.Batch(updateRulesStatus(rmStatusRefreshing), rm.deleteRule(rule.ID))
 		}
@@ -80,6 +83,9 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.availWidth = msg.w
 		rm.availHeight = msg.h
 		rm.setModuleDimensions()
+
+	case refreshRulesMsg:
+		return rm, rm.getRules()
 
 	case gotRulesMsg:
 		rm.rules = msg.rules
@@ -118,8 +124,6 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			cmds = append(cmds, rm.submitRule(rule), updateRulesStatus(rmStatusRefreshing))
 		}
-
-		return rm, tea.Batch(cmds...)
 
 	default:
 		var cmd tea.Cmd
@@ -176,13 +180,13 @@ func (rm *rulesModel) prepareForm() tea.Cmd {
 	return func() tea.Msg {
 		boards, err := rm.SDKClient.ListBoards()
 		if err != nil {
-			return sdkErrMsg{err: fmt.Errorf("listing boards: %w", err)}
+			return errMsg{fmt.Errorf("listing boards: %w", err)}
 		}
 		sortBoards(boards)
 
 		recips, err := rm.SDKClient.ListRecipients()
 		if err != nil {
-			return sdkErrMsg{err: fmt.Errorf("listing webex recipients: %w", err)}
+			return errMsg{fmt.Errorf("listing webex recipients: %w", err)}
 		}
 		sortRecips(recips)
 
@@ -197,30 +201,20 @@ func (rm *rulesModel) submitRule(rule *models.NotifierRule) tea.Cmd {
 	return func() tea.Msg {
 		_, err := rm.SDKClient.CreateNotifierRule(rule)
 		if err != nil {
-			return sdkErrMsg{err: fmt.Errorf("posting notifier rule: %w", err)}
+			currentErr = fmt.Errorf("creating notifier rule: %w", err)
 		}
 
-		rules, err := rm.SDKClient.ListNotifierRules()
-		if err != nil {
-			return sdkErrMsg{err: fmt.Errorf("listing rules after create: %w", err)}
-		}
-
-		return gotRulesMsg{rules: rules}
+		return refreshRulesMsg{}
 	}
 }
 
 func (rm *rulesModel) deleteRule(id int) tea.Cmd {
 	return func() tea.Msg {
 		if err := rm.SDKClient.DeleteNotifierRule(id); err != nil {
-			return sdkErrMsg{err: fmt.Errorf("deleting rule: %w", err)}
+			currentErr = fmt.Errorf("deleting notifier rule: %w", err)
 		}
 
-		rules, err := rm.SDKClient.ListNotifierRules()
-		if err != nil {
-			return sdkErrMsg{err: fmt.Errorf("listing rules after deletion: %w", err)}
-		}
-
-		return gotRulesMsg{rules: rules}
+		return refreshRulesMsg{}
 	}
 }
 
@@ -228,7 +222,7 @@ func (rm *rulesModel) getRules() tea.Cmd {
 	return func() tea.Msg {
 		rules, err := rm.SDKClient.ListNotifierRules()
 		if err != nil {
-			return sdkErr{error: err}
+			currentErr = err
 		}
 
 		return gotRulesMsg{rules: rules}

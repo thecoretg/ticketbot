@@ -8,7 +8,7 @@ type (
 	modelType       int
 	switchModelMsg  struct{ modelType }
 	resizeModelsMsg struct{ w, h int }
-	sdkErrMsg       struct{ err error }
+	errMsg          struct{ error }
 )
 
 const (

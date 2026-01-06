@@ -8,6 +8,8 @@ import (
 	"github.com/thecoretg/ticketbot/pkg/sdk"
 )
 
+var currentErr error
+
 type Model struct {
 	SDKClient   *sdk.Client
 	activeModel tea.Model
@@ -18,7 +20,6 @@ type Model struct {
 
 	width  int
 	height int
-	errMsg error
 }
 
 type allModels struct {
@@ -51,7 +52,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		_, hv := m.helpViewSize()
-		ev := lipgloss.Height(errMsg(m.errMsg))
+		ev := lipgloss.Height(errView(currentErr))
 		cmds = append(cmds, resizeModels(m.width, m.height-hv-ev))
 	case tea.KeyMsg:
 		switch {
@@ -61,6 +62,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.allModels.rules.status != rmStatusEntry {
 					return m, tea.Quit
 				}
+			}
+		case key.Matches(msg, allKeys.clearErr):
+			if currentErr != nil {
+				currentErr = nil
 			}
 		case key.Matches(msg, allKeys.switchModelRules):
 			return m, switchModel(modelTypeRules)
@@ -80,8 +85,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeModel = m.allModels.fwds
 			}
 		}
-	case sdkErrMsg:
-		m.errMsg = msg.err
 	}
 
 	rules, cmd := m.allModels.rules.Update(msg)
@@ -99,12 +102,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) View() string {
-	return lipgloss.JoinVertical(lipgloss.Top, m.activeModel.View(), errMsg(m.errMsg), m.helpView())
+	return lipgloss.JoinVertical(lipgloss.Top, m.activeModel.View(), errView(currentErr), m.helpView())
 }
 
-func errMsg(err error) string {
+func errView(err error) string {
 	if err != nil {
-		return errStyle.Render(err.Error())
+		return errStyle.Render("Error: " + err.Error())
 	}
 	return ""
 }

@@ -6,9 +6,8 @@ import (
 )
 
 type (
-	sdkErr      struct{ error error }
-	gotRulesMsg struct{ rules []models.NotifierRuleFull }
-	gotFwdsMsg  struct{ fwds []models.NotifierForwardFull }
+	sdkErr     struct{ error error }
+	gotFwdsMsg struct{ fwds []models.NotifierForwardFull }
 )
 
 func (m *Model) getFwds() tea.Cmd {
