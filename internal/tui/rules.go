@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -18,13 +17,14 @@ type (
 		rulesLoaded bool
 		table       table.Model
 		form        *huh.Form
-		spinner     spinner.Model
 		formResult  *rulesFormResult
 		status      subModelStatus
-
 		availWidth  int
 		availHeight int
-		rules       []models.NotifierRuleFull
+
+		rules             []models.NotifierRuleFull
+		ruleToDelete      models.NotifierRuleFull
+		ruleDeleteConfirm bool
 	}
 
 	ruleFormDataMsg struct {
@@ -39,22 +39,31 @@ type (
 
 	refreshRulesMsg struct{}
 	gotRulesMsg     struct{ rules []models.NotifierRuleFull }
+
+	rulesModelParams struct {
+		sdkClient     *sdk.Client
+		initialWidth  int
+		initialHeight int
+		initialRules  []models.NotifierRuleFull
+	}
 )
 
-func newRulesModel(cl *sdk.Client) *rulesModel {
-	s := spinner.New()
-	s.Spinner = spinner.Line
-	return &rulesModel{
-		SDKClient:  cl,
-		rules:      []models.NotifierRuleFull{},
-		table:      newTable(),
-		formResult: &rulesFormResult{},
-		spinner:    s,
+func newRulesModel(p rulesModelParams) *rulesModel {
+	rm := &rulesModel{
+		SDKClient:   p.sdkClient,
+		rules:       p.initialRules,
+		availWidth:  p.initialWidth,
+		availHeight: p.initialHeight,
+		table:       newTable(),
+		formResult:  &rulesFormResult{},
+		status:      statusMain,
 	}
+	rm.setModuleDimensions()
+	return rm
 }
 
 func (rm *rulesModel) Init() tea.Cmd {
-	return tea.Batch(rm.spinner.Tick, rm.getRules())
+	return nil
 }
 
 func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -66,9 +75,10 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return rm, tea.Batch(rm.prepareForm())
 		case key.Matches(msg, allKeys.deleteItem) && rm.status == statusMain:
 			if len(rm.rules) > 0 {
-				rule := rm.rules[rm.table.Cursor()]
-				rm.status = statusRefresh
-				return rm, tea.Batch(rm.deleteRule(rule.ID))
+				rm.ruleToDelete = rm.rules[rm.table.Cursor()]
+				rm.form = confirmationForm("Delete rule?", &rm.ruleDeleteConfirm, rm.availHeight)
+				rm.status = statusConfirm
+				return rm, rm.form.Init()
 			}
 		}
 
@@ -76,6 +86,9 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.availWidth = msg.w
 		rm.availHeight = msg.h
 		rm.setModuleDimensions()
+		if rm.status == statusInit {
+			rm.status = statusMain
+		}
 
 	case refreshRulesMsg:
 		return rm, rm.getRules()
@@ -91,6 +104,22 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rm.form = ruleEntryForm(msg.boards, msg.recips, rm.formResult, rm.availHeight)
 		rm.status = statusEntry
 		return rm, rm.form.Init()
+
+	case confirmDeleteMsg:
+		var id int
+		if rm.ruleDeleteConfirm {
+			id = rm.ruleToDelete.ID
+		}
+
+		// reset values
+		rm.ruleDeleteConfirm = false
+		rm.ruleToDelete = models.NotifierRuleFull{}
+
+		if id != 0 {
+			return rm, rm.deleteRule(id)
+		}
+		rm.status = statusMain
+
 	case errMsg:
 		rm.status = statusMain
 	}
@@ -98,7 +127,7 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch rm.status {
 
-	case statusEntry:
+	case statusEntry, statusConfirm:
 		form, cmd := rm.form.Update(msg)
 		if f, ok := form.(*huh.Form); ok {
 			rm.form = f
@@ -110,14 +139,20 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			rm.status = statusMain
 
 		case huh.StateCompleted:
-			res := rm.formResult
-			rule := &models.NotifierRule{
-				CwBoardID:        res.board.ID,
-				WebexRecipientID: res.recip.ID,
-				NotifyEnabled:    true,
+			switch rm.status {
+			case statusConfirm:
+				rm.status = statusRefresh
+				cmds = append(cmds, completeConfirmForm())
+			case statusEntry:
+				res := rm.formResult
+				rule := &models.NotifierRule{
+					CwBoardID:        res.board.ID,
+					WebexRecipientID: res.recip.ID,
+					NotifyEnabled:    true,
+				}
+				rm.status = statusRefresh
+				cmds = append(cmds, rm.submitRule(rule))
 			}
-			rm.status = statusRefresh
-			cmds = append(cmds, rm.submitRule(rule))
 		}
 
 	default:
@@ -126,24 +161,20 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	var cmd tea.Cmd
-	rm.spinner, cmd = rm.spinner.Update(msg)
-	cmds = append(cmds, cmd)
-
 	return rm, tea.Batch(cmds...)
 }
 
 func (rm *rulesModel) View() string {
 	switch rm.status {
 	case statusInit:
-		return fillSpaceCentered(useSpinner(rm.spinner, "Loading rules..."), rm.availWidth, rm.availHeight)
+		return fillSpaceCentered(useSpinner(spn, "Loading rules..."), rm.availWidth, rm.availHeight)
 	case statusRefresh:
-		return fillSpaceCentered(useSpinner(rm.spinner, "Refreshing..."), rm.availWidth, rm.availHeight)
+		return fillSpaceCentered(useSpinner(spn, "Refreshing..."), rm.availWidth, rm.availHeight)
 	case statusMain:
 		return rm.table.View()
 	case statusLoadingFormData:
-		return fillSpaceCentered(useSpinner(rm.spinner, "Loading form data..."), rm.availWidth, rm.availHeight)
-	case statusEntry:
+		return fillSpaceCentered(useSpinner(spn, "Loading form data..."), rm.availWidth, rm.availHeight)
+	case statusEntry, statusConfirm:
 		return rm.form.View()
 	}
 
@@ -156,6 +187,10 @@ func (rm *rulesModel) Status() subModelStatus {
 
 func (rm *rulesModel) Form() *huh.Form {
 	return rm.form
+}
+
+func (rm *rulesModel) Table() table.Model {
+	return rm.table
 }
 
 func (rm *rulesModel) setModuleDimensions() {
@@ -250,7 +285,7 @@ func rulesToRows(rules []models.NotifierRuleFull) []table.Row {
 	if len(rules) == 0 {
 		return []table.Row{
 			{
-				"NO", "RULEZ", "FOUND",
+				"NO", "RULES", "FOUND",
 			},
 		}
 	}

@@ -1,11 +1,9 @@
 package tui
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
@@ -45,10 +43,6 @@ func sortRules(rules []models.NotifierRuleFull) {
 	sort.SliceStable(rules, func(i, j int) bool {
 		return rules[i].BoardName < rules[j].BoardName
 	})
-}
-
-func useSpinner(s spinner.Model, content string) string {
-	return fmt.Sprintf("%s %s", s.View(), content)
 }
 
 func isValidDate(input string) bool {

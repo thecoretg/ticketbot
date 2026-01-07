@@ -26,11 +26,9 @@ var allKeys = keyMap{
 	),
 	switchModelRules: key.NewBinding(
 		key.WithKeys("ctrl+r"),
-		key.WithHelp("ctrl+r", "rules"),
 	),
 	switchModelFwds: key.NewBinding(
 		key.WithKeys("ctrl+f"),
-		key.WithHelp("ctrl+f", "forwards"),
 	),
 	newItem: key.NewBinding(
 		key.WithKeys("n"),
@@ -56,7 +54,15 @@ func (m *Model) helpKeys() []key.Binding {
 	var keys []key.Binding
 	keys = append(keys, allKeys.quit, allKeys.newItem)
 
-	if !m.entryMode {
+	if currentErr != nil {
+		keys = append(keys, allKeys.clearErr)
+	}
+
+	if m.activeModel == nil {
+		return keys
+	}
+
+	if m.activeModel.Status() == statusMain && len(m.activeModel.Table().Rows()) != 0 {
 		switch m.activeModel {
 		case m.rulesModel:
 			if len(m.rulesModel.rules) > 0 {
@@ -71,10 +77,6 @@ func (m *Model) helpKeys() []key.Binding {
 		}
 	}
 
-	if currentErr != nil {
-		keys = append(keys, allKeys.clearErr)
-	}
-
 	return keys
 }
 
@@ -84,7 +86,7 @@ func (m *Model) helpViewSize() (int, int) {
 }
 
 func (m *Model) helpView() string {
-	if m.activeModel.Status().inForm() {
+	if m.activeModel != nil && m.activeModel.Status().inForm() {
 		// add quit bind to form help
 		f := m.activeModel.Form()
 		k := append(f.KeyBinds(), allKeys.quit)

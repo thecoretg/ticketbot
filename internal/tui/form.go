@@ -30,15 +30,3 @@ func recipsToFormOpts(recips, exclude []models.WebexRecipient) []huh.Option[mode
 
 	return opts
 }
-
-func confirmationForm(prompt string, val bool, height int) *huh.Form {
-	return huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title(prompt).
-				Affirmative("Yes").
-				Negative("No").
-				Value(&val),
-		),
-	).WithTheme(huh.ThemeBase16()).WithHeight(height + 1).WithShowHelp(false)
-}

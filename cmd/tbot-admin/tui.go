@@ -11,6 +11,7 @@ var adminCmd = &cobra.Command{
 	Use:               "admin",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m := tui.NewModel(client)
+
 		if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 			return err
 		}
