@@ -91,7 +91,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	us := user.New(r.APIUser, r.APIKey)
 	cws := cwsvc.New(s.Pool, r.CW, cw)
 	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms, cr.WebexBotEmail)
-	wh := webhooks.New(cw, cr.RootURL)
+	wh := webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL)
 
 	nr := notifier.SvcParams{
 		Cfg:              cfg,
