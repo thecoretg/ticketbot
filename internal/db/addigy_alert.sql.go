@@ -7,7 +7,121 @@ package db
 
 import (
 	"context"
+	"time"
 )
+
+const acknowledgeAddigyAlert = `-- name: AcknowledgeAddigyAlert :exec
+UPDATE addigy_alert
+SET acknowledged_on = $2
+WHERE id = $1
+`
+
+type AcknowledgeAddigyAlertParams struct {
+	ID             string     `json:"id"`
+	AcknowledgedOn *time.Time `json:"acknowledged_on"`
+}
+
+func (q *Queries) AcknowledgeAddigyAlert(ctx context.Context, arg AcknowledgeAddigyAlertParams) error {
+	_, err := q.db.Exec(ctx, acknowledgeAddigyAlert, arg.ID, arg.AcknowledgedOn)
+	return err
+}
+
+const createAddigyAlert = `-- name: CreateAddigyAlert :one
+INSERT INTO addigy_alert (
+    id,
+    ticket_id,
+    level,
+    category,
+    name,
+    fact_name,
+    fact_identifier,
+    fact_type,
+    selector,
+    status,
+    value,
+    muted,
+    remediation,
+    resolved_by_email,
+    resolved_on,
+    acknowledged_on,
+    added_on
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+RETURNING id, ticket_id, level, category, name, fact_name, fact_identifier, fact_type, selector, status, value, muted, remediation, resolved_by_email, resolved_on, acknowledged_on, added_on
+`
+
+type CreateAddigyAlertParams struct {
+	ID              string     `json:"id"`
+	TicketID        *int       `json:"ticket_id"`
+	Level           string     `json:"level"`
+	Category        string     `json:"category"`
+	Name            string     `json:"name"`
+	FactName        string     `json:"fact_name"`
+	FactIdentifier  string     `json:"fact_identifier"`
+	FactType        string     `json:"fact_type"`
+	Selector        string     `json:"selector"`
+	Status          string     `json:"status"`
+	Value           *string    `json:"value"`
+	Muted           bool       `json:"muted"`
+	Remediation     bool       `json:"remediation"`
+	ResolvedByEmail *string    `json:"resolved_by_email"`
+	ResolvedOn      *time.Time `json:"resolved_on"`
+	AcknowledgedOn  *time.Time `json:"acknowledged_on"`
+	AddedOn         time.Time  `json:"added_on"`
+}
+
+func (q *Queries) CreateAddigyAlert(ctx context.Context, arg CreateAddigyAlertParams) (*AddigyAlert, error) {
+	row := q.db.QueryRow(ctx, createAddigyAlert,
+		arg.ID,
+		arg.TicketID,
+		arg.Level,
+		arg.Category,
+		arg.Name,
+		arg.FactName,
+		arg.FactIdentifier,
+		arg.FactType,
+		arg.Selector,
+		arg.Status,
+		arg.Value,
+		arg.Muted,
+		arg.Remediation,
+		arg.ResolvedByEmail,
+		arg.ResolvedOn,
+		arg.AcknowledgedOn,
+		arg.AddedOn,
+	)
+	var i AddigyAlert
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Level,
+		&i.Category,
+		&i.Name,
+		&i.FactName,
+		&i.FactIdentifier,
+		&i.FactType,
+		&i.Selector,
+		&i.Status,
+		&i.Value,
+		&i.Muted,
+		&i.Remediation,
+		&i.ResolvedByEmail,
+		&i.ResolvedOn,
+		&i.AcknowledgedOn,
+		&i.AddedOn,
+	)
+	return &i, err
+}
+
+const deleteAddigyAlert = `-- name: DeleteAddigyAlert :exec
+DELETE FROM addigy_alert
+WHERE id = $1
+`
+
+func (q *Queries) DeleteAddigyAlert(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, deleteAddigyAlert, id)
+	return err
+}
 
 const deleteAddigyAlertConfig = `-- name: DeleteAddigyAlertConfig :exec
 DELETE FROM addigy_alert_config
@@ -17,6 +131,36 @@ WHERE id = 1
 func (q *Queries) DeleteAddigyAlertConfig(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteAddigyAlertConfig)
 	return err
+}
+
+const getAddigyAlert = `-- name: GetAddigyAlert :one
+SELECT id, ticket_id, level, category, name, fact_name, fact_identifier, fact_type, selector, status, value, muted, remediation, resolved_by_email, resolved_on, acknowledged_on, added_on FROM addigy_alert
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetAddigyAlert(ctx context.Context, id string) (*AddigyAlert, error) {
+	row := q.db.QueryRow(ctx, getAddigyAlert, id)
+	var i AddigyAlert
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Level,
+		&i.Category,
+		&i.Name,
+		&i.FactName,
+		&i.FactIdentifier,
+		&i.FactType,
+		&i.Selector,
+		&i.Status,
+		&i.Value,
+		&i.Muted,
+		&i.Remediation,
+		&i.ResolvedByEmail,
+		&i.ResolvedOn,
+		&i.AcknowledgedOn,
+		&i.AddedOn,
+	)
+	return &i, err
 }
 
 const getAddigyAlertConfig = `-- name: GetAddigyAlertConfig :one
@@ -40,6 +184,315 @@ func (q *Queries) GetAddigyAlertConfig(ctx context.Context) (*AddigyAlertConfig,
 		&i.UpdatedOn,
 	)
 	return &i, err
+}
+
+const listAddigyAlerts = `-- name: ListAddigyAlerts :many
+SELECT id, ticket_id, level, category, name, fact_name, fact_identifier, fact_type, selector, status, value, muted, remediation, resolved_by_email, resolved_on, acknowledged_on, added_on FROM addigy_alert
+ORDER BY added_on DESC
+`
+
+func (q *Queries) ListAddigyAlerts(ctx context.Context) ([]*AddigyAlert, error) {
+	rows, err := q.db.Query(ctx, listAddigyAlerts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*AddigyAlert
+	for rows.Next() {
+		var i AddigyAlert
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Level,
+			&i.Category,
+			&i.Name,
+			&i.FactName,
+			&i.FactIdentifier,
+			&i.FactType,
+			&i.Selector,
+			&i.Status,
+			&i.Value,
+			&i.Muted,
+			&i.Remediation,
+			&i.ResolvedByEmail,
+			&i.ResolvedOn,
+			&i.AcknowledgedOn,
+			&i.AddedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAddigyAlertsByStatus = `-- name: ListAddigyAlertsByStatus :many
+SELECT id, ticket_id, level, category, name, fact_name, fact_identifier, fact_type, selector, status, value, muted, remediation, resolved_by_email, resolved_on, acknowledged_on, added_on FROM addigy_alert
+WHERE status = $1
+ORDER BY added_on DESC
+`
+
+func (q *Queries) ListAddigyAlertsByStatus(ctx context.Context, status string) ([]*AddigyAlert, error) {
+	rows, err := q.db.Query(ctx, listAddigyAlertsByStatus, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*AddigyAlert
+	for rows.Next() {
+		var i AddigyAlert
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Level,
+			&i.Category,
+			&i.Name,
+			&i.FactName,
+			&i.FactIdentifier,
+			&i.FactType,
+			&i.Selector,
+			&i.Status,
+			&i.Value,
+			&i.Muted,
+			&i.Remediation,
+			&i.ResolvedByEmail,
+			&i.ResolvedOn,
+			&i.AcknowledgedOn,
+			&i.AddedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAddigyAlertsByTicket = `-- name: ListAddigyAlertsByTicket :many
+SELECT id, ticket_id, level, category, name, fact_name, fact_identifier, fact_type, selector, status, value, muted, remediation, resolved_by_email, resolved_on, acknowledged_on, added_on FROM addigy_alert
+WHERE ticket_id = $1
+ORDER BY added_on DESC
+`
+
+func (q *Queries) ListAddigyAlertsByTicket(ctx context.Context, ticketID *int) ([]*AddigyAlert, error) {
+	rows, err := q.db.Query(ctx, listAddigyAlertsByTicket, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*AddigyAlert
+	for rows.Next() {
+		var i AddigyAlert
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Level,
+			&i.Category,
+			&i.Name,
+			&i.FactName,
+			&i.FactIdentifier,
+			&i.FactType,
+			&i.Selector,
+			&i.Status,
+			&i.Value,
+			&i.Muted,
+			&i.Remediation,
+			&i.ResolvedByEmail,
+			&i.ResolvedOn,
+			&i.AcknowledgedOn,
+			&i.AddedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnresolvedAddigyAlerts = `-- name: ListUnresolvedAddigyAlerts :many
+SELECT id, ticket_id, level, category, name, fact_name, fact_identifier, fact_type, selector, status, value, muted, remediation, resolved_by_email, resolved_on, acknowledged_on, added_on FROM addigy_alert
+WHERE resolved_on IS NULL
+ORDER BY added_on DESC
+`
+
+func (q *Queries) ListUnresolvedAddigyAlerts(ctx context.Context) ([]*AddigyAlert, error) {
+	rows, err := q.db.Query(ctx, listUnresolvedAddigyAlerts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*AddigyAlert
+	for rows.Next() {
+		var i AddigyAlert
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.Level,
+			&i.Category,
+			&i.Name,
+			&i.FactName,
+			&i.FactIdentifier,
+			&i.FactType,
+			&i.Selector,
+			&i.Status,
+			&i.Value,
+			&i.Muted,
+			&i.Remediation,
+			&i.ResolvedByEmail,
+			&i.ResolvedOn,
+			&i.AcknowledgedOn,
+			&i.AddedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const resolveAddigyAlert = `-- name: ResolveAddigyAlert :exec
+UPDATE addigy_alert
+SET
+    resolved_on = $2,
+    resolved_by_email = $3
+WHERE id = $1
+`
+
+type ResolveAddigyAlertParams struct {
+	ID              string     `json:"id"`
+	ResolvedOn      *time.Time `json:"resolved_on"`
+	ResolvedByEmail *string    `json:"resolved_by_email"`
+}
+
+func (q *Queries) ResolveAddigyAlert(ctx context.Context, arg ResolveAddigyAlertParams) error {
+	_, err := q.db.Exec(ctx, resolveAddigyAlert, arg.ID, arg.ResolvedOn, arg.ResolvedByEmail)
+	return err
+}
+
+const updateAddigyAlert = `-- name: UpdateAddigyAlert :one
+UPDATE addigy_alert
+SET
+    ticket_id = $2,
+    level = $3,
+    category = $4,
+    name = $5,
+    fact_name = $6,
+    fact_identifier = $7,
+    fact_type = $8,
+    selector = $9,
+    status = $10,
+    value = $11,
+    muted = $12,
+    remediation = $13,
+    resolved_by_email = $14,
+    resolved_on = $15,
+    acknowledged_on = $16
+WHERE id = $1
+RETURNING id, ticket_id, level, category, name, fact_name, fact_identifier, fact_type, selector, status, value, muted, remediation, resolved_by_email, resolved_on, acknowledged_on, added_on
+`
+
+type UpdateAddigyAlertParams struct {
+	ID              string     `json:"id"`
+	TicketID        *int       `json:"ticket_id"`
+	Level           string     `json:"level"`
+	Category        string     `json:"category"`
+	Name            string     `json:"name"`
+	FactName        string     `json:"fact_name"`
+	FactIdentifier  string     `json:"fact_identifier"`
+	FactType        string     `json:"fact_type"`
+	Selector        string     `json:"selector"`
+	Status          string     `json:"status"`
+	Value           *string    `json:"value"`
+	Muted           bool       `json:"muted"`
+	Remediation     bool       `json:"remediation"`
+	ResolvedByEmail *string    `json:"resolved_by_email"`
+	ResolvedOn      *time.Time `json:"resolved_on"`
+	AcknowledgedOn  *time.Time `json:"acknowledged_on"`
+}
+
+func (q *Queries) UpdateAddigyAlert(ctx context.Context, arg UpdateAddigyAlertParams) (*AddigyAlert, error) {
+	row := q.db.QueryRow(ctx, updateAddigyAlert,
+		arg.ID,
+		arg.TicketID,
+		arg.Level,
+		arg.Category,
+		arg.Name,
+		arg.FactName,
+		arg.FactIdentifier,
+		arg.FactType,
+		arg.Selector,
+		arg.Status,
+		arg.Value,
+		arg.Muted,
+		arg.Remediation,
+		arg.ResolvedByEmail,
+		arg.ResolvedOn,
+		arg.AcknowledgedOn,
+	)
+	var i AddigyAlert
+	err := row.Scan(
+		&i.ID,
+		&i.TicketID,
+		&i.Level,
+		&i.Category,
+		&i.Name,
+		&i.FactName,
+		&i.FactIdentifier,
+		&i.FactType,
+		&i.Selector,
+		&i.Status,
+		&i.Value,
+		&i.Muted,
+		&i.Remediation,
+		&i.ResolvedByEmail,
+		&i.ResolvedOn,
+		&i.AcknowledgedOn,
+		&i.AddedOn,
+	)
+	return &i, err
+}
+
+const updateAddigyAlertStatus = `-- name: UpdateAddigyAlertStatus :exec
+UPDATE addigy_alert
+SET status = $2
+WHERE id = $1
+`
+
+type UpdateAddigyAlertStatusParams struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+func (q *Queries) UpdateAddigyAlertStatus(ctx context.Context, arg UpdateAddigyAlertStatusParams) error {
+	_, err := q.db.Exec(ctx, updateAddigyAlertStatus, arg.ID, arg.Status)
+	return err
+}
+
+const updateAddigyAlertTicket = `-- name: UpdateAddigyAlertTicket :exec
+UPDATE addigy_alert
+SET ticket_id = $2
+WHERE id = $1
+`
+
+type UpdateAddigyAlertTicketParams struct {
+	ID       string `json:"id"`
+	TicketID *int   `json:"ticket_id"`
+}
+
+func (q *Queries) UpdateAddigyAlertTicket(ctx context.Context, arg UpdateAddigyAlertTicketParams) error {
+	_, err := q.db.Exec(ctx, updateAddigyAlertTicket, arg.ID, arg.TicketID)
+	return err
 }
 
 const upsertAddigyAlertConfig = `-- name: UpsertAddigyAlertConfig :one
