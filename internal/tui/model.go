@@ -13,18 +13,14 @@ var currentErr error
 type Model struct {
 	SDKClient   *sdk.Client
 	activeModel tea.Model
-	allModels   allModels
+	rulesModel  *rulesModel
+	fwdsModel   *fwdsModel
 	entryMode   bool
 
 	help help.Model
 
 	width  int
 	height int
-}
-
-type allModels struct {
-	rules *rulesModel
-	fwds  *fwdsModel
 }
 
 func NewModel(sl *sdk.Client) *Model {
@@ -34,15 +30,13 @@ func NewModel(sl *sdk.Client) *Model {
 		SDKClient:   sl,
 		help:        help.New(),
 		activeModel: rm,
-		allModels: allModels{
-			rules: rm,
-			fwds:  fm,
-		},
+		rulesModel:  rm,
+		fwdsModel:   fm,
 	}
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.allModels.rules.Init())
+	return tea.Batch(m.rulesModel.Init(), m.fwdsModel.Init())
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -56,12 +50,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, resizeModels(m.width, m.height-hv-ev))
 	case tea.KeyMsg:
 		switch {
+		case !isGlobalKey(msg):
+			am, cmd := m.activeModel.Update(msg)
+			switch am := am.(type) {
+			case *rulesModel:
+				m.rulesModel = am
+			case *fwdsModel:
+				m.fwdsModel = am
+			}
+
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
+
 		case key.Matches(msg, allKeys.quit):
-			switch m.activeModel {
-			case m.allModels.rules:
-				if m.allModels.rules.status != rmStatusEntry {
-					return m, tea.Quit
-				}
+			if m.rulesModel.status != rmStatusEntry && m.fwdsModel.status != fwdStatusEntry {
+				return m, tea.Quit
 			}
 		case key.Matches(msg, allKeys.clearErr):
 			if currentErr != nil {
@@ -75,29 +78,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchModelMsg:
 		switch msg.modelType {
 		case modelTypeRules:
-			if m.activeModel != m.allModels.rules {
-				m.allModels.rules.table.SetCursor(0)
-				m.activeModel = m.allModels.rules
+			if m.activeModel != m.rulesModel {
+				m.rulesModel.table.SetCursor(0)
+				m.activeModel = m.rulesModel
 			}
 		case modelTypeFwds:
-			if m.activeModel != m.allModels.fwds {
-				m.allModels.fwds.table.SetCursor(0)
-				m.activeModel = m.allModels.fwds
+			if m.activeModel != m.fwdsModel {
+				m.fwdsModel.table.SetCursor(0)
+				m.activeModel = m.fwdsModel
 			}
 		}
 	}
 
-	rules, cmd := m.allModels.rules.Update(msg)
+	rules, cmd := m.rulesModel.Update(msg)
 	if r, ok := rules.(*rulesModel); ok {
-		m.allModels.rules = r
+		m.rulesModel = r
 	}
 	cmds = append(cmds, cmd)
 
-	fwds, cmd := m.allModels.fwds.Update(msg)
+	fwds, cmd := m.fwdsModel.Update(msg)
 	if f, ok := fwds.(*fwdsModel); ok {
-		m.allModels.fwds = f
+		m.fwdsModel = f
 	}
 	cmds = append(cmds, cmd)
+
 	return m, tea.Batch(cmds...)
 }
 

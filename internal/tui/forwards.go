@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/pkg/sdk"
 )
@@ -18,6 +19,7 @@ import (
 type (
 	fwdsModel struct {
 		SDKClient  *sdk.Client
+		initRan    bool
 		fwdsLoaded bool
 		table      table.Model
 		form       *huh.Form
@@ -75,6 +77,7 @@ func newFwdsModel(cl *sdk.Client) *fwdsModel {
 }
 
 func (fm *fwdsModel) Init() tea.Cmd {
+	fm.initRan = true
 	return tea.Batch(fm.spinner.Tick, fm.getFwds())
 }
 
@@ -85,8 +88,10 @@ func (fm *fwdsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, allKeys.newItem) && fm.status == fwdStatusTable:
 			return fm, tea.Batch(updateFwdsStatus(fwdStatusLoadingData), fm.prepareForm())
 		case key.Matches(msg, allKeys.deleteItem) && fm.status == fwdStatusTable:
-			fwd := fm.fwds[fm.table.Cursor()]
-			return fm, tea.Batch(updateFwdsStatus(fwdStatusRefreshing), fm.deleteFwd(fwd.ID))
+			if len(fm.fwds) > 0 {
+				fwd := fm.fwds[fm.table.Cursor()]
+				return fm, tea.Batch(updateFwdsStatus(fwdStatusRefreshing), fm.deleteFwd(fwd.ID))
+			}
 		}
 	case resizeModelsMsg:
 		fm.availWidth = msg.w
@@ -103,7 +108,7 @@ func (fm *fwdsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case fwdsFormDataMsg:
 		fm.formResult = &fwdsFormResult{}
-		fm.form = fwdEntryForm(msg.recips, fm.formResult, fm.availHeight)
+		fm.form = fwdEntryForm(msg.recips, fm.formResult)
 		return fm, tea.Batch(updateFwdsStatus(fwdStatusEntry), fm.form.Init())
 
 	case updateFmStatusMsg:
@@ -113,6 +118,7 @@ func (fm *fwdsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch fm.status {
 	case fwdStatusEntry:
+		fm.setFormHeight(fm.availHeight)
 		form, cmd := fm.form.Update(msg)
 		if f, ok := form.(*huh.Form); ok {
 			fm.form = f
@@ -161,6 +167,9 @@ func (fm *fwdsModel) View() string {
 
 func (fm *fwdsModel) setModuleDimensions() {
 	fm.setTableDimensions(fm.availWidth, fm.availHeight)
+	if fm.form != nil {
+		fm.setFormHeight(fm.availHeight)
+	}
 }
 
 func (fm *fwdsModel) setTableDimensions(w, h int) {
@@ -184,12 +193,25 @@ func (fm *fwdsModel) setTableDimensions(w, h int) {
 	t.SetHeight(h)
 }
 
+func (fm *fwdsModel) setFormHeight(h int) {
+	e := fm.form.Errors()
+	// start with +1 since we return help view in the main model, not in the form itself
+	newH := h - len(e)
+	fm.form.WithHeight(newH)
+}
+
 func (fm *fwdsModel) prepareForm() tea.Cmd {
 	return func() tea.Msg {
 		recips, err := fm.SDKClient.ListRecipients()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing recipients: %w", err)}
 		}
+
+		if len(recips) == 0 {
+			currentErr = fmt.Errorf("no recipients available to create forward")
+			return updateFmStatusMsg{status: fwdStatusTable}
+		}
+
 		sortRecips(recips)
 
 		return fwdsFormDataMsg{
@@ -238,6 +260,13 @@ func (fm *fwdsModel) setRows() tea.Cmd {
 }
 
 func fwdsToRows(fwds []models.NotifierForwardFull) []table.Row {
+	if len(fwds) == 0 {
+		return []table.Row{
+			{
+				"NO", "FWDS", "FOUND", ":(", "",
+			},
+		}
+	}
 	var rows []table.Row
 	for _, f := range fwds {
 		src := fmt.Sprintf("%s (%s)", f.SourceName, shortenSourceType(f.SourceType))
@@ -254,7 +283,7 @@ func fwdsToRows(fwds []models.NotifierForwardFull) []table.Row {
 		dr := fmt.Sprintf("%s - %s", sd, ed)
 
 		rows = append(rows, []string{
-			boolToIcon(f.UserKeepsCopy),
+			boolToIcon(f.Enabled),
 			boolToIcon(f.UserKeepsCopy),
 			dr,
 			src,
@@ -265,18 +294,20 @@ func fwdsToRows(fwds []models.NotifierForwardFull) []table.Row {
 	return rows
 }
 
-func fwdEntryForm(recips []models.WebexRecipient, result *fwdsFormResult, height int) *huh.Form {
+func fwdEntryForm(recips []models.WebexRecipient, result *fwdsFormResult) *huh.Form {
+	theme := huh.ThemeBase16()
+	theme.Focused.ErrorMessage = lipgloss.NewStyle().Foreground(red)
 	return huh.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[models.WebexRecipient]().
 				Title("Source Recipient").
-				Options(recipsToFormOpts(recips)...).
+				Options(recipsToFormOpts(recips, nil)...).
 				Value(&result.src),
 		),
 		huh.NewGroup(
 			huh.NewSelect[models.WebexRecipient]().
 				Title("Destination Recipient").
-				Options(recipsToFormOpts(recips)...).
+				Options(recipsToFormOpts(recips, []models.WebexRecipient{result.src})...).
 				Value(&result.dst),
 		),
 		huh.NewGroup(
@@ -326,7 +357,7 @@ func fwdEntryForm(recips []models.WebexRecipient, result *fwdsFormResult, height
 				Affirmative("Yes").
 				Value(&result.userKeeps),
 		),
-	).WithTheme(huh.ThemeBase()).WithHeight(height + 1).WithShowHelp(false) // add +1 to height to account for not showing help
+	).WithTheme(theme).WithShowHelp(false) // add +1 to height to account for not showing help
 }
 
 func fwdFormResToForm(res *fwdsFormResult) *models.NotifierForward {

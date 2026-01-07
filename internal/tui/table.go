@@ -8,9 +8,13 @@ func newTable() table.Model {
 	)
 
 	s := table.DefaultStyles()
+	s.Header = s.Header.
+		Foreground(blue).
+		Bold(false)
 	s.Selected = s.Selected.
-		Foreground(grey).
-		Background(blue)
+		Foreground(black).
+		Background(green).
+		Bold(false)
 
 	t.SetStyles(s)
 	return t

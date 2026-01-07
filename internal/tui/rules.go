@@ -75,8 +75,10 @@ func (rm *rulesModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, allKeys.newItem) && rm.status == rmStatusTable:
 			return rm, tea.Batch(updateRulesStatus(rmStatusLoadingData), rm.prepareForm())
 		case key.Matches(msg, allKeys.deleteItem) && rm.status == rmStatusTable:
-			rule := rm.rules[rm.table.Cursor()]
-			return rm, tea.Batch(updateRulesStatus(rmStatusRefreshing), rm.deleteRule(rule.ID))
+			if len(rm.rules) > 0 {
+				rule := rm.rules[rm.table.Cursor()]
+				return rm, tea.Batch(updateRulesStatus(rmStatusRefreshing), rm.deleteRule(rule.ID))
+			}
 		}
 
 	case resizeModelsMsg:
@@ -157,7 +159,6 @@ func (rm *rulesModel) View() string {
 
 func (rm *rulesModel) setModuleDimensions() {
 	rm.setTableDimensions(rm.availWidth, rm.availHeight)
-	rm.setTableDimensions(rm.availWidth, rm.availHeight)
 }
 
 func (rm *rulesModel) setTableDimensions(w, h int) {
@@ -237,6 +238,13 @@ func (rm *rulesModel) setRows() tea.Cmd {
 }
 
 func rulesToRows(rules []models.NotifierRuleFull) []table.Row {
+	if len(rules) == 0 {
+		return []table.Row{
+			{
+				"NO", "RULEZ", "FOUND",
+			},
+		}
+	}
 	var rows []table.Row
 	for _, r := range rules {
 		recip := fmt.Sprintf("%s (%s)", r.RecipientName, r.RecipientType)
@@ -257,10 +265,10 @@ func ruleEntryForm(boards []models.Board, recips []models.WebexRecipient, result
 		huh.NewGroup(
 			huh.NewSelect[models.WebexRecipient]().
 				Title("Webex Recipient").
-				Options(recipsToFormOpts(recips)...).
+				Options(recipsToFormOpts(recips, nil)...).
 				Value(&result.recip),
 		),
-	).WithTheme(huh.ThemeBase()).WithHeight(height + 1).WithShowHelp(false) // add +1 to height to account for not showing help
+	).WithTheme(huh.ThemeBase16()).WithHeight(height + 1).WithShowHelp(false) // add +1 to height to account for not showing help
 }
 
 func updateRulesStatus(status rulesModelStatus) tea.Cmd {

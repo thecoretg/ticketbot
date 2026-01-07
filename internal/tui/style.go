@@ -6,8 +6,10 @@ import (
 
 var (
 	white    = lipgloss.ANSIColor(7)
+	black    = lipgloss.ANSIColor(0)
 	grey     = lipgloss.ANSIColor(8)
-	blue     = lipgloss.ANSIColor(4)
+	green    = lipgloss.ANSIColor(2)
+	blue     = lipgloss.ANSIColor(6)
 	red      = lipgloss.ANSIColor(1)
 	errStyle = lipgloss.NewStyle().Foreground(red).Bold(true)
 )

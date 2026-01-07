@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"slices"
+
 	"github.com/charmbracelet/huh"
 	"github.com/thecoretg/ticketbot/internal/models"
 )
@@ -15,9 +17,13 @@ func boardsToFormOpts(boards []models.Board) []huh.Option[models.Board] {
 	return opts
 }
 
-func recipsToFormOpts(recips []models.WebexRecipient) []huh.Option[models.WebexRecipient] {
+func recipsToFormOpts(recips, exclude []models.WebexRecipient) []huh.Option[models.WebexRecipient] {
 	var opts []huh.Option[models.WebexRecipient]
 	for _, r := range recips {
+		if slices.Contains(exclude, r) {
+			continue
+		}
+
 		o := huh.NewOption(r.Name, r)
 		opts = append(opts, o)
 	}
