@@ -44,10 +44,13 @@ CREATE TABLE IF NOT EXISTS addigy_alert (
     acknowledged_on TIMESTAMP,
     added_on TIMESTAMP NOT NULL
 );
+
+ALTER TABLE cw_ticket ADD COLUMN status_id INT REFERENCES cw_ticket_status(id);
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+ALTER TABLE cw_ticket DROP COLUMN status_id;
 DROP TABLE IF EXISTS addigy_alert;
 DROP TABLE IF EXISTS addigy_alert_config;
 DROP TABLE IF EXISTS cw_ticket_status;
