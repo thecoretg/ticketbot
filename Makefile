@@ -9,8 +9,10 @@ tui:
 gensql:
 	sqlc generate
 
-runserver: test-db-down test-db-up
+runserver:
 	op run --env-file="./testing.env" --no-masking -- go run ./cmd/server
+
+runserver-wipedb: test-db-down test-db-up runserver
 
 sync:
 	op run --env-file="./testing.env" --no-masking -- tbot-admin sync -b -r
