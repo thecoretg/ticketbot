@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +14,12 @@ import (
 func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int) error {
 	start := time.Now()
 	slog.Info("cwsvc: beginning ticket sync", "board_ids", boardIDs)
+	defer func() {
+		slog.Info("sync: syncing tickets complete", "took_time", time.Since(start))
+	}()
+
+	// First phase: get all OPEN tickets from connectwise and ensure they all exist
+	// in the database.
 	con := "closedFlag = false"
 	if len(boardIDs) > 0 {
 		con += fmt.Sprintf(" AND %s", boardIDParam(boardIDs))
@@ -56,10 +63,10 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 
 	for err := range errCh {
 		if err != nil {
-			slog.Error("cwsvc: syncing ticket", "error", err.Error())
+			slog.Error("sync: syncing open ticket", "error", err.Error())
 		}
 	}
-	slog.Info("cwsvc: syncing tickets complete", "took_time", time.Since(start))
+
 	return nil
 }
 
@@ -68,13 +75,13 @@ func boardIDParam(ids []int) string {
 		return ""
 	}
 
-	param := ""
+	var b strings.Builder
 	for i, id := range ids {
-		param += fmt.Sprintf("board/id = %d", id)
+		fmt.Fprintf(&b, "board/id = %d", id)
 		if i < len(ids)-1 {
-			param += " OR "
+			b.WriteString(" OR ")
 		}
 	}
 
-	return fmt.Sprintf("(%s)", param)
+	return fmt.Sprintf("(%s)", b.String())
 }

@@ -35,7 +35,7 @@ func (q *Queries) DeleteTicket(ctx context.Context, id int) error {
 }
 
 const getTicket = `-- name: GetTicket :one
-SELECT id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted, status_id FROM cw_ticket
+SELECT id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted FROM cw_ticket
 WHERE id = $1 LIMIT 1
 `
 
@@ -46,6 +46,7 @@ func (q *Queries) GetTicket(ctx context.Context, id int) (*CwTicket, error) {
 		&i.ID,
 		&i.Summary,
 		&i.BoardID,
+		&i.StatusID,
 		&i.OwnerID,
 		&i.CompanyID,
 		&i.ContactID,
@@ -54,13 +55,12 @@ func (q *Queries) GetTicket(ctx context.Context, id int) (*CwTicket, error) {
 		&i.UpdatedOn,
 		&i.AddedOn,
 		&i.Deleted,
-		&i.StatusID,
 	)
 	return &i, err
 }
 
 const listTickets = `-- name: ListTickets :many
-SELECT id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted, status_id FROM cw_ticket
+SELECT id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted FROM cw_ticket
 ORDER BY id
 `
 
@@ -77,6 +77,7 @@ func (q *Queries) ListTickets(ctx context.Context) ([]*CwTicket, error) {
 			&i.ID,
 			&i.Summary,
 			&i.BoardID,
+			&i.StatusID,
 			&i.OwnerID,
 			&i.CompanyID,
 			&i.ContactID,
@@ -85,7 +86,6 @@ func (q *Queries) ListTickets(ctx context.Context) ([]*CwTicket, error) {
 			&i.UpdatedOn,
 			&i.AddedOn,
 			&i.Deleted,
-			&i.StatusID,
 		); err != nil {
 			return nil, err
 		}
@@ -124,14 +124,14 @@ ON CONFLICT (id) DO UPDATE SET
     resources = EXCLUDED.resources,
     updated_by = EXCLUDED.updated_by,
     updated_on = NOW()
-RETURNING id, summary, board_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted, status_id
+RETURNING id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted
 `
 
 type UpsertTicketParams struct {
 	ID        int     `json:"id"`
 	Summary   string  `json:"summary"`
 	BoardID   int     `json:"board_id"`
-	StatusID  *int    `json:"status_id"`
+	StatusID  int     `json:"status_id"`
 	OwnerID   *int    `json:"owner_id"`
 	CompanyID int     `json:"company_id"`
 	ContactID *int    `json:"contact_id"`
@@ -156,6 +156,7 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (*Cw
 		&i.ID,
 		&i.Summary,
 		&i.BoardID,
+		&i.StatusID,
 		&i.OwnerID,
 		&i.CompanyID,
 		&i.ContactID,
@@ -164,7 +165,6 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (*Cw
 		&i.UpdatedOn,
 		&i.AddedOn,
 		&i.Deleted,
-		&i.StatusID,
 	)
 	return &i, err
 }

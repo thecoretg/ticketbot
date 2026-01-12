@@ -7,33 +7,28 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/pkg/psa"
 	"github.com/thecoretg/ticketbot/pkg/webex"
 )
 
 func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
-	var (
-		tx  pgx.Tx
-		err error
-	)
-
 	slog.Info("beginning webex room sync")
 	start := time.Now()
-	txSvc := s
-	if s.pool != nil {
-		tx, err = s.pool.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("beginning tx: %w", err)
-		}
+	defer func() {
+		slog.Info("full webex recipient sync complete", "took_time", time.Since(start).Seconds())
+	}()
 
-		txSvc = s.withTx(tx)
-
-		defer func() {
-			_ = tx.Rollback(ctx)
-		}()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning tx: %w", err)
 	}
+
+	txSvc := s.withTx(tx)
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	if err := txSvc.syncWebexRooms(ctx); err != nil {
 		return fmt.Errorf("syncing webex rooms: %w", err)
@@ -43,18 +38,18 @@ func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
 		return fmt.Errorf("syncing webex people: %w", err)
 	}
 
-	if s.pool != nil {
-		if err := tx.Commit(ctx); err != nil {
-			return fmt.Errorf("committing tx: %w", err)
-		}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing tx: %w", err)
 	}
 
-	slog.Info("full webex recipient sync complete", "took_time", time.Since(start).Seconds())
 	return nil
 }
 
 func (s *Service) syncWebexRooms(ctx context.Context) error {
 	start := time.Now()
+	defer func() {
+		slog.Info("webex room sync complete", "took_time", time.Since(start).Seconds())
+	}()
 	// get rooms from webex as source of truth
 	wr, err := s.Webex.WebexClient.ListRooms(nil)
 	if err != nil {
@@ -75,12 +70,15 @@ func (s *Service) syncWebexRooms(ctx context.Context) error {
 		}
 	}
 
-	slog.Info("webex room sync complete", "took_time", time.Since(start).Seconds())
 	return nil
 }
 
 func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 	start := time.Now()
+	defer func() {
+		slog.Info("webex people sync complete", "took_time", time.Since(start).Seconds())
+	}()
+
 	cwm, err := s.CW.CWClient.ListMembers(nil)
 	if err != nil {
 		return fmt.Errorf("getting members from connectwise: %w", err)
@@ -110,7 +108,6 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 		}
 	}
 
-	slog.Info("webex people sync complete", "took_time", time.Since(start).Seconds())
 	return nil
 }
 

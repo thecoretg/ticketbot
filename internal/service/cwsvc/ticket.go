@@ -361,7 +361,7 @@ func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (*models.Ti
 		ID:        cwt.ID,
 		Summary:   cwt.Summary,
 		BoardID:   cwt.Board.ID,
-		StatusID:  &cwt.Status.ID,
+		StatusID:  cwt.Status.ID,
 		OwnerID:   intToPtr(cwt.Owner.ID),
 		CompanyID: cwt.Company.ID,
 		ContactID: intToPtr(cwt.Contact.ID),
@@ -395,7 +395,7 @@ func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNo
 		return models.TicketNoteToFullTicketNote(ctx, n, s.Members, s.Contacts)
 	}
 
-	if !errors.Is(err, models.ErrTicketNoteNotFound) {
+	if err != nil && !errors.Is(err, models.ErrTicketNoteNotFound) {
 		return nil, fmt.Errorf("getting note from store: %w", err)
 	}
 

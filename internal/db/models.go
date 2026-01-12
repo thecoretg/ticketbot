@@ -105,6 +105,7 @@ type CwTicket struct {
 	ID        int       `json:"id"`
 	Summary   string    `json:"summary"`
 	BoardID   int       `json:"board_id"`
+	StatusID  int       `json:"status_id"`
 	OwnerID   *int      `json:"owner_id"`
 	CompanyID int       `json:"company_id"`
 	ContactID *int      `json:"contact_id"`
@@ -113,7 +114,6 @@ type CwTicket struct {
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
 	Deleted   bool      `json:"deleted"`
-	StatusID  *int      `json:"status_id"`
 }
 
 type CwTicketNote struct {
