@@ -125,13 +125,19 @@ func filterActiveFwds(fwds []*models.NotifierForward) []*models.NotifierForward 
 
 func dateRangeActive(start, end *time.Time) bool {
 	now := time.Now()
-	if start == nil {
-		return false
+	switch {
+	case start != nil && end != nil:
+		// Definited start and end date
+		return !now.Before(*start) && now.Before(*end)
+	case start != nil && end == nil:
+		// Indefinite starting at start date
+		return !now.Before(*start)
+	case start == nil && end != nil:
+		// Active until end date
+		return now.Before(*end)
+	case start == nil && end == nil:
+		// Indefinite
+		return true
 	}
-
-	if end == nil {
-		return now.After(*start)
-	}
-
-	return now.After(*start) && now.Before(*end)
+	return false
 }
