@@ -69,7 +69,7 @@ func Run() error {
 
 		if err := a.Svc.Sync.Sync(ctx, p); err != nil {
 			// just log but continue
-			slog.Error("error syncing webex recipients and connectwise boards", "error", err)
+			slog.Error("error syncing webex recipients and connectwise boards", "error", err.Error())
 		}
 	}
 

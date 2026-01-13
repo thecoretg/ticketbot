@@ -24,7 +24,9 @@ RETURNING *;
 
 -- name: SoftDeleteMember :exec
 UPDATE cw_member
-SET deleted = TRUE
+SET
+    deleted = TRUE,
+    updated_on = NOW()
 WHERE id = $1;
 
 -- name: DeleteMember :exec

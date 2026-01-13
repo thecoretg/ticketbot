@@ -61,6 +61,10 @@ func (p *BoardRepo) Upsert(ctx context.Context, b *models.Board) (*models.Board,
 	return boardFromPG(d), nil
 }
 
+func (p *BoardRepo) SoftDelete(ctx context.Context, id int) error {
+	return p.queries.SoftDeleteBoard(ctx, id)
+}
+
 func (p *BoardRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteBoard(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -85,5 +89,6 @@ func boardFromPG(pg *db.CwBoard) *models.Board {
 		Name:      pg.Name,
 		UpdatedOn: pg.UpdatedOn,
 		AddedOn:   pg.AddedOn,
+		Deleted:   pg.Deleted,
 	}
 }

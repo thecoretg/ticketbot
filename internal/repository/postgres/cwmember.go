@@ -72,6 +72,10 @@ func (p *MemberRepo) Upsert(ctx context.Context, b *models.Member) (*models.Memb
 	return memberFromPG(d), nil
 }
 
+func (p *MemberRepo) SoftDelete(ctx context.Context, id int) error {
+	return p.queries.SoftDeleteMember(ctx, id)
+}
+
 func (p *MemberRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteMember(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -102,5 +106,6 @@ func memberFromPG(pg *db.CwMember) *models.Member {
 		PrimaryEmail: pg.PrimaryEmail,
 		UpdatedOn:    pg.UpdatedOn,
 		AddedOn:      pg.AddedOn,
+		Deleted:      pg.Deleted,
 	}
 }

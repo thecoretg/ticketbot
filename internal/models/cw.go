@@ -15,6 +15,7 @@ type Board struct {
 	Name      string    `json:"name"`
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
+	Deleted   bool      `json:"deleted"`
 }
 
 type BoardRepository interface {
@@ -22,6 +23,7 @@ type BoardRepository interface {
 	List(ctx context.Context) ([]*Board, error)
 	Get(ctx context.Context, id int) (*Board, error)
 	Upsert(ctx context.Context, b *Board) (*Board, error)
+	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
 }
 
@@ -32,6 +34,7 @@ type Company struct {
 	Name      string    `json:"name"`
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
+	Deleted   bool      `json:"deleted"`
 }
 
 type CompanyRepository interface {
@@ -39,6 +42,7 @@ type CompanyRepository interface {
 	List(ctx context.Context) ([]*Company, error)
 	Get(ctx context.Context, id int) (*Company, error)
 	Upsert(ctx context.Context, c *Company) (*Company, error)
+	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
 }
 
@@ -51,6 +55,7 @@ type Contact struct {
 	CompanyID *int      `json:"company_id"`
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
+	Deleted   bool      `json:"deleted"`
 }
 
 type ContactRepository interface {
@@ -58,6 +63,7 @@ type ContactRepository interface {
 	List(ctx context.Context) ([]*Contact, error)
 	Get(ctx context.Context, id int) (*Contact, error)
 	Upsert(ctx context.Context, c *Contact) (*Contact, error)
+	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
 }
 
@@ -71,6 +77,7 @@ type Member struct {
 	PrimaryEmail string    `json:"primary_email"`
 	UpdatedOn    time.Time `json:"updated_on"`
 	AddedOn      time.Time `json:"added_on"`
+	Deleted      bool      `json:"deleted"`
 }
 
 type MemberRepository interface {
@@ -79,6 +86,7 @@ type MemberRepository interface {
 	Get(ctx context.Context, id int) (*Member, error)
 	GetByIdentifier(ctx context.Context, identifier string) (*Member, error)
 	Upsert(ctx context.Context, c *Member) (*Member, error)
+	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
 }
 
@@ -88,6 +96,7 @@ type Ticket struct {
 	ID        int       `json:"id"`
 	Summary   string    `json:"summary"`
 	BoardID   int       `json:"board_id"`
+	StatusID  int       `json:"status_id"`
 	OwnerID   *int      `json:"owner_id"`
 	CompanyID int       `json:"company_id"`
 	ContactID *int      `json:"contact_id"`
@@ -95,6 +104,7 @@ type Ticket struct {
 	UpdatedBy *string   `json:"updated_by"`
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
+	Deleted   bool      `json:"deleted"`
 }
 
 type TicketRepository interface {
@@ -103,12 +113,14 @@ type TicketRepository interface {
 	Get(ctx context.Context, id int) (*Ticket, error)
 	Exists(ctx context.Context, id int) (bool, error)
 	Upsert(ctx context.Context, c *Ticket) (*Ticket, error)
+	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
 }
 
 type FullTicket struct {
 	Ticket     Ticket
 	Board      Board
+	Status     TicketStatus
 	Company    Company
 	Contact    *Contact
 	Owner      *Member
@@ -126,6 +138,7 @@ type TicketNote struct {
 	Content   *string   `json:"text"`
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
+	Deleted   bool      `json:"deleted"`
 }
 
 type TicketNoteRepository interface {
@@ -134,6 +147,7 @@ type TicketNoteRepository interface {
 	ListAll(ctx context.Context) ([]*TicketNote, error)
 	Get(ctx context.Context, id int) (*TicketNote, error)
 	Upsert(ctx context.Context, c *TicketNote) (*TicketNote, error)
+	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
 }
 
@@ -183,6 +197,7 @@ type TicketStatus struct {
 	Closed         bool      `json:"closed"`
 	UpdatedOn      time.Time `json:"updated_on"`
 	AddedOn        time.Time `json:"added_on"`
+	Deleted        bool      `json:"deleted"`
 }
 
 type TicketStatusRepository interface {
@@ -191,5 +206,6 @@ type TicketStatusRepository interface {
 	ListByBoard(ctx context.Context, boardID int) ([]*TicketStatus, error)
 	Get(ctx context.Context, id int) (*TicketStatus, error)
 	Upsert(ctx context.Context, s *TicketStatus) (*TicketStatus, error)
+	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
 }

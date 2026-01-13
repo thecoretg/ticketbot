@@ -61,7 +61,7 @@ func (s *Service) ProcessAllHooks() error {
 	for err := range errch {
 		if err != nil {
 			errored = true
-			slog.Error("hook sync", "error", err)
+			slog.Error("hook sync", "error", err.Error())
 		}
 	}
 
@@ -110,7 +110,7 @@ func (s *Service) ProcessWebexHooks() error {
 	for err := range errch {
 		if err != nil {
 			errored = true
-			slog.Error("webex hook sync", "error", err)
+			slog.Error("webex hook sync", "error", err.Error())
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/mock"
@@ -49,6 +50,7 @@ type TestFlags struct {
 	SkipHooks       bool
 	MockWebex       bool
 	MockConnectwise bool // currently does nothing
+	StoreTTLSeconds int64
 }
 
 type Services struct {
@@ -62,12 +64,20 @@ type Services struct {
 	Ticketbot *ticketbot.Service
 }
 
+const defaultStoreTTL = int64(900)
+
 func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	cr := getCreds()
 	tf := getTestFlags()
 	if err := cr.validate(tf); err != nil {
 		return nil, fmt.Errorf("validating credentials: %w", err)
 	}
+
+	ttl := defaultStoreTTL
+	if tf.StoreTTLSeconds != 0 {
+		ttl = tf.StoreTTLSeconds
+	}
+	slog.Info("using TTL", "ttl", ttl)
 
 	cw := psa.NewClient(cr.CWCreds)
 	wx := webex.NewClient(cr.WebexAPISecret)
@@ -87,9 +97,8 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 	cfg = loadConfigOverrides(cfg)
 
 	cs := config.New(r.Config, cfg)
-
 	us := user.New(r.APIUser, r.APIKey)
-	cws := cwsvc.New(s.Pool, r.CW, cw)
+	cws := cwsvc.New(s.Pool, r.CW, cw, ttl)
 	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms, cr.WebexBotEmail)
 	wh := webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL)
 
@@ -209,10 +218,22 @@ func makeMessageSender(mocking bool, webexSecret string) models.MessageSender {
 }
 
 func getTestFlags() *TestFlags {
+	var ttl int64
 	var apiKey *string
 	if os.Getenv("API_KEY") != "" {
 		k := os.Getenv("API_KEY")
 		apiKey = &k
+	}
+
+	ttlStr := os.Getenv("STORE_TTL_SECONDS")
+	if ttlStr != "" {
+		i, err := strconv.Atoi(ttlStr)
+		if err != nil {
+			slog.Error("couldn't convert STORE_TTL_SECONDS env var to integer, using default", "string", ttlStr)
+		} else {
+			ttl = int64(i)
+			slog.Info("ttl test flag provided", "ttl", ttl)
+		}
 	}
 
 	return &TestFlags{
@@ -221,5 +242,6 @@ func getTestFlags() *TestFlags {
 		SkipHooks:       os.Getenv("SKIP_HOOKS") == "true",
 		MockWebex:       os.Getenv("MOCK_WEBEX") == "true",
 		MockConnectwise: os.Getenv("MOCK_CONNECTWISE") == "true",
+		StoreTTLSeconds: ttl,
 	}
 }

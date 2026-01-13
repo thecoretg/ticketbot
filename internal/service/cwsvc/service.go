@@ -1,6 +1,8 @@
 package cwsvc
 
 import (
+	"time"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/models"
@@ -8,28 +10,24 @@ import (
 )
 
 type Service struct {
+	TTL       time.Duration
 	Boards    models.BoardRepository
 	Companies models.CompanyRepository
 	Contacts  models.ContactRepository
 	Members   models.MemberRepository
 	Tickets   models.TicketRepository
+	Statuses  models.TicketStatusRepository
 	Notes     models.TicketNoteRepository
 	pool      *pgxpool.Pool
 	CWClient  *psa.Client
 }
 
-type Repos struct {
-	Boards    models.BoardRepository
-	Companies models.CompanyRepository
-	Contacts  models.ContactRepository
-	Members   models.MemberRepository
-	Tickets   models.TicketRepository
-	Notes     models.TicketNoteRepository
-}
-
-func New(pool *pgxpool.Pool, r models.CWRepos, cl *psa.Client) *Service {
+func New(pool *pgxpool.Pool, r models.CWRepos, cl *psa.Client, ttl int64) *Service {
+	t := time.Second * time.Duration(ttl)
 	return &Service{
+		TTL:       t,
 		Boards:    r.Board,
+		Statuses:  r.TicketStatus,
 		Companies: r.Company,
 		Contacts:  r.Contact,
 		Members:   r.Member,
@@ -42,7 +40,9 @@ func New(pool *pgxpool.Pool, r models.CWRepos, cl *psa.Client) *Service {
 
 func (s *Service) WithTX(tx pgx.Tx) *Service {
 	return &Service{
+		TTL:       s.TTL,
 		Boards:    s.Boards.WithTx(tx),
+		Statuses:  s.Statuses.WithTx(tx),
 		Companies: s.Companies.WithTx(tx),
 		Contacts:  s.Contacts.WithTx(tx),
 		Members:   s.Members.WithTx(tx),

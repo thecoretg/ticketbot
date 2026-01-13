@@ -17,6 +17,13 @@ ON CONFLICT (id) DO UPDATE SET
     updated_on = NOW()
 RETURNING *;
 
+-- name: SoftDeleteContact :exec
+UPDATE cw_contact
+SET
+    deleted = TRUE,
+    updated_on = NOW()
+WHERE id = $1;
+
 -- name: DeleteContact :exec
 DELETE FROM cw_contact
 WHERE id = $1;

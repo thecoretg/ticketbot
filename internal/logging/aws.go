@@ -76,7 +76,7 @@ func NewCloudwatchLogger(ctx context.Context, params CloudwatchHandlerParams) (*
 			RetentionInDays: aws.Int32(params.RetentionDays),
 		})
 		if err != nil {
-			slog.Warn("failed to set retention policy", "error", err)
+			slog.Warn("failed to set retention policy", "error", err.Error())
 		} else {
 			slog.Info("cloudwatch retention policy set", "days", params.RetentionDays)
 		}

@@ -15,12 +15,13 @@ func AllRepos(pool *pgxpool.Pool) *models.AllRepos {
 		NotifierRules:       NewNotifierRuleRepo(pool),
 		WebexRecipients:     NewWebexRecipientRepo(pool),
 		CW: models.CWRepos{
-			Board:   NewBoardRepo(pool),
-			Company: NewCompanyRepo(pool),
-			Contact: NewContactRepo(pool),
-			Member:  NewMemberRepo(pool),
-			Note:    NewTicketNoteRepo(pool),
-			Ticket:  NewTicketRepo(pool),
+			Board:        NewBoardRepo(pool),
+			TicketStatus: NewTicketStatusRepo(pool),
+			Company:      NewCompanyRepo(pool),
+			Contact:      NewContactRepo(pool),
+			Member:       NewMemberRepo(pool),
+			Note:         NewTicketNoteRepo(pool),
+			Ticket:       NewTicketRepo(pool),
 		},
 	}
 }

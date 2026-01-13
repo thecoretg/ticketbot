@@ -75,6 +75,10 @@ func (p *TicketStatusRepo) Upsert(ctx context.Context, s *models.TicketStatus) (
 	return ticketStatusFromPG(d), nil
 }
 
+func (p *TicketStatusRepo) SoftDelete(ctx context.Context, id int) error {
+	return p.queries.SoftDeleteTicketStatus(ctx, id)
+}
+
 func (p *TicketStatusRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteTicketStatus(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -109,5 +113,6 @@ func ticketStatusFromPG(pg *db.CwTicketStatus) *models.TicketStatus {
 		Closed:         pg.Closed,
 		UpdatedOn:      pg.UpdatedOn,
 		AddedOn:        pg.AddedOn,
+		Deleted:        pg.Deleted,
 	}
 }

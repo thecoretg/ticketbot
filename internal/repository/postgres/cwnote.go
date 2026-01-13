@@ -74,6 +74,10 @@ func (p *TicketNoteRepo) Upsert(ctx context.Context, b *models.TicketNote) (*mod
 	return ticketNoteFromPG(d), nil
 }
 
+func (p *TicketNoteRepo) SoftDelete(ctx context.Context, id int) error {
+	return p.queries.SoftDeleteTicketNote(ctx, id)
+}
+
 func (p *TicketNoteRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteTicketNote(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -104,5 +108,6 @@ func ticketNoteFromPG(pg *db.CwTicketNote) *models.TicketNote {
 		ContactID: pg.ContactID,
 		UpdatedOn: pg.UpdatedOn,
 		AddedOn:   pg.AddedOn,
+		Deleted:   pg.Deleted,
 	}
 }

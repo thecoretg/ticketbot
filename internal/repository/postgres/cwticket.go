@@ -22,7 +22,8 @@ func NewTicketRepo(pool *pgxpool.Pool) *TicketRepo {
 
 func (p *TicketRepo) WithTx(tx pgx.Tx) models.TicketRepository {
 	return &TicketRepo{
-		queries: db.New(tx)}
+		queries: db.New(tx),
+	}
 }
 
 func (p *TicketRepo) List(ctx context.Context) ([]*models.Ticket, error) {
@@ -64,6 +65,10 @@ func (p *TicketRepo) Upsert(ctx context.Context, b *models.Ticket) (*models.Tick
 	return ticketFromPG(d), nil
 }
 
+func (p *TicketRepo) SoftDelete(ctx context.Context, id int) error {
+	return p.queries.SoftDeleteTicket(ctx, id)
+}
+
 func (p *TicketRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteTicket(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -80,6 +85,7 @@ func ticketToUpsertParams(t *models.Ticket) db.UpsertTicketParams {
 		ID:        t.ID,
 		Summary:   t.Summary,
 		BoardID:   t.BoardID,
+		StatusID:  t.StatusID,
 		OwnerID:   t.OwnerID,
 		CompanyID: t.CompanyID,
 		ContactID: t.ContactID,
@@ -93,6 +99,7 @@ func ticketFromPG(pg *db.CwTicket) *models.Ticket {
 		ID:        pg.ID,
 		Summary:   pg.Summary,
 		BoardID:   pg.BoardID,
+		StatusID:  pg.StatusID,
 		OwnerID:   pg.OwnerID,
 		CompanyID: pg.CompanyID,
 		ContactID: pg.ContactID,
@@ -100,5 +107,6 @@ func ticketFromPG(pg *db.CwTicket) *models.Ticket {
 		UpdatedBy: pg.UpdatedBy,
 		UpdatedOn: pg.UpdatedOn,
 		AddedOn:   pg.AddedOn,
+		Deleted:   pg.Deleted,
 	}
 }

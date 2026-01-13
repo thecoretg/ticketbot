@@ -6,14 +6,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/pkg/psa"
 )
 
 func (s *Service) SyncBoards(ctx context.Context) error {
-	// TODO: make this less bad
-
 	start := time.Now()
 	slog.Info("beginning connectwise board sync")
 	cwb, err := s.CW.CWClient.ListBoards(nil)
@@ -28,39 +25,35 @@ func (s *Service) SyncBoards(ctx context.Context) error {
 	}
 	slog.Info("board sync: got boards from store", "total_boards", len(sb))
 
-	// TODO: this is a bandaid. Move this logic to the repo.
-	txSvc := s.CW
-	var tx pgx.Tx
-	if s.pool != nil {
-		tx, err = s.pool.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("beginning tx: %w", err)
-		}
-
-		txSvc = s.CW.WithTX(tx)
-
-		defer func() {
-			_ = tx.Rollback(ctx)
-		}()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning tx: %w", err)
 	}
 
+	txSvc := s.withTx(tx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
 	for _, b := range boardsToUpsert(cwb) {
-		if _, err := txSvc.Boards.Upsert(ctx, b); err != nil {
-			return fmt.Errorf("upserting board %d (%s): %w", b.ID, b.Name, err)
+		if _, err := txSvc.CW.Boards.Upsert(ctx, b); err != nil {
+			slog.Error("board sync: upserting board", "board_id", b.ID, "error", err.Error())
+			continue
+		}
+
+		if err := txSvc.SyncBoardStatuses(ctx, b.ID); err != nil {
+			slog.Error("board sync: status sync", "board_id", b.ID, "error", err.Error())
 		}
 	}
 
 	for _, b := range boardsToDelete(cwb, sb) {
-		if err := txSvc.Boards.Delete(ctx, b.ID); err != nil {
-			return fmt.Errorf("deleting board %d (%s): %w", b.ID, b.Name, err)
+		if err := txSvc.CW.Boards.SoftDelete(ctx, b.ID); err != nil {
+			return fmt.Errorf("soft deleting board %d (%s): %w", b.ID, b.Name, err)
 		}
 	}
 
-	// TODO: this is a bandaid. Move this logic to the repo.
-	if s.pool != nil {
-		if err := tx.Commit(ctx); err != nil {
-			return fmt.Errorf("committing tx: %w", err)
-		}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing tx: %w", err)
 	}
 
 	slog.Info("board sync complete", "took_time", time.Since(start).Seconds())
@@ -88,6 +81,10 @@ func boardsToDelete(cwBoards []psa.Board, storeBoards []*models.Board) []*models
 
 	var toDelete []*models.Board
 	for _, b := range storeBoards {
+		// skip soft deleted boards
+		if b.Deleted {
+			continue
+		}
 		if _, ok := ci[b.ID]; !ok {
 			toDelete = append(toDelete, b)
 		}

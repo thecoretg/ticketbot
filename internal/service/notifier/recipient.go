@@ -57,7 +57,7 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 			slog.Debug("getAllRecipients: calling webexsvc.GetRecipient", "room_id", nr.WebexRecipientID)
 			r, err := s.WebexSvc.GetRecipient(ctx, nr.WebexRecipientID)
 			if err != nil {
-				slog.Error("getting stored webex recipient for notifier rule", "rule_id", nr.ID, "recipient_id", nr.WebexRecipientID, "error", err)
+				slog.Error("getting stored webex recipient for notifier rule", "rule_id", nr.ID, "recipient_id", nr.WebexRecipientID, "error", err.Error())
 				continue
 			}
 
@@ -68,7 +68,7 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 	for e := range includedEmails {
 		r, err := s.WebexSvc.EnsurePersonRecipientByEmail(ctx, e)
 		if err != nil {
-			slog.Error("notifier: ensuring webex person by email", "ticket_id", t.Ticket.ID, "email", e, "error", err)
+			slog.Error("notifier: ensuring webex person by email", "ticket_id", t.Ticket.ID, "email", e, "error", err.Error())
 			continue
 		}
 
@@ -78,7 +78,7 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 	fwdProcd, err := s.processAllFwds(ctx, recips)
 	if err != nil {
 		// return pre-fwd processing
-		slog.Error("forward processing failed; using original recipients", "ticket_id", t.Ticket.ID, "error", err)
+		slog.Error("forward processing failed; using original recipients", "ticket_id", t.Ticket.ID, "error", err.Error())
 		return recips.toSlice(), nil
 	}
 

@@ -20,7 +20,7 @@ func (q *Queries) DeleteMember(ctx context.Context, id int) error {
 }
 
 const getMember = `-- name: GetMember :one
-SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on FROM cw_member
+SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted FROM cw_member
 WHERE id = $1 LIMIT 1
 `
 
@@ -35,12 +35,13 @@ func (q *Queries) GetMember(ctx context.Context, id int) (*CwMember, error) {
 		&i.PrimaryEmail,
 		&i.UpdatedOn,
 		&i.AddedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }
 
 const getMemberByIdentifier = `-- name: GetMemberByIdentifier :one
-SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on FROM cw_member
+SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted FROM cw_member
 WHERE identifier = $1 LIMIT 1
 `
 
@@ -55,12 +56,13 @@ func (q *Queries) GetMemberByIdentifier(ctx context.Context, identifier string) 
 		&i.PrimaryEmail,
 		&i.UpdatedOn,
 		&i.AddedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }
 
 const listMembers = `-- name: ListMembers :many
-SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on FROM cw_member
+SELECT id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted FROM cw_member
 ORDER BY id
 `
 
@@ -81,6 +83,7 @@ func (q *Queries) ListMembers(ctx context.Context) ([]*CwMember, error) {
 			&i.PrimaryEmail,
 			&i.UpdatedOn,
 			&i.AddedOn,
+			&i.Deleted,
 		); err != nil {
 			return nil, err
 		}
@@ -94,7 +97,9 @@ func (q *Queries) ListMembers(ctx context.Context) ([]*CwMember, error) {
 
 const softDeleteMember = `-- name: SoftDeleteMember :exec
 UPDATE cw_member
-SET deleted = TRUE
+SET
+    deleted = TRUE,
+    updated_on = NOW()
 WHERE id = $1
 `
 
@@ -113,7 +118,7 @@ ON CONFLICT (id) DO UPDATE SET
     last_name = EXCLUDED.last_name,
     primary_email = EXCLUDED.primary_email,
     updated_on = NOW()
-RETURNING id, identifier, first_name, last_name, primary_email, updated_on, added_on
+RETURNING id, identifier, first_name, last_name, primary_email, updated_on, added_on, deleted
 `
 
 type UpsertMemberParams struct {
@@ -141,6 +146,7 @@ func (q *Queries) UpsertMember(ctx context.Context, arg UpsertMemberParams) (*Cw
 		&i.PrimaryEmail,
 		&i.UpdatedOn,
 		&i.AddedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }

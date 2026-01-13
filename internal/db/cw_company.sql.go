@@ -20,7 +20,7 @@ func (q *Queries) DeleteCompany(ctx context.Context, id int) error {
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, name, updated_on, added_on FROM cw_company
+SELECT id, name, updated_on, added_on, deleted FROM cw_company
 WHERE id = $1 LIMIT 1
 `
 
@@ -32,12 +32,13 @@ func (q *Queries) GetCompany(ctx context.Context, id int) (*CwCompany, error) {
 		&i.Name,
 		&i.UpdatedOn,
 		&i.AddedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT id, name, updated_on, added_on FROM cw_company
+SELECT id, name, updated_on, added_on, deleted FROM cw_company
 ORDER BY id
 `
 
@@ -55,6 +56,7 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]*CwCompany, error) {
 			&i.Name,
 			&i.UpdatedOn,
 			&i.AddedOn,
+			&i.Deleted,
 		); err != nil {
 			return nil, err
 		}
@@ -68,7 +70,9 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]*CwCompany, error) {
 
 const softDeleteCompany = `-- name: SoftDeleteCompany :exec
 UPDATE cw_company
-SET deleted = TRUE
+SET
+    deleted = TRUE,
+    updated_on = NOW()
 WHERE id = $1
 `
 
@@ -83,7 +87,7 @@ SET
     name = $2,
     updated_on = NOW()
 WHERE id = $1
-RETURNING id, name, updated_on, added_on
+RETURNING id, name, updated_on, added_on, deleted
 `
 
 type UpdateCompanyParams struct {
@@ -99,6 +103,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (*
 		&i.Name,
 		&i.UpdatedOn,
 		&i.AddedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }
@@ -110,7 +115,7 @@ VALUES ($1, $2)
 ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name,
     updated_on = NOW()
-RETURNING id, name, updated_on, added_on
+RETURNING id, name, updated_on, added_on, deleted
 `
 
 type UpsertCompanyParams struct {
@@ -126,6 +131,7 @@ func (q *Queries) UpsertCompany(ctx context.Context, arg UpsertCompanyParams) (*
 		&i.Name,
 		&i.UpdatedOn,
 		&i.AddedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }

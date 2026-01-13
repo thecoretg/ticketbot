@@ -25,7 +25,9 @@ RETURNING *;
 
 -- name: SoftDeleteTicketNote :exec
 UPDATE cw_ticket_note
-SET deleted = TRUE
+SET
+    deleted = TRUE,
+    updated_on = NOW()
 WHERE id = $1;
 
 -- name: DeleteTicketNote :exec

@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/internal/models"
 	"github.com/thecoretg/ticketbot/pkg/psa"
 )
@@ -25,11 +24,12 @@ type CWData struct {
 	note   *psa.ServiceTicketNote
 }
 
-func (s *Service) DeleteTicket(ctx context.Context, id int) error {
-	if err := s.Tickets.Delete(ctx, id); err != nil {
-		return fmt.Errorf("deleting ticket from store: %w", err)
-	}
-	return nil
+func (s *Service) SoftDeleteTicket(ctx context.Context, id int) error {
+	return s.Tickets.SoftDelete(ctx, id)
+}
+
+func (s *Service) PermDeleteTicket(ctx context.Context, id int) error {
+	return s.Tickets.Delete(ctx, id)
 }
 
 func (s *Service) ProcessTicket(ctx context.Context, id int, caller string) (*models.FullTicket, error) {
@@ -42,7 +42,6 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, caller string) (*mo
 }
 
 func (s *Service) processTicket(ctx context.Context, id int, caller string) (req *Request, err error) {
-	// TODO: make this less bad
 	req = &Request{
 		NoProcReason: "",
 		cd:           CWData{},
@@ -67,21 +66,16 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		return req, fmt.Errorf("no data returned from connectwise for ticket %d", id)
 	}
 
-	// TODO: this is a bandaid. Move this logic to the repo.
-	txSvc := s
-	var tx pgx.Tx
-	if s.pool != nil {
-		tx, err = s.pool.Begin(ctx)
-		if err != nil {
-			return req, fmt.Errorf("beginning tx: %w", err)
-		}
-
-		txSvc = s.WithTX(tx)
-
-		defer func() {
-			_ = tx.Rollback(ctx)
-		}()
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return req, fmt.Errorf("beginning tx: %w", err)
 	}
+
+	txSvc := s.WithTX(tx)
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	cwt := cd.ticket
 	logger = logger.With(slog.Int("ticket_id", cwt.ID), slog.String("caller", caller))
@@ -92,9 +86,15 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	}
 	logger = logger.With(boardLogGrp(board))
 
+	status, err := txSvc.ensureStatus(ctx, cwt.Status.ID, cwt.Board.ID)
+	if err != nil {
+		return req, fmt.Errorf("ensuring status in store: %w", err)
+	}
+	logger = logger.With(statusLogGrp(status))
+
 	company, err := txSvc.ensureCompany(ctx, cwt.Company.ID)
 	if err != nil {
-		return nil, fmt.Errorf("ensuring company in store: %w", err)
+		return req, fmt.Errorf("ensuring company in store: %w", err)
 	}
 	logger = logger.With(companyLogGrp(company))
 
@@ -102,7 +102,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	if cwt.Contact.ID != 0 {
 		contact, err = txSvc.ensureContact(ctx, cwt.Contact.ID)
 		if err != nil {
-			return nil, fmt.Errorf("ensuring ticket contact in store: %w", err)
+			return req, fmt.Errorf("ensuring ticket contact in store: %w", err)
 		}
 		logger = logger.With(contactLogGrp(contact))
 	}
@@ -111,14 +111,14 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	if cwt.Owner.ID != 0 {
 		owner, err = txSvc.ensureMember(ctx, cwt.Owner.ID)
 		if err != nil {
-			return nil, fmt.Errorf("ensuring ticket owner in store: %w", err)
+			return req, fmt.Errorf("ensuring ticket owner in store: %w", err)
 		}
 		logger = logger.With(ownerLogGrp(owner))
 	}
 
 	ticket, err := txSvc.ensureTicket(ctx, cd.ticket)
 	if err != nil {
-		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
+		return req, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
 	var rsc []*models.Member
@@ -128,7 +128,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		for _, i := range ids {
 			member, err := txSvc.ensureMemberByIdentifier(ctx, i)
 			if err != nil {
-				logger.Warn("cwsvc: error getting resource member by identifier", "identifier", i, "error", err)
+				logger.Warn("cwsvc: error getting resource member by identifier", "identifier", i, "error", err.Error())
 				continue
 			}
 
@@ -140,20 +140,18 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	if cd.note != nil && cd.note.ID != 0 {
 		note, err = txSvc.ensureTicketNote(ctx, cd.note)
 		if err != nil {
-			return nil, fmt.Errorf("ensuring ticket note in store: %w", err)
+			return req, fmt.Errorf("ensuring ticket note in store: %w", err)
 		}
 		logger = logger.With(noteLogGrp(note))
 	}
 
-	// TODO: this is a bandaid. Move this logic to the repo.
-	if s.pool != nil {
-		if err := tx.Commit(ctx); err != nil {
-			return nil, fmt.Errorf("committing transaction: %w", err)
-		}
+	if err := tx.Commit(ctx); err != nil {
+		return req, fmt.Errorf("committing transaction: %w", err)
 	}
 
 	req.FullTicket = &models.FullTicket{
 		Board:      *board,
+		Status:     *status,
 		Ticket:     *ticket,
 		Company:    *company,
 		Contact:    contact,
@@ -184,11 +182,11 @@ func (s *Service) getCwData(ticketID int) (CWData, error) {
 
 func (s *Service) ensureBoard(ctx context.Context, id int) (*models.Board, error) {
 	b, err := s.Boards.Get(ctx, id)
-	if err == nil {
+	if err == nil && !s.withinTTL(b.UpdatedOn, "board", id) {
 		return b, nil
 	}
 
-	if !errors.Is(err, models.ErrBoardNotFound) {
+	if err != nil && !errors.Is(err, models.ErrBoardNotFound) {
 		return nil, fmt.Errorf("getting board from store: %w", err)
 	}
 
@@ -208,13 +206,49 @@ func (s *Service) ensureBoard(ctx context.Context, id int) (*models.Board, error
 	return b, nil
 }
 
+func (s *Service) ensureStatus(ctx context.Context, id, boardID int) (*models.TicketStatus, error) {
+	st, err := s.Statuses.Get(ctx, id)
+	if err == nil && !s.withinTTL(st.UpdatedOn, "status", id) {
+		return st, nil
+	}
+
+	if err != nil && !errors.Is(err, models.ErrTicketStatusNotFound) {
+		return nil, fmt.Errorf("getting status from store: %w", err)
+	}
+
+	_, err = s.ensureBoard(ctx, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring status board in store: %w", err)
+	}
+
+	cw, err := s.CWClient.GetBoardStatus(id, nil, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("getting status from cw: %w", err)
+	}
+
+	st, err = s.Statuses.Upsert(ctx, &models.TicketStatus{
+		ID:             id,
+		BoardID:        boardID,
+		Name:           cw.Name,
+		DefaultStatus:  cw.DefaultFlag,
+		DisplayOnBoard: cw.DisplayOnBoard,
+		Inactive:       cw.Inactive,
+		Closed:         cw.ClosedStatus,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("inserting board into store: %w", err)
+	}
+
+	return st, nil
+}
+
 func (s *Service) ensureCompany(ctx context.Context, id int) (*models.Company, error) {
 	c, err := s.Companies.Get(ctx, id)
-	if err == nil {
+	if err == nil && !s.withinTTL(c.UpdatedOn, "company", id) {
 		return c, nil
 	}
 
-	if !errors.Is(err, models.ErrCompanyNotFound) {
+	if err != nil && !errors.Is(err, models.ErrCompanyNotFound) {
 		return nil, fmt.Errorf("getting company from store: %w", err)
 	}
 
@@ -236,11 +270,11 @@ func (s *Service) ensureCompany(ctx context.Context, id int) (*models.Company, e
 
 func (s *Service) ensureContact(ctx context.Context, id int) (*models.Contact, error) {
 	c, err := s.Contacts.Get(ctx, id)
-	if err == nil {
+	if err == nil && !s.withinTTL(c.UpdatedOn, "contact", id) {
 		return c, nil
 	}
 
-	if !errors.Is(err, models.ErrContactNotFound) {
+	if err != nil && !errors.Is(err, models.ErrContactNotFound) {
 		return nil, fmt.Errorf("getting contact from store: %w", err)
 	}
 
@@ -273,11 +307,11 @@ func (s *Service) ensureContact(ctx context.Context, id int) (*models.Contact, e
 
 func (s *Service) ensureMemberByIdentifier(ctx context.Context, identifier string) (*models.Member, error) {
 	m, err := s.Members.GetByIdentifier(ctx, identifier)
-	if err == nil {
+	if err == nil && !s.withinTTL(m.UpdatedOn, "member", identifier) {
 		return m, nil
 	}
 
-	if !errors.Is(err, models.ErrMemberNotFound) {
+	if err != nil && !errors.Is(err, models.ErrMemberNotFound) {
 		return nil, fmt.Errorf("getting member from store: %w", err)
 	}
 
@@ -291,11 +325,11 @@ func (s *Service) ensureMemberByIdentifier(ctx context.Context, identifier strin
 
 func (s *Service) ensureMember(ctx context.Context, id int) (*models.Member, error) {
 	m, err := s.Members.Get(ctx, id)
-	if err == nil {
+	if err == nil && !s.withinTTL(m.UpdatedOn, "member", id) {
 		return m, nil
 	}
 
-	if !errors.Is(err, models.ErrMemberNotFound) {
+	if err != nil && !errors.Is(err, models.ErrMemberNotFound) {
 		return nil, fmt.Errorf("getting member from store: %w", err)
 	}
 
@@ -327,6 +361,7 @@ func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (*models.Ti
 		ID:        cwt.ID,
 		Summary:   cwt.Summary,
 		BoardID:   cwt.Board.ID,
+		StatusID:  cwt.Status.ID,
 		OwnerID:   intToPtr(cwt.Owner.ID),
 		CompanyID: cwt.Company.ID,
 		ContactID: intToPtr(cwt.Contact.ID),
@@ -356,11 +391,11 @@ func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNo
 	}
 
 	n, err := s.Notes.Get(ctx, cwn.ID)
-	if err == nil {
+	if err == nil && !s.withinTTL(n.UpdatedOn, "ticket_note", cwn.ID) {
 		return models.TicketNoteToFullTicketNote(ctx, n, s.Members, s.Contacts)
 	}
 
-	if !errors.Is(err, models.ErrTicketNoteNotFound) {
+	if err != nil && !errors.Is(err, models.ErrTicketNoteNotFound) {
 		return nil, fmt.Errorf("getting note from store: %w", err)
 	}
 
@@ -430,12 +465,17 @@ func strToPtr(s string) *string {
 }
 
 func logRequest(req *Request, err error, logger *slog.Logger) {
+	if req == nil {
+		logger.Error("received nil request")
+		return
+	}
+
 	if req.NoProcReason != "" {
 		logger = logger.With("no_process_reason", req.NoProcReason)
 	}
 
 	if err != nil {
-		logger.Error("error occured processing ticket", "error", err)
+		logger.Error("error occured processing ticket", "error", err.Error())
 	} else {
 		logger.Info("ticket processed")
 	}
@@ -447,6 +487,15 @@ func companyLogGrp(company *models.Company) slog.Attr {
 
 func boardLogGrp(board *models.Board) slog.Attr {
 	return slog.Group("board", "id", board.ID, "name", board.Name)
+}
+
+func statusLogGrp(status *models.TicketStatus) slog.Attr {
+	return slog.Group("status",
+		"id", status.ID,
+		"name", status.Name,
+		"closed", status.Closed,
+		"inactive", status.Inactive,
+	)
 }
 
 func ownerLogGrp(owner *models.Member) slog.Attr {

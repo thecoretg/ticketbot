@@ -62,7 +62,7 @@ func (s *Service) Sync(ctx context.Context, payload *models.SyncPayload) error {
 	for err := range errch {
 		if err != nil {
 			errored = true
-			slog.Error("hook sync", "error", err)
+			slog.Error("hook sync", "error", err.Error())
 		}
 	}
 

@@ -34,7 +34,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (err error) {
 	defer func() {
 		took := time.Since(start).Seconds()
 		if err != nil {
-			slog.Error("ticketbot: request finished with error", "ticket_id", id, "took_seconds", took, "error", err)
+			slog.Error("ticketbot: request finished with error", "ticket_id", id, "took_seconds", took, "error", err.Error())
 			return
 		}
 		slog.Debug("ticketbot: request finished", "ticket_id", id, "took_seconds", took)

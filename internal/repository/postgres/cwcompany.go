@@ -60,6 +60,10 @@ func (p *CompanyRepo) Upsert(ctx context.Context, b *models.Company) (*models.Co
 	return companyFromPG(d), nil
 }
 
+func (p *CompanyRepo) SoftDelete(ctx context.Context, id int) error {
+	return p.queries.SoftDeleteCompany(ctx, id)
+}
+
 func (p *CompanyRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteCompany(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -84,5 +88,6 @@ func companyFromPG(pg *db.CwCompany) *models.Company {
 		Name:      pg.Name,
 		UpdatedOn: pg.UpdatedOn,
 		AddedOn:   pg.AddedOn,
+		Deleted:   pg.Deleted,
 	}
 }

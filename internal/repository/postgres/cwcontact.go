@@ -60,6 +60,10 @@ func (p *ContactRepo) Upsert(ctx context.Context, b *models.Contact) (*models.Co
 	return contactFromPG(d), nil
 }
 
+func (p *ContactRepo) SoftDelete(ctx context.Context, id int) error {
+	return p.queries.SoftDeleteContact(ctx, id)
+}
+
 func (p *ContactRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteContact(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -88,5 +92,6 @@ func contactFromPG(pg *db.CwContact) *models.Contact {
 		CompanyID: pg.CompanyID,
 		UpdatedOn: pg.UpdatedOn,
 		AddedOn:   pg.AddedOn,
+		Deleted:   pg.Deleted,
 	}
 }

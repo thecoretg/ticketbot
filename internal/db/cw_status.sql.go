@@ -20,7 +20,7 @@ func (q *Queries) DeleteTicketStatus(ctx context.Context, id int) error {
 }
 
 const getTicketStatus = `-- name: GetTicketStatus :one
-SELECT id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on FROM cw_ticket_status
+SELECT id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on, deleted FROM cw_ticket_status
 WHERE id = $1 LIMIT 1
 `
 
@@ -37,12 +37,13 @@ func (q *Queries) GetTicketStatus(ctx context.Context, id int) (*CwTicketStatus,
 		&i.Closed,
 		&i.AddedOn,
 		&i.UpdatedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }
 
 const listAllTicketStatuses = `-- name: ListAllTicketStatuses :many
-SELECT id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on FROM cw_ticket_status
+SELECT id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on, deleted FROM cw_ticket_status
 ORDER BY id
 `
 
@@ -65,6 +66,7 @@ func (q *Queries) ListAllTicketStatuses(ctx context.Context) ([]*CwTicketStatus,
 			&i.Closed,
 			&i.AddedOn,
 			&i.UpdatedOn,
+			&i.Deleted,
 		); err != nil {
 			return nil, err
 		}
@@ -77,7 +79,7 @@ func (q *Queries) ListAllTicketStatuses(ctx context.Context) ([]*CwTicketStatus,
 }
 
 const listTicketStatusesByBoard = `-- name: ListTicketStatusesByBoard :many
-SELECT id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on FROM cw_ticket_status
+SELECT id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on, deleted FROM cw_ticket_status
 WHERE board_id = $1
 ORDER BY id
 `
@@ -101,6 +103,7 @@ func (q *Queries) ListTicketStatusesByBoard(ctx context.Context, boardID int) ([
 			&i.Closed,
 			&i.AddedOn,
 			&i.UpdatedOn,
+			&i.Deleted,
 		); err != nil {
 			return nil, err
 		}
@@ -110,6 +113,19 @@ func (q *Queries) ListTicketStatusesByBoard(ctx context.Context, boardID int) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const softDeleteTicketStatus = `-- name: SoftDeleteTicketStatus :exec
+UPDATE cw_ticket_status
+SET
+    deleted = TRUE,
+    updated_on = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteTicketStatus(ctx context.Context, id int) error {
+	_, err := q.db.Exec(ctx, softDeleteTicketStatus, id)
+	return err
 }
 
 const upsertTicketStatus = `-- name: UpsertTicketStatus :one
@@ -131,7 +147,7 @@ ON CONFLICT (id) DO UPDATE SET
     inactive = EXCLUDED.inactive,
     closed = EXCLUDED.closed,
     updated_on = NOW()
-RETURNING id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on
+RETURNING id, board_id, name, default_status, display_on_board, inactive, closed, added_on, updated_on, deleted
 `
 
 type UpsertTicketStatusParams struct {
@@ -165,6 +181,7 @@ func (q *Queries) UpsertTicketStatus(ctx context.Context, arg UpsertTicketStatus
 		&i.Closed,
 		&i.AddedOn,
 		&i.UpdatedOn,
+		&i.Deleted,
 	)
 	return &i, err
 }

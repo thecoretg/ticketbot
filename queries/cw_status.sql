@@ -32,6 +32,13 @@ ON CONFLICT (id) DO UPDATE SET
     updated_on = NOW()
 RETURNING *;
 
+-- name: SoftDeleteTicketStatus :exec
+UPDATE cw_ticket_status
+SET
+    deleted = TRUE,
+    updated_on = NOW()
+WHERE id = $1;
+
 -- name: DeleteTicketStatus :exec
 DELETE FROM cw_ticket_status
 WHERE id = $1;

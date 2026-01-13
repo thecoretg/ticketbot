@@ -25,7 +25,9 @@ RETURNING *;
 
 -- name: SoftDeleteCompany :exec
 UPDATE cw_company
-SET deleted = TRUE
+SET
+    deleted = TRUE,
+    updated_on = NOW()
 WHERE id = $1;
 
 -- name: DeleteCompany :exec

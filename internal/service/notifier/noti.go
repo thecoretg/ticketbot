@@ -227,7 +227,7 @@ func logRequest(req *Request, err error, logger *slog.Logger) {
 	}
 
 	if err != nil {
-		logger.Error("error occured with notification", "error", err)
+		logger.Error("error occured with notification", "error", err.Error())
 	} else {
 		logger.Info("notification processed")
 	}
