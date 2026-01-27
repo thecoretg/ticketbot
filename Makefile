@@ -1,6 +1,9 @@
 create-bin-dir:
 	mkdir -p bin
 
+build-server: create-bin-dir
+	go build -o bin/server ./cmd/server
+
 build-cli: create-bin-dir
 	go build -o bin/tbot-admin ./cmd/tbot-admin && cp bin/tbot-admin ~/go/bin/tbot-admin
 

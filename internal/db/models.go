@@ -8,39 +8,6 @@ import (
 	"time"
 )
 
-type AddigyAlert struct {
-	ID              string     `json:"id"`
-	TicketID        *int       `json:"ticket_id"`
-	Level           string     `json:"level"`
-	Category        string     `json:"category"`
-	Name            string     `json:"name"`
-	FactName        string     `json:"fact_name"`
-	FactIdentifier  string     `json:"fact_identifier"`
-	FactType        string     `json:"fact_type"`
-	Selector        string     `json:"selector"`
-	Status          string     `json:"status"`
-	Value           *string    `json:"value"`
-	Muted           bool       `json:"muted"`
-	Remediation     bool       `json:"remediation"`
-	ResolvedByEmail *string    `json:"resolved_by_email"`
-	ResolvedOn      *time.Time `json:"resolved_on"`
-	AcknowledgedOn  *time.Time `json:"acknowledged_on"`
-	AddedOn         time.Time  `json:"added_on"`
-}
-
-type AddigyAlertConfig struct {
-	ID                   int       `json:"id"`
-	CwBoardID            int       `json:"cw_board_id"`
-	UnattendedStatusID   int       `json:"unattended_status_id"`
-	AcknowledgedStatusID int       `json:"acknowledged_status_id"`
-	Mute1DayStatusID     int       `json:"mute_1_day_status_id"`
-	Mute5DayStatusID     int       `json:"mute_5_day_status_id"`
-	Mute10DayStatusID    int       `json:"mute_10_day_status_id"`
-	Mute30DayStatusID    int       `json:"mute_30_day_status_id"`
-	AddedOn              time.Time `json:"added_on"`
-	UpdatedOn            time.Time `json:"updated_on"`
-}
-
 type ApiKey struct {
 	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`
