@@ -44,7 +44,7 @@ func registerUserRoutes(r *gin.RouterGroup, h *handlers.UserHandler) {
 	r.GET("", h.ListUsers)
 	r.GET(":id", h.GetUser)
 	r.POST("", h.CreateUser)
-	r.DELETE(":id")
+	r.DELETE(":id", h.DeleteUser)
 
 	k := r.Group("keys")
 	k.GET("", h.ListAPIKeys)
