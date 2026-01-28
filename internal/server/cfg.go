@@ -13,9 +13,10 @@ import (
 // this is primarily for testing purposes.
 func loadConfigOverrides(current *models.Config) *models.Config {
 	var (
-		attemptNotify *bool
-		maxLen        *int
-		maxConSyncs   *int
+		attemptNotify   *bool
+		skipLaunchSyncs *bool
+		maxLen          *int
+		maxConSyncs     *int
 	)
 
 	switch os.Getenv("ATTEMPT_NOTIFY") {
@@ -25,6 +26,15 @@ func loadConfigOverrides(current *models.Config) *models.Config {
 	case "false":
 		v := false
 		attemptNotify = &v
+	}
+
+	switch os.Getenv("SKIP_LAUNCH_SYNCS") {
+	case "true":
+		v := true
+		skipLaunchSyncs = &v
+	case "false":
+		v := false
+		skipLaunchSyncs = &v
 	}
 
 	mlInt, err := strconv.Atoi(os.Getenv("MAX_MSG_LENGTH"))
@@ -37,6 +47,11 @@ func loadConfigOverrides(current *models.Config) *models.Config {
 	if err == nil {
 		v := msInt
 		maxConSyncs = &v
+	}
+
+	if skipLaunchSyncs != nil {
+		slog.Info("SKIP_LAUNCH_SYNCS overridden via env", "value", *skipLaunchSyncs)
+		current.SkipLaunchSyncs = *skipLaunchSyncs
 	}
 
 	if attemptNotify != nil {

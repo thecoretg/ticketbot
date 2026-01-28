@@ -21,6 +21,7 @@ var (
 const (
 	modelTypeRules modelType = iota
 	modelTypeFwds
+	modelTypeUsers
 )
 
 func switchModel(m modelType) tea.Cmd {

@@ -8,7 +8,7 @@ build-cli: create-bin-dir
 	go build -o bin/tbot-admin ./cmd/tbot-admin && cp bin/tbot-admin ~/go/bin/tbot-admin
 
 tui:
-	go run ./cmd/tbot-admin admin
+	go run ./cmd/tbot-admin
 gensql:
 	sqlc generate
 

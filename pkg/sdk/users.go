@@ -7,6 +7,10 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
+func (c *Client) GetCurrentUser() (*models.APIUser, error) {
+	return GetOne[models.APIUser](c, "users/me", nil)
+}
+
 func (c *Client) ListUsers() ([]models.APIUser, error) {
 	return GetMany[models.APIUser](c, "users", nil)
 }

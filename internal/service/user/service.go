@@ -15,6 +15,12 @@ func (e ErrUserAlreadyExists) Error() string {
 	return fmt.Sprintf("user with email '%s' already exists", e.Email)
 }
 
+type ErrCannotDeleteSelf struct{}
+
+func (e ErrCannotDeleteSelf) Error() string {
+	return "cannot delete your own user account"
+}
+
 type Service struct {
 	Users models.APIUserRepository
 	Keys  models.APIKeyRepository
@@ -52,7 +58,10 @@ func (s *Service) InsertUser(ctx context.Context, email string) (*models.APIUser
 	return s.Users.Insert(ctx, email)
 }
 
-func (s *Service) DeleteUser(ctx context.Context, id int) error {
+func (s *Service) DeleteUser(ctx context.Context, id int, authenticatedUserID int) error {
+	if id == authenticatedUserID {
+		return ErrCannotDeleteSelf{}
+	}
 	return s.Users.Delete(ctx, id)
 }
 

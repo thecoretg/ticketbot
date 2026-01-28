@@ -11,6 +11,7 @@ type keyMap struct {
 	clearErr         key.Binding
 	switchModelRules key.Binding
 	switchModelFwds  key.Binding
+	switchModelUsers key.Binding
 	newItem          key.Binding
 	deleteItem       key.Binding
 }
@@ -29,6 +30,9 @@ var allKeys = keyMap{
 	),
 	switchModelFwds: key.NewBinding(
 		key.WithKeys("ctrl+f"),
+	),
+	switchModelUsers: key.NewBinding(
+		key.WithKeys("ctrl+u"),
 	),
 	newItem: key.NewBinding(
 		key.WithKeys("n"),
@@ -68,12 +72,17 @@ func (m *Model) helpKeys() []key.Binding {
 			if len(m.rulesModel.rules) > 0 {
 				keys = append(keys, allKeys.deleteItem)
 			}
-			keys = append(keys, allKeys.switchModelFwds)
+			keys = append(keys, allKeys.switchModelFwds, allKeys.switchModelUsers)
 		case m.fwdsModel:
 			if len(m.fwdsModel.fwds) > 0 {
 				keys = append(keys, allKeys.deleteItem)
 			}
-			keys = append(keys, allKeys.switchModelRules)
+			keys = append(keys, allKeys.switchModelRules, allKeys.switchModelUsers)
+		case m.usersModel:
+			if len(m.usersModel.users) > 0 {
+				keys = append(keys, allKeys.deleteItem)
+			}
+			keys = append(keys, allKeys.switchModelRules, allKeys.switchModelFwds)
 		}
 	}
 
@@ -99,5 +108,6 @@ func isGlobalKey(msg tea.KeyMsg) bool {
 	return key.Matches(msg, allKeys.quit) ||
 		key.Matches(msg, allKeys.clearErr) ||
 		key.Matches(msg, allKeys.switchModelRules) ||
-		key.Matches(msg, allKeys.switchModelFwds)
+		key.Matches(msg, allKeys.switchModelFwds) ||
+		key.Matches(msg, allKeys.switchModelUsers)
 }

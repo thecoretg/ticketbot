@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,25 @@ type UserHandler struct {
 
 func NewUserHandler(svc *user.Service) *UserHandler {
 	return &UserHandler{Service: svc}
+}
+
+func (h *UserHandler) GetCurrentUser(c *gin.Context) {
+	authenticatedUserID := c.GetInt("user_id")
+
+	slog.Info("get current user called", "authenticated_user_id", authenticatedUserID)
+
+	u, err := h.Service.GetUser(c.Request.Context(), authenticatedUserID)
+	if err != nil {
+		if errors.Is(err, models.ErrAPIUserNotFound) {
+			notFoundError(c, err)
+			return
+		}
+		internalServerError(c, err)
+		return
+	}
+
+	slog.Info("returning current user", "user_id", u.ID, "email", u.EmailAddress)
+	outputJSON(c, u)
 }
 
 func (h *UserHandler) ListUsers(c *gin.Context) {
@@ -74,14 +94,28 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.Service.DeleteUser(c.Request.Context(), id); err != nil {
+	authenticatedUserID := c.GetInt("user_id")
+
+	slog.Info("user deletion requested",
+		"authenticated_user_id", authenticatedUserID,
+		"target_user_id", id)
+
+	if err := h.Service.DeleteUser(c.Request.Context(), id, authenticatedUserID); err != nil {
 		if errors.Is(err, models.ErrAPIUserNotFound) {
 			notFoundError(c, err)
+			return
+		}
+		if errors.Is(err, user.ErrCannotDeleteSelf{}) {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 		internalServerError(c, err)
 		return
 	}
+
+	slog.Info("user deleted successfully",
+		"authenticated_user_id", authenticatedUserID,
+		"deleted_user_id", id)
 
 	c.Status(http.StatusOK)
 }

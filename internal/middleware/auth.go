@@ -44,11 +44,12 @@ func APIKeyAuth(r models.APIKeyRepository) gin.HandlerFunc {
 			slog.Debug("auth middleware: got no keys from store")
 		}
 
-		var userID int32
+		var userID int
 		found := false
 		for _, k := range keys {
 			if bcrypt.CompareHashAndPassword(k.KeyHash, []byte(key)) == nil {
-				userID = int32(k.UserID)
+				userID = k.UserID
+			slog.Info("authenticated user", "user_id", userID)
 				found = true
 				break
 			}

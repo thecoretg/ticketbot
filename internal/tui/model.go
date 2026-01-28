@@ -25,6 +25,7 @@ type Model struct {
 	activeModel subModel
 	rulesModel  *rulesModel
 	fwdsModel   *fwdsModel
+	usersModel  *usersModel
 	help        help.Model
 	width       int
 	height      int
@@ -33,6 +34,7 @@ type Model struct {
 type modelsReadyMsg struct {
 	rules *rulesModel
 	fwds  *fwdsModel
+	users *usersModel
 }
 
 type subModel interface {
@@ -63,6 +65,11 @@ func (m *Model) createSubModels(w, h int) tea.Cmd {
 			return errMsg{fmt.Errorf("listing initial forwards: %w", err)}
 		}
 
+		users, err := m.SDKClient.ListUsers()
+		if err != nil {
+			return errMsg{fmt.Errorf("listing initial users: %w", err)}
+		}
+
 		rp := rulesModelParams{
 			sdkClient:     m.SDKClient,
 			initialRules:  rules,
@@ -77,9 +84,17 @@ func (m *Model) createSubModels(w, h int) tea.Cmd {
 			initialHeight: h,
 		}
 
+		up := usersModelParams{
+			sdkClient:     m.SDKClient,
+			initialUsers:  users,
+			initialWidth:  w,
+			initialHeight: h,
+		}
+
 		return modelsReadyMsg{
 			rules: newRulesModel(rp),
 			fwds:  newFwdsModel(fp),
+			users: newUsersModel(up),
 		}
 	}
 }
@@ -112,6 +127,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.rulesModel = am
 			case *fwdsModel:
 				m.fwdsModel = am
+			case *usersModel:
+				m.usersModel = am
 			}
 
 			cmds = append(cmds, cmd)
@@ -129,14 +146,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, switchModel(modelTypeRules)
 		case key.Matches(msg, allKeys.switchModelFwds):
 			return m, switchModel(modelTypeFwds)
+		case key.Matches(msg, allKeys.switchModelUsers):
+			return m, switchModel(modelTypeUsers)
 		}
 
 	case modelsReadyMsg:
 		m.rulesModel = msg.rules
 		m.fwdsModel = msg.fwds
+		m.usersModel = msg.users
 		m.activeModel = m.rulesModel
 		m.initialized = true
-		return m, tea.Batch(m.rulesModel.Init(), m.fwdsModel.Init())
+		return m, tea.Batch(m.rulesModel.Init(), m.fwdsModel.Init(), m.usersModel.Init())
 
 	case switchModelMsg:
 		switch msg.modelType {
@@ -148,7 +168,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activeModel != m.fwdsModel {
 				m.activeModel = m.fwdsModel
 			}
+		case modelTypeUsers:
+			if m.activeModel != m.usersModel {
+				m.activeModel = m.usersModel
+			}
 		}
+	case gotCurrentUserMsg:
+		users, cmd := m.usersModel.Update(msg)
+		if u, ok := users.(*usersModel); ok {
+			m.usersModel = u
+		}
+		cmds = append(cmds, cmd)
 	case errMsg:
 		currentErr = msg.error
 	}
@@ -164,6 +194,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		fwds, cmd := m.fwdsModel.Update(msg)
 		if f, ok := fwds.(*fwdsModel); ok {
 			m.fwdsModel = f
+		}
+		cmds = append(cmds, cmd)
+	case m.usersModel:
+		users, cmd := m.usersModel.Update(msg)
+		if u, ok := users.(*usersModel); ok {
+			m.usersModel = u
 		}
 		cmds = append(cmds, cmd)
 	}
@@ -185,7 +221,8 @@ func (m *Model) View() string {
 
 func (m *Model) headerView() string {
 	rl := "[CTRL+R] RULES"
-	fl := "[CTRL+F] FORWARDS "
+	fl := "[CTRL+F] FORWARDS"
+	ul := "[CTRL+U] USERS"
 	rulesTab := menuLabelStyle.Render(rl)
 	if m.activeModel == m.rulesModel {
 		rulesTab = activeMenuLabelStyle.Render(rl)
@@ -196,10 +233,15 @@ func (m *Model) headerView() string {
 		fwdsTab = activeMenuLabelStyle.Render(fl)
 	}
 
-	avail := m.width - lipgloss.Width(rulesTab) - lipgloss.Width(fwdsTab)
+	usersTab := menuLabelStyle.Render(ul)
+	if m.activeModel == m.usersModel {
+		usersTab = activeMenuLabelStyle.Render(ul)
+	}
+
+	avail := m.width - lipgloss.Width(rulesTab) - lipgloss.Width(fwdsTab) - lipgloss.Width(usersTab) - lipgloss.Width(" / ") - lipgloss.Width(" / ")
 	avail = max(0, avail)
 	line := lipgloss.NewStyle().Foreground(green).Render(strings.Repeat(lipgloss.NormalBorder().Bottom, avail))
-	tabs := lipgloss.JoinHorizontal(lipgloss.Bottom, rulesTab, " / ", fwdsTab, line)
+	tabs := lipgloss.JoinHorizontal(lipgloss.Bottom, rulesTab, " / ", fwdsTab, " / ", usersTab, line)
 	return tabs
 }
 
