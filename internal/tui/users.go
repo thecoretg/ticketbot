@@ -31,7 +31,6 @@ type (
 	refreshUsersMsg   struct{}
 	gotUsersMsg       struct{ users []models.APIUser }
 	gotCurrentUserMsg struct{ userID int }
-
 )
 
 func newUsersModel(parent *Model, initialUsers []models.APIUser) *usersModel {
@@ -67,7 +66,7 @@ func (um *usersModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return errMsg{fmt.Errorf("cannot delete your own user account (ID: %d)", um.parent.currentUserID)}
 					}
 				}
-				um.form = confirmationForm("Delete user?", &um.userDeleteConfirm, um.parent.availHeight)
+				um.form = confirmationForm(fmt.Sprintf("Delete user %s?", um.userToDelete.EmailAddress), &um.userDeleteConfirm, um.parent.availHeight)
 				um.status = statusConfirm
 				return um, um.form.Init()
 			}
