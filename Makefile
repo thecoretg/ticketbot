@@ -8,7 +8,8 @@ build-cli: create-bin-dir
 	go build -o bin/tbot-admin ./cmd/tbot-admin && cp bin/tbot-admin ~/go/bin/tbot-admin
 
 tui:
-	go run ./cmd/tbot-admin
+	op run --env-file="./testing.env" --no-masking -- go run ./cmd/tbot-admin
+
 gensql:
 	sqlc generate
 

@@ -21,6 +21,11 @@ var (
 			if err := createClient(cmd, args); err != nil {
 				return fmt.Errorf("creating client: %w", err)
 			}
+
+			if err := client.AuthTest(); err != nil {
+				return fmt.Errorf("error authenticating: %w", err)
+			}
+
 			m := tui.NewModel(client)
 			if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 				return err
