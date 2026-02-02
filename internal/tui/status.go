@@ -12,6 +12,7 @@ const (
 	statusConfirm
 	statusRefresh
 	statusShowKey
+	statusSyncing
 	statusError
 )
 

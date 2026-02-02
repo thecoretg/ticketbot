@@ -12,6 +12,7 @@ type keyMap struct {
 	switchModelFwds    key.Binding
 	switchModelUsers   key.Binding
 	switchModelAPIKeys key.Binding
+	switchModelSync    key.Binding
 	newItem            key.Binding
 	deleteItem         key.Binding
 }
@@ -32,6 +33,9 @@ var allKeys = keyMap{
 	),
 	switchModelAPIKeys: key.NewBinding(
 		key.WithKeys("ctrl+a"),
+	),
+	switchModelSync: key.NewBinding(
+		key.WithKeys("ctrl+s"),
 	),
 	newItem: key.NewBinding(
 		key.WithKeys("n"),
@@ -105,5 +109,6 @@ func isGlobalKey(msg tea.KeyMsg) bool {
 		key.Matches(msg, allKeys.switchModelRules) ||
 		key.Matches(msg, allKeys.switchModelFwds) ||
 		key.Matches(msg, allKeys.switchModelUsers) ||
-		key.Matches(msg, allKeys.switchModelAPIKeys)
+		key.Matches(msg, allKeys.switchModelAPIKeys) ||
+		key.Matches(msg, allKeys.switchModelSync)
 }

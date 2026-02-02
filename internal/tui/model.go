@@ -27,6 +27,7 @@ type Model struct {
 	fwdsModel     *fwdsModel
 	usersModel    *usersModel
 	apiKeysModel  *apiKeysModel
+	syncModel     *syncModel
 	help          help.Model
 	width         int
 	height        int
@@ -38,6 +39,7 @@ type modelsReadyMsg struct {
 	fwds    *fwdsModel
 	users   *usersModel
 	apiKeys *apiKeysModel
+	sync    *syncModel
 }
 
 type subModel interface {
@@ -83,7 +85,8 @@ func (m *Model) createSubModels() tea.Cmd {
 			rules:   newRulesModel(m, rules),
 			fwds:    newFwdsModel(m, fwds),
 			users:   newUsersModel(m, users),
-			apiKeys: newAPIKeysModel(m, apiKeys),
+			apiKeys: newAPIKeysModel(m, apiKeys, users),
+			sync:    newSyncModel(m),
 		}
 	}
 }
@@ -152,6 +155,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.usersModel = am
 			case *apiKeysModel:
 				m.apiKeysModel = am
+			case *syncModel:
+				m.syncModel = am
 			}
 
 			cmds = append(cmds, cmd)
@@ -167,6 +172,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, switchModel(modelTypeUsers)
 		case key.Matches(msg, allKeys.switchModelAPIKeys):
 			return m, switchModel(modelTypeAPIKeys)
+		case key.Matches(msg, allKeys.switchModelSync):
+			return m, switchModel(modelTypeSync)
 		}
 
 	case modelsReadyMsg:
@@ -174,9 +181,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.fwdsModel = msg.fwds
 		m.usersModel = msg.users
 		m.apiKeysModel = msg.apiKeys
+		m.syncModel = msg.sync
 		m.activeModel = m.rulesModel
 		m.initialized = true
-		return m, tea.Batch(m.rulesModel.Init(), m.fwdsModel.Init(), m.usersModel.Init(), m.apiKeysModel.Init())
+		return m, tea.Batch(m.rulesModel.Init(), m.fwdsModel.Init(), m.usersModel.Init(), m.apiKeysModel.Init(), m.syncModel.Init())
 
 	case switchModelMsg:
 		switch msg.modelType {
@@ -195,6 +203,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case modelTypeAPIKeys:
 			if m.activeModel != m.apiKeysModel {
 				m.activeModel = m.apiKeysModel
+			}
+		case modelTypeSync:
+			if m.activeModel != m.syncModel {
+				m.activeModel = m.syncModel
 			}
 		}
 	case gotCurrentUserMsg:
@@ -228,6 +240,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.apiKeysModel = ak
 		}
 		cmds = append(cmds, cmd)
+	case m.syncModel:
+		sync, cmd := m.syncModel.Update(msg)
+		if s, ok := sync.(*syncModel); ok {
+			m.syncModel = s
+		}
+		cmds = append(cmds, cmd)
 	}
 
 	var cmd tea.Cmd
@@ -250,6 +268,7 @@ func (m *Model) headerView() string {
 	fl := "[F] FORWARDS"
 	ul := "[U] USERS"
 	kl := "[A] KEYS"
+	sl := "[S] SYNC"
 	rulesTab := menuLabelStyle.Render(rl)
 	if m.activeModel == m.rulesModel {
 		rulesTab = activeMenuLabelStyle.Render(rl)
@@ -270,7 +289,12 @@ func (m *Model) headerView() string {
 		keysTab = activeMenuLabelStyle.Render(kl)
 	}
 
-	tabs := []string{rulesTab, fwdsTab, usersTab, keysTab}
+	syncTab := menuLabelStyle.Render(sl)
+	if m.activeModel == m.syncModel {
+		syncTab = activeMenuLabelStyle.Render(sl)
+	}
+
+	tabs := []string{rulesTab, fwdsTab, usersTab, keysTab, syncTab}
 	leaderKey := menuLabelStyle.Render("CTRL + ")
 	sep := " / "
 	content := lipgloss.JoinHorizontal(lipgloss.Bottom, leaderKey, strings.Join(tabs, sep), " ")

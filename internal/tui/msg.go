@@ -23,6 +23,7 @@ const (
 	modelTypeFwds
 	modelTypeUsers
 	modelTypeAPIKeys
+	modelTypeSync
 )
 
 func switchModel(m modelType) tea.Cmd {

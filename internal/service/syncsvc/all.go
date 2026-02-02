@@ -16,14 +16,20 @@ func (s *Service) IsSyncing() bool {
 }
 
 func (s *Service) Sync(ctx context.Context, payload *models.SyncPayload) error {
-	if !s.syncing.CompareAndSwap(false, true) {
-		return errors.New("sync already in progress")
-	}
-
-	defer s.syncing.Store(false)
-
 	if payload == nil {
 		return errors.New("received nil payload")
+	}
+
+	slog.Info("received sync payload",
+		slog.Bool("sync_boards", payload.CWBoards),
+		slog.Bool("sync_recipients", payload.WebexRecipients),
+		slog.Bool("sync_tickets", payload.CWTickets),
+		slog.Any("ticket_board_ids", payload.BoardIDs),
+		slog.Int("max_concurrent_syncs", payload.MaxConcurrentSyncs),
+	)
+
+	if !s.syncing.CompareAndSwap(false, true) {
+		return errors.New("sync already in progress")
 	}
 
 	errch := make(chan error, 3)
@@ -32,6 +38,7 @@ func (s *Service) Sync(ctx context.Context, payload *models.SyncPayload) error {
 	start := time.Now()
 	errored := false
 	defer func() {
+		s.syncing.Store(false)
 		if errored {
 			slog.Error("sync complete with errors, see logs", "payload", payload, "took_seconds", time.Since(start).Seconds())
 		} else {

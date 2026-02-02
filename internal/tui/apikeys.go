@@ -23,6 +23,7 @@ type (
 		previousStatus   subModelStatus
 		keys             []models.APIKey
 		keyToDelete      models.APIKey
+		users            []models.APIUser
 		keyDeleteConfirm bool
 		createdKey       string
 		errorMsg         error
@@ -41,10 +42,11 @@ type (
 	showCreatedKeyMsg struct{}
 )
 
-func newAPIKeysModel(parent *Model, initialKeys []models.APIKey) *apiKeysModel {
+func newAPIKeysModel(parent *Model, initialKeys []models.APIKey, initialUsers []models.APIUser) *apiKeysModel {
 	akm := &apiKeysModel{
 		parent:     parent,
 		keys:       initialKeys,
+		users:      initialUsers,
 		table:      newTable(),
 		formResult: &apiKeysFormResult{},
 		status:     statusMain,
@@ -203,7 +205,6 @@ func (akm *apiKeysModel) showKeyView() string {
 	return b.String()
 }
 
-
 func (akm *apiKeysModel) Status() subModelStatus {
 	return akm.status
 }
@@ -226,17 +227,19 @@ func (akm *apiKeysModel) setTableDimensions() {
 	t := &akm.table
 	idW := 6
 	userIDW := 8
+	emailW := 20
 	hintW := 10
-	remainingW := w - idW - userIDW - hintW
+	remainingW := w - idW - userIDW - emailW - hintW
 	createdW := remainingW
 	t.SetColumns([]table.Column{
 		{Title: "ID", Width: idW},
-		{Title: "USER", Width: userIDW},
+		{Title: "USER_ID", Width: userIDW},
+		{Title: "EMAIL", Width: emailW},
 		{Title: "HINT", Width: hintW},
 		{Title: "CREATED", Width: createdW},
 	})
 
-	t.SetRows(apiKeysToRows(akm.keys))
+	t.SetRows(apiKeysToRows(akm.keys, akm.users))
 	t.SetHeight(h)
 }
 
@@ -289,12 +292,12 @@ func (akm *apiKeysModel) getKeys() tea.Cmd {
 }
 
 func (akm *apiKeysModel) setRows() tea.Cmd {
-	akm.table.SetRows(apiKeysToRows(akm.keys))
+	akm.table.SetRows(apiKeysToRows(akm.keys, akm.users))
 	akm.table.SetCursor(0)
 	return nil
 }
 
-func apiKeysToRows(keys []models.APIKey) []table.Row {
+func apiKeysToRows(keys []models.APIKey, users []models.APIUser) []table.Row {
 	if len(keys) == 0 {
 		return []table.Row{
 			{
@@ -302,15 +305,28 @@ func apiKeysToRows(keys []models.APIKey) []table.Row {
 			},
 		}
 	}
+
+	userLookup := make(map[int]models.APIUser, len(users))
+	for _, u := range users {
+		userLookup[u.ID] = u
+	}
+
 	var rows []table.Row
 	for _, k := range keys {
 		hint := "N/A"
 		if k.KeyHint != nil && *k.KeyHint != "" {
 			hint = "****" + *k.KeyHint
 		}
+
+		email := "N/A"
+		if u, ok := userLookup[k.UserID]; ok {
+			email = u.EmailAddress
+		}
+
 		rows = append(rows, []string{
 			fmt.Sprintf("%d", k.ID),
 			fmt.Sprintf("%d", k.UserID),
+			email,
 			hint,
 			k.CreatedOn.Format("2006-01-02 15:04"),
 		})

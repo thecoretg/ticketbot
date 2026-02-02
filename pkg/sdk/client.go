@@ -25,6 +25,7 @@ func NewClient(apiKey, baseURL string) (*Client, error) {
 	c.SetHeader("Content-Type", "application/json")
 	c.SetHeader("Accept", "application/json")
 	c.SetRetryCount(3)
+	c.SetDisableWarn(true)
 
 	if apiKey != "" {
 		c.SetAuthToken(apiKey)
