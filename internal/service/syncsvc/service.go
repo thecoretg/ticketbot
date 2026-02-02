@@ -1,6 +1,8 @@
 package syncsvc
 
 import (
+	"sync/atomic"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
@@ -13,6 +15,7 @@ type Service struct {
 	Webex    *webexsvc.Service
 	Notifier *notifier.Service
 	pool     *pgxpool.Pool
+	syncing  atomic.Bool
 }
 
 func New(pool *pgxpool.Pool, cw *cwsvc.Service, wx *webexsvc.Service, ns *notifier.Service) *Service {

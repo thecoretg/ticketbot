@@ -19,6 +19,11 @@ func NewSyncHandler(svc *syncsvc.Service) *SyncHandler {
 	}
 }
 
+func (h *SyncHandler) HandleSyncStatus(c *gin.Context) {
+	status := &models.SyncStatusResponse{Status: h.Svc.IsSyncing()}
+	c.JSON(200, status)
+}
+
 func (h *SyncHandler) HandleSync(c *gin.Context) {
 	p := &models.SyncPayload{}
 

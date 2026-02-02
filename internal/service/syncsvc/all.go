@@ -11,7 +11,17 @@ import (
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
+func (s *Service) IsSyncing() bool {
+	return s.syncing.Load()
+}
+
 func (s *Service) Sync(ctx context.Context, payload *models.SyncPayload) error {
+	if !s.syncing.CompareAndSwap(false, true) {
+		return errors.New("sync already in progress")
+	}
+
+	defer s.syncing.Store(false)
+
 	if payload == nil {
 		return errors.New("received nil payload")
 	}

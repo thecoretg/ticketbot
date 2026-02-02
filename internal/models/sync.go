@@ -1,5 +1,9 @@
 package models
 
+type SyncStatusResponse struct {
+	Status bool `json:"status"`
+}
+
 type SyncPayload struct {
 	WebexRecipients    bool  `json:"webex_recipients"`
 	CWBoards           bool  `json:"cw_boards"`

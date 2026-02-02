@@ -12,8 +12,9 @@ func AddRoutes(a *App, g *gin.Engine) {
 	g.GET("healthcheck", handlers.HandleHealthCheck) // authless ping for lightsail health checks
 	g.GET("authtest", auth, handlers.HandleHealthCheck)
 
+	s := g.Group("sync", auth)
 	sh := handlers.NewSyncHandler(a.Svc.Sync)
-	g.POST("sync", auth, sh.HandleSync)
+	registerSyncRoutes(s, sh)
 
 	u := g.Group("users", auth)
 	uh := handlers.NewUserHandler(a.Svc.User)
@@ -38,6 +39,11 @@ func AddRoutes(a *App, g *gin.Engine) {
 	tb := handlers.NewTicketbotHandler(a.Svc.Ticketbot)
 	hh := g.Group("hooks")
 	registerHookRoutes(hh, tb)
+}
+
+func registerSyncRoutes(r *gin.RouterGroup, h *handlers.SyncHandler) {
+	r.POST("", h.HandleSync)
+	r.GET("status", h.HandleSyncStatus)
 }
 
 func registerUserRoutes(r *gin.RouterGroup, h *handlers.UserHandler) {
