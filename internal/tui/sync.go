@@ -153,11 +153,9 @@ func (sm *syncModel) View() string {
 	case statusError:
 		return renderErrorView(sm.errorMsg, sm.parent.width, sm.parent.availHeight)
 	case statusMain:
-		syncInfo := "Sync boards, Webex recipients, or tickets.\n\n" +
-			"These are only really necessary when starting a fresh server.\n" +
-			"If syncing tickets, expect it to take anywhere from 5 to 30 minutes depending on selected boards. " +
-			"For details on progress, see server logs.\n\n" +
-			"When the sync is complete, you will be returned to this page.\nPress 'n' to begin."
+		syncInfo := "For details on syncing, see documentation on Github.\n" +
+			"https://github.com/thecoretg/ticketbot?tab=readme-ov-file#sync-workflows\n\n" +
+			"Press 'n' to begin."
 		return fillSpaceCentered(syncInfo, sm.parent.width, sm.parent.availHeight)
 	case statusLoadingFormData:
 		return fillSpaceCentered(useSpinner(spn, "Loading sync options..."), sm.parent.width, sm.parent.availHeight)
