@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	"github.com/thecoretg/ticketbot/internal/models"
 )
 
 var (
@@ -28,7 +29,12 @@ var (
 				return nil
 			}
 
-			cwBoardsToTable(boards)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tName")
+			for _, b := range boards {
+				fmt.Fprintf(w, "%d\t%s\n", b.ID, b.Name)
+			}
+			w.Flush()
 			return nil
 		},
 	}
@@ -47,7 +53,12 @@ var (
 				return nil
 			}
 
-			notifierRulesTable(ns)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tEnabled\tBoard\tRecipient\tType")
+			for _, n := range ns {
+				fmt.Fprintf(w, "%d\t%t\t%s\t%s\t%s\n", n.ID, n.Enabled, n.BoardName, n.RecipientName, n.RecipientType)
+			}
+			w.Flush()
 			return nil
 		},
 	}
@@ -67,7 +78,31 @@ var (
 				return nil
 			}
 
-			userForwardsTable(ufs)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tEnabled\tStart\tEnd\tKeepCopy\tSource\tSourceType\tDestination\tDestType")
+			for _, uf := range ufs {
+				sd := "NA"
+				ed := "NA"
+				if uf.StartDate != nil {
+					sd = uf.StartDate.Format("2006-01-02")
+				}
+				if uf.EndDate != nil {
+					ed = uf.EndDate.Format("2006-01-02")
+				}
+
+				fmt.Fprintf(w, "%d\t%t\t%s\t%s\t%t\t%s\t%s\t%s\t%s\n",
+					uf.ID,
+					uf.Enabled,
+					sd,
+					ed,
+					uf.UserKeepsCopy,
+					uf.SourceName,
+					uf.SourceType,
+					uf.DestinationName,
+					uf.DestinationType,
+				)
+			}
+			w.Flush()
 			return nil
 		},
 	}
@@ -85,9 +120,14 @@ var (
 				return nil
 			}
 
-			recips = filterEmptyTitleRooms(recips)
-
-			webexRoomsToTable(recips)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tType\tName")
+			for _, r := range recips {
+				if r.Name != "Empty Title" {
+					fmt.Fprintf(w, "%d\t%s\t%s\n", r.ID, r.Type, r.Name)
+				}
+			}
+			w.Flush()
 			return nil
 		},
 	}
@@ -105,7 +145,12 @@ var (
 				return nil
 			}
 
-			apiUsersTable(users)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tEmail\tCreated")
+			for _, u := range users {
+				fmt.Fprintf(w, "%d\t%s\t%s\n", u.ID, u.EmailAddress, u.CreatedOn.Format("2006-01-02"))
+			}
+			w.Flush()
 			return nil
 		},
 	}
@@ -124,7 +169,12 @@ var (
 				return nil
 			}
 
-			apiKeysTable(keys)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "UserID\tKeyID\tCreated")
+			for _, k := range keys {
+				fmt.Fprintf(w, "%d\t%d\t%s\n", k.UserID, k.ID, k.CreatedOn.Format("2006-01-02"))
+			}
+			w.Flush()
 			return nil
 		},
 	}
@@ -136,13 +186,3 @@ func init() {
 	listForwardsCmd.Flags().StringVarP(&listFwdsFilter, "filter", "f", "", "active filter; valid: 'active', 'inactive', or 'all'")
 }
 
-func filterEmptyTitleRooms(rooms []models.WebexRecipient) []models.WebexRecipient {
-	var f []models.WebexRecipient
-	for _, r := range rooms {
-		if r.Name != "Empty Title" {
-			f = append(f, r)
-		}
-	}
-
-	return f
-}
