@@ -21,6 +21,28 @@ ON dst.id = f.destination_id;
 SELECT * FROM notifier_forward
 ORDER BY id;
 
+-- name: ListActiveNotifierForwards :many
+SELECT * FROM notifier_forward
+WHERE enabled = true
+    AND (start_date IS NULL OR  start_date <= NOW())
+    AND (end_date IS NULL OR end_date > NOW())
+ORDER BY id;
+
+-- name: ListInactiveNotifierForwards :many
+SELECT * FROM notifier_forward
+WHERE enabled = false
+    OR (start_date IS NOT NULL AND start_date > NOW())
+    OR (end_date IS NOT NULL AND end_date <= NOW())
+ORDER BY id;
+
+-- name: ListActiveNotifierForwardsBySourceRecipientID :many
+SELECT * FROM notifier_forward
+WHERE source_id = $1
+    AND enabled = true
+    AND (start_date IS NULL OR start_date <= NOW())
+    AND (end_date IS NULL OR end_date > NOW())
+ORDER BY id;
+
 -- name: GetNotifierForward :one
 SELECT * FROM notifier_forward
 WHERE id = $1 LIMIT 1;

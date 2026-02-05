@@ -97,6 +97,121 @@ func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierF
 	return &i, err
 }
 
+const listActiveNotifierForwards = `-- name: ListActiveNotifierForwards :many
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
+WHERE enabled = true
+    AND (start_date IS NULL OR  start_date <= NOW())
+    AND (end_date IS NULL OR end_date > NOW())
+ORDER BY id
+`
+
+func (q *Queries) ListActiveNotifierForwards(ctx context.Context) ([]*NotifierForward, error) {
+	rows, err := q.db.Query(ctx, listActiveNotifierForwards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*NotifierForward
+	for rows.Next() {
+		var i NotifierForward
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceID,
+			&i.DestinationID,
+			&i.StartDate,
+			&i.EndDate,
+			&i.Enabled,
+			&i.UserKeepsCopy,
+			&i.CreatedOn,
+			&i.UpdatedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveNotifierForwardsBySourceRecipientID = `-- name: ListActiveNotifierForwardsBySourceRecipientID :many
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
+WHERE source_id = $1
+    AND enabled = true
+    AND (start_date IS NULL OR start_date <= NOW())
+    AND (end_date IS NULL OR end_date > NOW())
+ORDER BY id
+`
+
+func (q *Queries) ListActiveNotifierForwardsBySourceRecipientID(ctx context.Context, sourceID int) ([]*NotifierForward, error) {
+	rows, err := q.db.Query(ctx, listActiveNotifierForwardsBySourceRecipientID, sourceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*NotifierForward
+	for rows.Next() {
+		var i NotifierForward
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceID,
+			&i.DestinationID,
+			&i.StartDate,
+			&i.EndDate,
+			&i.Enabled,
+			&i.UserKeepsCopy,
+			&i.CreatedOn,
+			&i.UpdatedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInactiveNotifierForwards = `-- name: ListInactiveNotifierForwards :many
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
+WHERE enabled = false
+    OR (start_date IS NOT NULL AND start_date > NOW())
+    OR (end_date IS NOT NULL AND end_date <= NOW())
+ORDER BY id
+`
+
+func (q *Queries) ListInactiveNotifierForwards(ctx context.Context) ([]*NotifierForward, error) {
+	rows, err := q.db.Query(ctx, listInactiveNotifierForwards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*NotifierForward
+	for rows.Next() {
+		var i NotifierForward
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceID,
+			&i.DestinationID,
+			&i.StartDate,
+			&i.EndDate,
+			&i.Enabled,
+			&i.UserKeepsCopy,
+			&i.CreatedOn,
+			&i.UpdatedOn,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listNotifierForwards = `-- name: ListNotifierForwards :many
 SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
 ORDER BY id

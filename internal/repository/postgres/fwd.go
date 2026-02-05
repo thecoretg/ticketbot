@@ -40,6 +40,34 @@ func (p *UserForwardRepo) ListAll(ctx context.Context) ([]*models.NotifierForwar
 	return b, nil
 }
 
+func (p *UserForwardRepo) ListAllActive(ctx context.Context) ([]*models.NotifierForward, error) {
+	dm, err := p.queries.ListActiveNotifierForwards(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var b []*models.NotifierForward
+	for _, d := range dm {
+		b = append(b, forwardFromPG(d))
+	}
+
+	return b, nil
+}
+
+func (p *UserForwardRepo) ListAllInactive(ctx context.Context) ([]*models.NotifierForward, error) {
+	dm, err := p.queries.ListInactiveNotifierForwards(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var b []*models.NotifierForward
+	for _, d := range dm {
+		b = append(b, forwardFromPG(d))
+	}
+
+	return b, nil
+}
+
 func (p *UserForwardRepo) ListAllFull(ctx context.Context) ([]*models.NotifierForwardFull, error) {
 	df, err := p.queries.ListNotifierForwardsFull(ctx)
 	if err != nil {
@@ -56,6 +84,20 @@ func (p *UserForwardRepo) ListAllFull(ctx context.Context) ([]*models.NotifierFo
 
 func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]*models.NotifierForward, error) {
 	dm, err := p.queries.ListNotifierForwardsBySourceRecipientID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var b []*models.NotifierForward
+	for _, d := range dm {
+		b = append(b, forwardFromPG(d))
+	}
+
+	return b, nil
+}
+
+func (p *UserForwardRepo) ListActiveBySourceRoomID(ctx context.Context, id int) ([]*models.NotifierForward, error) {
+	dm, err := p.queries.ListActiveNotifierForwardsBySourceRecipientID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
