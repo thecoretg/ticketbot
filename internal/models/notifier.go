@@ -48,11 +48,11 @@ type NotifierForwardFull struct {
 type NotifierForwardRepository interface {
 	WithTx(tx pgx.Tx) NotifierForwardRepository
 	ListAll(ctx context.Context) ([]*NotifierForward, error)
-	ListAllActive(ctx context.Context) ([]*NotifierForward, error)
-	ListAllInactive(ctx context.Context) ([]*NotifierForward, error)
+	ListAllActive(ctx context.Context) ([]*NotifierForwardFull, error)
+	ListAllInactive(ctx context.Context) ([]*NotifierForwardFull, error)
 	ListAllFull(ctx context.Context) ([]*NotifierForwardFull, error)
 	ListBySourceRoomID(ctx context.Context, id int) ([]*NotifierForward, error)
-	ListActiveBySourceRoomID(ctx context.Context, id int) ([]*NotifierForward, error)
+	ListActiveBySourceRoomID(ctx context.Context, id int) ([]*NotifierForwardFull, error)
 	Get(ctx context.Context, id int) (*NotifierForward, error)
 	Exists(ctx context.Context, id int) (bool, error)
 	Insert(ctx context.Context, c *NotifierForward) (*NotifierForward, error)

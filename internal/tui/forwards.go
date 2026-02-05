@@ -44,7 +44,6 @@ type (
 
 	refreshFwdsMsg struct{}
 	gotFwdsMsg     struct{ fwds []models.NotifierForwardFull }
-
 )
 
 var (
@@ -283,7 +282,8 @@ func (fm *fwdsModel) deleteFwd(id int) tea.Cmd {
 
 func (fm *fwdsModel) getFwds() tea.Cmd {
 	return func() tea.Msg {
-		fwds, err := fm.parent.SDKClient.ListUserForwards()
+		p := map[string]string{"filter": "active"}
+		fwds, err := fm.parent.SDKClient.ListUserForwards(p)
 		if err != nil {
 			return errMsg{fmt.Errorf("listing notifier forwards: %w", err)}
 		}
@@ -293,7 +293,6 @@ func (fm *fwdsModel) getFwds() tea.Cmd {
 }
 
 func (fm *fwdsModel) setRows() tea.Cmd {
-	// TODO: sort fwds
 	fm.table.SetRows(fwdsToRows(fm.fwds))
 	fm.table.SetCursor(0)
 	return nil

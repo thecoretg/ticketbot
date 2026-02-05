@@ -3,13 +3,20 @@ package notifier
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
 func (s *Service) ListForwardsFull(ctx context.Context) ([]*models.NotifierForwardFull, error) {
 	return s.Forwards.ListAllFull(ctx)
+}
+
+func (s *Service) ListForwardsActive(ctx context.Context) ([]*models.NotifierForwardFull, error) {
+	return s.Forwards.ListAllActive(ctx)
+}
+
+func (s *Service) ListForwardsInactive(ctx context.Context) ([]*models.NotifierForwardFull, error) {
+	return s.Forwards.ListAllInactive(ctx)
 }
 
 func (s *Service) ListForwards(ctx context.Context) ([]*models.NotifierForward, error) {
@@ -65,15 +72,10 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 		}
 
 		// get all forwards by the ID of the source recipient
-		fwds, err := s.Forwards.ListBySourceRoomID(ctx, r.recipient.ID)
+		fwds, err := s.Forwards.ListActiveBySourceRoomID(ctx, r.recipient.ID)
 		if err != nil {
 			// TODO: make this so it doesn't exit if only one fails. log it.
 			return nil, fmt.Errorf("checking forwards for recipient id %d: %w", r.recipient.ID, err)
-		}
-
-		fwds = filterActiveFwds(fwds)
-		if len(fwds) == 0 {
-			continue
 		}
 
 		keep := false
@@ -87,19 +89,19 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 			// if the forward destination recipient is in the map already without a forward,
 			// there is no need to treat it as a forward; they are already in the ticket and would
 			// get the notification regardless.
-			if _, ok := in[f.DestID]; ok {
+			if _, ok := in[f.DestinationID]; ok {
 				continue
 			}
 
 			// get the destination recipient and add it to the recipients map
-			fm, err := s.WebexSvc.GetRecipient(ctx, f.DestID)
+			fm, err := s.WebexSvc.GetRecipient(ctx, f.DestinationID)
 			if err != nil {
 				// TODO: once done...
-				return nil, fmt.Errorf("getting recipient info for forward destination %d: %w", f.DestID, err)
+				return nil, fmt.Errorf("getting recipient info for forward destination %d: %w", f.DestinationID, err)
 			}
 
-			in[f.DestID] = newRecipWithFwd(fm, r)
-			queue = append(queue, f.DestID)
+			in[f.DestinationID] = newRecipWithFwd(fm, r)
+			queue = append(queue, f.DestinationID)
 		}
 
 		if !keep {
@@ -109,35 +111,4 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 	}
 
 	return in, nil
-}
-
-// filterActiveFwds returns all forwards that are enabled if the current time is within the date range
-func filterActiveFwds(fwds []*models.NotifierForward) []*models.NotifierForward {
-	var activeFwds []*models.NotifierForward
-	for _, f := range fwds {
-		if f.Enabled && dateRangeActive(f.StartDate, f.EndDate) {
-			activeFwds = append(activeFwds, f)
-		}
-	}
-
-	return activeFwds
-}
-
-func dateRangeActive(start, end *time.Time) bool {
-	now := time.Now()
-	switch {
-	case start != nil && end != nil:
-		// Definited start and end date
-		return !now.Before(*start) && now.Before(*end)
-	case start != nil && end == nil:
-		// Indefinite starting at start date
-		return !now.Before(*start)
-	case start == nil && end != nil:
-		// Active until end date
-		return now.Before(*end)
-	case start == nil && end == nil:
-		// Indefinite
-		return true
-	}
-	return false
 }

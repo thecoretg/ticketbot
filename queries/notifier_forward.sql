@@ -22,26 +22,68 @@ SELECT * FROM notifier_forward
 ORDER BY id;
 
 -- name: ListActiveNotifierForwards :many
-SELECT * FROM notifier_forward
-WHERE enabled = true
-    AND (start_date IS NULL OR  start_date <= NOW())
-    AND (end_date IS NULL OR end_date > NOW())
-ORDER BY id;
+SELECT
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src ON src.id = f.source_id
+JOIN webex_recipient AS dst ON dst.id = f.destination_id
+WHERE f.enabled = true
+    AND (f.start_date IS NULL OR f.start_date <= NOW())
+    AND (f.end_date IS NULL OR f.end_date > NOW())
+ORDER BY f.id;
 
 -- name: ListInactiveNotifierForwards :many
-SELECT * FROM notifier_forward
-WHERE enabled = false
-    OR (start_date IS NOT NULL AND start_date > NOW())
-    OR (end_date IS NOT NULL AND end_date <= NOW())
-ORDER BY id;
+SELECT
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src ON src.id = f.source_id
+JOIN webex_recipient AS dst ON dst.id = f.destination_id
+WHERE f.enabled = false
+    OR (f.start_date IS NOT NULL AND f.start_date > NOW())
+    OR (f.end_date IS NOT NULL AND f.end_date <= NOW())
+ORDER BY f.id;
 
--- name: ListActiveNotifierForwardsBySourceRecipientID :many
-SELECT * FROM notifier_forward
-WHERE source_id = $1
-    AND enabled = true
-    AND (start_date IS NULL OR start_date <= NOW())
-    AND (end_date IS NULL OR end_date > NOW())
-ORDER BY id;
+-- name: ListActiveForwardsBySourceRecipient :many
+SELECT
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src ON src.id = f.source_id
+JOIN webex_recipient AS dst ON dst.id = f.destination_id
+WHERE f.source_id = $1
+    AND f.enabled = true
+    AND (f.start_date IS NULL OR f.start_date <= NOW())
+    AND (f.end_date IS NULL OR f.end_date > NOW())
+ORDER BY f.id;
 
 -- name: GetNotifierForward :one
 SELECT * FROM notifier_forward

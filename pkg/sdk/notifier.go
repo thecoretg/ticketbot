@@ -36,8 +36,8 @@ func (c *Client) DeleteNotifierRule(id int) error {
 	return c.Delete(fmt.Sprintf("notifiers/rules/%d", id))
 }
 
-func (c *Client) ListUserForwards() ([]models.NotifierForwardFull, error) {
-	return GetMany[models.NotifierForwardFull](c, "notifiers/forwards", nil)
+func (c *Client) ListUserForwards(params map[string]string) ([]models.NotifierForwardFull, error) {
+	return GetMany[models.NotifierForwardFull](c, "notifiers/forwards", params)
 }
 
 func (c *Client) GetUserForward(id int) (*models.NotifierForward, error) {

@@ -90,7 +90,21 @@ func (h *NotifierHandler) DeleteNotifierRule(c *gin.Context) {
 }
 
 func (h *NotifierHandler) ListForwards(c *gin.Context) {
-	n, err := h.Svc.ListForwardsFull(c.Request.Context())
+	ctx := c.Request.Context()
+	filter := c.Query("filter")
+
+	var n []*models.NotifierForwardFull
+	var err error
+
+	switch filter {
+	case "active":
+		n, err = h.Svc.ListForwardsActive(ctx)
+	case "inactive":
+		n, err = h.Svc.ListForwardsInactive(ctx)
+	default:
+		n, err = h.Svc.ListForwardsFull(ctx)
+	}
+
 	if err != nil {
 		internalServerError(c, err)
 		return

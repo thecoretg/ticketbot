@@ -87,7 +87,11 @@ func userForwardsTable(forwards []models.NotifierForwardFull) {
 	t := defaultTable()
 	t.Headers("ID", "ENABLED", "START", "END", "KEEP COPY", "SOURCE", "DESTINATION")
 	for _, uf := range forwards {
+		sd := "NA"
 		ed := "NA"
+		if uf.StartDate != nil {
+			sd = uf.StartDate.Format("2006-01-02")
+		}
 		if uf.EndDate != nil {
 			ed = uf.EndDate.Format("2006-01-02")
 		}
@@ -95,7 +99,7 @@ func userForwardsTable(forwards []models.NotifierForwardFull) {
 		t.Row(
 			strconv.Itoa(uf.ID),
 			boolToIcon(uf.Enabled),
-			uf.StartDate.Format("2006-01-02"),
+			sd,
 			ed,
 			boolToIcon(uf.UserKeepsCopy),
 			fmt.Sprintf("%s (%s)", uf.SourceName, uf.SourceType),

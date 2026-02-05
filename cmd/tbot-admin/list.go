@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/thecoretg/ticketbot/internal/models"
 )
 
 var (
-	listCmd = &cobra.Command{
+	listFwdsFilter string
+	listCmd        = &cobra.Command{
 		Use:               "list",
 		PersistentPreRunE: createClient,
 	}
@@ -54,7 +56,8 @@ var (
 		Use:     "notifier-forwards",
 		Aliases: []string{"forwards", "fwds"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ufs, err := client.ListUserForwards()
+			params := map[string]string{"filter": strings.ToLower(listFwdsFilter)}
+			ufs, err := client.ListUserForwards(params)
 			if err != nil {
 				return err
 			}
@@ -130,6 +133,7 @@ var (
 func init() {
 	listCmd.AddCommand(listBoardsCmd, listNotifierRulesCmd, listForwardsCmd,
 		listWebexRecipientsCmd, listUsersCmd, listAPIKeysCmd)
+	listForwardsCmd.Flags().StringVarP(&listFwdsFilter, "filter", "f", "", "active filter; valid: 'active', 'inactive', or 'all'")
 }
 
 func filterEmptyTitleRooms(rooms []models.WebexRecipient) []models.WebexRecipient {

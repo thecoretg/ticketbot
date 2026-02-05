@@ -40,29 +40,29 @@ func (p *UserForwardRepo) ListAll(ctx context.Context) ([]*models.NotifierForwar
 	return b, nil
 }
 
-func (p *UserForwardRepo) ListAllActive(ctx context.Context) ([]*models.NotifierForward, error) {
+func (p *UserForwardRepo) ListAllActive(ctx context.Context) ([]*models.NotifierForwardFull, error) {
 	dm, err := p.queries.ListActiveNotifierForwards(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []*models.NotifierForward
+	var b []*models.NotifierForwardFull
 	for _, d := range dm {
-		b = append(b, forwardFromPG(d))
+		b = append(b, activeForwardFromPG(d))
 	}
 
 	return b, nil
 }
 
-func (p *UserForwardRepo) ListAllInactive(ctx context.Context) ([]*models.NotifierForward, error) {
+func (p *UserForwardRepo) ListAllInactive(ctx context.Context) ([]*models.NotifierForwardFull, error) {
 	dm, err := p.queries.ListInactiveNotifierForwards(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []*models.NotifierForward
+	var b []*models.NotifierForwardFull
 	for _, d := range dm {
-		b = append(b, forwardFromPG(d))
+		b = append(b, inactiveForwardFromPG(d))
 	}
 
 	return b, nil
@@ -96,15 +96,15 @@ func (p *UserForwardRepo) ListBySourceRoomID(ctx context.Context, id int) ([]*mo
 	return b, nil
 }
 
-func (p *UserForwardRepo) ListActiveBySourceRoomID(ctx context.Context, id int) ([]*models.NotifierForward, error) {
-	dm, err := p.queries.ListActiveNotifierForwardsBySourceRecipientID(ctx, id)
+func (p *UserForwardRepo) ListActiveBySourceRoomID(ctx context.Context, id int) ([]*models.NotifierForwardFull, error) {
+	dm, err := p.queries.ListActiveForwardsBySourceRecipient(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	var b []*models.NotifierForward
+	var b []*models.NotifierForwardFull
 	for _, d := range dm {
-		b = append(b, forwardFromPG(d))
+		b = append(b, activeForwardBySourceFromPG(d))
 	}
 
 	return b, nil
@@ -172,6 +172,54 @@ func forwardFromPG(pg *db.NotifierForward) *models.NotifierForward {
 }
 
 func fullForwardFromPG(pg *db.ListNotifierForwardsFullRow) *models.NotifierForwardFull {
+	return &models.NotifierForwardFull{
+		ID:              pg.ID,
+		Enabled:         pg.Enabled,
+		UserKeepsCopy:   pg.UserKeepsCopy,
+		StartDate:       pg.StartDate,
+		EndDate:         pg.EndDate,
+		SourceID:        pg.SourceID,
+		SourceName:      pg.SourceName,
+		SourceType:      pg.SourceType,
+		DestinationID:   pg.DestinationID,
+		DestinationName: pg.DestinationName,
+		DestinationType: pg.DestinationType,
+	}
+}
+
+func activeForwardFromPG(pg *db.ListActiveNotifierForwardsRow) *models.NotifierForwardFull {
+	return &models.NotifierForwardFull{
+		ID:              pg.ID,
+		Enabled:         pg.Enabled,
+		UserKeepsCopy:   pg.UserKeepsCopy,
+		StartDate:       pg.StartDate,
+		EndDate:         pg.EndDate,
+		SourceID:        pg.SourceID,
+		SourceName:      pg.SourceName,
+		SourceType:      pg.SourceType,
+		DestinationID:   pg.DestinationID,
+		DestinationName: pg.DestinationName,
+		DestinationType: pg.DestinationType,
+	}
+}
+
+func inactiveForwardFromPG(pg *db.ListInactiveNotifierForwardsRow) *models.NotifierForwardFull {
+	return &models.NotifierForwardFull{
+		ID:              pg.ID,
+		Enabled:         pg.Enabled,
+		UserKeepsCopy:   pg.UserKeepsCopy,
+		StartDate:       pg.StartDate,
+		EndDate:         pg.EndDate,
+		SourceID:        pg.SourceID,
+		SourceName:      pg.SourceName,
+		SourceType:      pg.SourceType,
+		DestinationID:   pg.DestinationID,
+		DestinationName: pg.DestinationName,
+		DestinationType: pg.DestinationType,
+	}
+}
+
+func activeForwardBySourceFromPG(pg *db.ListActiveForwardsBySourceRecipientRow) *models.NotifierForwardFull {
 	return &models.NotifierForwardFull{
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,

@@ -97,33 +97,64 @@ func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierF
 	return &i, err
 }
 
-const listActiveNotifierForwards = `-- name: ListActiveNotifierForwards :many
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
-WHERE enabled = true
-    AND (start_date IS NULL OR  start_date <= NOW())
-    AND (end_date IS NULL OR end_date > NOW())
-ORDER BY id
+const listActiveForwardsBySourceRecipient = `-- name: ListActiveForwardsBySourceRecipient :many
+SELECT
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src ON src.id = f.source_id
+JOIN webex_recipient AS dst ON dst.id = f.destination_id
+WHERE f.source_id = $1
+    AND f.enabled = true
+    AND (f.start_date IS NULL OR f.start_date <= NOW())
+    AND (f.end_date IS NULL OR f.end_date > NOW())
+ORDER BY f.id
 `
 
-func (q *Queries) ListActiveNotifierForwards(ctx context.Context) ([]*NotifierForward, error) {
-	rows, err := q.db.Query(ctx, listActiveNotifierForwards)
+type ListActiveForwardsBySourceRecipientRow struct {
+	ID              int        `json:"id"`
+	Enabled         bool       `json:"enabled"`
+	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	StartDate       *time.Time `json:"start_date"`
+	EndDate         *time.Time `json:"end_date"`
+	SourceID        int        `json:"source_id"`
+	SourceName      string     `json:"source_name"`
+	SourceType      string     `json:"source_type"`
+	DestinationID   int        `json:"destination_id"`
+	DestinationName string     `json:"destination_name"`
+	DestinationType string     `json:"destination_type"`
+}
+
+func (q *Queries) ListActiveForwardsBySourceRecipient(ctx context.Context, sourceID int) ([]*ListActiveForwardsBySourceRecipientRow, error) {
+	rows, err := q.db.Query(ctx, listActiveForwardsBySourceRecipient, sourceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*NotifierForward
+	var items []*ListActiveForwardsBySourceRecipientRow
 	for rows.Next() {
-		var i NotifierForward
+		var i ListActiveForwardsBySourceRecipientRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.SourceID,
-			&i.DestinationID,
-			&i.StartDate,
-			&i.EndDate,
 			&i.Enabled,
 			&i.UserKeepsCopy,
-			&i.CreatedOn,
-			&i.UpdatedOn,
+			&i.StartDate,
+			&i.EndDate,
+			&i.SourceID,
+			&i.SourceName,
+			&i.SourceType,
+			&i.DestinationID,
+			&i.DestinationName,
+			&i.DestinationType,
 		); err != nil {
 			return nil, err
 		}
@@ -135,34 +166,63 @@ func (q *Queries) ListActiveNotifierForwards(ctx context.Context) ([]*NotifierFo
 	return items, nil
 }
 
-const listActiveNotifierForwardsBySourceRecipientID = `-- name: ListActiveNotifierForwardsBySourceRecipientID :many
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
-WHERE source_id = $1
-    AND enabled = true
-    AND (start_date IS NULL OR start_date <= NOW())
-    AND (end_date IS NULL OR end_date > NOW())
-ORDER BY id
+const listActiveNotifierForwards = `-- name: ListActiveNotifierForwards :many
+SELECT
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src ON src.id = f.source_id
+JOIN webex_recipient AS dst ON dst.id = f.destination_id
+WHERE f.enabled = true
+    AND (f.start_date IS NULL OR f.start_date <= NOW())
+    AND (f.end_date IS NULL OR f.end_date > NOW())
+ORDER BY f.id
 `
 
-func (q *Queries) ListActiveNotifierForwardsBySourceRecipientID(ctx context.Context, sourceID int) ([]*NotifierForward, error) {
-	rows, err := q.db.Query(ctx, listActiveNotifierForwardsBySourceRecipientID, sourceID)
+type ListActiveNotifierForwardsRow struct {
+	ID              int        `json:"id"`
+	Enabled         bool       `json:"enabled"`
+	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	StartDate       *time.Time `json:"start_date"`
+	EndDate         *time.Time `json:"end_date"`
+	SourceID        int        `json:"source_id"`
+	SourceName      string     `json:"source_name"`
+	SourceType      string     `json:"source_type"`
+	DestinationID   int        `json:"destination_id"`
+	DestinationName string     `json:"destination_name"`
+	DestinationType string     `json:"destination_type"`
+}
+
+func (q *Queries) ListActiveNotifierForwards(ctx context.Context) ([]*ListActiveNotifierForwardsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveNotifierForwards)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*NotifierForward
+	var items []*ListActiveNotifierForwardsRow
 	for rows.Next() {
-		var i NotifierForward
+		var i ListActiveNotifierForwardsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.SourceID,
-			&i.DestinationID,
-			&i.StartDate,
-			&i.EndDate,
 			&i.Enabled,
 			&i.UserKeepsCopy,
-			&i.CreatedOn,
-			&i.UpdatedOn,
+			&i.StartDate,
+			&i.EndDate,
+			&i.SourceID,
+			&i.SourceName,
+			&i.SourceType,
+			&i.DestinationID,
+			&i.DestinationName,
+			&i.DestinationType,
 		); err != nil {
 			return nil, err
 		}
@@ -175,32 +235,62 @@ func (q *Queries) ListActiveNotifierForwardsBySourceRecipientID(ctx context.Cont
 }
 
 const listInactiveNotifierForwards = `-- name: ListInactiveNotifierForwards :many
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
-WHERE enabled = false
-    OR (start_date IS NOT NULL AND start_date > NOW())
-    OR (end_date IS NOT NULL AND end_date <= NOW())
-ORDER BY id
+SELECT
+    f.id AS id,
+    f.enabled AS enabled,
+    f.user_keeps_copy AS user_keeps_copy,
+    f.start_date AS start_date,
+    f.end_date AS end_date,
+    src.id AS source_id,
+    src.name AS source_name,
+    src.type AS source_type,
+    dst.id AS destination_id,
+    dst.name AS destination_name,
+    dst.type AS destination_type
+FROM notifier_forward AS f
+JOIN webex_recipient AS src ON src.id = f.source_id
+JOIN webex_recipient AS dst ON dst.id = f.destination_id
+WHERE f.enabled = false
+    OR (f.start_date IS NOT NULL AND f.start_date > NOW())
+    OR (f.end_date IS NOT NULL AND f.end_date <= NOW())
+ORDER BY f.id
 `
 
-func (q *Queries) ListInactiveNotifierForwards(ctx context.Context) ([]*NotifierForward, error) {
+type ListInactiveNotifierForwardsRow struct {
+	ID              int        `json:"id"`
+	Enabled         bool       `json:"enabled"`
+	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	StartDate       *time.Time `json:"start_date"`
+	EndDate         *time.Time `json:"end_date"`
+	SourceID        int        `json:"source_id"`
+	SourceName      string     `json:"source_name"`
+	SourceType      string     `json:"source_type"`
+	DestinationID   int        `json:"destination_id"`
+	DestinationName string     `json:"destination_name"`
+	DestinationType string     `json:"destination_type"`
+}
+
+func (q *Queries) ListInactiveNotifierForwards(ctx context.Context) ([]*ListInactiveNotifierForwardsRow, error) {
 	rows, err := q.db.Query(ctx, listInactiveNotifierForwards)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*NotifierForward
+	var items []*ListInactiveNotifierForwardsRow
 	for rows.Next() {
-		var i NotifierForward
+		var i ListInactiveNotifierForwardsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.SourceID,
-			&i.DestinationID,
-			&i.StartDate,
-			&i.EndDate,
 			&i.Enabled,
 			&i.UserKeepsCopy,
-			&i.CreatedOn,
-			&i.UpdatedOn,
+			&i.StartDate,
+			&i.EndDate,
+			&i.SourceID,
+			&i.SourceName,
+			&i.SourceType,
+			&i.DestinationID,
+			&i.DestinationName,
+			&i.DestinationType,
 		); err != nil {
 			return nil, err
 		}
