@@ -8,6 +8,8 @@ import (
 
 type keyMap struct {
 	quit               key.Binding
+	nextModel          key.Binding
+	prevModel          key.Binding
 	switchModelRules   key.Binding
 	switchModelFwds    key.Binding
 	switchModelUsers   key.Binding
@@ -21,6 +23,14 @@ var allKeys = keyMap{
 	quit: key.NewBinding(
 		key.WithKeys("ctrl+c"),
 		key.WithHelp("ctrl+c", "quit"),
+	),
+	nextModel: key.NewBinding(
+		key.WithKeys("ctrl+l", "right"),
+		key.WithHelp("right", "next tab"),
+	),
+	prevModel: key.NewBinding(
+		key.WithKeys("ctrl+h", "left"),
+		key.WithHelp("left", "prev tab"),
 	),
 	switchModelRules: key.NewBinding(
 		key.WithKeys("ctrl+r"),
@@ -59,7 +69,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 func (m *Model) helpKeys() []key.Binding {
 	var keys []key.Binding
-	keys = append(keys, allKeys.quit, allKeys.newItem)
+	keys = append(keys, allKeys.quit, allKeys.newItem, allKeys.prevModel, allKeys.nextModel)
 
 	if m.activeModel == nil {
 		return keys
@@ -106,6 +116,8 @@ func (m *Model) helpView() string {
 
 func isGlobalKey(msg tea.KeyMsg) bool {
 	return key.Matches(msg, allKeys.quit) ||
+		key.Matches(msg, allKeys.nextModel) ||
+		key.Matches(msg, allKeys.prevModel) ||
 		key.Matches(msg, allKeys.switchModelRules) ||
 		key.Matches(msg, allKeys.switchModelFwds) ||
 		key.Matches(msg, allKeys.switchModelUsers) ||

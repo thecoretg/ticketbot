@@ -48,6 +48,10 @@ func newUsersModel(parent *Model, initialUsers []models.APIUser) *usersModel {
 	return um
 }
 
+func (um *usersModel) ModelType() modelType {
+	return modelTypeUsers
+}
+
 func (um *usersModel) Init() tea.Cmd {
 	return nil
 }
@@ -208,7 +212,7 @@ func (um *usersModel) setTableDimensions() {
 
 func (um *usersModel) submitUser(email string) tea.Cmd {
 	return func() tea.Msg {
-		_, err := um.parent.SDKClient.CreateUser(email)
+		_, err := um.parent.sdkClient.CreateUser(email)
 		if err != nil {
 			return errMsg{fmt.Errorf("creating user: %w", err)}
 		}
@@ -219,7 +223,7 @@ func (um *usersModel) submitUser(email string) tea.Cmd {
 
 func (um *usersModel) deleteUser(id int) tea.Cmd {
 	return func() tea.Msg {
-		if err := um.parent.SDKClient.DeleteUser(id); err != nil {
+		if err := um.parent.sdkClient.DeleteUser(id); err != nil {
 			return errMsg{fmt.Errorf("deleting user: %w", err)}
 		}
 
@@ -229,7 +233,7 @@ func (um *usersModel) deleteUser(id int) tea.Cmd {
 
 func (um *usersModel) getUsers() tea.Cmd {
 	return func() tea.Msg {
-		users, err := um.parent.SDKClient.ListUsers()
+		users, err := um.parent.sdkClient.ListUsers()
 		if err != nil {
 			return errMsg{fmt.Errorf("getting users: %w", err)}
 		}

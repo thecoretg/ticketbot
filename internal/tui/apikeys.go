@@ -55,6 +55,10 @@ func newAPIKeysModel(parent *Model, initialKeys []models.APIKey, initialUsers []
 	return akm
 }
 
+func (akm *apiKeysModel) ModelType() modelType {
+	return modelTypeAPIKeys
+}
+
 func (akm *apiKeysModel) Init() tea.Cmd {
 	return nil
 }
@@ -245,7 +249,7 @@ func (akm *apiKeysModel) setTableDimensions() {
 
 func (akm *apiKeysModel) prepareForm() tea.Cmd {
 	return func() tea.Msg {
-		users, err := akm.parent.SDKClient.ListUsers()
+		users, err := akm.parent.sdkClient.ListUsers()
 		if err != nil {
 			return errMsg{fmt.Errorf("loading users: %w", err)}
 		}
@@ -260,7 +264,7 @@ func (akm *apiKeysModel) prepareForm() tea.Cmd {
 
 func (akm *apiKeysModel) submitKey(email string) tea.Cmd {
 	return func() tea.Msg {
-		key, err := akm.parent.SDKClient.CreateAPIKey(email)
+		key, err := akm.parent.sdkClient.CreateAPIKey(email)
 		if err != nil {
 			return errMsg{fmt.Errorf("creating API key: %w", err)}
 		}
@@ -272,7 +276,7 @@ func (akm *apiKeysModel) submitKey(email string) tea.Cmd {
 
 func (akm *apiKeysModel) deleteKey(id int) tea.Cmd {
 	return func() tea.Msg {
-		if err := akm.parent.SDKClient.DeleteAPIKey(id); err != nil {
+		if err := akm.parent.sdkClient.DeleteAPIKey(id); err != nil {
 			return errMsg{fmt.Errorf("deleting API key: %w", err)}
 		}
 
@@ -282,7 +286,7 @@ func (akm *apiKeysModel) deleteKey(id int) tea.Cmd {
 
 func (akm *apiKeysModel) getKeys() tea.Cmd {
 	return func() tea.Msg {
-		keys, err := akm.parent.SDKClient.ListAPIKeys()
+		keys, err := akm.parent.sdkClient.ListAPIKeys()
 		if err != nil {
 			return errMsg{fmt.Errorf("getting API keys: %w", err)}
 		}

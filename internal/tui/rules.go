@@ -52,6 +52,10 @@ func newRulesModel(parent *Model, initialRules []models.NotifierRuleFull) *rules
 	return rm
 }
 
+func (rm *rulesModel) ModelType() modelType {
+	return modelTypeRules
+}
+
 func (rm *rulesModel) Init() tea.Cmd {
 	return nil
 }
@@ -220,7 +224,7 @@ func (rm *rulesModel) setTableDimensions() {
 
 func (rm *rulesModel) prepareForm() tea.Cmd {
 	return func() tea.Msg {
-		boards, err := rm.parent.SDKClient.ListBoards()
+		boards, err := rm.parent.sdkClient.ListBoards()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing boards: %w", err)}
 		}
@@ -230,7 +234,7 @@ func (rm *rulesModel) prepareForm() tea.Cmd {
 		}
 		sortBoards(boards)
 
-		recips, err := rm.parent.SDKClient.ListRecipients()
+		recips, err := rm.parent.sdkClient.ListRecipients()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing webex recipients: %w", err)}
 		}
@@ -249,7 +253,7 @@ func (rm *rulesModel) prepareForm() tea.Cmd {
 
 func (rm *rulesModel) submitRule(rule *models.NotifierRule) tea.Cmd {
 	return func() tea.Msg {
-		_, err := rm.parent.SDKClient.CreateNotifierRule(rule)
+		_, err := rm.parent.sdkClient.CreateNotifierRule(rule)
 		if err != nil {
 			return errMsg{fmt.Errorf("creating notifier rule: %w", err)}
 		}
@@ -260,7 +264,7 @@ func (rm *rulesModel) submitRule(rule *models.NotifierRule) tea.Cmd {
 
 func (rm *rulesModel) deleteRule(id int) tea.Cmd {
 	return func() tea.Msg {
-		if err := rm.parent.SDKClient.DeleteNotifierRule(id); err != nil {
+		if err := rm.parent.sdkClient.DeleteNotifierRule(id); err != nil {
 			return errMsg{fmt.Errorf("deleting notifier rule: %w", err)}
 		}
 
@@ -270,7 +274,7 @@ func (rm *rulesModel) deleteRule(id int) tea.Cmd {
 
 func (rm *rulesModel) getRules() tea.Cmd {
 	return func() tea.Msg {
-		rules, err := rm.parent.SDKClient.ListNotifierRules()
+		rules, err := rm.parent.sdkClient.ListNotifierRules()
 		if err != nil {
 			return errMsg{fmt.Errorf("getting rules: %w", err)}
 		}

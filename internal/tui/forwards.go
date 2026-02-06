@@ -64,6 +64,10 @@ func newFwdsModel(parent *Model, initialFwds []models.NotifierForwardFull) *fwds
 	return fm
 }
 
+func (fm *fwdsModel) ModelType() modelType {
+	return modelTypeFwds
+}
+
 func (fm *fwdsModel) Init() tea.Cmd {
 	return nil
 }
@@ -242,7 +246,7 @@ func (fm *fwdsModel) setFormHeight(h int) {
 
 func (fm *fwdsModel) prepareForm() tea.Cmd {
 	return func() tea.Msg {
-		recips, err := fm.parent.SDKClient.ListRecipients()
+		recips, err := fm.parent.sdkClient.ListRecipients()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing recipients: %w", err)}
 		}
@@ -261,7 +265,7 @@ func (fm *fwdsModel) prepareForm() tea.Cmd {
 
 func (fm *fwdsModel) submitFwd(fwd *models.NotifierForward) tea.Cmd {
 	return func() tea.Msg {
-		_, err := fm.parent.SDKClient.CreateUserForward(fwd)
+		_, err := fm.parent.sdkClient.CreateUserForward(fwd)
 		if err != nil {
 			return errMsg{fmt.Errorf("creating notifier forward: %w", err)}
 		}
@@ -272,7 +276,7 @@ func (fm *fwdsModel) submitFwd(fwd *models.NotifierForward) tea.Cmd {
 
 func (fm *fwdsModel) deleteFwd(id int) tea.Cmd {
 	return func() tea.Msg {
-		if err := fm.parent.SDKClient.DeleteUserForward(id); err != nil {
+		if err := fm.parent.sdkClient.DeleteUserForward(id); err != nil {
 			return errMsg{fmt.Errorf("deleting notifier forward: %w", err)}
 		}
 
@@ -283,7 +287,7 @@ func (fm *fwdsModel) deleteFwd(id int) tea.Cmd {
 func (fm *fwdsModel) getFwds() tea.Cmd {
 	return func() tea.Msg {
 		p := map[string]string{"filter": "active"}
-		fwds, err := fm.parent.SDKClient.ListUserForwards(p)
+		fwds, err := fm.parent.sdkClient.ListUserForwards(p)
 		if err != nil {
 			return errMsg{fmt.Errorf("listing notifier forwards: %w", err)}
 		}

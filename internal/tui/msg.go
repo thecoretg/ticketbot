@@ -26,6 +26,24 @@ const (
 	modelTypeSync
 )
 
+func nextModel(current modelType) tea.Cmd {
+	return func() tea.Msg {
+		if current == modelTypeSync {
+			return switchModelMsg{modelTypeRules}
+		}
+		return switchModelMsg{current + 1}
+	}
+}
+
+func prevModel(current modelType) tea.Cmd {
+	return func() tea.Msg {
+		if current == modelTypeRules {
+			return switchModelMsg{modelTypeSync}
+		}
+		return switchModelMsg{current - 1}
+	}
+}
+
 func switchModel(m modelType) tea.Cmd {
 	return func() tea.Msg {
 		return switchModelMsg{m}
