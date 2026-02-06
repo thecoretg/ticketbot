@@ -78,6 +78,10 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 			return nil, fmt.Errorf("checking forwards for recipient id %d: %w", r.recipient.ID, err)
 		}
 
+		if len(fwds) == 0 {
+			continue
+		}
+
 		keep := false
 
 		for _, f := range fwds {
