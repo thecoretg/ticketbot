@@ -47,6 +47,10 @@ func newSyncModel(parent *Model) *syncModel {
 	return sm
 }
 
+func (sm *syncModel) ModelType() modelType {
+	return modelTypeSync
+}
+
 func (sm *syncModel) Init() tea.Cmd {
 	return nil
 }
@@ -189,7 +193,7 @@ func (sm *syncModel) setModuleDimensions() {
 
 func (sm *syncModel) prepareForm() tea.Cmd {
 	return func() tea.Msg {
-		boards, err := sm.parent.SDKClient.ListBoards()
+		boards, err := sm.parent.sdkClient.ListBoards()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing boards: %w", err)}
 		}
@@ -207,7 +211,7 @@ func (sm *syncModel) prepareForm() tea.Cmd {
 
 func (sm *syncModel) startSync(payload *models.SyncPayload) tea.Cmd {
 	return func() tea.Msg {
-		if err := sm.parent.SDKClient.Sync(payload); err != nil {
+		if err := sm.parent.sdkClient.Sync(payload); err != nil {
 			return errMsg{fmt.Errorf("starting sync: %w", err)}
 		}
 
@@ -219,7 +223,7 @@ func (sm *syncModel) checkSyncStatus() tea.Cmd {
 	return func() tea.Msg {
 		time.Sleep(3 * time.Second)
 
-		syncing, err := sm.parent.SDKClient.GetSyncStatus()
+		syncing, err := sm.parent.sdkClient.GetSyncStatus()
 		if err != nil {
 			return errMsg{fmt.Errorf("checking sync status: %w", err)}
 		}

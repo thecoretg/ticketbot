@@ -17,7 +17,7 @@ import (
 var spn = newSpinner(spinner.Line, green)
 
 type Model struct {
-	SDKClient     *sdk.Client
+	sdkClient     *sdk.Client
 	initialized   bool
 	currentUserID int
 	currentKeyID  int
@@ -49,11 +49,12 @@ type subModel interface {
 	Status() subModelStatus
 	Table() table.Model
 	Form() *huh.Form
+	ModelType() modelType
 }
 
 func NewModel(sl *sdk.Client, apiKey string) *Model {
 	return &Model{
-		SDKClient:     sl,
+		sdkClient:     sl,
 		currentAPIKey: apiKey,
 		help:          help.New(),
 	}
@@ -61,22 +62,22 @@ func NewModel(sl *sdk.Client, apiKey string) *Model {
 
 func (m *Model) createSubModels() tea.Cmd {
 	return func() tea.Msg {
-		rules, err := m.SDKClient.ListNotifierRules()
+		rules, err := m.sdkClient.ListNotifierRules()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing initial rules: %w", err)}
 		}
 
-		fwds, err := m.SDKClient.ListUserForwards(map[string]string{"filter": "active"})
+		fwds, err := m.sdkClient.ListUserForwards(map[string]string{"filter": "active"})
 		if err != nil {
 			return errMsg{fmt.Errorf("listing initial forwards: %w", err)}
 		}
 
-		users, err := m.SDKClient.ListUsers()
+		users, err := m.sdkClient.ListUsers()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing initial users: %w", err)}
 		}
 
-		apiKeys, err := m.SDKClient.ListAPIKeys()
+		apiKeys, err := m.sdkClient.ListAPIKeys()
 		if err != nil {
 			return errMsg{fmt.Errorf("listing initial API keys: %w", err)}
 		}
@@ -97,7 +98,7 @@ func (m *Model) Init() tea.Cmd {
 
 func (m *Model) getCurrentUser() tea.Cmd {
 	return func() tea.Msg {
-		user, err := m.SDKClient.GetCurrentUser()
+		user, err := m.sdkClient.GetCurrentUser()
 		if err != nil {
 			return errMsg{fmt.Errorf("getting current user: %w", err)}
 		}
@@ -112,7 +113,7 @@ func (m *Model) identifyCurrentKey() tea.Cmd {
 			return gotCurrentKeyMsg{keyID: 0}
 		}
 
-		keys, err := m.SDKClient.ListAPIKeys()
+		keys, err := m.sdkClient.ListAPIKeys()
 		if err != nil {
 			return errMsg{fmt.Errorf("getting API keys to identify current: %w", err)}
 		}
@@ -163,7 +164,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 
 		case key.Matches(msg, allKeys.quit):
-			return m, tea.Quit
+			// quit key should exit form if in a form (handled in submodels)
+			if m.activeModel.Status() != statusEntry {
+				return m, tea.Quit
+			}
 		case key.Matches(msg, allKeys.switchModelRules):
 			return m, switchModel(modelTypeRules)
 		case key.Matches(msg, allKeys.switchModelFwds):
@@ -174,6 +178,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, switchModel(modelTypeAPIKeys)
 		case key.Matches(msg, allKeys.switchModelSync):
 			return m, switchModel(modelTypeSync)
+		case key.Matches(msg, allKeys.nextModel):
+			return m, nextModel(m.activeModel.ModelType())
+		case key.Matches(msg, allKeys.prevModel):
+			return m, prevModel(m.activeModel.ModelType())
 		}
 
 	case modelsReadyMsg:
@@ -209,6 +217,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeModel = m.syncModel
 			}
 		}
+
 	case gotCurrentUserMsg:
 		m.currentUserID = msg.userID
 	case gotCurrentKeyMsg:
@@ -264,42 +273,27 @@ func (m *Model) View() string {
 }
 
 func (m *Model) headerView() string {
-	rl := "[R] RULES"
-	fl := "[F] FORWARDS"
-	ul := "[U] USERS"
-	kl := "[A] KEYS"
-	sl := "[S] SYNC"
-	rulesTab := menuLabelStyle.Render(rl)
-	if m.activeModel == m.rulesModel {
-		rulesTab = activeMenuLabelStyle.Render(rl)
-	}
+	mod := menuLabelStyle.Render("CTRL + ")
+	r := m.tabStyle(m.rulesModel, "[R] RULES")
+	f := m.tabStyle(m.fwdsModel, "[F] FORWARDS")
+	u := m.tabStyle(m.usersModel, "[U] USERS")
+	k := m.tabStyle(m.apiKeysModel, "[A] KEYS")
+	s := m.tabStyle(m.syncModel, "[S] SYNC")
 
-	fwdsTab := menuLabelStyle.Render(fl)
-	if m.activeModel == m.fwdsModel {
-		fwdsTab = activeMenuLabelStyle.Render(fl)
-	}
-
-	usersTab := menuLabelStyle.Render(ul)
-	if m.activeModel == m.usersModel {
-		usersTab = activeMenuLabelStyle.Render(ul)
-	}
-
-	keysTab := menuLabelStyle.Render(kl)
-	if m.activeModel == m.apiKeysModel {
-		keysTab = activeMenuLabelStyle.Render(kl)
-	}
-
-	syncTab := menuLabelStyle.Render(sl)
-	if m.activeModel == m.syncModel {
-		syncTab = activeMenuLabelStyle.Render(sl)
-	}
-
-	tabs := []string{rulesTab, fwdsTab, usersTab, keysTab, syncTab}
-	leaderKey := menuLabelStyle.Render("CTRL + ")
+	tabs := []string{r, f, u, k, s}
 	sep := " / "
-	content := lipgloss.JoinHorizontal(lipgloss.Bottom, leaderKey, strings.Join(tabs, sep), " ")
+	content := lipgloss.JoinHorizontal(lipgloss.Bottom, mod, strings.Join(tabs, sep), " ")
 	avail := m.width - lipgloss.Width(content)
 	avail = max(0, avail)
 	line := lipgloss.NewStyle().Foreground(green).Render(strings.Repeat(lipgloss.NormalBorder().Bottom, avail))
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, content, line)
+}
+
+func (m *Model) tabStyle(s subModel, title string) string {
+	tab := menuLabelStyle.Render(title)
+	if m.activeModel == s {
+		tab = activeMenuLabelStyle.Render(title)
+	}
+
+	return tab
 }
