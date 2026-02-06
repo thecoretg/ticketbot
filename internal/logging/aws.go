@@ -108,7 +108,6 @@ func (h *CloudwatchHandler) Enabled(ctx context.Context, level slog.Level) bool 
 
 func (h *CloudwatchHandler) Handle(ctx context.Context, record slog.Record) error {
 	logEntry := map[string]any{
-		"time":    record.Time.Format(time.RFC3339),
 		"level":   record.Level.String(),
 		"message": record.Message,
 	}
