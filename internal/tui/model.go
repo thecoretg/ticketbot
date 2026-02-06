@@ -164,7 +164,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 
 		case key.Matches(msg, allKeys.quit):
-			return m, tea.Quit
+			// quit key should exit form if in a form (handled in submodels)
+			if m.activeModel.Status() != statusEntry {
+				return m, tea.Quit
+			}
 		case key.Matches(msg, allKeys.switchModelRules):
 			return m, switchModel(modelTypeRules)
 		case key.Matches(msg, allKeys.switchModelFwds):
