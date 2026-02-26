@@ -67,7 +67,7 @@ func (m *Model) createSubModels() tea.Cmd {
 			return errMsg{fmt.Errorf("listing initial rules: %w", err)}
 		}
 
-		fwds, err := m.sdkClient.ListUserForwards(map[string]string{"filter": "active"})
+		fwds, err := m.sdkClient.ListUserForwards(map[string]string{"filter": "not-expired"})
 		if err != nil {
 			return errMsg{fmt.Errorf("listing initial forwards: %w", err)}
 		}

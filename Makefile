@@ -28,14 +28,14 @@ test-db-down:
 reset-test-db: test-db-down test-db-up
 
 docker-build:
-	docker buildx build --platform=linux/amd64 -t ticketbot:v1.4.1 --load -f ./docker/DockerfileMain .
+	docker buildx build --platform=linux/amd64 -t ticketbot:v1.4.2 --load -f ./docker/DockerfileMain .
 
 deploy-container: docker-build
 	aws lightsail push-container-image \
 	--region us-west-2 \
 	--service-name ticketbot \
 	--label ticketbot-server \
-	--image ticketbot:v1.4.1
+	--image ticketbot:v1.4.2
 
 lightsail-logs:
 	aws lightsail get-container-log \

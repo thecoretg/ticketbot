@@ -286,7 +286,7 @@ func (fm *fwdsModel) deleteFwd(id int) tea.Cmd {
 
 func (fm *fwdsModel) getFwds() tea.Cmd {
 	return func() tea.Msg {
-		p := map[string]string{"filter": "active"}
+		p := map[string]string{"filter": "not-expired"}
 		fwds, err := fm.parent.sdkClient.ListUserForwards(p)
 		if err != nil {
 			return errMsg{fmt.Errorf("listing notifier forwards: %w", err)}

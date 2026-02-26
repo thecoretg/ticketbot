@@ -54,6 +54,20 @@ func (p *UserForwardRepo) ListAllActive(ctx context.Context) ([]*models.Notifier
 	return b, nil
 }
 
+func (p *UserForwardRepo) ListAllNotExpired(ctx context.Context) ([]*models.NotifierForwardFull, error) {
+	dm, err := p.queries.ListNotExpiredNotifierForwards(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var b []*models.NotifierForwardFull
+	for _, d := range dm {
+		b = append(b, notExpiredForwardFromPG(d))
+	}
+
+	return b, nil
+}
+
 func (p *UserForwardRepo) ListAllInactive(ctx context.Context) ([]*models.NotifierForwardFull, error) {
 	dm, err := p.queries.ListInactiveNotifierForwards(ctx)
 	if err != nil {
@@ -204,6 +218,22 @@ func activeForwardFromPG(pg *db.ListActiveNotifierForwardsRow) *models.NotifierF
 }
 
 func inactiveForwardFromPG(pg *db.ListInactiveNotifierForwardsRow) *models.NotifierForwardFull {
+	return &models.NotifierForwardFull{
+		ID:              pg.ID,
+		Enabled:         pg.Enabled,
+		UserKeepsCopy:   pg.UserKeepsCopy,
+		StartDate:       pg.StartDate,
+		EndDate:         pg.EndDate,
+		SourceID:        pg.SourceID,
+		SourceName:      pg.SourceName,
+		SourceType:      pg.SourceType,
+		DestinationID:   pg.DestinationID,
+		DestinationName: pg.DestinationName,
+		DestinationType: pg.DestinationType,
+	}
+}
+
+func notExpiredForwardFromPG(pg *db.ListNotExpiredNotifierForwardsRow) *models.NotifierForwardFull {
 	return &models.NotifierForwardFull{
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,

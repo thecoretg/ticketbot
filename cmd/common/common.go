@@ -2,5 +2,5 @@ package common
 
 const (
 	GooseMigrationVersion = 3
-	ServerVersion         = "1.4.1"
+	ServerVersion         = "1.4.2"
 )

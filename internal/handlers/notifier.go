@@ -101,6 +101,8 @@ func (h *NotifierHandler) ListForwards(c *gin.Context) {
 		n, err = h.Svc.ListForwardsActive(ctx)
 	case "inactive":
 		n, err = h.Svc.ListForwardsInactive(ctx)
+	case "not-expired":
+		n, err = h.Svc.ListForwardsNotExpired(ctx)
 	default:
 		n, err = h.Svc.ListForwardsFull(ctx)
 	}

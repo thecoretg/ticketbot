@@ -49,6 +49,7 @@ type NotifierForwardRepository interface {
 	WithTx(tx pgx.Tx) NotifierForwardRepository
 	ListAll(ctx context.Context) ([]*NotifierForward, error)
 	ListAllActive(ctx context.Context) ([]*NotifierForwardFull, error)
+	ListAllNotExpired(ctx context.Context) ([]*NotifierForwardFull, error)
 	ListAllInactive(ctx context.Context) ([]*NotifierForwardFull, error)
 	ListAllFull(ctx context.Context) ([]*NotifierForwardFull, error)
 	ListBySourceRoomID(ctx context.Context, id int) ([]*NotifierForward, error)

@@ -15,6 +15,10 @@ func (s *Service) ListForwardsActive(ctx context.Context) ([]*models.NotifierFor
 	return s.Forwards.ListAllActive(ctx)
 }
 
+func (s *Service) ListForwardsNotExpired(ctx context.Context) ([]*models.NotifierForwardFull, error) {
+	return s.Forwards.ListAllNotExpired(ctx)
+}
+
 func (s *Service) ListForwardsInactive(ctx context.Context) ([]*models.NotifierForwardFull, error) {
 	return s.Forwards.ListAllInactive(ctx)
 }
