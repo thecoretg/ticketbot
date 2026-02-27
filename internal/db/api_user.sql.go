@@ -35,7 +35,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email_address, created_on, updated_on FROM api_user
+SELECT id, email_address, created_on, updated_on, password_hash FROM api_user
 WHERE id = $1 LIMIT 1
 `
 
@@ -47,12 +47,13 @@ func (q *Queries) GetUser(ctx context.Context, id int) (*ApiUser, error) {
 		&i.EmailAddress,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.PasswordHash,
 	)
 	return &i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email_address, created_on, updated_on FROM api_user
+SELECT id, email_address, created_on, updated_on, password_hash FROM api_user
 WHERE email_address = $1 LIMIT 1
 `
 
@@ -64,6 +65,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, emailAddress string) (*Api
 		&i.EmailAddress,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.PasswordHash,
 	)
 	return &i, err
 }
@@ -72,7 +74,7 @@ const insertUser = `-- name: InsertUser :one
 INSERT INTO api_user
 (email_address)
 VALUES ($1)
-RETURNING id, email_address, created_on, updated_on
+RETURNING id, email_address, created_on, updated_on, password_hash
 `
 
 func (q *Queries) InsertUser(ctx context.Context, emailAddress string) (*ApiUser, error) {
@@ -83,12 +85,13 @@ func (q *Queries) InsertUser(ctx context.Context, emailAddress string) (*ApiUser
 		&i.EmailAddress,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.PasswordHash,
 	)
 	return &i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email_address, created_on, updated_on FROM api_user
+SELECT id, email_address, created_on, updated_on, password_hash FROM api_user
 ORDER BY email_address
 `
 
@@ -106,6 +109,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]*ApiUser, error) {
 			&i.EmailAddress,
 			&i.CreatedOn,
 			&i.UpdatedOn,
+			&i.PasswordHash,
 		); err != nil {
 			return nil, err
 		}
@@ -123,7 +127,7 @@ SET
     email_address = $2,
     updated_on = NOW()
 WHERE id = $1
-RETURNING id, email_address, created_on, updated_on
+RETURNING id, email_address, created_on, updated_on, password_hash
 `
 
 type UpdateUserParams struct {
@@ -139,6 +143,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (*ApiUse
 		&i.EmailAddress,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.PasswordHash,
 	)
 	return &i, err
 }

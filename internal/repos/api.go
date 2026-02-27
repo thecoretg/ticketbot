@@ -20,7 +20,9 @@ type APIUserRepository interface {
 	List(ctx context.Context) ([]*models.APIUser, error)
 	Get(ctx context.Context, id int) (*models.APIUser, error)
 	GetByEmail(ctx context.Context, email string) (*models.APIUser, error)
+	GetForAuth(ctx context.Context, email string) (*models.UserAuth, error)
 	Exists(ctx context.Context, email string) (bool, error)
 	Insert(ctx context.Context, email string) (*models.APIUser, error)
+	SetPassword(ctx context.Context, id int, hash []byte) error
 	Delete(ctx context.Context, id int) error
 }

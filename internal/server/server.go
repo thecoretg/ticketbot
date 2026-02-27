@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
@@ -33,6 +34,7 @@ type App struct {
 }
 
 type Services struct {
+	Auth      *authsvc.Service
 	Config    *config.Service
 	User      *user.Service
 	CW        *cwsvc.Service
@@ -99,6 +101,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 		CWClient:      cw,
 		MessageSender: wx,
 		Svc: &Services{
+			Auth:      authsvc.New(r.APIUser, r.Sessions),
 			Config:    config.New(r.Config, cfg),
 			User:      user.New(r.APIUser, r.APIKey),
 			Hooks:     webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL),

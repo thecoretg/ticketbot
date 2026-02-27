@@ -87,6 +87,29 @@ func (p *APIUserRepo) Update(ctx context.Context, u *models.APIUser) (*models.AP
 	return userFromPG(d), nil
 }
 
+func (p *APIUserRepo) GetForAuth(ctx context.Context, email string) (*models.UserAuth, error) {
+	d, err := p.queries.GetUserForAuth(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, models.ErrAPIUserNotFound
+		}
+		return nil, err
+	}
+
+	return &models.UserAuth{
+		ID:           d.ID,
+		EmailAddress: d.EmailAddress,
+		PasswordHash: d.PasswordHash,
+	}, nil
+}
+
+func (p *APIUserRepo) SetPassword(ctx context.Context, id int, hash []byte) error {
+	return p.queries.SetUserPassword(ctx, db.SetUserPasswordParams{
+		ID:           id,
+		PasswordHash: hash,
+	})
+}
+
 func (p *APIUserRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteUser(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

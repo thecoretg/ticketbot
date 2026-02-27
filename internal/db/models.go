@@ -22,6 +22,7 @@ type ApiUser struct {
 	EmailAddress string    `json:"email_address"`
 	CreatedOn    time.Time `json:"created_on"`
 	UpdatedOn    time.Time `json:"updated_on"`
+	PasswordHash []byte    `json:"password_hash"`
 }
 
 type AppConfig struct {
@@ -126,6 +127,14 @@ type NotifierRule struct {
 	WebexRecipientID int       `json:"webex_recipient_id"`
 	NotifyEnabled    bool      `json:"notify_enabled"`
 	CreatedOn        time.Time `json:"created_on"`
+}
+
+type Session struct {
+	ID        int       `json:"id"`
+	UserID    int       `json:"user_id"`
+	TokenHash []byte    `json:"token_hash"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedOn time.Time `json:"created_on"`
 }
 
 type TicketNotification struct {

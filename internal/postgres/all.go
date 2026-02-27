@@ -10,6 +10,7 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		APIKey:              NewAPIKeyRepo(pool),
 		APIUser:             NewAPIUserRepo(pool),
 		Config:              NewConfigRepo(pool),
+		Sessions:            NewSessionRepo(pool),
 		TicketNotifications: NewNotificationRepo(pool),
 		NotifierForwards:    NewUserForwardRepo(pool),
 		NotifierRules:       NewNotifierRuleRepo(pool),

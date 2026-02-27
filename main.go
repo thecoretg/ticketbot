@@ -75,7 +75,11 @@ func Run() error {
 
 	if !a.TestFlags.SkipAuth {
 		slog.Info("attempting to bootstrap admin")
-		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, a.TestFlags.APIKey); err != nil {
+		var adminPwd *string
+		if a.Creds.InitialAdminPassword != "" {
+			adminPwd = &a.Creds.InitialAdminPassword
+		}
+		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, a.TestFlags.APIKey, adminPwd); err != nil {
 			return fmt.Errorf("bootstrapping admin api key: %w", err)
 		}
 	} else {

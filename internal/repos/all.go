@@ -4,6 +4,7 @@ type AllRepos struct {
 	APIKey              APIKeyRepository
 	APIUser             APIUserRepository
 	Config              ConfigRepository
+	Sessions            SessionRepository
 	TicketNotifications TicketNotificationRepository
 	NotifierForwards    NotifierForwardRepository
 	NotifierRules       NotifierRuleRepository

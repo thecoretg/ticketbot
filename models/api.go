@@ -33,3 +33,11 @@ type APIUser struct {
 	CreatedOn    time.Time `json:"created_on"`
 	UpdatedOn    time.Time `json:"updated_on"`
 }
+
+// UserAuth is a restricted view of APIUser used only during login.
+// It is separate from APIUser to preserve comparability ([]byte is not comparable).
+type UserAuth struct {
+	ID           int
+	EmailAddress string
+	PasswordHash []byte
+}

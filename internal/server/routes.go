@@ -1,16 +1,27 @@
 package server
 
 import (
+	"io/fs"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/handlers"
 	"github.com/thecoretg/ticketbot/internal/middleware"
+	"github.com/thecoretg/ticketbot/internal/web"
 )
 
 func AddRoutes(a *App, g *gin.Engine) {
-	auth := middleware.APIKeyAuth(a.Svc.User.Keys)
+	panelFS, _ := fs.Sub(web.StaticFiles, "static")
+	g.StaticFS("/panel", http.FS(panelFS))
+
+	auth := middleware.CombinedAuth(a.Stores.APIKey, a.Svc.Auth)
 
 	g.GET("healthcheck", handlers.HandleHealthCheck) // authless ping for lightsail health checks
 	g.GET("authtest", auth, handlers.HandleHealthCheck)
+
+	ah := handlers.NewAuthHandler(a.Svc.Auth)
+	g.POST("auth/login", ah.HandleLogin)
+	g.POST("auth/logout", ah.HandleLogout)
 
 	s := g.Group("sync", auth)
 	sh := handlers.NewSyncHandler(a.Svc.Sync)

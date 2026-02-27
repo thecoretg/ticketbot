@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticketbot Admin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Login -->
+<div id="login" class="screen hidden">
+    <div class="login-card">
+        <h1>Ticketbot</h1>
+        <p>Enter your API key to continue</p>
+        <div class="form-group">
+            <input id="login-email" type="email" placeholder="Email" autocomplete="email">
+        </div>
+        <div class="form-group">
+            <input id="login-password" type="password" placeholder="Password" autocomplete="current-password">
+        </div>
+        <button id="login-btn" class="btn btn-primary" onclick="login()">Login</button>
+        <p id="login-err" class="error-text hidden"></p>
+    </div>
+</div>
+
+<!-- App -->
+<div id="app" class="screen hidden">
+    <header class="header">
+        <span class="header-title">Ticketbot Admin</span>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    </header>
+    <nav class="tab-nav">
+        <button class="tab active" data-tab="rules"    onclick="switchTab('rules')">Rules</button>
+        <button class="tab"        data-tab="forwards" onclick="switchTab('forwards')">Forwards</button>
+        <button class="tab"        data-tab="users"    onclick="switchTab('users')">Users</button>
+        <button class="tab"        data-tab="keys"     onclick="switchTab('keys')">Keys</button>
+        <button class="tab"        data-tab="sync"     onclick="switchTab('sync')">Sync</button>
+        <button class="tab"        data-tab="config"   onclick="switchTab('config')">Config</button>
+    </nav>
+    <main id="content" class="content"></main>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="modal-overlay hidden" onclick="handleOverlayClick(event)">
+    <div id="modal" class="modal">
+        <div class="modal-header">
+            <h2 id="modal-title"></h2>
+            <button class="btn-icon" onclick="closeModal()">✕</button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+        <div id="modal-footer" class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+            <button id="modal-submit" class="btn btn-primary">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

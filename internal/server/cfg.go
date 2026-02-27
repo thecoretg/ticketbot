@@ -15,13 +15,14 @@ import (
 )
 
 type Creds struct {
-	RootURL           string
-	InitialAdminEmail string
-	PostgresDSN       string
-	WebexAPISecret    string
-	WebexBotEmail     string
-	WebexHooksSecret  string
-	CWCreds           *psa.Creds
+	RootURL              string
+	InitialAdminEmail    string
+	InitialAdminPassword string
+	PostgresDSN          string
+	WebexAPISecret       string
+	WebexBotEmail        string
+	WebexHooksSecret     string
+	CWCreds              *psa.Creds
 }
 
 type TestFlags struct {
@@ -34,9 +35,10 @@ type TestFlags struct {
 
 func getCreds() *Creds {
 	return &Creds{
-		RootURL:           os.Getenv("ROOT_URL"),
-		InitialAdminEmail: os.Getenv("INITIAL_ADMIN_EMAIL"),
-		PostgresDSN:       os.Getenv("POSTGRES_DSN"),
+		RootURL:              os.Getenv("ROOT_URL"),
+		InitialAdminEmail:    os.Getenv("INITIAL_ADMIN_EMAIL"),
+		InitialAdminPassword: os.Getenv("INITIAL_ADMIN_PASSWORD"),
+		PostgresDSN:          os.Getenv("POSTGRES_DSN"),
 		WebexAPISecret:    os.Getenv("WEBEX_SECRET"),
 		WebexBotEmail:     os.Getenv("WEBEX_BOT_EMAIL"),
 		WebexHooksSecret:  os.Getenv("WEBEX_HOOKS_SECRET"),
