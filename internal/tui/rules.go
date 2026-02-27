@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type (

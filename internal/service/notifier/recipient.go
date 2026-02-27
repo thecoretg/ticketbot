@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type (

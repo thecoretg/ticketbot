@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type (

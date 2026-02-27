@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/internal/repos"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func APIKeyAuth(r models.APIKeyRepository) gin.HandlerFunc {
+func APIKeyAuth(r repos.APIKeyRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
@@ -49,7 +49,7 @@ func APIKeyAuth(r models.APIKeyRepository) gin.HandlerFunc {
 		for _, k := range keys {
 			if bcrypt.CompareHashAndPassword(k.KeyHash, []byte(key)) == nil {
 				userID = k.UserID
-			slog.Info("authenticated user", "user_id", userID)
+				slog.Info("authenticated user", "user_id", userID)
 				found = true
 				break
 			}

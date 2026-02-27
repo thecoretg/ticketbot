@@ -3,7 +3,7 @@ package cwsvc
 import (
 	"context"
 
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 func (s *Service) ListMembers(ctx context.Context) ([]*models.Member, error) {

@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/repos"
 )
 
 type ErrUserAlreadyExists struct {
@@ -22,11 +23,11 @@ func (e ErrCannotDeleteSelf) Error() string {
 }
 
 type Service struct {
-	Users models.APIUserRepository
-	Keys  models.APIKeyRepository
+	Users repos.APIUserRepository
+	Keys  repos.APIKeyRepository
 }
 
-func New(u models.APIUserRepository, k models.APIKeyRepository) *Service {
+func New(u repos.APIUserRepository, k repos.APIKeyRepository) *Service {
 	return &Service{
 		Users: u,
 		Keys:  k,

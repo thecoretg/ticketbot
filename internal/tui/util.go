@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 	"golang.org/x/crypto/bcrypt"
 )
 

@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/models"
-	"github.com/thecoretg/ticketbot/pkg/psa"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
 func (s *Service) SyncBoardStatuses(ctx context.Context, boardID int) error {

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thecoretg/ticketbot/pkg/psa"
+	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
 func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int) error {

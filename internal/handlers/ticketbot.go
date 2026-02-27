@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
-	"github.com/thecoretg/ticketbot/pkg/psa"
+	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
 type TicketbotHandler struct {

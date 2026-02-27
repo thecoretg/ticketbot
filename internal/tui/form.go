@@ -4,7 +4,7 @@ import (
 	"slices"
 
 	"github.com/charmbracelet/huh"
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 func boardsToFormOpts(boards []models.Board) []huh.Option[models.Board] {

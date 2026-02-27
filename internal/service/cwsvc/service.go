@@ -5,24 +5,24 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/models"
-	"github.com/thecoretg/ticketbot/pkg/psa"
+	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
 type Service struct {
 	TTL       time.Duration
-	Boards    models.BoardRepository
-	Companies models.CompanyRepository
-	Contacts  models.ContactRepository
-	Members   models.MemberRepository
-	Tickets   models.TicketRepository
-	Statuses  models.TicketStatusRepository
-	Notes     models.TicketNoteRepository
+	Boards    repos.BoardRepository
+	Companies repos.CompanyRepository
+	Contacts  repos.ContactRepository
+	Members   repos.MemberRepository
+	Tickets   repos.TicketRepository
+	Statuses  repos.TicketStatusRepository
+	Notes     repos.TicketNoteRepository
 	pool      *pgxpool.Pool
 	CWClient  *psa.Client
 }
 
-func New(pool *pgxpool.Pool, r models.CWRepos, cl *psa.Client, ttl int64) *Service {
+func New(pool *pgxpool.Pool, r repos.CWRepos, cl *psa.Client, ttl int64) *Service {
 	t := time.Second * time.Duration(ttl)
 	return &Service{
 		TTL:       t,

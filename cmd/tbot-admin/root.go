@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/thecoretg/ticketbot/cmd/common"
 	"github.com/thecoretg/ticketbot/internal/tui"
-	"github.com/thecoretg/ticketbot/pkg/sdk"
+	"github.com/thecoretg/ticketbot/sdk"
 )
 
 var (

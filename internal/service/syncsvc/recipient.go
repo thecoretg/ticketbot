@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/models"
-	"github.com/thecoretg/ticketbot/pkg/psa"
-	"github.com/thecoretg/ticketbot/pkg/webex"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
 func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {

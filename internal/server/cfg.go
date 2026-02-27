@@ -8,9 +8,10 @@ import (
 	"strconv"
 
 	"github.com/thecoretg/ticketbot/internal/mock"
-	"github.com/thecoretg/ticketbot/internal/models"
-	"github.com/thecoretg/ticketbot/pkg/psa"
-	"github.com/thecoretg/ticketbot/pkg/webex"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
 type Creds struct {
@@ -98,7 +99,7 @@ func (c *Creds) validate(tf *TestFlags) error {
 
 // getStartupConfig gets the current config at server startup. It uses the default if one is not
 // found in the store, applies any environment overrides, upserts, and then returns the final result.
-func getStartupConfig(ctx context.Context, r models.ConfigRepository) (*models.Config, error) {
+func getStartupConfig(ctx context.Context, r repos.ConfigRepository) (*models.Config, error) {
 	var err error
 
 	// get initial config; if none in db, use default
@@ -118,7 +119,7 @@ func getStartupConfig(ctx context.Context, r models.ConfigRepository) (*models.C
 	return cfg, nil
 }
 
-func makeMessageSender(mocking bool, webexSecret string) models.MessageSender {
+func makeMessageSender(mocking bool, webexSecret string) repos.MessageSender {
 	if mocking {
 		slog.Info("running with webex mocking")
 		return mock.NewWebexClient(webexSecret)

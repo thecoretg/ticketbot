@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 func (s *Service) ListForwardsFull(ctx context.Context) ([]*models.NotifierForwardFull, error) {

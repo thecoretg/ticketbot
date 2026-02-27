@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 func (s *Service) IsSyncing() bool {

@@ -4,15 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/repos"
 )
 
 type Service struct {
-	Config    models.ConfigRepository
+	Config    repos.ConfigRepository
 	ConfigRef *models.Config
 }
 
-func New(c models.ConfigRepository, cfg *models.Config) *Service {
+func New(c repos.ConfigRepository, cfg *models.Config) *Service {
 	return &Service{
 		Config:    c,
 		ConfigRef: cfg,

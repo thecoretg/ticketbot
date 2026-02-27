@@ -3,17 +3,17 @@ package webexsvc
 import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/internal/repos"
 )
 
 type Service struct {
-	Recipients  models.WebexRecipientRepository
+	Recipients  repos.WebexRecipientRepository
 	pool        *pgxpool.Pool
-	WebexClient models.MessageSender
+	WebexClient repos.MessageSender
 	BotEmail    string
 }
 
-func New(pool *pgxpool.Pool, r models.WebexRecipientRepository, cl models.MessageSender, botEmail string) *Service {
+func New(pool *pgxpool.Pool, r repos.WebexRecipientRepository, cl repos.MessageSender, botEmail string) *Service {
 	return &Service{
 		Recipients:  r,
 		WebexClient: cl,

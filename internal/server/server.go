@@ -6,7 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/models"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
@@ -15,16 +16,16 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/internal/service/webhooks"
-	"github.com/thecoretg/ticketbot/pkg/psa"
-	"github.com/thecoretg/ticketbot/pkg/webex"
+	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
 type App struct {
 	Creds                   *Creds
 	TestFlags               *TestFlags
-	Stores                  *models.AllRepos
+	Stores                  *repos.AllRepos
 	CWClient                *psa.Client
-	MessageSender           models.MessageSender
+	MessageSender           repos.MessageSender
 	Pool                    *pgxpool.Pool
 	Config                  *models.Config
 	Svc                     *Services

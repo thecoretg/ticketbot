@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/thecoretg/ticketbot/pkg/sdk"
+	"github.com/thecoretg/ticketbot/sdk"
 )
 
 var spn = newSpinner(spinner.Line, green)

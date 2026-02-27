@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/thecoretg/ticketbot/internal/models"
-	"github.com/thecoretg/ticketbot/pkg/webex"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
 func (s *Service) ListRecipients(ctx context.Context) ([]*models.WebexRecipient, error) {

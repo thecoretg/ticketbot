@@ -7,8 +7,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/thecoretg/ticketbot/internal/models"
-	"github.com/thecoretg/ticketbot/pkg/psa"
+	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/psa"
 )
 
 var ErrTicketWasDeleted = errors.New("ticket was deleted from connectwise")
@@ -392,7 +393,7 @@ func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNo
 
 	n, err := s.Notes.Get(ctx, cwn.ID)
 	if err == nil && !s.withinTTL(n.UpdatedOn, "ticket_note", cwn.ID) {
-		return models.TicketNoteToFullTicketNote(ctx, n, s.Members, s.Contacts)
+		return repos.TicketNoteToFullTicketNote(ctx, n, s.Members, s.Contacts)
 	}
 
 	if err != nil && !errors.Is(err, models.ErrTicketNoteNotFound) {
@@ -410,7 +411,7 @@ func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNo
 		return nil, fmt.Errorf("inserting note into store: %w", err)
 	}
 
-	return models.TicketNoteToFullTicketNote(ctx, n, s.Members, s.Contacts)
+	return repos.TicketNoteToFullTicketNote(ctx, n, s.Members, s.Contacts)
 }
 
 func (s *Service) getNoteContactID(ctx context.Context, n *psa.ServiceTicketNote) (*int, error) {

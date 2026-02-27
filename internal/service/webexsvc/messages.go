@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/thecoretg/ticketbot/pkg/webex"
+	"github.com/thecoretg/ticketbot/internal/webex"
 )
 
 var ErrMessageFromBot = errors.New("message is from the bot")
