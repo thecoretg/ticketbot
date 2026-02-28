@@ -37,7 +37,10 @@ type APIUser struct {
 // UserAuth is a restricted view of APIUser used only during login.
 // It is separate from APIUser to preserve comparability ([]byte is not comparable).
 type UserAuth struct {
-	ID           int
-	EmailAddress string
-	PasswordHash []byte
+	ID            int
+	EmailAddress  string
+	PasswordHash  []byte
+	ResetRequired bool
+	TOTPSecret    *string
+	TOTPEnabled   bool
 }

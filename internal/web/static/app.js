@@ -2,8 +2,40 @@
 // State
 // ─────────────────────────────────────────────────────────
 let currentTab    = 'rules'
+let currentUser   = null
+let pendingToken  = null   // pending TOTP token after password login
+let totpEnabled   = false  // cached TOTP status for account menu
 let syncPollTimer = null
 let modalSubmitFn = null
+
+// ─────────────────────────────────────────────────────────
+// Password requirements
+// ─────────────────────────────────────────────────────────
+const PWD_REQS = [
+    { label: '8+ characters',    test: p => p.length >= 8 },
+    { label: 'Uppercase letter', test: p => /[A-Z]/.test(p) },
+    { label: 'Lowercase letter', test: p => /[a-z]/.test(p) },
+    { label: 'Number',           test: p => /[0-9]/.test(p) },
+]
+
+function passwordValid(pwd) {
+    return PWD_REQS.every(r => r.test(pwd))
+}
+
+function attachPwdReqs(inputId, containerId) {
+    const input     = document.getElementById(inputId)
+    const container = document.getElementById(containerId)
+    if (!input || !container) return
+    const update = () => {
+        const p = input.value
+        container.innerHTML = PWD_REQS.map(r => {
+            const ok = r.test(p)
+            return `<span class="pwd-req${ok ? ' ok' : ''}">${ok ? '✓' : '○'} ${r.label}</span>`
+        }).join('')
+    }
+    input.addEventListener('input', update)
+    update()
+}
 
 // ─────────────────────────────────────────────────────────
 // API helper
@@ -48,8 +80,15 @@ async function login() {
     errEl.classList.add('hidden')
 
     try {
-        await api('POST', '/auth/login', { email, password })
-        showApp()
+        const res = await api('POST', '/auth/login', { email, password })
+        if (res?.totp_required) {
+            pendingToken = res.pending_token
+            showTOTPVerify()
+        } else if (res?.reset_required) {
+            showPasswordReset()
+        } else {
+            showApp()
+        }
     } catch {
         showLoginErr('Invalid email or password')
     } finally {
@@ -66,19 +105,260 @@ function showLoginErr(msg) {
 
 async function logout() {
     try { await api('POST', '/auth/logout') } catch {}
+    currentUser  = null
+    pendingToken = null
+    totpEnabled  = false
     stopSyncPoll()
     document.getElementById('login-email').value    = ''
     document.getElementById('login-password').value = ''
     document.getElementById('login-err').classList.add('hidden')
+    document.getElementById('account-dropdown').classList.add('hidden')
     document.getElementById('login').classList.remove('hidden')
     document.getElementById('app').classList.add('hidden')
+    document.getElementById('password-reset').classList.add('hidden')
+    document.getElementById('totp-verify').classList.add('hidden')
 }
 
-function showApp() {
+function showTOTPVerify() {
     document.getElementById('login').classList.add('hidden')
+    document.getElementById('totp-verify').classList.remove('hidden')
+    document.getElementById('totp-code').value = ''
+    document.getElementById('totp-err').classList.add('hidden')
+    document.getElementById('totp-code').focus()
+}
+
+async function submitTOTPVerify() {
+    const code  = document.getElementById('totp-code').value.trim()
+    const errEl = document.getElementById('totp-err')
+    const btn   = document.getElementById('totp-btn')
+
+    errEl.classList.add('hidden')
+    if (!code) {
+        errEl.textContent = 'Code is required'
+        errEl.classList.remove('hidden')
+        return
+    }
+
+    btn.disabled    = true
+    btn.textContent = 'Verifying…'
+
+    try {
+        const res = await api('POST', '/auth/totp/verify', { pending_token: pendingToken, code })
+        pendingToken = null
+        if (res.reset_required) {
+            document.getElementById('totp-verify').classList.add('hidden')
+            showPasswordReset()
+        } else {
+            showApp()
+        }
+    } catch {
+        errEl.textContent = 'Invalid or expired code'
+        errEl.classList.remove('hidden')
+    } finally {
+        btn.disabled    = false
+        btn.textContent = 'Verify'
+    }
+}
+
+function showPasswordReset() {
+    document.getElementById('login').classList.add('hidden')
+    document.getElementById('totp-verify').classList.add('hidden')
+    document.getElementById('password-reset').classList.remove('hidden')
+    attachPwdReqs('reset-new', 'reset-reqs')
+    document.getElementById('reset-current').focus()
+}
+
+async function submitPasswordReset() {
+    const currentPwd = document.getElementById('reset-current').value
+    const newPwd     = document.getElementById('reset-new').value
+    const confirm    = document.getElementById('reset-confirm').value
+    const errEl      = document.getElementById('reset-err')
+    const btn        = document.getElementById('reset-btn')
+
+    errEl.classList.add('hidden')
+
+    if (!currentPwd || !newPwd || !confirm) {
+        errEl.textContent = 'All fields are required'
+        errEl.classList.remove('hidden')
+        return
+    }
+    if (!passwordValid(newPwd)) {
+        errEl.textContent = 'Password does not meet requirements'
+        errEl.classList.remove('hidden')
+        return
+    }
+    if (newPwd !== confirm) {
+        errEl.textContent = 'New passwords do not match'
+        errEl.classList.remove('hidden')
+        return
+    }
+
+    btn.disabled    = true
+    btn.textContent = 'Saving…'
+
+    try {
+        await api('PUT', '/auth/password', { current_password: currentPwd, new_password: newPwd })
+        document.getElementById('password-reset').classList.add('hidden')
+        document.getElementById('reset-current').value = ''
+        document.getElementById('reset-new').value     = ''
+        document.getElementById('reset-confirm').value = ''
+        showApp()
+    } catch (e) {
+        errEl.textContent = e.message || 'Failed to change password'
+        errEl.classList.remove('hidden')
+    } finally {
+        btn.disabled    = false
+        btn.textContent = 'Change Password'
+    }
+}
+
+async function showApp() {
+    document.getElementById('login').classList.add('hidden')
+    document.getElementById('totp-verify').classList.add('hidden')
+    document.getElementById('password-reset').classList.add('hidden')
     document.getElementById('app').classList.remove('hidden')
+    try {
+        const [me, totp] = await Promise.all([
+            api('GET', '/users/me'),
+            api('GET', '/auth/totp'),
+        ])
+        currentUser = me
+        totpEnabled = totp.enabled
+        document.getElementById('header-email').textContent   = currentUser.email_address
+        document.getElementById('dropdown-email').textContent = currentUser.email_address
+        updateTOTPMenuItem()
+    } catch {}
     const hash = window.location.hash.replace('#', '')
     switchTab(tabLoaders[hash] ? hash : 'rules')
+}
+
+// ─────────────────────────────────────────────────────────
+// Account menu
+// ─────────────────────────────────────────────────────────
+function toggleAccountMenu(e) {
+    e.stopPropagation()
+    document.getElementById('account-dropdown').classList.toggle('hidden')
+}
+
+function showChangePasswordModal() {
+    document.getElementById('account-dropdown').classList.add('hidden')
+    openModal('Change Password', `
+        <div class="form-group">
+            <label>Current Password</label>
+            <input type="password" id="f-cur-pwd" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+            <label>New Password</label>
+            <input type="password" id="f-new-pwd" autocomplete="new-password">
+            <div id="f-pwd-reqs" class="pwd-reqs"></div>
+        </div>
+        <div class="form-group">
+            <label>Confirm New Password</label>
+            <input type="password" id="f-confirm-pwd" autocomplete="new-password">
+        </div>`, async () => {
+        const cur     = document.getElementById('f-cur-pwd').value
+        const newPwd  = document.getElementById('f-new-pwd').value
+        const confirm = document.getElementById('f-confirm-pwd').value
+        if (!passwordValid(newPwd))  { toast('Password does not meet requirements', 'error'); return }
+        if (newPwd !== confirm)      { toast('New passwords do not match', 'error'); return }
+        try {
+            await api('PUT', '/auth/password', { current_password: cur, new_password: newPwd })
+            closeModal()
+            toast('Password changed', 'success')
+        } catch (e) { toast(e.message, 'error') }
+    }, 'Change Password')
+    setTimeout(() => attachPwdReqs('f-new-pwd', 'f-pwd-reqs'), 50)
+}
+
+function updateTOTPMenuItem() {
+    const btn = document.getElementById('totp-menu-btn')
+    if (!btn) return
+    btn.textContent = totpEnabled ? 'Disable 2FA' : 'Set Up 2FA'
+}
+
+function handleTOTPMenuClick() {
+    document.getElementById('account-dropdown').classList.add('hidden')
+    if (totpEnabled) {
+        showTOTPDisableModal()
+    } else {
+        showTOTPSetupModal()
+    }
+}
+
+async function showTOTPSetupModal() {
+    // Phase 1: fetch QR code and secret
+    let setupData
+    try {
+        setupData = await api('POST', '/auth/totp/setup')
+    } catch (e) { toast(e.message, 'error'); return }
+
+    openModal('Set Up Two-Factor Auth', `
+        <p style="color:var(--muted);font-size:13px">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.).</p>
+        <img class="qr-code" src="data:image/png;base64,${setupData.qr_png}" alt="TOTP QR Code">
+        <div class="form-group">
+            <label>Or enter this secret manually</label>
+            <div class="secret-display">${esc(setupData.secret)}</div>
+        </div>
+        <div class="form-group">
+            <label>Current Password</label>
+            <input type="password" id="f-totp-pwd" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+            <label>Confirmation Code <span style="color:var(--muted)">(from your authenticator app)</span></label>
+            <input type="text" id="f-totp-code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="6">
+        </div>`, async () => {
+        const pwd  = document.getElementById('f-totp-pwd').value
+        const code = document.getElementById('f-totp-code').value.trim()
+        if (!pwd)  { toast('Password is required', 'error'); return }
+        if (!code) { toast('Confirmation code is required', 'error'); return }
+        try {
+            const res = await api('PUT', '/auth/totp/setup', {
+                password: pwd,
+                code,
+                secret: setupData.secret,
+            })
+            totpEnabled = true
+            updateTOTPMenuItem()
+            // Replace modal body with recovery codes (shown once)
+            document.getElementById('modal-title').textContent = '2FA Enabled'
+            document.getElementById('modal-body').innerHTML = `
+                <p style="color:var(--warning);font-size:13px">
+                    ⚠ Save these recovery codes somewhere safe. Each can only be used once and they will not be shown again.
+                </p>
+                <div class="recovery-codes">
+                    ${res.recovery_codes.map(c => `<div class="recovery-code">${esc(c)}</div>`).join('')}
+                </div>`
+            document.getElementById('modal-footer').innerHTML = `
+                <button class="btn btn-ghost" onclick="copyRecoveryCodes()">Copy All</button>
+                <button class="btn btn-primary" onclick="closeModal()">Done</button>`
+            modalSubmitFn = null
+            window._recoveryCodes = res.recovery_codes
+        } catch (e) { toast(e.message || 'Failed to enable 2FA', 'error') }
+    }, 'Enable 2FA')
+}
+
+function copyRecoveryCodes() {
+    const codes = (window._recoveryCodes || []).join('\n')
+    navigator.clipboard.writeText(codes).then(() => toast('Recovery codes copied', 'success'))
+}
+
+function showTOTPDisableModal() {
+    openModal('Disable Two-Factor Auth', `
+        <p style="color:var(--muted);font-size:13px">Enter your current password to disable 2FA. Your recovery codes will also be removed.</p>
+        <div class="form-group">
+            <label>Current Password</label>
+            <input type="password" id="f-disable-pwd" autocomplete="current-password">
+        </div>`, async () => {
+        const pwd = document.getElementById('f-disable-pwd').value
+        if (!pwd) { toast('Password is required', 'error'); return }
+        try {
+            await api('DELETE', '/auth/totp', { password: pwd })
+            totpEnabled = false
+            updateTOTPMenuItem()
+            closeModal()
+            toast('Two-factor authentication disabled', 'success')
+        } catch (e) { toast(e.message || 'Failed to disable 2FA', 'error') }
+    }, 'Disable 2FA')
 }
 
 function checkSavedKey() {
@@ -415,13 +695,19 @@ function showNewUserModal() {
         <div class="form-group">
             <label>Email Address</label>
             <input type="email" id="f-email" placeholder="user@example.com">
+        </div>
+        <div class="form-group">
+            <label>Temporary Password</label>
+            <input type="password" id="f-temp-password" placeholder="User must change on first login">
         </div>`, async () => {
-        const email = document.getElementById('f-email').value.trim()
-        if (!email) { toast('Email is required', 'error'); return }
+        const email    = document.getElementById('f-email').value.trim()
+        const password = document.getElementById('f-temp-password').value
+        if (!email)     { toast('Email is required', 'error'); return }
+        if (!password)  { toast('Temporary password is required', 'error'); return }
         try {
-            await api('POST', '/users', { email_address: email })
+            await api('POST', '/users', { email_address: email, password })
             closeModal()
-            toast('User created', 'success')
+            toast('User created — they must change their password on first login', 'success')
             loadUsers()
         } catch (e) { toast(e.message, 'error') }
     })
@@ -695,8 +981,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('login-password').addEventListener('keydown', e => {
         if (e.key === 'Enter') login()
     })
+    document.getElementById('totp-code').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitTOTPVerify()
+    })
+    document.getElementById('reset-current').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('reset-new').focus()
+    })
+    document.getElementById('reset-new').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('reset-confirm').focus()
+    })
+    document.getElementById('reset-confirm').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitPasswordReset()
+    })
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') closeModal()
+    })
+    document.addEventListener('click', () => {
+        document.getElementById('account-dropdown').classList.add('hidden')
     })
     checkSavedKey()
 })

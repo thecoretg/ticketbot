@@ -6,8 +6,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/user"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type UserHandler struct {
@@ -67,14 +68,33 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	outputJSON(c, u)
 }
 
+type createUserRequest struct {
+	EmailAddress string `json:"email_address"`
+	Password     string `json:"password"` // optional; if set, user must reset on first login
+}
+
 func (h *UserHandler) CreateUser(c *gin.Context) {
-	p := &models.APIUser{}
-	if err := c.ShouldBindJSON(p); err != nil {
+	var p createUserRequest
+	if err := c.ShouldBindJSON(&p); err != nil {
 		badPayloadError(c, err)
 		return
 	}
 
-	u, err := h.Service.InsertUser(c.Request.Context(), p.EmailAddress)
+	var (
+		u   *models.APIUser
+		err error
+	)
+
+	if p.Password != "" {
+		if err := authsvc.ValidatePassword(p.Password); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		u, err = h.Service.InsertUserWithPassword(c.Request.Context(), p.EmailAddress, p.Password)
+	} else {
+		u, err = h.Service.InsertUser(c.Request.Context(), p.EmailAddress)
+	}
+
 	if err != nil {
 		if errors.Is(err, user.ErrUserAlreadyExists{Email: p.EmailAddress}) {
 			conflictError(c, err)

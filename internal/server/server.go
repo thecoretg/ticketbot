@@ -101,7 +101,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 		CWClient:      cw,
 		MessageSender: wx,
 		Svc: &Services{
-			Auth:      authsvc.New(r.APIUser, r.Sessions),
+			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery),
 			Config:    config.New(r.Config, cfg),
 			User:      user.New(r.APIUser, r.APIKey),
 			Hooks:     webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL),

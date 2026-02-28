@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type ErrUserAlreadyExists struct {
@@ -57,6 +58,29 @@ func (s *Service) InsertUser(ctx context.Context, email string) (*models.APIUser
 	}
 
 	return s.Users.Insert(ctx, email)
+}
+
+// InsertUserWithPassword creates a user and sets a temporary password that must be changed on first login.
+func (s *Service) InsertUserWithPassword(ctx context.Context, email, password string) (*models.APIUser, error) {
+	u, err := s.InsertUser(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("hashing password: %w", err)
+	}
+
+	if err := s.Users.SetPassword(ctx, u.ID, hash); err != nil {
+		return nil, fmt.Errorf("setting password: %w", err)
+	}
+
+	if err := s.Users.SetPasswordResetRequired(ctx, u.ID, true); err != nil {
+		return nil, fmt.Errorf("setting reset flag: %w", err)
+	}
+
+	return u, nil
 }
 
 func (s *Service) DeleteUser(ctx context.Context, id int, authenticatedUserID int) error {

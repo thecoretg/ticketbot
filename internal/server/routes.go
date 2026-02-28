@@ -22,6 +22,14 @@ func AddRoutes(a *App, g *gin.Engine) {
 	ah := handlers.NewAuthHandler(a.Svc.Auth)
 	g.POST("auth/login", ah.HandleLogin)
 	g.POST("auth/logout", ah.HandleLogout)
+	g.PUT("auth/password", auth, ah.HandleChangePassword)
+
+	th := handlers.NewTOTPHandler(a.Svc.Auth)
+	g.POST("auth/totp/verify", th.HandleVerify)
+	g.GET("auth/totp", auth, th.HandleStatus)
+	g.POST("auth/totp/setup", auth, th.HandleBeginSetup)
+	g.PUT("auth/totp/setup", auth, th.HandleConfirmSetup)
+	g.DELETE("auth/totp", auth, th.HandleDisable)
 
 	s := g.Group("sync", auth)
 	sh := handlers.NewSyncHandler(a.Svc.Sync)

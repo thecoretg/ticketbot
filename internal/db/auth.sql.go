@@ -11,17 +11,20 @@ import (
 )
 
 const getUserForAuth = `-- name: GetUserForAuth :one
-SELECT id, email_address, password_hash, created_on, updated_on
+SELECT id, email_address, password_hash, password_reset_required, totp_secret, totp_enabled, created_on, updated_on
 FROM api_user
 WHERE email_address = $1 LIMIT 1
 `
 
 type GetUserForAuthRow struct {
-	ID           int       `json:"id"`
-	EmailAddress string    `json:"email_address"`
-	PasswordHash []byte    `json:"password_hash"`
-	CreatedOn    time.Time `json:"created_on"`
-	UpdatedOn    time.Time `json:"updated_on"`
+	ID                    int       `json:"id"`
+	EmailAddress          string    `json:"email_address"`
+	PasswordHash          []byte    `json:"password_hash"`
+	PasswordResetRequired bool      `json:"password_reset_required"`
+	TotpSecret            *string   `json:"totp_secret"`
+	TotpEnabled           bool      `json:"totp_enabled"`
+	CreatedOn             time.Time `json:"created_on"`
+	UpdatedOn             time.Time `json:"updated_on"`
 }
 
 func (q *Queries) GetUserForAuth(ctx context.Context, emailAddress string) (*GetUserForAuthRow, error) {
@@ -31,10 +34,90 @@ func (q *Queries) GetUserForAuth(ctx context.Context, emailAddress string) (*Get
 		&i.ID,
 		&i.EmailAddress,
 		&i.PasswordHash,
+		&i.PasswordResetRequired,
+		&i.TotpSecret,
+		&i.TotpEnabled,
 		&i.CreatedOn,
 		&i.UpdatedOn,
 	)
 	return &i, err
+}
+
+const getUserForAuthByID = `-- name: GetUserForAuthByID :one
+SELECT id, email_address, password_hash, password_reset_required, totp_secret, totp_enabled, created_on, updated_on
+FROM api_user
+WHERE id = $1 LIMIT 1
+`
+
+type GetUserForAuthByIDRow struct {
+	ID                    int       `json:"id"`
+	EmailAddress          string    `json:"email_address"`
+	PasswordHash          []byte    `json:"password_hash"`
+	PasswordResetRequired bool      `json:"password_reset_required"`
+	TotpSecret            *string   `json:"totp_secret"`
+	TotpEnabled           bool      `json:"totp_enabled"`
+	CreatedOn             time.Time `json:"created_on"`
+	UpdatedOn             time.Time `json:"updated_on"`
+}
+
+func (q *Queries) GetUserForAuthByID(ctx context.Context, id int) (*GetUserForAuthByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserForAuthByID, id)
+	var i GetUserForAuthByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.EmailAddress,
+		&i.PasswordHash,
+		&i.PasswordResetRequired,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.CreatedOn,
+		&i.UpdatedOn,
+	)
+	return &i, err
+}
+
+const setPasswordResetRequired = `-- name: SetPasswordResetRequired :exec
+UPDATE api_user
+SET password_reset_required = $2, updated_on = NOW()
+WHERE id = $1
+`
+
+type SetPasswordResetRequiredParams struct {
+	ID                    int  `json:"id"`
+	PasswordResetRequired bool `json:"password_reset_required"`
+}
+
+func (q *Queries) SetPasswordResetRequired(ctx context.Context, arg SetPasswordResetRequiredParams) error {
+	_, err := q.db.Exec(ctx, setPasswordResetRequired, arg.ID, arg.PasswordResetRequired)
+	return err
+}
+
+const setTOTPEnabled = `-- name: SetTOTPEnabled :exec
+UPDATE api_user SET totp_enabled = $2, updated_on = NOW() WHERE id = $1
+`
+
+type SetTOTPEnabledParams struct {
+	ID          int  `json:"id"`
+	TotpEnabled bool `json:"totp_enabled"`
+}
+
+func (q *Queries) SetTOTPEnabled(ctx context.Context, arg SetTOTPEnabledParams) error {
+	_, err := q.db.Exec(ctx, setTOTPEnabled, arg.ID, arg.TotpEnabled)
+	return err
+}
+
+const setTOTPSecret = `-- name: SetTOTPSecret :exec
+UPDATE api_user SET totp_secret = $2, updated_on = NOW() WHERE id = $1
+`
+
+type SetTOTPSecretParams struct {
+	ID         int     `json:"id"`
+	TotpSecret *string `json:"totp_secret"`
+}
+
+func (q *Queries) SetTOTPSecret(ctx context.Context, arg SetTOTPSecretParams) error {
+	_, err := q.db.Exec(ctx, setTOTPSecret, arg.ID, arg.TotpSecret)
+	return err
 }
 
 const setUserPassword = `-- name: SetUserPassword :exec

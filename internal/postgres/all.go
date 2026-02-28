@@ -11,6 +11,8 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		APIUser:             NewAPIUserRepo(pool),
 		Config:              NewConfigRepo(pool),
 		Sessions:            NewSessionRepo(pool),
+		TOTPPending:         NewTOTPPendingRepo(pool),
+		TOTPRecovery:        NewTOTPRecoveryRepo(pool),
 		TicketNotifications: NewNotificationRepo(pool),
 		NotifierForwards:    NewUserForwardRepo(pool),
 		NotifierRules:       NewNotifierRuleRepo(pool),

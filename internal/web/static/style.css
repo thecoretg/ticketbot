@@ -26,8 +26,8 @@ body {
 
 .hidden { display: none !important; }
 
-/* ── Login ── */
-#login {
+/* ── Login / Password Reset ── */
+#login, #totp-verify, #password-reset {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -427,6 +427,115 @@ select option { background: var(--card); }
 }
 
 .toggle input:checked + .toggle-track::after { transform: translateX(18px); }
+
+/* ── Account menu ── */
+.account-menu {
+    position: relative;
+}
+
+.account-btn {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+}
+
+.account-caret {
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.account-dropdown {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    min-width: 200px;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 50;
+    overflow: hidden;
+}
+
+.account-dropdown-email {
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    overflow: hidden;
+    padding: 10px 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-dropdown-item {
+    background: none;
+    border: none;
+    color: var(--text);
+    cursor: pointer;
+    display: block;
+    font-size: 13px;
+    padding: 10px 14px;
+    text-align: left;
+    width: 100%;
+}
+
+.account-dropdown-item:hover { background: rgba(255,255,255,0.04); }
+.account-dropdown-item--danger { color: var(--danger); }
+
+/* ── Password requirements ── */
+.pwd-reqs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 6px;
+}
+
+.pwd-req {
+    color: var(--muted);
+    font-size: 11px;
+    transition: color 0.15s;
+}
+
+.pwd-req.ok { color: var(--success); }
+
+/* ── TOTP QR + recovery codes ── */
+.qr-code {
+    display: block;
+    image-rendering: pixelated;
+    margin: 0 auto;
+    width: 200px;
+    height: 200px;
+}
+
+.secret-display {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: 'Menlo', 'Consolas', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    padding: 10px 12px;
+    text-align: center;
+    word-break: break-all;
+}
+
+.recovery-codes {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: 1fr 1fr;
+}
+
+.recovery-code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Menlo', 'Consolas', monospace;
+    font-size: 12px;
+    padding: 8px 10px;
+    text-align: center;
+    color: var(--text);
+}
 
 /* ── Checkbox list (sync board filter) ── */
 .check-list {

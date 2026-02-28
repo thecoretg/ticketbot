@@ -12,7 +12,7 @@
 <div id="login" class="screen hidden">
     <div class="login-card">
         <h1>Ticketbot</h1>
-        <p>Enter your API key to continue</p>
+        <p>Sign in to continue</p>
         <div class="form-group">
             <input id="login-email" type="email" placeholder="Email" autocomplete="email">
         </div>
@@ -24,11 +24,54 @@
     </div>
 </div>
 
+<!-- TOTP Verify -->
+<div id="totp-verify" class="screen hidden">
+    <div class="login-card">
+        <h1>Two-Factor Auth</h1>
+        <p>Enter the 6-digit code from your authenticator app, or use a recovery code.</p>
+        <div class="form-group">
+            <input id="totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="20">
+        </div>
+        <button id="totp-btn" class="btn btn-primary" onclick="submitTOTPVerify()">Verify</button>
+        <p id="totp-err" class="error-text hidden"></p>
+    </div>
+</div>
+
+<!-- Password Reset (forced on first login) -->
+<div id="password-reset" class="screen hidden">
+    <div class="login-card">
+        <h1>Change Password</h1>
+        <p>Your password must be changed before continuing.</p>
+        <div class="form-group">
+            <input id="reset-current" type="password" placeholder="Current password" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+            <input id="reset-new" type="password" placeholder="New password" autocomplete="new-password">
+            <div id="reset-reqs" class="pwd-reqs"></div>
+        </div>
+        <div class="form-group">
+            <input id="reset-confirm" type="password" placeholder="Confirm new password" autocomplete="new-password">
+        </div>
+        <button id="reset-btn" class="btn btn-primary" onclick="submitPasswordReset()">Change Password</button>
+        <p id="reset-err" class="error-text hidden"></p>
+    </div>
+</div>
+
 <!-- App -->
 <div id="app" class="screen hidden">
     <header class="header">
         <span class="header-title">Ticketbot Admin</span>
-        <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+        <div class="account-menu">
+            <button class="btn btn-ghost btn-sm account-btn" onclick="toggleAccountMenu(event)">
+                <span id="header-email">Account</span><span class="account-caret">▾</span>
+            </button>
+            <div id="account-dropdown" class="account-dropdown hidden">
+                <div class="account-dropdown-email" id="dropdown-email">—</div>
+                <button class="account-dropdown-item" onclick="showChangePasswordModal()">Change Password</button>
+                <button id="totp-menu-btn" class="account-dropdown-item" onclick="handleTOTPMenuClick()"></button>
+                <button class="account-dropdown-item account-dropdown-item--danger" onclick="logout()">Logout</button>
+            </div>
+        </div>
     </header>
     <nav class="tab-nav">
         <button class="tab active" data-tab="rules"    onclick="switchTab('rules')">Rules</button>

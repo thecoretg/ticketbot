@@ -79,8 +79,8 @@ func Run() error {
 		if a.Creds.InitialAdminPassword != "" {
 			adminPwd = &a.Creds.InitialAdminPassword
 		}
-		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, a.TestFlags.APIKey, adminPwd); err != nil {
-			return fmt.Errorf("bootstrapping admin api key: %w", err)
+		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, adminPwd); err != nil {
+			return fmt.Errorf("bootstrapping admin: %w", err)
 		}
 	} else {
 		slog.Info("SKIP AUTH ENABLED")

@@ -96,17 +96,40 @@ func (p *APIUserRepo) GetForAuth(ctx context.Context, email string) (*models.Use
 		return nil, err
 	}
 
-	return &models.UserAuth{
-		ID:           d.ID,
-		EmailAddress: d.EmailAddress,
-		PasswordHash: d.PasswordHash,
-	}, nil
+	return userAuthFromPG(d.ID, d.EmailAddress, d.PasswordHash, d.PasswordResetRequired, d.TotpSecret, d.TotpEnabled), nil
+}
+
+func (p *APIUserRepo) GetForAuthByID(ctx context.Context, id int) (*models.UserAuth, error) {
+	d, err := p.queries.GetUserForAuthByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, models.ErrAPIUserNotFound
+		}
+		return nil, err
+	}
+
+	return userAuthFromPG(d.ID, d.EmailAddress, d.PasswordHash, d.PasswordResetRequired, d.TotpSecret, d.TotpEnabled), nil
 }
 
 func (p *APIUserRepo) SetPassword(ctx context.Context, id int, hash []byte) error {
 	return p.queries.SetUserPassword(ctx, db.SetUserPasswordParams{
 		ID:           id,
 		PasswordHash: hash,
+	})
+}
+
+func (p *APIUserRepo) SetTOTPSecret(ctx context.Context, id int, secret *string) error {
+	return p.queries.SetTOTPSecret(ctx, db.SetTOTPSecretParams{ID: id, TotpSecret: secret})
+}
+
+func (p *APIUserRepo) SetTOTPEnabled(ctx context.Context, id int, enabled bool) error {
+	return p.queries.SetTOTPEnabled(ctx, db.SetTOTPEnabledParams{ID: id, TotpEnabled: enabled})
+}
+
+func (p *APIUserRepo) SetPasswordResetRequired(ctx context.Context, id int, required bool) error {
+	return p.queries.SetPasswordResetRequired(ctx, db.SetPasswordResetRequiredParams{
+		ID:                    id,
+		PasswordResetRequired: required,
 	})
 }
 
@@ -134,5 +157,16 @@ func userFromPG(pg *db.ApiUser) *models.APIUser {
 		EmailAddress: pg.EmailAddress,
 		CreatedOn:    pg.CreatedOn,
 		UpdatedOn:    pg.UpdatedOn,
+	}
+}
+
+func userAuthFromPG(id int, email string, passwordHash []byte, resetRequired bool, totpSecret *string, totpEnabled bool) *models.UserAuth {
+	return &models.UserAuth{
+		ID:            id,
+		EmailAddress:  email,
+		PasswordHash:  passwordHash,
+		ResetRequired: resetRequired,
+		TOTPSecret:    totpSecret,
+		TOTPEnabled:   totpEnabled,
 	}
 }

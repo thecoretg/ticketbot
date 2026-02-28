@@ -18,11 +18,14 @@ type ApiKey struct {
 }
 
 type ApiUser struct {
-	ID           int       `json:"id"`
-	EmailAddress string    `json:"email_address"`
-	CreatedOn    time.Time `json:"created_on"`
-	UpdatedOn    time.Time `json:"updated_on"`
-	PasswordHash []byte    `json:"password_hash"`
+	ID                    int       `json:"id"`
+	EmailAddress          string    `json:"email_address"`
+	CreatedOn             time.Time `json:"created_on"`
+	UpdatedOn             time.Time `json:"updated_on"`
+	PasswordHash          []byte    `json:"password_hash"`
+	PasswordResetRequired bool      `json:"password_reset_required"`
+	TotpSecret            *string   `json:"totp_secret"`
+	TotpEnabled           bool      `json:"totp_enabled"`
 }
 
 type AppConfig struct {
@@ -147,6 +150,22 @@ type TicketNotification struct {
 	Skipped         bool      `json:"skipped"`
 	CreatedOn       time.Time `json:"created_on"`
 	UpdatedOn       time.Time `json:"updated_on"`
+}
+
+type TotpPending struct {
+	ID        int       `json:"id"`
+	UserID    int       `json:"user_id"`
+	TokenHash []byte    `json:"token_hash"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedOn time.Time `json:"created_on"`
+}
+
+type TotpRecoveryCode struct {
+	ID        int       `json:"id"`
+	UserID    int       `json:"user_id"`
+	CodeHash  []byte    `json:"code_hash"`
+	Used      bool      `json:"used"`
+	CreatedOn time.Time `json:"created_on"`
 }
 
 type WebexRecipient struct {

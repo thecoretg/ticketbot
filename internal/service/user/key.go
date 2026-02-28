@@ -7,12 +7,58 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"time"
 
 	"github.com/thecoretg/ticketbot/models"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const defaultBootstrapPassword = "password"
+
+// BootstrapAdmin ensures the initial admin user exists. If the user does not
+// exist yet, it is created and its password is set to initialPassword (or
+// "password" if nil), with password_reset_required = true.
+// If the user already exists, this is a no-op.
+func (s *Service) BootstrapAdmin(ctx context.Context, email string, initialPassword *string) error {
+	if email == "" {
+		return errors.New("received empty email")
+	}
+
+	_, err := s.Users.GetByEmail(ctx, email)
+	if err == nil {
+		slog.Info("initial admin already exists, skipping bootstrap")
+		return nil
+	}
+	if !errors.Is(err, models.ErrAPIUserNotFound) {
+		return fmt.Errorf("getting admin by email: %w", err)
+	}
+
+	slog.Info("initial admin not found; creating now", "email", email)
+	u, err := s.Users.Insert(ctx, email)
+	if err != nil {
+		return fmt.Errorf("creating user: %w", err)
+	}
+
+	plain := defaultBootstrapPassword
+	if initialPassword != nil && *initialPassword != "" {
+		plain = *initialPassword
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hashing password: %w", err)
+	}
+
+	if err := s.Users.SetPassword(ctx, u.ID, hash); err != nil {
+		return fmt.Errorf("setting password: %w", err)
+	}
+
+	if err := s.Users.SetPasswordResetRequired(ctx, u.ID, true); err != nil {
+		return fmt.Errorf("setting reset required: %w", err)
+	}
+
+	slog.Info("bootstrap admin created — password change required on first login", "email", email)
+	return nil
+}
 
 func (s *Service) createAPIKey(ctx context.Context, email string, explicitKey *string) (string, error) {
 	u, err := s.Users.GetByEmail(ctx, email)
@@ -50,110 +96,6 @@ func (s *Service) createAPIKey(ctx context.Context, email string, explicitKey *s
 	}
 
 	return plain, nil
-}
-
-func (s *Service) BootstrapAdmin(ctx context.Context, email string, explicitKey *string, explicitPassword *string) error {
-	if explicitKey != nil {
-		slog.Debug("bootstrapping admin with explicit key from test flags")
-	}
-
-	if email == "" {
-		return errors.New("received empty email")
-	}
-
-	u, err := s.Users.GetByEmail(ctx, email)
-	if err != nil {
-		if errors.Is(err, models.ErrAPIUserNotFound) {
-			slog.Info("initial admin not found; creating now", "email", email)
-			u, err = s.Users.Insert(ctx, email)
-			if err != nil {
-				return fmt.Errorf("creating user: %w", err)
-			}
-		} else {
-			return fmt.Errorf("getting admin by email: %w", err)
-		}
-	} else {
-		slog.Info("initial admin found in store")
-	}
-
-	keys, err := s.Keys.List(ctx)
-	if err != nil {
-		return fmt.Errorf("getting keys: %w", err)
-	}
-
-	hasKey := false
-	for _, k := range keys {
-		if k.UserID == u.ID {
-			hasKey = true
-			break
-		}
-	}
-
-	if !hasKey {
-		key, err := s.createAPIKey(ctx, email, explicitKey)
-		if err != nil {
-			return fmt.Errorf("creating key: %w", err)
-		}
-
-		slog.Info("bootstrap token created", "email", email, "key", key)
-		if os.Getenv("API_KEY_DELAY") == "true" {
-			slog.Info("waiting 30 seconds; copy the above key, it won't be shown again")
-			time.Sleep(30 * time.Second)
-		}
-	} else {
-		slog.Info("initial admin already has an api token, skipping creation")
-	}
-
-	if err := s.bootstrapPassword(ctx, u.ID, email, explicitPassword); err != nil {
-		return fmt.Errorf("bootstrapping admin password: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Service) bootstrapPassword(ctx context.Context, userID int, email string, explicitPassword *string) error {
-	ua, err := s.Users.GetForAuth(ctx, email)
-	if err != nil {
-		return fmt.Errorf("checking user auth record: %w", err)
-	}
-
-	if len(ua.PasswordHash) > 0 {
-		slog.Info("initial admin already has a password, skipping")
-		return nil
-	}
-
-	// Determine the password to set
-	var plain string
-	if explicitPassword != nil && *explicitPassword != "" {
-		plain = *explicitPassword
-	} else {
-		generated, err := generatePassword()
-		if err != nil {
-			return fmt.Errorf("generating password: %w", err)
-		}
-		plain = generated
-		slog.Info("bootstrap password generated (copy now, won't be shown again)", "password", plain)
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("hashing password: %w", err)
-	}
-
-	if err := s.Users.SetPassword(ctx, userID, hash); err != nil {
-		return fmt.Errorf("storing password: %w", err)
-	}
-
-	return nil
-}
-
-func generatePassword() (string, error) {
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
-		return "", fmt.Errorf("generating password: %w", err)
-	}
-
-	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 func generateKey() (string, error) {
