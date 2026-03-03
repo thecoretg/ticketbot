@@ -501,7 +501,7 @@ function fmtDateTime(d) {
 
 function fmtDateRange(start, end) {
     if (!start && !end) return '—'
-    const fmt = d => new Date(d).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })
+    const fmt = d => new Date(d).toLocaleString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     const s   = start ? fmt(start) : '∞'
     const e   = end   ? fmt(end)   : '∞'
     return `${s} – ${e}`
@@ -652,12 +652,18 @@ async function showNewForwardModal() {
             <select id="f-dest">${recipOpts}</select>
         </div>
         <div class="form-group">
-            <label>Start Date <span style="color:var(--muted)">(optional)</span></label>
-            <input type="date" id="f-start">
+            <label>Start Date &amp; Time <span style="color:var(--muted)">(optional)</span></label>
+            <div style="display:flex;gap:8px">
+                <input type="date" id="f-start-date" style="flex:2">
+                <input type="time" id="f-start-time" style="flex:1">
+            </div>
         </div>
         <div class="form-group">
-            <label>End Date <span style="color:var(--muted)">(optional)</span></label>
-            <input type="date" id="f-end">
+            <label>End Date &amp; Time <span style="color:var(--muted)">(optional)</span></label>
+            <div style="display:flex;gap:8px">
+                <input type="date" id="f-end-date" style="flex:2">
+                <input type="time" id="f-end-time" style="flex:1">
+            </div>
         </div>
         <div class="form-group">
             <label>Source Keeps Copy?</label>
@@ -666,23 +672,28 @@ async function showNewForwardModal() {
                 <option value="false">No</option>
             </select>
         </div>`, async () => {
-        const sourceId = parseInt(document.getElementById('f-source').value)
-        const destId   = parseInt(document.getElementById('f-dest').value)
-        const startRaw = document.getElementById('f-start').value
-        const endRaw   = document.getElementById('f-end').value
-        const keepCopy = document.getElementById('f-keep').value === 'true'
+        const sourceId  = parseInt(document.getElementById('f-source').value)
+        const destId    = parseInt(document.getElementById('f-dest').value)
+        const startDate = document.getElementById('f-start-date').value
+        const startTime = document.getElementById('f-start-time').value
+        const endDate   = document.getElementById('f-end-date').value
+        const endTime   = document.getElementById('f-end-time').value
+        const keepCopy  = document.getElementById('f-keep').value === 'true'
+
+        const startDT = startDate ? `${startDate}T${startTime || '00:00'}` : null
+        const endDT   = endDate   ? `${endDate}T${endTime   || '23:59'}` : null
 
         if (sourceId === destId) { toast('Source and destination must be different', 'error'); return }
-        if (endRaw && startRaw && endRaw < startRaw) { toast('End date cannot be before start date', 'error'); return }
+        if (startDT && endDT && endDT <= startDT) { toast('End must be after start', 'error'); return }
 
         const payload = {
-            user_email:     sourceId,
-            dest_email:     destId,
-            enabled:        true,
+            user_email:      sourceId,
+            dest_email:      destId,
+            enabled:         true,
             user_keeps_copy: keepCopy,
         }
-        if (startRaw) payload.start_date = new Date(startRaw).toISOString()
-        if (endRaw)   payload.end_date   = new Date(endRaw).toISOString()
+        if (startDT) payload.start_date = new Date(startDT).toISOString()
+        if (endDT)   payload.end_date   = new Date(endDT).toISOString()
 
         try {
             await api('POST', '/notifiers/forwards', payload)
