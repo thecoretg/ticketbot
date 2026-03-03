@@ -31,7 +31,7 @@ type CloudwatchHandler struct {
 	mu            sync.Mutex
 	attrs         []slog.Attr
 	groups        []string
-	level         *slog.Level
+	level         slog.Leveler
 }
 
 type CloudwatchHandlerParams struct {
@@ -40,7 +40,7 @@ type CloudwatchHandlerParams struct {
 	SecretAccessKey string
 	GroupName       string
 	StreamName      string
-	Level           *slog.Level
+	Level           slog.Leveler
 	RetentionDays   int32 // Number of days to retain logs (0 = never expire)
 }
 
@@ -103,7 +103,7 @@ func NewCloudwatchLogger(ctx context.Context, params CloudwatchHandlerParams) (*
 }
 
 func (h *CloudwatchHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return level >= *h.level
+	return level >= h.level.Level()
 }
 
 func (h *CloudwatchHandler) Handle(ctx context.Context, record slog.Record) error {
@@ -189,7 +189,7 @@ func (h *CloudwatchHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-func GetCloudwatchParamsFromEnv(level *slog.Level) CloudwatchHandlerParams {
+func GetCloudwatchParamsFromEnv(level slog.Leveler) CloudwatchHandlerParams {
 	p := &CloudwatchHandlerParams{
 		Region:          os.Getenv("AWS_REGION"),
 		AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),

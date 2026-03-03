@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/ticketbot/internal/psa"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
@@ -17,8 +17,8 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/internal/service/webhooks"
-	"github.com/thecoretg/ticketbot/internal/psa"
 	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type App struct {
@@ -47,7 +47,7 @@ type Services struct {
 
 const defaultStoreTTL = int64(900)
 
-func NewApp(ctx context.Context, migVersion int64, level *slog.Level) (*App, error) {
+func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar) (*App, error) {
 	cr := getCreds()
 	tf := getTestFlags()
 	if err := cr.validate(tf); err != nil {
@@ -79,15 +79,14 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.Level) (*App, err
 	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms, cr.WebexBotEmail)
 
 	nr := notifier.SvcParams{
-		Cfg:              cfg,
-		WebexSvc:         ws,
-		NotifierRules:    r.NotifierRules,
-		Notifications:    r.TicketNotifications,
-		Forwards:         r.NotifierForwards,
-		Pool:             s.Pool,
-		MessageSender:    ms,
-		CWCompanyID:      cr.CWCreds.CompanyId,
-
+		Cfg:           cfg,
+		WebexSvc:      ws,
+		NotifierRules: r.NotifierRules,
+		Notifications: r.TicketNotifications,
+		Forwards:      r.NotifierForwards,
+		Pool:          s.Pool,
+		MessageSender: ms,
+		CWCompanyID:   cr.CWCreds.CompanyId,
 	}
 
 	ns := notifier.New(nr)

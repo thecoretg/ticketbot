@@ -6,18 +6,9 @@ before:
 
 builds:
   - id: "server"
-    goos:
-      - linux
-      - darwin
-    main: ./cmd/server
+    goos: [linux]
+    main: .
     binary: ticketbot
-
-  - id: admin-cli
-    goos:
-      - linux
-      - darwin
-    main: ./cmd/tbot-admin
-    binary: tbot-admin
 
 archives:
   - formats: [tar.gz]

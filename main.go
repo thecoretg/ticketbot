@@ -15,7 +15,7 @@ import (
 
 const (
 	gooseMigrationVersion = 4
-	serverVersion         = "1.4.2"
+	serverVersion         = "1.5.0"
 )
 
 func main() {
@@ -32,9 +32,9 @@ func Run() error {
 
 	ctx := context.Background()
 
-	level := slog.LevelInfo
+	var level slog.LevelVar
 	if os.Getenv("DEBUG") == "true" {
-		level = slog.LevelDebug
+		level.Set(slog.LevelDebug)
 	}
 
 	var cwHandler *logging.CloudwatchHandler

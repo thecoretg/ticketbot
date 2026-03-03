@@ -12,10 +12,10 @@ import (
 type Service struct {
 	Config    repos.ConfigRepository
 	ConfigRef *models.Config
-	level     *slog.Level
+	level     *slog.LevelVar
 }
 
-func New(c repos.ConfigRepository, cfg *models.Config, level *slog.Level) *Service {
+func New(c repos.ConfigRepository, cfg *models.Config, level *slog.LevelVar) *Service {
 	s := &Service{
 		Config:    c,
 		ConfigRef: cfg,
@@ -71,9 +71,9 @@ func (s *Service) applyChanges(src *models.Config) {
 
 	if s.level != nil {
 		if src.DebugLogging {
-			*s.level = slog.LevelDebug
+			s.level.Set(slog.LevelDebug)
 		} else {
-			*s.level = slog.LevelInfo
+			s.level.Set(slog.LevelInfo)
 		}
 	}
 }
