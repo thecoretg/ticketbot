@@ -63,6 +63,7 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		MaxMessageLength:   c.MaxMessageLength,
 		MaxConcurrentSyncs: c.MaxConcurrentSyncs,
 		SkipLaunchSyncs:    c.SkipLaunchSyncs,
+		RequireTotp:        c.RequireTOTP,
 	}
 }
 
@@ -73,5 +74,6 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		MaxMessageLength:   pg.MaxMessageLength,
 		MaxConcurrentSyncs: pg.MaxConcurrentSyncs,
 		SkipLaunchSyncs:    pg.SkipLaunchSyncs,
+		RequireTOTP:        pg.RequireTotp,
 	}
 }

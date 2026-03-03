@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/pquerna/otp/totp"
@@ -43,16 +45,27 @@ func (s *Service) BeginSetup(ctx context.Context, userID int) (secret, otpauthUR
 // provided secret (from BeginSetup). On success it enables TOTP, stores the
 // secret, generates fresh recovery codes, and returns them (shown once).
 func (s *Service) ConfirmSetup(ctx context.Context, userID int, password, code, secret string) ([]string, error) {
+	code = strings.ReplaceAll(code, " ", "")
+
 	u, err := s.users.GetForAuthByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("looking up user: %w", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword(u.PasswordHash, []byte(password)); err != nil {
+		slog.Error("totp confirm: password check failed", "user_id", userID)
 		return nil, ErrInvalidCredentials
 	}
 
 	if !totp.Validate(code, secret) {
+		expected, genErr := totp.GenerateCode(secret, time.Now().UTC())
+		slog.Error("totp confirm: TOTP code invalid",
+			"user_id", userID,
+			"code_len", len(code),
+			"secret_len", len(secret),
+			"gen_err", genErr,
+			"codes_match", expected == code,
+		)
 		return nil, ErrInvalidTOTPCode
 	}
 
@@ -73,41 +86,49 @@ func (s *Service) ConfirmSetup(ctx context.Context, userID int, password, code, 
 // VerifyTOTP validates a TOTP code (or recovery code) against a pending token
 // produced by Login. On success it deletes the pending token and creates a
 // real session.
-func (s *Service) VerifyTOTP(ctx context.Context, pendingToken, code string) (sessionToken string, resetRequired bool, err error) {
+func (s *Service) VerifyTOTP(ctx context.Context, pendingToken, code string) (sessionToken string, resetRequired bool, recoveryCodeUsed bool, err error) {
+	// Strip any spaces (some authenticator apps display codes as "123 456").
+	code = strings.ReplaceAll(code, " ", "")
+
 	tokenHash := hashToken(pendingToken)
 	pending, err := s.totpPending.GetByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return "", false, ErrInvalidCredentials
+		slog.Error("totp verify: pending token not found", "err", err)
+		return "", false, false, ErrInvalidCredentials
 	}
 
 	u, err := s.users.GetForAuthByID(ctx, pending.UserID)
 	if err != nil {
-		return "", false, fmt.Errorf("looking up user: %w", err)
+		return "", false, false, fmt.Errorf("looking up user: %w", err)
 	}
 
 	if !u.TOTPEnabled || u.TOTPSecret == nil {
-		return "", false, ErrInvalidCredentials
+		slog.Error("totp verify: totp not configured on account", "user_id", pending.UserID, "enabled", u.TOTPEnabled, "has_secret", u.TOTPSecret != nil)
+		return "", false, false, ErrInvalidCredentials
 	}
 
 	if !totp.Validate(code, *u.TOTPSecret) {
+		slog.Error("totp verify: TOTP code invalid, trying recovery code", "user_id", pending.UserID)
 		// Try as a recovery code.
 		codeHash := sha256Code(code)
 		rc, err := s.totpRecovery.GetUnusedByHash(ctx, pending.UserID, codeHash)
 		if err != nil {
-			return "", false, ErrInvalidCredentials
+			slog.Error("totp verify: recovery code not found either", "user_id", pending.UserID)
+			return "", false, false, ErrInvalidCredentials
 		}
 		if err := s.totpRecovery.MarkUsed(ctx, rc.ID); err != nil {
-			return "", false, fmt.Errorf("marking recovery code used: %w", err)
+			return "", false, false, fmt.Errorf("marking recovery code used: %w", err)
 		}
+		recoveryCodeUsed = true
 	}
 
 	if err := s.totpPending.Delete(ctx, pending.ID); err != nil {
-		return "", false, fmt.Errorf("deleting pending token: %w", err)
+		return "", false, false, fmt.Errorf("deleting pending token: %w", err)
 	}
 
 	token, hash, err := generateToken()
 	if err != nil {
-		return "", false, fmt.Errorf("generating session token: %w", err)
+		return "", false, false, fmt.Errorf("generating session token: %w", err)
 	}
 
 	_, err = s.sessions.Create(ctx, &models.Session{
@@ -116,10 +137,10 @@ func (s *Service) VerifyTOTP(ctx context.Context, pendingToken, code string) (se
 		ExpiresAt: time.Now().Add(sessionDuration),
 	})
 	if err != nil {
-		return "", false, fmt.Errorf("creating session: %w", err)
+		return "", false, false, fmt.Errorf("creating session: %w", err)
 	}
 
-	return token, u.ResetRequired, nil
+	return token, u.ResetRequired, recoveryCodeUsed, nil
 }
 
 // TOTPStatus returns whether TOTP is currently enabled for the user.

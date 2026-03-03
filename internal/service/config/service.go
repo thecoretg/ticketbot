@@ -39,4 +39,5 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.AttemptNotify = src.AttemptNotify
 	cfg.MaxConcurrentSyncs = src.MaxConcurrentSyncs
 	cfg.MaxMessageLength = src.MaxMessageLength
+	cfg.RequireTOTP = src.RequireTOTP
 }

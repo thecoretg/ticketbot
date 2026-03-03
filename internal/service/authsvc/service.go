@@ -31,10 +31,11 @@ var (
 // LoginResult is returned by Login. When TOTPRequired is true the caller must
 // redirect to the TOTP verification step using PendingToken.
 type LoginResult struct {
-	TOTPRequired  bool
-	Token         string // session token (only set when TOTPRequired is false)
-	PendingToken  string // pending token (only set when TOTPRequired is true)
-	ResetRequired bool   // only meaningful when TOTPRequired is false
+	TOTPRequired      bool
+	Token             string // session token (only set when TOTPRequired is false)
+	PendingToken      string // pending token (only set when TOTPRequired is true)
+	ResetRequired     bool   // only meaningful when TOTPRequired is false
+	TOTPSetupRequired bool   // true when require_totp is on and the user has no TOTP configured
 }
 
 // ValidatePassword enforces password strength requirements.
@@ -67,10 +68,11 @@ type Service struct {
 	sessions     repos.SessionRepository
 	totpPending  repos.TOTPPendingRepository
 	totpRecovery repos.TOTPRecoveryRepository
+	cfg          *models.Config
 }
 
-func New(users repos.APIUserRepository, sessions repos.SessionRepository, totpPending repos.TOTPPendingRepository, totpRecovery repos.TOTPRecoveryRepository) *Service {
-	return &Service{users: users, sessions: sessions, totpPending: totpPending, totpRecovery: totpRecovery}
+func New(users repos.APIUserRepository, sessions repos.SessionRepository, totpPending repos.TOTPPendingRepository, totpRecovery repos.TOTPRecoveryRepository, cfg *models.Config) *Service {
+	return &Service{users: users, sessions: sessions, totpPending: totpPending, totpRecovery: totpRecovery, cfg: cfg}
 }
 
 // Login validates credentials. If the user has TOTP enabled it returns a
@@ -125,7 +127,8 @@ func (s *Service) Login(ctx context.Context, email, password string) (LoginResul
 		return LoginResult{}, fmt.Errorf("creating session: %w", err)
 	}
 
-	return LoginResult{Token: token, ResetRequired: u.ResetRequired}, nil
+	totpSetupRequired := s.cfg.RequireTOTP && !u.TOTPEnabled
+	return LoginResult{Token: token, ResetRequired: u.ResetRequired, TOTPSetupRequired: totpSetupRequired}, nil
 }
 
 // ChangePassword validates the current password, sets the new one, and clears the reset flag.

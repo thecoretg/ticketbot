@@ -47,7 +47,7 @@ func (h *AuthHandler) HandleLogin(c *gin.Context) {
 	}
 
 	c.SetCookie(cookieName, result.Token, int(24*time.Hour/time.Second), "/", "", false, true)
-	c.JSON(http.StatusOK, gin.H{"ok": true, "reset_required": result.ResetRequired})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "reset_required": result.ResetRequired, "totp_setup_required": result.TOTPSetupRequired})
 }
 
 type changePasswordRequest struct {

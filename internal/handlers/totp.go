@@ -32,7 +32,7 @@ func (h *TOTPHandler) HandleVerify(c *gin.Context) {
 		return
 	}
 
-	token, resetRequired, err := h.svc.VerifyTOTP(c.Request.Context(), req.PendingToken, req.Code)
+	token, resetRequired, recoveryCodeUsed, err := h.svc.VerifyTOTP(c.Request.Context(), req.PendingToken, req.Code)
 	if err != nil {
 		if errors.Is(err, authsvc.ErrInvalidCredentials) || errors.Is(err, authsvc.ErrInvalidTOTPCode) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired code"})
@@ -43,7 +43,7 @@ func (h *TOTPHandler) HandleVerify(c *gin.Context) {
 	}
 
 	c.SetCookie(cookieName, token, int(24*time.Hour/time.Second), "/", "", false, true)
-	c.JSON(http.StatusOK, gin.H{"ok": true, "reset_required": resetRequired})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "reset_required": resetRequired, "recovery_code_used": recoveryCodeUsed})
 }
 
 // HandleBeginSetup generates a new TOTP secret and QR code for the user.

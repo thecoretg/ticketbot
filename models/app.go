@@ -22,6 +22,9 @@ type Config struct {
 
 	// SkipLaunchSyncs is a flag to skip the automatic syncing of webex recipients and connectwise boards.
 	SkipLaunchSyncs bool `json:"skip_launch_syncs"`
+
+	// RequireTOTP enforces that all users must have TOTP enabled to access the application.
+	RequireTOTP bool `json:"require_totp"`
 }
 
 var DefaultConfig = Config{
@@ -30,4 +33,5 @@ var DefaultConfig = Config{
 	MaxMessageLength:   300,
 	MaxConcurrentSyncs: 5,
 	SkipLaunchSyncs:    false,
+	RequireTOTP:        false,
 }

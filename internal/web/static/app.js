@@ -1,12 +1,14 @@
 // ─────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────
-let currentTab    = 'rules'
-let currentUser   = null
-let pendingToken  = null   // pending TOTP token after password login
-let totpEnabled   = false  // cached TOTP status for account menu
-let syncPollTimer = null
-let modalSubmitFn = null
+let currentTab        = 'rules'
+let currentUser       = null
+let pendingToken      = null   // pending TOTP token after password login
+let totpEnabled       = false  // cached TOTP status for account menu
+let totpSetupRequired = false  // true when server enforces TOTP and user hasn't set it up
+let requireTOTP       = false  // cached value of config.require_totp
+let syncPollTimer     = null
+let modalSubmitFn     = null
 
 // ─────────────────────────────────────────────────────────
 // Password requirements
@@ -87,7 +89,8 @@ async function login() {
         } else if (res?.reset_required) {
             showPasswordReset()
         } else {
-            showApp()
+            await showApp()
+            if (res?.totp_setup_required) showTOTPSetupModal(true)
         }
     } catch {
         showLoginErr('Invalid email or password')
@@ -150,6 +153,9 @@ async function submitTOTPVerify() {
             showPasswordReset()
         } else {
             showApp()
+            if (res.recovery_code_used) {
+                toast('You logged in with a recovery code. Check your 2FA setup in the account menu.', 'error')
+            }
         }
     } catch {
         errEl.textContent = 'Invalid or expired code'
@@ -218,15 +224,21 @@ async function showApp() {
     document.getElementById('password-reset').classList.add('hidden')
     document.getElementById('app').classList.remove('hidden')
     try {
-        const [me, totp] = await Promise.all([
+        const [me, totp, cfg] = await Promise.all([
             api('GET', '/users/me'),
             api('GET', '/auth/totp'),
+            api('GET', '/config'),
         ])
         currentUser = me
         totpEnabled = totp.enabled
+        requireTOTP = cfg.require_totp
         document.getElementById('header-email').textContent   = currentUser.email_address
         document.getElementById('dropdown-email').textContent = currentUser.email_address
         updateTOTPMenuItem()
+        if (requireTOTP && !totpEnabled) {
+            showTOTPSetupModal(true)
+            return
+        }
     } catch {}
     const hash = window.location.hash.replace('#', '')
     switchTab(tabLoaders[hash] ? hash : 'rules')
@@ -273,27 +285,41 @@ function showChangePasswordModal() {
 function updateTOTPMenuItem() {
     const btn = document.getElementById('totp-menu-btn')
     if (!btn) return
-    btn.textContent = totpEnabled ? 'Disable 2FA' : 'Set Up 2FA'
+    if (!totpEnabled) {
+        btn.textContent = 'Set Up 2FA'
+    } else if (requireTOTP) {
+        btn.textContent = 'Reset 2FA'
+    } else {
+        btn.textContent = 'Disable 2FA'
+    }
 }
 
 function handleTOTPMenuClick() {
     document.getElementById('account-dropdown').classList.add('hidden')
-    if (totpEnabled) {
-        showTOTPDisableModal()
-    } else {
+    if (!totpEnabled) {
         showTOTPSetupModal()
+    } else if (requireTOTP) {
+        showTOTPSetupModal()  // reset: dismissible, old secret stays until new one is confirmed
+    } else {
+        showTOTPDisableModal()
     }
 }
 
-async function showTOTPSetupModal() {
+async function showTOTPSetupModal(required = false) {
     // Phase 1: fetch QR code and secret
     let setupData
     try {
         setupData = await api('POST', '/auth/totp/setup')
     } catch (e) { toast(e.message, 'error'); return }
 
+    if (required) totpSetupRequired = true
+
+    const desc = required
+        ? '<p style="color:var(--warning);font-size:13px">Two-factor authentication is required for this account. Set it up to continue.</p>'
+        : '<p style="color:var(--muted);font-size:13px">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.).</p>'
+
     openModal('Set Up Two-Factor Auth', `
-        <p style="color:var(--muted);font-size:13px">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.).</p>
+        ${desc}
         <img class="qr-code" src="data:image/png;base64,${setupData.qr_png}" alt="TOTP QR Code">
         <div class="form-group">
             <label>Or enter this secret manually</label>
@@ -318,6 +344,7 @@ async function showTOTPSetupModal() {
                 secret: setupData.secret,
             })
             totpEnabled = true
+            totpSetupRequired = false
             updateTOTPMenuItem()
             // Replace modal body with recovery codes (shown once)
             document.getElementById('modal-title').textContent = '2FA Enabled'
@@ -330,11 +357,24 @@ async function showTOTPSetupModal() {
                 </div>`
             document.getElementById('modal-footer').innerHTML = `
                 <button class="btn btn-ghost" onclick="copyRecoveryCodes()">Copy All</button>
-                <button class="btn btn-primary" onclick="closeModal()">Done</button>`
+                <button class="btn btn-primary" onclick="finishTOTPSetup()">Done</button>`
             modalSubmitFn = null
             window._recoveryCodes = res.recovery_codes
         } catch (e) { toast(e.message || 'Failed to enable 2FA', 'error') }
     }, 'Enable 2FA')
+
+    if (required) {
+        // Remove the cancel button — setup cannot be skipped when required
+        const cancel = document.querySelector('#modal-footer .btn-ghost')
+        if (cancel) cancel.remove()
+    }
+}
+
+function finishTOTPSetup() {
+    document.getElementById('modal-overlay').classList.add('hidden')
+    modalSubmitFn = null
+    const hash = window.location.hash.replace('#', '')
+    switchTab(tabLoaders[hash] ? hash : 'rules')
 }
 
 function copyRecoveryCodes() {
@@ -438,6 +478,7 @@ async function handleModalSubmit() {
 }
 
 function closeModal() {
+    if (totpSetupRequired) return
     document.getElementById('modal-overlay').classList.add('hidden')
     modalSubmitFn = null
 }
@@ -953,6 +994,16 @@ function renderConfig(cfg) {
             <input class="config-input" type="number" id="c-max-syncs" value="${cfg.max_concurrent_syncs}" min="1">
         </div>
         <div class="config-row">
+            <div>
+                <div class="config-label">Require 2FA</div>
+                <div class="config-desc">All users must set up two-factor authentication to access the app</div>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="c-require-totp" ${cfg.require_totp ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="config-row">
             <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Changes</button>
         </div>
     </div>`)
@@ -966,6 +1017,7 @@ async function saveConfig() {
             skip_launch_syncs:    document.getElementById('c-skip-launch').checked,
             max_message_length:   parseInt(document.getElementById('c-max-len').value)   || 300,
             max_concurrent_syncs: parseInt(document.getElementById('c-max-syncs').value) || 5,
+            require_totp:         document.getElementById('c-require-totp').checked,
         })
         toast('Config saved', 'success')
     } catch (e) { toast(e.message, 'error') }
