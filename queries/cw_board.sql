@@ -4,7 +4,7 @@ WHERE id = $1 LIMIT 1;
 
 -- name: ListBoards :many
 SELECT * FROM cw_board
-ORDER BY id;
+ORDER BY name;
 
 -- name: UpsertBoard :one
 INSERT INTO cw_board

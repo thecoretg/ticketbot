@@ -20,9 +20,6 @@ type Config struct {
 	// as it has been deemed a good amount to prevent constant rate limits from Connectwise.
 	MaxConcurrentSyncs int `json:"max_concurrent_syncs"`
 
-	// SkipLaunchSyncs is a flag to skip the automatic syncing of webex recipients and connectwise boards.
-	SkipLaunchSyncs bool `json:"skip_launch_syncs"`
-
 	// RequireTOTP enforces that all users must have TOTP enabled to access the application.
 	RequireTOTP bool `json:"require_totp"`
 }
@@ -33,7 +30,6 @@ type ConfigUpdateParams struct {
 	AttemptNotify      *bool `json:"attempt_notify"`
 	MaxMessageLength   *int  `json:"max_message_length"`
 	MaxConcurrentSyncs *int  `json:"max_concurrent_syncs"`
-	SkipLaunchSyncs    *bool `json:"skip_launch_syncs"`
 	RequireTOTP        *bool `json:"require_totp"`
 }
 
@@ -42,6 +38,5 @@ var DefaultConfig = Config{
 	AttemptNotify:      false,
 	MaxMessageLength:   300,
 	MaxConcurrentSyncs: 5,
-	SkipLaunchSyncs:    false,
 	RequireTOTP:        false,
 }

@@ -136,10 +136,9 @@ func makeMessageSender(mocking bool, webexSecret string) repos.MessageSender {
 // so it is recommended to use one or the other (via API or env, but not both)
 func loadEnvConfig(current *models.Config) *models.Config {
 	var (
-		attemptNotify   *bool
-		maxLen          *int
-		maxConSyncs     *int
-		skipLaunchSyncs *bool
+		attemptNotify *bool
+		maxLen        *int
+		maxConSyncs   *int
 	)
 
 	switch os.Getenv("ATTEMPT_NOTIFY") {
@@ -149,15 +148,6 @@ func loadEnvConfig(current *models.Config) *models.Config {
 	case "false":
 		v := false
 		attemptNotify = &v
-	}
-
-	switch os.Getenv("SKIP_LAUNCH_SYNCS") {
-	case "true":
-		v := true
-		skipLaunchSyncs = &v
-	case "false":
-		v := false
-		skipLaunchSyncs = &v
 	}
 
 	mlInt, err := strconv.Atoi(os.Getenv("MAX_MSG_LENGTH"))
@@ -170,11 +160,6 @@ func loadEnvConfig(current *models.Config) *models.Config {
 	if err == nil {
 		v := msInt
 		maxConSyncs = &v
-	}
-
-	if skipLaunchSyncs != nil {
-		slog.Info("SKIP_LAUNCH_SYNCS set via env", "value", *skipLaunchSyncs)
-		current.SkipLaunchSyncs = *skipLaunchSyncs
 	}
 
 	if attemptNotify != nil {

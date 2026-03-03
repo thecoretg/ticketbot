@@ -132,7 +132,7 @@ func (q *Queries) ListWebexPeople(ctx context.Context) ([]*WebexRecipient, error
 
 const listWebexRecipients = `-- name: ListWebexRecipients :many
 SELECT id, webex_id, name, email, type, last_activity, created_on, updated_on FROM webex_recipient
-ORDER BY id
+ORDER BY name
 `
 
 func (q *Queries) ListWebexRecipients(ctx context.Context) ([]*WebexRecipient, error) {

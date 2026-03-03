@@ -8,7 +8,7 @@ WHERE webex_id = $1;
 
 -- name: ListWebexRecipients :many
 SELECT * FROM webex_recipient
-ORDER BY id;
+ORDER BY name;
 
 -- name: ListWebexRooms :many
 SELECT * FROM webex_recipient

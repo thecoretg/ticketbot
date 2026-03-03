@@ -40,9 +40,6 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.MaxConcurrentSyncs != nil {
 		merged.MaxConcurrentSyncs = *p.MaxConcurrentSyncs
 	}
-	if p.SkipLaunchSyncs != nil {
-		merged.SkipLaunchSyncs = *p.SkipLaunchSyncs
-	}
 	if p.RequireTOTP != nil {
 		merged.RequireTOTP = *p.RequireTOTP
 	}
@@ -62,4 +59,5 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.MaxConcurrentSyncs = src.MaxConcurrentSyncs
 	cfg.MaxMessageLength = src.MaxMessageLength
 	cfg.RequireTOTP = src.RequireTOTP
+
 }

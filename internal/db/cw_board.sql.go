@@ -39,7 +39,7 @@ func (q *Queries) GetBoard(ctx context.Context, id int) (*CwBoard, error) {
 
 const listBoards = `-- name: ListBoards :many
 SELECT id, name, updated_on, added_on, deleted FROM cw_board
-ORDER BY id
+ORDER BY name
 `
 
 func (q *Queries) ListBoards(ctx context.Context) ([]*CwBoard, error) {

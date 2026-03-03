@@ -30,10 +30,12 @@ CREATE TABLE totp_recovery_code (
 );
 
 ALTER TABLE app_config ADD COLUMN require_totp BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE app_config DROP COLUMN skip_launch_syncs;
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+ALTER TABLE app_config ADD COLUMN skip_launch_syncs BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE app_config DROP COLUMN require_totp;
 DROP TABLE IF EXISTS totp_recovery_code;
 DROP TABLE IF EXISTS totp_pending;

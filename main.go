@@ -11,7 +11,6 @@ import (
 	"github.com/thecoretg/ticketbot/cmd/common"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/middleware"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/server"
 )
 
@@ -57,20 +56,6 @@ func Run() error {
 	a, err := server.NewApp(ctx, common.GooseMigrationVersion)
 	if err != nil {
 		return fmt.Errorf("initializing app: %w", err)
-	}
-
-	if !a.Config.SkipLaunchSyncs {
-		slog.Info("syncing webex rooms and connectwise boards")
-		p := &models.SyncPayload{
-			WebexRecipients:    true,
-			CWBoards:           true,
-			MaxConcurrentSyncs: a.Config.MaxConcurrentSyncs,
-		}
-
-		if err := a.Svc.Sync.Sync(ctx, p); err != nil {
-			// just log but continue
-			slog.Error("error syncing webex recipients and connectwise boards", "error", err.Error())
-		}
 	}
 
 	if !a.TestFlags.SkipAuth {

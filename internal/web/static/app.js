@@ -970,16 +970,6 @@ function renderConfig(cfg) {
         </div>
         <div class="config-row">
             <div>
-                <div class="config-label">Skip Launch Syncs</div>
-                <div class="config-desc">Skip syncing boards and recipients on server startup</div>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="c-skip-launch" ${cfg.skip_launch_syncs ? 'checked' : ''}>
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-        <div class="config-row">
-            <div>
                 <div class="config-label">Max Message Length</div>
                 <div class="config-desc">Truncation limit for ticket note content</div>
             </div>
@@ -1011,9 +1001,7 @@ function renderConfig(cfg) {
 async function saveConfig() {
     try {
         await api('PUT', '/config', {
-            id:                   1,
             attempt_notify:       document.getElementById('c-notify').checked,
-            skip_launch_syncs:    document.getElementById('c-skip-launch').checked,
             max_message_length:   parseInt(document.getElementById('c-max-len').value)   || 300,
             max_concurrent_syncs: parseInt(document.getElementById('c-max-syncs').value) || 5,
             require_totp:         document.getElementById('c-require-totp').checked,
