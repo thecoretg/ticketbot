@@ -8,10 +8,14 @@ import (
 	"slices"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/cmd/common"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/server"
+)
+
+const (
+	gooseMigrationVersion = 4
+	serverVersion         = "1.4.2"
 )
 
 func main() {
@@ -22,7 +26,7 @@ func main() {
 
 func Run() error {
 	if len(os.Args[1:]) > 0 && slices.Contains([]string{"version", "v"}, os.Args[1]) {
-		fmt.Println(common.ServerVersion)
+		fmt.Println(serverVersion)
 		return nil
 	}
 
@@ -36,7 +40,7 @@ func Run() error {
 	var cwHandler *logging.CloudwatchHandler
 	if logging.CloudwatchVarsSet() {
 		var err error
-		p := logging.GetCloudwatchParamsFromEnv()
+		p := logging.GetCloudwatchParamsFromEnv(&level)
 		cwHandler, err = logging.NewCloudwatchLogger(ctx, p)
 		if err != nil {
 			return fmt.Errorf("creating cloudwatch logger: %w", err)
@@ -49,11 +53,11 @@ func Run() error {
 		logger = slog.New(cwHandler)
 	} else {
 		slog.Info("using stdout json handler")
-		logger = logging.NewDefaultLogger(level)
+		logger = logging.NewDefaultLogger(&level)
 	}
 	slog.SetDefault(logger)
 
-	a, err := server.NewApp(ctx, common.GooseMigrationVersion)
+	a, err := server.NewApp(ctx, gooseMigrationVersion, &level)
 	if err != nil {
 		return fmt.Errorf("initializing app: %w", err)
 	}

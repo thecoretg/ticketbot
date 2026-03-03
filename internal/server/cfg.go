@@ -100,10 +100,8 @@ func (c *Creds) validate(tf *TestFlags) error {
 }
 
 // getStartupConfig gets the current config at server startup. It uses the default if one is not
-// found in the store, applies any environment overrides, upserts, and then returns the final result.
+// found in the store, upserts, and then returns the final result.
 func getStartupConfig(ctx context.Context, r repos.ConfigRepository) (*models.Config, error) {
-	var err error
-
 	// get initial config; if none in db, use default
 	cfg, _ := r.Get(ctx)
 	if cfg == nil {
@@ -111,9 +109,7 @@ func getStartupConfig(ctx context.Context, r repos.ConfigRepository) (*models.Co
 		cfg = &models.DefaultConfig
 	}
 
-	// load any overrides from env, then upsert in store
-	cfg = loadEnvConfig(cfg)
-	cfg, err = r.Upsert(ctx, cfg)
+	cfg, err := r.Upsert(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("upserting config: %w", err)
 	}
@@ -130,55 +126,6 @@ func makeMessageSender(mocking bool, webexSecret string) repos.MessageSender {
 	return webex.NewClient(webexSecret)
 }
 
-// loadEnvConfig takes any explicitly set config values from env variables
-// and sets them in the config. These are overridden if set via the config routes,
-// but then would be overridden again from env when the server is next restarted,
-// so it is recommended to use one or the other (via API or env, but not both)
-func loadEnvConfig(current *models.Config) *models.Config {
-	var (
-		attemptNotify *bool
-		maxLen        *int
-		maxConSyncs   *int
-	)
-
-	switch os.Getenv("ATTEMPT_NOTIFY") {
-	case "true":
-		v := true
-		attemptNotify = &v
-	case "false":
-		v := false
-		attemptNotify = &v
-	}
-
-	mlInt, err := strconv.Atoi(os.Getenv("MAX_MSG_LENGTH"))
-	if err == nil {
-		v := mlInt
-		maxLen = &v
-	}
-
-	msInt, err := strconv.Atoi(os.Getenv("MAX_CONCURRENT_SYNCS"))
-	if err == nil {
-		v := msInt
-		maxConSyncs = &v
-	}
-
-	if attemptNotify != nil {
-		slog.Info("ATTEMPT_NOTIFY set via env", "value", *attemptNotify)
-		current.AttemptNotify = *attemptNotify
-	}
-
-	if maxLen != nil {
-		slog.Info("MAX_MSG_LENGTH set via env", "value", *maxLen)
-		current.MaxMessageLength = *maxLen
-	}
-
-	if maxConSyncs != nil {
-		slog.Info("MAX_CONCURRENT_SYNCS set via env", "value", *maxConSyncs)
-		current.MaxConcurrentSyncs = *maxConSyncs
-	}
-
-	return current
-}
 
 func getTestFlags() *TestFlags {
 	var ttl int64

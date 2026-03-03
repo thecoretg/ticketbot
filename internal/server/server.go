@@ -47,7 +47,7 @@ type Services struct {
 
 const defaultStoreTTL = int64(900)
 
-func NewApp(ctx context.Context, migVersion int64) (*App, error) {
+func NewApp(ctx context.Context, migVersion int64, level *slog.Level) (*App, error) {
 	cr := getCreds()
 	tf := getTestFlags()
 	if err := cr.validate(tf); err != nil {
@@ -102,7 +102,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 		MessageSender: wx,
 		Svc: &Services{
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
-			Config:    config.New(r.Config, cfg),
+			Config:    config.New(r.Config, cfg, level),
 			User:      user.New(r.APIUser, r.APIKey),
 			Hooks:     webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL),
 			CW:        cwsvc.New(s.Pool, r.CW, cw, ttl),

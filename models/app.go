@@ -22,6 +22,9 @@ type Config struct {
 
 	// RequireTOTP enforces that all users must have TOTP enabled to access the application.
 	RequireTOTP bool `json:"require_totp"`
+
+	// DebugLogging enables debug-level log output at runtime without a server restart.
+	DebugLogging bool `json:"debug_logging"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
@@ -31,6 +34,7 @@ type ConfigUpdateParams struct {
 	MaxMessageLength   *int  `json:"max_message_length"`
 	MaxConcurrentSyncs *int  `json:"max_concurrent_syncs"`
 	RequireTOTP        *bool `json:"require_totp"`
+	DebugLogging       *bool `json:"debug_logging"`
 }
 
 var DefaultConfig = Config{
@@ -39,4 +43,5 @@ var DefaultConfig = Config{
 	MaxMessageLength:   300,
 	MaxConcurrentSyncs: 5,
 	RequireTOTP:        false,
+	DebugLogging:       false,
 }

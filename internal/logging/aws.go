@@ -31,7 +31,7 @@ type CloudwatchHandler struct {
 	mu            sync.Mutex
 	attrs         []slog.Attr
 	groups        []string
-	logLevel      slog.Level
+	level         *slog.Level
 }
 
 type CloudwatchHandlerParams struct {
@@ -40,7 +40,7 @@ type CloudwatchHandlerParams struct {
 	SecretAccessKey string
 	GroupName       string
 	StreamName      string
-	LogLevel        slog.Level
+	Level           *slog.Level
 	RetentionDays   int32 // Number of days to retain logs (0 = never expire)
 }
 
@@ -98,12 +98,12 @@ func NewCloudwatchLogger(ctx context.Context, params CloudwatchHandlerParams) (*
 		client:        client,
 		logGroupName:  params.GroupName,
 		logStreamName: streamTime,
-		logLevel:      params.LogLevel,
+		level:         params.Level,
 	}, nil
 }
 
 func (h *CloudwatchHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return level >= h.logLevel
+	return level >= *h.level
 }
 
 func (h *CloudwatchHandler) Handle(ctx context.Context, record slog.Record) error {
@@ -167,6 +167,7 @@ func (h *CloudwatchHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		logGroupName:  h.logGroupName,
 		logStreamName: h.logStreamName,
 		sequenceToken: h.sequenceToken,
+		level:         h.level,
 		attrs:         newAttrs,
 		groups:        h.groups,
 	}
@@ -182,19 +183,20 @@ func (h *CloudwatchHandler) WithGroup(name string) slog.Handler {
 		logGroupName:  h.logGroupName,
 		logStreamName: h.logStreamName,
 		sequenceToken: h.sequenceToken,
+		level:         h.level,
 		attrs:         h.attrs,
 		groups:        newGroups,
 	}
 }
 
-func GetCloudwatchParamsFromEnv() CloudwatchHandlerParams {
+func GetCloudwatchParamsFromEnv(level *slog.Level) CloudwatchHandlerParams {
 	p := &CloudwatchHandlerParams{
 		Region:          os.Getenv("AWS_REGION"),
 		AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
 		SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
 		GroupName:       "lightsail/ticketbot",
 		StreamName:      "container-logs",
-		LogLevel:        slog.LevelInfo,
+		Level:           level,
 		RetentionDays:   7,
 	}
 
@@ -210,10 +212,6 @@ func GetCloudwatchParamsFromEnv() CloudwatchHandlerParams {
 		if days, err := strconv.Atoi(retentionEnv); err == nil {
 			p.RetentionDays = int32(days)
 		}
-	}
-
-	if os.Getenv("DEBUG") == "true" {
-		p.LogLevel = slog.LevelDebug
 	}
 
 	return *p

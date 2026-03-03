@@ -8,12 +8,13 @@ ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
 RETURNING *;
 
 -- name: UpsertAppConfig :one
-INSERT INTO app_config(id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp)
-VALUES(1, $1, $2, $3, $4)
+INSERT INTO app_config(id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging)
+VALUES(1, $1, $2, $3, $4, $5)
 ON CONFLICT (id) DO UPDATE SET
     attempt_notify = EXCLUDED.attempt_notify,
     max_message_length = EXCLUDED.max_message_length,
     max_concurrent_syncs = EXCLUDED.max_concurrent_syncs,
-    require_totp = EXCLUDED.require_totp
+    require_totp = EXCLUDED.require_totp,
+    debug_logging = EXCLUDED.debug_logging
 RETURNING *;
 

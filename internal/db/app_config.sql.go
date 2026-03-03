@@ -10,7 +10,7 @@ import (
 )
 
 const getAppConfig = `-- name: GetAppConfig :one
-SELECT id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp FROM app_config
+SELECT id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging FROM app_config
 WHERE id = 1
 `
 
@@ -23,6 +23,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 		&i.MaxMessageLength,
 		&i.MaxConcurrentSyncs,
 		&i.RequireTotp,
+		&i.DebugLogging,
 	)
 	return &i, err
 }
@@ -30,7 +31,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 const insertDefaultAppConfig = `-- name: InsertDefaultAppConfig :one
 INSERT INTO app_config (id) VALUES (1)
 ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp
+RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging
 `
 
 func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error) {
@@ -42,19 +43,21 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error
 		&i.MaxMessageLength,
 		&i.MaxConcurrentSyncs,
 		&i.RequireTotp,
+		&i.DebugLogging,
 	)
 	return &i, err
 }
 
 const upsertAppConfig = `-- name: UpsertAppConfig :one
-INSERT INTO app_config(id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp)
-VALUES(1, $1, $2, $3, $4)
+INSERT INTO app_config(id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging)
+VALUES(1, $1, $2, $3, $4, $5)
 ON CONFLICT (id) DO UPDATE SET
     attempt_notify = EXCLUDED.attempt_notify,
     max_message_length = EXCLUDED.max_message_length,
     max_concurrent_syncs = EXCLUDED.max_concurrent_syncs,
-    require_totp = EXCLUDED.require_totp
-RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp
+    require_totp = EXCLUDED.require_totp,
+    debug_logging = EXCLUDED.debug_logging
+RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging
 `
 
 type UpsertAppConfigParams struct {
@@ -62,6 +65,7 @@ type UpsertAppConfigParams struct {
 	MaxMessageLength   int  `json:"max_message_length"`
 	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
 	RequireTotp        bool `json:"require_totp"`
+	DebugLogging       bool `json:"debug_logging"`
 }
 
 func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams) (*AppConfig, error) {
@@ -70,6 +74,7 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		arg.MaxMessageLength,
 		arg.MaxConcurrentSyncs,
 		arg.RequireTotp,
+		arg.DebugLogging,
 	)
 	var i AppConfig
 	err := row.Scan(
@@ -78,6 +83,7 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		&i.MaxMessageLength,
 		&i.MaxConcurrentSyncs,
 		&i.RequireTotp,
+		&i.DebugLogging,
 	)
 	return &i, err
 }

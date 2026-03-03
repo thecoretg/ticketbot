@@ -34,6 +34,7 @@ type AppConfig struct {
 	MaxMessageLength   int  `json:"max_message_length"`
 	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
 	RequireTotp        bool `json:"require_totp"`
+	DebugLogging       bool `json:"debug_logging"`
 }
 
 type CwBoard struct {

@@ -3,21 +3,26 @@ package config
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type Service struct {
 	Config    repos.ConfigRepository
 	ConfigRef *models.Config
+	level     *slog.Level
 }
 
-func New(c repos.ConfigRepository, cfg *models.Config) *Service {
-	return &Service{
+func New(c repos.ConfigRepository, cfg *models.Config, level *slog.Level) *Service {
+	s := &Service{
 		Config:    c,
 		ConfigRef: cfg,
+		level:     level,
 	}
+	s.applyChanges(cfg)
+	return s
 }
 
 func (s *Service) Get(ctx context.Context) (*models.Config, error) {
@@ -43,6 +48,9 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.RequireTOTP != nil {
 		merged.RequireTOTP = *p.RequireTOTP
 	}
+	if p.DebugLogging != nil {
+		merged.DebugLogging = *p.DebugLogging
+	}
 
 	updated, err := s.Config.Upsert(ctx, &merged)
 	if err != nil {
@@ -59,5 +67,13 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.MaxConcurrentSyncs = src.MaxConcurrentSyncs
 	cfg.MaxMessageLength = src.MaxMessageLength
 	cfg.RequireTOTP = src.RequireTOTP
+	cfg.DebugLogging = src.DebugLogging
 
+	if s.level != nil {
+		if src.DebugLogging {
+			*s.level = slog.LevelDebug
+		} else {
+			*s.level = slog.LevelInfo
+		}
+	}
 }

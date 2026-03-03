@@ -993,6 +993,16 @@ function renderConfig(cfg) {
             </label>
         </div>
         <div class="config-row">
+            <div>
+                <div class="config-label">Debug Logging</div>
+                <div class="config-desc">Enable debug-level log output without a server restart</div>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="c-debug-logging" ${cfg.debug_logging ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="config-row">
             <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Changes</button>
         </div>
     </div>`)
@@ -1005,6 +1015,7 @@ async function saveConfig() {
             max_message_length:   parseInt(document.getElementById('c-max-len').value)   || 300,
             max_concurrent_syncs: parseInt(document.getElementById('c-max-syncs').value) || 5,
             require_totp:         document.getElementById('c-require-totp').checked,
+            debug_logging:        document.getElementById('c-debug-logging').checked,
         })
         toast('Config saved', 'success')
     } catch (e) { toast(e.message, 'error') }
