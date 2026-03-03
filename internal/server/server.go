@@ -87,7 +87,7 @@ func NewApp(ctx context.Context, migVersion int64) (*App, error) {
 		Pool:             s.Pool,
 		MessageSender:    ms,
 		CWCompanyID:      cr.CWCreds.CompanyId,
-		MaxMessageLength: cfg.MaxMessageLength,
+
 	}
 
 	ns := notifier.New(nr)

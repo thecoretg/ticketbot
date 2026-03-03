@@ -911,11 +911,10 @@ async function showNewSyncModal() {
 
         try {
             await api('POST', '/sync', {
-                cw_boards:           document.getElementById('f-sync-boards').checked,
-                webex_recipients:    document.getElementById('f-sync-webex').checked,
-                cw_tickets:          document.getElementById('f-sync-tickets').checked,
-                board_ids:           boardIds,
-                max_concurrent_syncs: 5,
+                cw_boards:        document.getElementById('f-sync-boards').checked,
+                webex_recipients: document.getElementById('f-sync-webex').checked,
+                cw_tickets:       document.getElementById('f-sync-tickets').checked,
+                board_ids:        boardIds,
             })
             closeModal()
             toast('Sync started', 'success')

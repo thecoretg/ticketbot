@@ -27,6 +27,16 @@ type Config struct {
 	RequireTOTP bool `json:"require_totp"`
 }
 
+// ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
+// distinguishing between "not provided" and an explicit zero/false value.
+type ConfigUpdateParams struct {
+	AttemptNotify      *bool `json:"attempt_notify"`
+	MaxMessageLength   *int  `json:"max_message_length"`
+	MaxConcurrentSyncs *int  `json:"max_concurrent_syncs"`
+	SkipLaunchSyncs    *bool `json:"skip_launch_syncs"`
+	RequireTOTP        *bool `json:"require_totp"`
+}
+
 var DefaultConfig = Config{
 	ID:                 1,
 	AttemptNotify:      false,

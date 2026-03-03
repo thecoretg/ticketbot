@@ -64,7 +64,7 @@ func Run() error {
 		p := &models.SyncPayload{
 			WebexRecipients:    true,
 			CWBoards:           true,
-			MaxConcurrentSyncs: 10,
+			MaxConcurrentSyncs: a.Config.MaxConcurrentSyncs,
 		}
 
 		if err := a.Svc.Sync.Sync(ctx, p); err != nil {

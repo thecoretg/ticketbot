@@ -8,39 +8,36 @@ import (
 )
 
 type Service struct {
-	Cfg              *models.Config
-	WebexSvc         *webexsvc.Service
-	NotifierRules    repos.NotifierRuleRepository
-	Notifications    repos.TicketNotificationRepository
-	Forwards         repos.NotifierForwardRepository
-	Pool             *pgxpool.Pool
-	MessageSender    repos.MessageSender
-	CWCompanyID      string
-	MaxMessageLength int
+	Cfg           *models.Config
+	WebexSvc      *webexsvc.Service
+	NotifierRules repos.NotifierRuleRepository
+	Notifications repos.TicketNotificationRepository
+	Forwards      repos.NotifierForwardRepository
+	Pool          *pgxpool.Pool
+	MessageSender repos.MessageSender
+	CWCompanyID   string
 }
 
 type SvcParams struct {
-	Cfg              *models.Config
-	WebexSvc         *webexsvc.Service
-	NotifierRules    repos.NotifierRuleRepository
-	Notifications    repos.TicketNotificationRepository
-	Forwards         repos.NotifierForwardRepository
-	Pool             *pgxpool.Pool
-	MessageSender    repos.MessageSender
-	CWCompanyID      string
-	MaxMessageLength int
+	Cfg           *models.Config
+	WebexSvc      *webexsvc.Service
+	NotifierRules repos.NotifierRuleRepository
+	Notifications repos.TicketNotificationRepository
+	Forwards      repos.NotifierForwardRepository
+	Pool          *pgxpool.Pool
+	MessageSender repos.MessageSender
+	CWCompanyID   string
 }
 
 func New(p SvcParams) *Service {
 	return &Service{
-		Cfg:              p.Cfg,
-		WebexSvc:         p.WebexSvc,
-		NotifierRules:    p.NotifierRules,
-		Notifications:    p.Notifications,
-		Forwards:         p.Forwards,
-		Pool:             p.Pool,
-		MessageSender:    p.MessageSender,
-		CWCompanyID:      p.CWCompanyID,
-		MaxMessageLength: p.MaxMessageLength,
+		Cfg:           p.Cfg,
+		WebexSvc:      p.WebexSvc,
+		NotifierRules: p.NotifierRules,
+		Notifications: p.Notifications,
+		Forwards:      p.Forwards,
+		Pool:          p.Pool,
+		MessageSender: p.MessageSender,
+		CWCompanyID:   p.CWCompanyID,
 	}
 }

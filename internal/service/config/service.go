@@ -24,8 +24,30 @@ func (s *Service) Get(ctx context.Context) (*models.Config, error) {
 	return s.ensureConfig(ctx)
 }
 
-func (s *Service) Update(ctx context.Context, p *models.Config) (*models.Config, error) {
-	updated, err := s.Config.Upsert(ctx, p)
+func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*models.Config, error) {
+	current, err := s.ensureConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting current config: %w", err)
+	}
+
+	merged := *current
+	if p.AttemptNotify != nil {
+		merged.AttemptNotify = *p.AttemptNotify
+	}
+	if p.MaxMessageLength != nil {
+		merged.MaxMessageLength = *p.MaxMessageLength
+	}
+	if p.MaxConcurrentSyncs != nil {
+		merged.MaxConcurrentSyncs = *p.MaxConcurrentSyncs
+	}
+	if p.SkipLaunchSyncs != nil {
+		merged.SkipLaunchSyncs = *p.SkipLaunchSyncs
+	}
+	if p.RequireTOTP != nil {
+		merged.RequireTOTP = *p.RequireTOTP
+	}
+
+	updated, err := s.Config.Upsert(ctx, &merged)
 	if err != nil {
 		return nil, fmt.Errorf("upserting config in store: %w", err)
 	}

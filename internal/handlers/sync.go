@@ -11,12 +11,11 @@ import (
 
 type SyncHandler struct {
 	Svc *syncsvc.Service
+	cfg *models.Config
 }
 
-func NewSyncHandler(svc *syncsvc.Service) *SyncHandler {
-	return &SyncHandler{
-		Svc: svc,
-	}
+func NewSyncHandler(svc *syncsvc.Service, cfg *models.Config) *SyncHandler {
+	return &SyncHandler{Svc: svc, cfg: cfg}
 }
 
 func (h *SyncHandler) HandleSyncStatus(c *gin.Context) {
@@ -30,6 +29,10 @@ func (h *SyncHandler) HandleSync(c *gin.Context) {
 	if err := c.ShouldBindJSON(p); err != nil {
 		badPayloadError(c, err)
 		return
+	}
+
+	if p.MaxConcurrentSyncs == 0 {
+		p.MaxConcurrentSyncs = h.cfg.MaxConcurrentSyncs
 	}
 
 	ctx := context.WithoutCancel(c.Request.Context())

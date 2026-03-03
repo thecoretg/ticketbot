@@ -32,7 +32,7 @@ func AddRoutes(a *App, g *gin.Engine) {
 	g.DELETE("auth/totp", auth, th.HandleDisable)
 
 	s := g.Group("sync", auth)
-	sh := handlers.NewSyncHandler(a.Svc.Sync)
+	sh := handlers.NewSyncHandler(a.Svc.Sync, a.Config)
 	registerSyncRoutes(s, sh)
 
 	u := g.Group("users", auth)

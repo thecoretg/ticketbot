@@ -27,7 +27,7 @@ func (h *ConfigHandler) Get(c *gin.Context) {
 }
 
 func (h *ConfigHandler) Update(c *gin.Context) {
-	p := &models.Config{}
+	p := &models.ConfigUpdateParams{}
 	if err := c.ShouldBindJSON(p); err != nil {
 		badPayloadError(c, err)
 		return

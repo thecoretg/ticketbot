@@ -42,7 +42,7 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 		}
 
 		h += mainHeader
-		body := makeMessageBody(t, h, s.MaxMessageLength)
+		body := makeMessageBody(t, h, s.Cfg.MaxMessageLength)
 
 		wm := newWebexMsg(r.recipient, body)
 		n := &models.TicketNotification{
