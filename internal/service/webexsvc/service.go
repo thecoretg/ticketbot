@@ -13,11 +13,10 @@ type Service struct {
 	BotEmail    string
 }
 
-func New(pool *pgxpool.Pool, r repos.WebexRecipientRepository, cl repos.MessageSender, botEmail string) *Service {
+func New(pool *pgxpool.Pool, r repos.WebexRecipientRepository, cl repos.MessageSender) *Service {
 	return &Service{
 		Recipients:  r,
 		WebexClient: cl,
-		BotEmail:    botEmail,
 		pool:        pool,
 	}
 }

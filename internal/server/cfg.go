@@ -8,10 +8,10 @@ import (
 	"strconv"
 
 	"github.com/thecoretg/ticketbot/internal/mock"
-	"github.com/thecoretg/ticketbot/models"
-	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type Creds struct {
@@ -20,8 +20,6 @@ type Creds struct {
 	InitialAdminPassword string
 	PostgresDSN          string
 	WebexAPISecret       string
-	WebexBotEmail        string
-	WebexHooksSecret     string
 	CWCreds              *psa.Creds
 }
 
@@ -39,9 +37,7 @@ func getCreds() *Creds {
 		InitialAdminEmail:    os.Getenv("INITIAL_ADMIN_EMAIL"),
 		InitialAdminPassword: os.Getenv("INITIAL_ADMIN_PASSWORD"),
 		PostgresDSN:          os.Getenv("POSTGRES_DSN"),
-		WebexAPISecret:    os.Getenv("WEBEX_SECRET"),
-		WebexBotEmail:     os.Getenv("WEBEX_BOT_EMAIL"),
-		WebexHooksSecret:  os.Getenv("WEBEX_HOOKS_SECRET"),
+		WebexAPISecret:       os.Getenv("WEBEX_SECRET"),
 		CWCreds: &psa.Creds{
 			PublicKey:  os.Getenv("CW_PUB_KEY"),
 			PrivateKey: os.Getenv("CW_PRIV_KEY"),
@@ -125,7 +121,6 @@ func makeMessageSender(mocking bool, webexSecret string) repos.MessageSender {
 
 	return webex.NewClient(webexSecret)
 }
-
 
 func getTestFlags() *TestFlags {
 	var ttl int64

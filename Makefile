@@ -13,17 +13,14 @@ tui:
 gensql:
 	sqlc generate
 
-runserver:
-	op run --env-file="./testing.env" --no-masking -- go run .
+docker-up:
+	docker compose -f ./docker/docker-compose.yml up --build
+
+docker-down:
+	docker-compose -f ./docker/docker-compose.yml down
 
 sync:
 	op run --env-file="./testing.env" --no-masking -- tbot-admin sync -b -r
-
-test-db-up:
-	docker compose -f ./docker/docker-compose-db.yml up -d
-
-test-db-down:
-	docker compose -f ./docker/docker-compose-db.yml down -v
 
 reset-test-db: test-db-down test-db-up
 

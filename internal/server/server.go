@@ -18,7 +18,6 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/internal/service/webhooks"
-	"github.com/thecoretg/ticketbot/internal/webex"
 	"github.com/thecoretg/ticketbot/models"
 )
 
@@ -63,7 +62,6 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	slog.Info("using TTL", "ttl", ttl)
 
 	cw := psa.NewClient(cr.CWCreds)
-	wx := webex.NewClient(cr.WebexAPISecret)
 	ms := makeMessageSender(tf.MockWebex, cr.WebexAPISecret)
 
 	s, err := CreateStores(ctx, cr, migVersion)
@@ -78,7 +76,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	}
 
 	cws := cwsvc.New(s.Pool, r.CW, cw, ttl)
-	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms, cr.WebexBotEmail)
+	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms)
 
 	nr := notifier.SvcParams{
 		Cfg:           cfg,
@@ -102,15 +100,15 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		Stores:        r,
 		Pool:          s.Pool,
 		CWClient:      cw,
-		MessageSender: wx,
+		MessageSender: ms,
 		LogBuffer:     logBuf,
 		Svc: &Services{
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
 			Config:    config.New(r.Config, cfg, level),
 			User:      user.New(r.APIUser, r.APIKey),
-			Hooks:     webhooks.New(cw, wx, cr.WebexHooksSecret, cr.RootURL),
-			CW:        cwsvc.New(s.Pool, r.CW, cw, ttl),
-			Webex:     webexsvc.New(s.Pool, r.WebexRecipients, ms, cr.WebexBotEmail),
+			Hooks:     webhooks.New(cw, cr.RootURL),
+			CW:        cws,
+			Webex:     ws,
 			Sync:      syncsvc.New(s.Pool, cws, ws, ns),
 			Notifier:  notifier.New(nr),
 			Ticketbot: ticketbot.New(cfg, cws, ns),
