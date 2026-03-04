@@ -1,19 +1,41 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-    --bg:        #0b0d18;
-    --surface:   #141627;
-    --card:      #1c1f35;
-    --border:    #272a45;
-    --text:      #e4e8f1;
-    --muted:     #7a83a6;
-    --primary:   #6e67f0;
-    --primary-h: #5b54e0;
-    --success:   #45d483;
-    --danger:    #f06969;
-    --warning:   #f0ad45;
+    --bg:        #1a1d23;
+    --surface:   #21252d;
+    --card:      #282d38;
+    --border:    #343a47;
+    --text:      #d4d9e4;
+    --muted:     #7a8499;
+    --primary:   #5b9bd5;
+    --primary-h: #4a88c0;
+    --success:   #4caf82;
+    --danger:    #e06c6c;
+    --warning:   #d4924a;
     --header-h:  52px;
     --nav-h:     44px;
+    --hover-bg:       rgba(255,255,255,0.03);
+    --shadow-md:      rgba(0,0,0,0.40);
+    --picker-filter:  invert(1) opacity(0.5);
+    --picker-filter-h: invert(1) opacity(0.9);
+}
+
+html[data-theme="light"] {
+    --bg:        #f0f2f5;
+    --surface:   #ffffff;
+    --card:      #ffffff;
+    --border:    #dde1e7;
+    --text:      #1c2030;
+    --muted:     #6b7280;
+    --primary:   #2b7cc1;
+    --primary-h: #1e6aad;
+    --success:   #2a9461;
+    --danger:    #c0392b;
+    --warning:   #b8741a;
+    --hover-bg:       rgba(0,0,0,0.04);
+    --shadow-md:      rgba(0,0,0,0.12);
+    --picker-filter:  opacity(0.5);
+    --picker-filter-h: opacity(0.9);
 }
 
 body {
@@ -177,7 +199,7 @@ td {
     vertical-align: middle;
 }
 
-tr:hover td { background: rgba(255,255,255,0.02); }
+tr:hover td { background: var(--hover-bg); }
 td.actions  { text-align: right; }
 
 /* ── Badges ── */
@@ -226,13 +248,13 @@ input:focus, select:focus { border-color: var(--primary); outline: none; }
 
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator {
-    filter: invert(1) opacity(0.5);
+    filter: var(--picker-filter);
     cursor: pointer;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator:hover,
 input[type="time"]::-webkit-calendar-picker-indicator:hover {
-    filter: invert(1) opacity(0.9);
+    filter: var(--picker-filter-h);
 }
 select option { background: var(--card); }
 
@@ -302,7 +324,7 @@ select option { background: var(--card); }
     border-left: 3px solid var(--primary);
     border-radius: 8px;
     bottom: 24px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 20px var(--shadow-md);
     color: var(--text);
     font-size: 13px;
     max-width: 360px;
@@ -460,7 +482,7 @@ select option { background: var(--card); }
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    box-shadow: 0 8px 24px var(--shadow-md);
     min-width: 200px;
     position: absolute;
     right: 0;
@@ -491,7 +513,7 @@ select option { background: var(--card); }
     width: 100%;
 }
 
-.account-dropdown-item:hover { background: rgba(255,255,255,0.04); }
+.account-dropdown-item:hover { background: var(--hover-bg); }
 .account-dropdown-item--danger { color: var(--danger); }
 
 /* ── Password requirements ── */
@@ -599,7 +621,7 @@ select option { background: var(--card); }
     gap: 10px;
     z-index: 100;
     white-space: nowrap;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 16px var(--shadow-md);
 }
 
 .logs-options-popup label {

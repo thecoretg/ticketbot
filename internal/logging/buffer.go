@@ -51,6 +51,32 @@ func (r *ring) entries() []LogEntry {
 	return out
 }
 
+func (r *ring) resize(newSize int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// collect existing entries in order (under lock, without re-locking)
+	old := make([]LogEntry, r.count)
+	if r.count < r.size {
+		copy(old, r.buf[:r.count])
+	} else {
+		n := copy(old, r.buf[r.head:])
+		copy(old[n:], r.buf[:r.head])
+	}
+
+	// trim to newSize if shrinking
+	if len(old) > newSize {
+		old = old[len(old)-newSize:]
+	}
+
+	// replace internals in-place so all derived handlers see the change
+	r.buf = make([]LogEntry, newSize)
+	copy(r.buf, old)
+	r.size = newSize
+	r.count = len(old)
+	r.head = r.count % newSize
+}
+
 // BufferHandler wraps an existing slog.Handler and stores the last N entries.
 type BufferHandler struct {
 	inner      slog.Handler
@@ -81,8 +107,8 @@ func (h *BufferHandler) Handle(ctx context.Context, rec slog.Record) error {
 		return err
 	}
 
-	// exclude healthcheck noise from the ring buffer and DB
-	if strings.Contains(rec.Message, "/healthcheck") {
+	// exclude healthcheck and log-poll noise from the ring buffer and DB
+	if strings.Contains(rec.Message, "/healthcheck") || strings.Contains(rec.Message, "/logs") {
 		return nil
 	}
 
@@ -163,23 +189,14 @@ func (h *BufferHandler) Seed(entries []LogEntry) {
 	}
 }
 
-// Resize replaces the ring buffer with a new one of the given size.
-// Existing entries are copied over (oldest dropped if newSize is smaller).
-// All derived handlers share the ring pointer and pick up the change automatically.
+// Resize changes the ring buffer capacity in-place so all derived handlers
+// (from WithAttrs/WithGroup) automatically see the new size.
+// Existing entries are preserved; oldest are dropped if newSize is smaller.
 func (h *BufferHandler) Resize(newSize int) {
 	if newSize <= 0 || newSize == h.r.size {
 		return
 	}
-	old := h.r.entries()
-	newRing := &ring{buf: make([]LogEntry, newSize), size: newSize}
-	// if shrinking, keep only the most recent entries
-	if len(old) > newSize {
-		old = old[len(old)-newSize:]
-	}
-	for _, e := range old {
-		newRing.push(e)
-	}
-	h.r = newRing
+	h.r.resize(newSize)
 }
 
 // Size returns the current buffer capacity.

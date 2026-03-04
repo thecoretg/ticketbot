@@ -104,7 +104,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		LogBuffer:     logBuf,
 		Svc: &Services{
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
-			Config:    config.New(r.Config, cfg, level),
+			Config:    config.New(r.Config, cfg, level, logBuf),
 			User:      user.New(r.APIUser, r.APIKey),
 			Hooks:     webhooks.New(cw, cr.RootURL),
 			CW:        cws,

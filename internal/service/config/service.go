@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -13,13 +14,15 @@ type Service struct {
 	Config    repos.ConfigRepository
 	ConfigRef *models.Config
 	level     *slog.LevelVar
+	logBuf    *logging.BufferHandler
 }
 
-func New(c repos.ConfigRepository, cfg *models.Config, level *slog.LevelVar) *Service {
+func New(c repos.ConfigRepository, cfg *models.Config, level *slog.LevelVar, logBuf *logging.BufferHandler) *Service {
 	s := &Service{
 		Config:    c,
 		ConfigRef: cfg,
 		level:     level,
+		logBuf:    logBuf,
 	}
 	s.applyChanges(cfg)
 	return s
@@ -80,6 +83,11 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.LogRetentionDays = src.LogRetentionDays
 	cfg.LogCleanupIntervalHours = src.LogCleanupIntervalHours
 	cfg.LogBufferSize = src.LogBufferSize
+
+	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
+		s.logBuf.Resize(src.LogBufferSize)
+		slog.Info("log buffer resized", "size", src.LogBufferSize)
+	}
 
 	if s.level != nil {
 		if src.DebugLogging {

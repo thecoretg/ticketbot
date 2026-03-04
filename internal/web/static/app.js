@@ -1,4 +1,27 @@
 // ─────────────────────────────────────────────────────────
+// Theme
+// ─────────────────────────────────────────────────────────
+function initTheme() {
+    const stored    = localStorage.getItem('theme')
+    const preferred = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+    applyTheme(stored || preferred)
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+    const btn = document.getElementById('theme-toggle')
+    if (btn) btn.textContent = theme === 'light' ? '☽' : '☀'
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme')
+    applyTheme(current === 'light' ? 'dark' : 'light')
+}
+
+initTheme()
+
+// ─────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────
 let currentTab        = 'rules'
@@ -1049,7 +1072,7 @@ function renderConfig(cfg) {
         <div class="config-row">
             <div>
                 <div class="config-label">Log Buffer Size</div>
-                <div class="config-desc">Max log entries held in memory for the web panel (takes effect on restart)</div>
+                <div class="config-desc">Max log entries held in memory for the web panel</div>
             </div>
             <input class="config-input" type="number" id="c-log-buffer-size" value="${cfg.log_buffer_size}" min="100">
         </div>
@@ -1106,7 +1129,6 @@ function saveLogsPrefs(patch) {
 const _lp              = logsPrefs()
 let logsLevelFilter    = _lp.levelFilter    ?? 'ALL'
 let logsContextFilter  = _lp.contextFilter  ?? 'ALL'
-let logsHideSelf       = _lp.hideSelf        ?? true
 let logsHideGin        = _lp.hideGin         ?? false
 let logsSearch         = ''
 
@@ -1145,9 +1167,6 @@ function renderLogs(entries) {
         filtered = filtered.filter(e => (e.message || '') === 'notification processed')
     }
 
-    if (logsHideSelf) {
-        filtered = filtered.filter(e => !(e.message || '').includes('/logs'))
-    }
     if (logsHideGin) {
         filtered = filtered.filter(e => !(e.message || '').startsWith('[GIN]'))
     }
@@ -1188,7 +1207,6 @@ function renderLogs(entries) {
             <div class="logs-options-wrap">
                 <button class="btn btn-ghost btn-sm" onclick="toggleLogsOptions(event)">Options</button>
                 <div id="logs-options-popup" class="logs-options-popup hidden">
-                    <label><input type="checkbox" ${logsHideSelf ? 'checked' : ''} onchange="setLogsHideSelf(this.checked)"> Hide /logs</label>
                     <label><input type="checkbox" ${logsHideGin ? 'checked' : ''} onchange="setLogsHideGin(this.checked)"> Hide request logs</label>
                 </div>
             </div>
@@ -1215,12 +1233,6 @@ function setLogsFilter(level) {
 function setLogsContextFilter(val) {
     logsContextFilter = val
     saveLogsPrefs({ contextFilter: val })
-    loadLogs()
-}
-
-function setLogsHideSelf(val) {
-    logsHideSelf = val
-    saveLogsPrefs({ hideSelf: val })
     loadLogs()
 }
 

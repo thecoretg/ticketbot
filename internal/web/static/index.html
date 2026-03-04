@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ticketbot Admin</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        const t = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+        document.documentElement.setAttribute('data-theme', t)
+    </script>
 </head>
 <body>
 
@@ -61,6 +65,8 @@
 <div id="app" class="screen hidden">
     <header class="header">
         <span class="header-title">Ticketbot Admin</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+        <button id="theme-toggle" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="Toggle theme"></button>
         <div class="account-menu">
             <button class="btn btn-ghost btn-sm account-btn" onclick="toggleAccountMenu(event)">
                 <span id="header-email">Account</span><span class="account-caret">▾</span>
@@ -72,6 +78,7 @@
                 <button class="account-dropdown-item account-dropdown-item--danger" onclick="confirmRestart()">Restart Server</button>
                 <button class="account-dropdown-item account-dropdown-item--danger" onclick="logout()">Logout</button>
             </div>
+        </div>
         </div>
     </header>
     <nav class="tab-nav">
