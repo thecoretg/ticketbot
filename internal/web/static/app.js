@@ -401,6 +401,37 @@ function showTOTPDisableModal() {
     }, 'Disable 2FA')
 }
 
+function confirmRestart() {
+    document.getElementById('account-dropdown').classList.add('hidden')
+    openModal('Restart Server', `
+        <p style="color:var(--muted);font-size:13px">
+            The server will restart and reconnect automatically. This usually takes a few seconds.
+        </p>`, async () => {
+        try {
+            await api('POST', '/admin/restart')
+        } catch { /* server closes the connection during shutdown, that's fine */ }
+        closeModal()
+        showRestartBanner()
+    }, 'Restart')
+}
+
+function showRestartBanner() {
+    const content = document.getElementById('content')
+    const banner = document.createElement('div')
+    banner.id = 'restart-banner'
+    banner.innerHTML = `<div class="restart-banner">Restarting… reconnecting</div>`
+    document.getElementById('app').prepend(banner)
+
+    const poll = setInterval(async () => {
+        try {
+            await fetch('/healthcheck')
+            clearInterval(poll)
+            banner.remove()
+            toast('Server restarted successfully', 'success')
+        } catch { /* still down, keep polling */ }
+    }, 1500)
+}
+
 function checkSavedKey() {
     api('GET', '/authtest')
         .then(showApp)
@@ -419,10 +450,12 @@ const tabLoaders = {
     keys:     loadKeys,
     sync:     loadSync,
     config:   loadConfig,
+    logs:     loadLogs,
 }
 
 function switchTab(tab) {
     stopSyncPoll()
+    stopLogsPoll()
     currentTab = tab
     window.location.hash = tab
     document.querySelectorAll('.tab').forEach(el => {
@@ -1014,6 +1047,27 @@ function renderConfig(cfg) {
             </label>
         </div>
         <div class="config-row">
+            <div>
+                <div class="config-label">Log Buffer Size</div>
+                <div class="config-desc">Max log entries held in memory for the web panel (takes effect on restart)</div>
+            </div>
+            <input class="config-input" type="number" id="c-log-buffer-size" value="${cfg.log_buffer_size}" min="100">
+        </div>
+        <div class="config-row">
+            <div>
+                <div class="config-label">Log Retention</div>
+                <div class="config-desc">How many days of logs to keep in the database (0 = keep forever)</div>
+            </div>
+            <input class="config-input" type="number" id="c-log-retention" value="${cfg.log_retention_days}" min="0">
+        </div>
+        <div class="config-row">
+            <div>
+                <div class="config-label">Log Cleanup Interval</div>
+                <div class="config-desc">How often old logs are deleted, in hours</div>
+            </div>
+            <input class="config-input" type="number" id="c-log-cleanup-interval" value="${cfg.log_cleanup_interval_hours}" min="1">
+        </div>
+        <div class="config-row">
             <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Changes</button>
         </div>
     </div>`)
@@ -1022,14 +1076,199 @@ function renderConfig(cfg) {
 async function saveConfig() {
     try {
         await api('PUT', '/config', {
-            attempt_notify:       document.getElementById('c-notify').checked,
-            max_message_length:   parseInt(document.getElementById('c-max-len').value)   || 300,
-            max_concurrent_syncs: parseInt(document.getElementById('c-max-syncs').value) || 5,
-            require_totp:         document.getElementById('c-require-totp').checked,
-            debug_logging:        document.getElementById('c-debug-logging').checked,
+            attempt_notify:             document.getElementById('c-notify').checked,
+            max_message_length:         parseInt(document.getElementById('c-max-len').value)              || 300,
+            max_concurrent_syncs:       parseInt(document.getElementById('c-max-syncs').value)            || 5,
+            require_totp:               document.getElementById('c-require-totp').checked,
+            debug_logging:              document.getElementById('c-debug-logging').checked,
+            log_buffer_size:            parseInt(document.getElementById('c-log-buffer-size').value)      || 500,
+            log_retention_days:         parseInt(document.getElementById('c-log-retention').value)        ?? 7,
+            log_cleanup_interval_hours: parseInt(document.getElementById('c-log-cleanup-interval').value) || 24,
         })
         toast('Config saved', 'success')
     } catch (e) { toast(e.message, 'error') }
+}
+
+// ─────────────────────────────────────────────────────────
+// Logs
+// ─────────────────────────────────────────────────────────
+let logsPollTimer        = null
+let logsFrozen           = false
+let logsLastEntries      = []
+
+function logsPrefs() {
+    try { return JSON.parse(localStorage.getItem('logsPrefs') || '{}') } catch { return {} }
+}
+function saveLogsPrefs(patch) {
+    localStorage.setItem('logsPrefs', JSON.stringify({ ...logsPrefs(), ...patch }))
+}
+
+const _lp              = logsPrefs()
+let logsLevelFilter    = _lp.levelFilter    ?? 'ALL'
+let logsContextFilter  = _lp.contextFilter  ?? 'ALL'
+let logsHideSelf       = _lp.hideSelf        ?? true
+let logsHideGin        = _lp.hideGin         ?? false
+let logsSearch         = ''
+
+async function loadLogs() {
+    try {
+        const entries = await api('GET', '/logs')
+        logsLastEntries = entries || []
+        renderLogs(logsLastEntries)
+        startLogsPoll()
+    } catch (e) {
+        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+    }
+}
+
+function renderLogs(entries) {
+    const levelOpts = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR'].map(l =>
+        `<option value="${l}" ${l === logsLevelFilter ? 'selected' : ''}>${l}</option>`
+    ).join('')
+
+    const contextDefs = [
+        { value: 'ALL',      label: 'All' },
+        { value: 'TICKET',   label: 'Ticket Processing' },
+        { value: 'NOTIF',    label: 'Notification Processing' },
+    ]
+    const contextOpts = contextDefs.map(c =>
+        `<option value="${c.value}" ${c.value === logsContextFilter ? 'selected' : ''}>${c.label}</option>`
+    ).join('')
+
+    let filtered = logsLevelFilter === 'ALL'
+        ? entries
+        : entries.filter(e => e.level.toUpperCase() === logsLevelFilter)
+
+    if (logsContextFilter === 'TICKET') {
+        filtered = filtered.filter(e => (e.message || '') === 'ticket processed')
+    } else if (logsContextFilter === 'NOTIF') {
+        filtered = filtered.filter(e => (e.message || '') === 'notification processed')
+    }
+
+    if (logsHideSelf) {
+        filtered = filtered.filter(e => !(e.message || '').includes('/logs'))
+    }
+    if (logsHideGin) {
+        filtered = filtered.filter(e => !(e.message || '').startsWith('[GIN]'))
+    }
+    if (logsSearch) {
+        const term = logsSearch.toLowerCase()
+        filtered = filtered.filter(e => {
+            if ((e.message || '').toLowerCase().includes(term)) return true
+            if (e.attrs && JSON.stringify(e.attrs).toLowerCase().includes(term)) return true
+            return false
+        })
+    }
+
+    const rows = filtered.slice().reverse().map(e => {
+        const lvl   = (e.level || '').toUpperCase()
+        const cls   = lvl === 'ERROR' ? 'log-error' : lvl === 'WARN' ? 'log-warn' : lvl === 'DEBUG' ? 'log-debug' : ''
+        const time  = e.time ? new Date(e.time).toLocaleTimeString() : '—'
+        const attrs = e.attrs ? ' ' + Object.entries(e.attrs).map(([k,v]) => {
+            const val = (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v)
+            return `<span class="log-attr">${esc(k)}=<span class="log-attr-val">${esc(val)}</span></span>`
+        }).join(' ') : ''
+        return `<div class="log-row ${cls}">
+            <span class="log-time">${time}</span>
+            <span class="log-level">${esc(e.level)}</span>
+            <span class="log-msg">${esc(e.message)}${attrs}</span>
+        </div>`
+    })
+
+    const isEmpty        = rows.length === 0
+    const searchFocused  = document.activeElement?.id === 'logs-search'
+    const searchPos      = searchFocused ? document.getElementById('logs-search')?.selectionStart : null
+
+    setContent(`<div class="tab-header">
+        <h2>Logs</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+            <select id="logs-level-filter" onchange="setLogsFilter(this.value)" class="btn btn-ghost btn-sm" style="cursor:pointer">${levelOpts}</select>
+            <select id="logs-context-filter" onchange="setLogsContextFilter(this.value)" class="btn btn-ghost btn-sm" style="cursor:pointer;width:180px">${contextOpts}</select>
+            <input id="logs-search" type="text" placeholder="Search…" value="${esc(logsSearch)}" oninput="setLogsSearch(this.value)" class="logs-search-input">
+            <div class="logs-options-wrap">
+                <button class="btn btn-ghost btn-sm" onclick="toggleLogsOptions(event)">Options</button>
+                <div id="logs-options-popup" class="logs-options-popup hidden">
+                    <label><input type="checkbox" ${logsHideSelf ? 'checked' : ''} onchange="setLogsHideSelf(this.checked)"> Hide /logs</label>
+                    <label><input type="checkbox" ${logsHideGin ? 'checked' : ''} onchange="setLogsHideGin(this.checked)"> Hide request logs</label>
+                </div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="toggleLogFreeze()">${logsFrozen ? 'Unfreeze' : 'Freeze'}</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadLogs()">Refresh</button>
+        </div>
+    </div>
+    <div class="log-list">
+        ${isEmpty ? '<div class="empty-state">No log entries</div>' : rows.join('')}
+    </div>`)
+
+    if (searchFocused) {
+        const input = document.getElementById('logs-search')
+        if (input) { input.focus(); if (searchPos != null) input.setSelectionRange(searchPos, searchPos) }
+    }
+}
+
+function setLogsFilter(level) {
+    logsLevelFilter = level
+    saveLogsPrefs({ levelFilter: level })
+    loadLogs()
+}
+
+function setLogsContextFilter(val) {
+    logsContextFilter = val
+    saveLogsPrefs({ contextFilter: val })
+    loadLogs()
+}
+
+function setLogsHideSelf(val) {
+    logsHideSelf = val
+    saveLogsPrefs({ hideSelf: val })
+    loadLogs()
+}
+
+function setLogsHideGin(val) {
+    logsHideGin = val
+    saveLogsPrefs({ hideGin: val })
+    loadLogs()
+}
+
+function setLogsSearch(val) {
+    logsSearch = val
+    renderLogs(logsLastEntries)
+}
+
+function toggleLogsOptions(e) {
+    e.stopPropagation()
+    document.getElementById('logs-options-popup')?.classList.toggle('hidden')
+}
+
+function toggleLogFreeze() {
+    logsFrozen = !logsFrozen
+    if (logsFrozen) {
+        stopLogsPoll()
+    } else {
+        loadLogs()
+    }
+    // re-render toolbar state without re-fetching
+    const btn = document.querySelector('.log-list')?.previousElementSibling?.querySelector('button[onclick="toggleLogFreeze()"]')
+    if (btn) btn.textContent = logsFrozen ? 'Unfreeze' : 'Freeze'
+}
+
+function startLogsPoll() {
+    if (logsFrozen) return
+    stopLogsPoll()
+    logsPollTimer = setInterval(async () => {
+        if (currentTab !== 'logs') { stopLogsPoll(); return }
+        if (logsFrozen) { stopLogsPoll(); return }
+        try {
+            const entries = await api('GET', '/logs')
+            logsLastEntries = entries || []
+            renderLogs(logsLastEntries)
+        } catch { stopLogsPoll() }
+    }, 5000)
+}
+
+function stopLogsPoll() {
+    clearInterval(logsPollTimer)
+    logsPollTimer = null
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1059,6 +1298,7 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     document.addEventListener('click', () => {
         document.getElementById('account-dropdown').classList.add('hidden')
+        document.getElementById('logs-options-popup')?.classList.add('hidden')
     })
     checkSavedKey()
 })

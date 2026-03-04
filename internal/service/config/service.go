@@ -51,6 +51,15 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.DebugLogging != nil {
 		merged.DebugLogging = *p.DebugLogging
 	}
+	if p.LogRetentionDays != nil {
+		merged.LogRetentionDays = *p.LogRetentionDays
+	}
+	if p.LogCleanupIntervalHours != nil {
+		merged.LogCleanupIntervalHours = *p.LogCleanupIntervalHours
+	}
+	if p.LogBufferSize != nil {
+		merged.LogBufferSize = *p.LogBufferSize
+	}
 
 	updated, err := s.Config.Upsert(ctx, &merged)
 	if err != nil {
@@ -68,6 +77,9 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.MaxMessageLength = src.MaxMessageLength
 	cfg.RequireTOTP = src.RequireTOTP
 	cfg.DebugLogging = src.DebugLogging
+	cfg.LogRetentionDays = src.LogRetentionDays
+	cfg.LogCleanupIntervalHours = src.LogCleanupIntervalHours
+	cfg.LogBufferSize = src.LogBufferSize
 
 	if s.level != nil {
 		if src.DebugLogging {

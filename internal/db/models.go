@@ -29,12 +29,24 @@ type ApiUser struct {
 }
 
 type AppConfig struct {
-	ID                 int  `json:"id"`
-	AttemptNotify      bool `json:"attempt_notify"`
-	MaxMessageLength   int  `json:"max_message_length"`
-	MaxConcurrentSyncs int  `json:"max_concurrent_syncs"`
-	RequireTotp        bool `json:"require_totp"`
-	DebugLogging       bool `json:"debug_logging"`
+	ID                      int  `json:"id"`
+	AttemptNotify           bool `json:"attempt_notify"`
+	MaxMessageLength        int  `json:"max_message_length"`
+	MaxConcurrentSyncs      int  `json:"max_concurrent_syncs"`
+	RequireTotp             bool `json:"require_totp"`
+	DebugLogging            bool `json:"debug_logging"`
+	LogRetentionDays        int  `json:"log_retention_days"`
+	LogCleanupIntervalHours int  `json:"log_cleanup_interval_hours"`
+	LogBufferSize           int  `json:"log_buffer_size"`
+}
+
+type AppLog struct {
+	ID        int       `json:"id"`
+	Time      time.Time `json:"time"`
+	Level     string    `json:"level"`
+	Message   string    `json:"message"`
+	Attrs     []byte    `json:"attrs"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type CwBoard struct {

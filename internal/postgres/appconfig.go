@@ -59,21 +59,27 @@ func (p *ConfigRepo) Upsert(ctx context.Context, c *models.Config) (*models.Conf
 
 func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 	return db.UpsertAppConfigParams{
-		AttemptNotify:      c.AttemptNotify,
-		MaxMessageLength:   c.MaxMessageLength,
-		MaxConcurrentSyncs: c.MaxConcurrentSyncs,
-		RequireTotp:        c.RequireTOTP,
-		DebugLogging:       c.DebugLogging,
+		AttemptNotify:           c.AttemptNotify,
+		MaxMessageLength:        c.MaxMessageLength,
+		MaxConcurrentSyncs:      c.MaxConcurrentSyncs,
+		RequireTotp:             c.RequireTOTP,
+		DebugLogging:            c.DebugLogging,
+		LogRetentionDays:        c.LogRetentionDays,
+		LogCleanupIntervalHours: c.LogCleanupIntervalHours,
+		LogBufferSize:           c.LogBufferSize,
 	}
 }
 
 func configFromPG(pg *db.AppConfig) *models.Config {
 	return &models.Config{
-		ID:                 pg.ID,
-		AttemptNotify:      pg.AttemptNotify,
-		MaxMessageLength:   pg.MaxMessageLength,
-		MaxConcurrentSyncs: pg.MaxConcurrentSyncs,
-		RequireTOTP:        pg.RequireTotp,
-		DebugLogging:       pg.DebugLogging,
+		ID:                      pg.ID,
+		AttemptNotify:           pg.AttemptNotify,
+		MaxMessageLength:        pg.MaxMessageLength,
+		MaxConcurrentSyncs:      pg.MaxConcurrentSyncs,
+		RequireTOTP:             pg.RequireTotp,
+		DebugLogging:            pg.DebugLogging,
+		LogRetentionDays:        pg.LogRetentionDays,
+		LogCleanupIntervalHours: pg.LogCleanupIntervalHours,
+		LogBufferSize:           pg.LogBufferSize,
 	}
 }

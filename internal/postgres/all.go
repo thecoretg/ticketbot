@@ -10,6 +10,7 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		APIKey:              NewAPIKeyRepo(pool),
 		APIUser:             NewAPIUserRepo(pool),
 		Config:              NewConfigRepo(pool),
+		Logs:                NewLogRepo(pool),
 		Sessions:            NewSessionRepo(pool),
 		TOTPPending:         NewTOTPPendingRepo(pool),
 		TOTPRecovery:        NewTOTPRecoveryRepo(pool),

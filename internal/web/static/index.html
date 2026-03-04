@@ -69,6 +69,7 @@
                 <div class="account-dropdown-email" id="dropdown-email">—</div>
                 <button class="account-dropdown-item" onclick="showChangePasswordModal()">Change Password</button>
                 <button id="totp-menu-btn" class="account-dropdown-item" onclick="handleTOTPMenuClick()"></button>
+                <button class="account-dropdown-item account-dropdown-item--danger" onclick="confirmRestart()">Restart Server</button>
                 <button class="account-dropdown-item account-dropdown-item--danger" onclick="logout()">Logout</button>
             </div>
         </div>
@@ -80,6 +81,7 @@
         <button class="tab"        data-tab="keys"     onclick="switchTab('keys')">Keys</button>
         <button class="tab"        data-tab="sync"     onclick="switchTab('sync')">Sync</button>
         <button class="tab"        data-tab="config"   onclick="switchTab('config')">Config</button>
+        <button class="tab"        data-tab="logs"     onclick="switchTab('logs')">Logs</button>
     </nav>
     <main id="content" class="content"></main>
 </div>

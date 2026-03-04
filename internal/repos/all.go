@@ -4,6 +4,7 @@ type AllRepos struct {
 	APIKey              APIKeyRepository
 	APIUser             APIUserRepository
 	Config              ConfigRepository
+	Logs                LogRepository
 	Sessions            SessionRepository
 	TOTPPending         TOTPPendingRepository
 	TOTPRecovery        TOTPRecoveryRepository

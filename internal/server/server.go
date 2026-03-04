@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/psa"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
@@ -31,6 +32,7 @@ type App struct {
 	Config                  *models.Config
 	Svc                     *Services
 	CurrentMigrationVersion int64
+	LogBuffer               *logging.BufferHandler
 }
 
 type Services struct {
@@ -47,11 +49,11 @@ type Services struct {
 
 const defaultStoreTTL = int64(900)
 
-func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar) (*App, error) {
+func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf *logging.BufferHandler) (*App, *logging.Persister, error) {
 	cr := getCreds()
 	tf := getTestFlags()
 	if err := cr.validate(tf); err != nil {
-		return nil, fmt.Errorf("validating credentials: %w", err)
+		return nil, nil, fmt.Errorf("validating credentials: %w", err)
 	}
 
 	ttl := defaultStoreTTL
@@ -66,13 +68,13 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar) (*App, 
 
 	s, err := CreateStores(ctx, cr, migVersion)
 	if err != nil {
-		return nil, fmt.Errorf("initializing stores: %w", err)
+		return nil, nil, fmt.Errorf("initializing stores: %w", err)
 	}
 	r := s.Repos
 
 	cfg, err := getStartupConfig(ctx, r.Config)
 	if err != nil {
-		return nil, fmt.Errorf("getting initial config: %w", err)
+		return nil, nil, fmt.Errorf("getting initial config: %w", err)
 	}
 
 	cws := cwsvc.New(s.Pool, r.CW, cw, ttl)
@@ -91,6 +93,8 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar) (*App, 
 
 	ns := notifier.New(nr)
 
+	persister := logging.NewPersister(r.Logs, logBuf, cfg)
+
 	return &App{
 		Creds:         cr,
 		Config:        cfg,
@@ -99,6 +103,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar) (*App, 
 		Pool:          s.Pool,
 		CWClient:      cw,
 		MessageSender: wx,
+		LogBuffer:     logBuf,
 		Svc: &Services{
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
 			Config:    config.New(r.Config, cfg, level),
@@ -110,5 +115,5 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar) (*App, 
 			Notifier:  notifier.New(nr),
 			Ticketbot: ticketbot.New(cfg, cws, ns),
 		},
-	}, nil
+	}, persister, nil
 }

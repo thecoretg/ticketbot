@@ -25,23 +25,38 @@ type Config struct {
 
 	// DebugLogging enables debug-level log output at runtime without a server restart.
 	DebugLogging bool `json:"debug_logging"`
+
+	// LogRetentionDays is how many days of logs to keep in the database.
+	LogRetentionDays int `json:"log_retention_days"`
+
+	// LogCleanupIntervalHours is how often the cleanup goroutine runs to delete old logs.
+	LogCleanupIntervalHours int `json:"log_cleanup_interval_hours"`
+
+	// LogBufferSize is how many log entries to keep in the in-memory ring buffer.
+	LogBufferSize int `json:"log_buffer_size"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
 // distinguishing between "not provided" and an explicit zero/false value.
 type ConfigUpdateParams struct {
-	AttemptNotify      *bool `json:"attempt_notify"`
-	MaxMessageLength   *int  `json:"max_message_length"`
-	MaxConcurrentSyncs *int  `json:"max_concurrent_syncs"`
-	RequireTOTP        *bool `json:"require_totp"`
-	DebugLogging       *bool `json:"debug_logging"`
+	AttemptNotify           *bool `json:"attempt_notify"`
+	MaxMessageLength        *int  `json:"max_message_length"`
+	MaxConcurrentSyncs      *int  `json:"max_concurrent_syncs"`
+	RequireTOTP             *bool `json:"require_totp"`
+	DebugLogging            *bool `json:"debug_logging"`
+	LogRetentionDays        *int  `json:"log_retention_days"`
+	LogCleanupIntervalHours *int  `json:"log_cleanup_interval_hours"`
+	LogBufferSize           *int  `json:"log_buffer_size"`
 }
 
 var DefaultConfig = Config{
-	ID:                 1,
-	AttemptNotify:      false,
-	MaxMessageLength:   300,
-	MaxConcurrentSyncs: 5,
-	RequireTOTP:        false,
-	DebugLogging:       false,
+	ID:                      1,
+	AttemptNotify:           false,
+	MaxMessageLength:        300,
+	MaxConcurrentSyncs:      5,
+	RequireTOTP:             false,
+	DebugLogging:            false,
+	LogRetentionDays:        7,
+	LogCleanupIntervalHours: 24,
+	LogBufferSize:           500,
 }

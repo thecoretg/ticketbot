@@ -10,7 +10,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/web"
 )
 
-func AddRoutes(a *App, g *gin.Engine) {
+func AddRoutes(a *App, g *gin.Engine, shutdown func()) {
 	panelFS, _ := fs.Sub(web.StaticFiles, "static")
 	g.StaticFS("/panel", http.FS(panelFS))
 
@@ -54,6 +54,12 @@ func AddRoutes(a *App, g *gin.Engine) {
 	n := g.Group("notifiers", auth)
 	nh := handlers.NewNotifierHandler(a.Svc.Notifier)
 	registerNotifierRoutes(n, nh)
+
+	lh := handlers.NewLogsHandler(a.LogBuffer)
+	g.GET("logs", auth, lh.HandleList)
+
+	adminh := handlers.NewAdminHandler(shutdown)
+	g.POST("admin/restart", auth, adminh.HandleRestart)
 
 	tb := handlers.NewTicketbotHandler(a.Svc.Ticketbot)
 	hh := g.Group("hooks")
