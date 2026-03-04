@@ -481,7 +481,7 @@ function switchTab(tab) {
     stopLogsPoll()
     currentTab = tab
     window.location.hash = tab
-    document.querySelectorAll('.tab').forEach(el => {
+    document.querySelectorAll('.nav-item').forEach(el => {
         el.classList.toggle('active', el.dataset.tab === tab)
     })
     setContent('<div class="loading-state">Loading…</div>')

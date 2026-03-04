@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ticketbot Admin</title>
+    <title>Ticketbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script>
         const t = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
@@ -15,15 +18,23 @@
 <!-- Login -->
 <div id="login" class="screen hidden">
     <div class="login-card">
-        <h1>Ticketbot</h1>
-        <p>Sign in to continue</p>
-        <div class="form-group">
-            <input id="login-email" type="email" placeholder="Email" autocomplete="email">
+        <div class="login-brand">
+            <div class="brand-mark">T</div>
+            <span class="brand-name">Ticketbot</span>
+        </div>
+        <div>
+            <h1>Sign in</h1>
+            <p>Enter your credentials to continue</p>
         </div>
         <div class="form-group">
-            <input id="login-password" type="password" placeholder="Password" autocomplete="current-password">
+            <label>Email</label>
+            <input id="login-email" type="email" placeholder="you@example.com" autocomplete="email">
         </div>
-        <button id="login-btn" class="btn btn-primary" onclick="login()">Login</button>
+        <div class="form-group">
+            <label>Password</label>
+            <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button id="login-btn" class="btn btn-primary" onclick="login()">Continue</button>
         <p id="login-err" class="error-text hidden"></p>
     </div>
 </div>
@@ -31,8 +42,14 @@
 <!-- TOTP Verify -->
 <div id="totp-verify" class="screen hidden">
     <div class="login-card">
-        <h1>Two-Factor Auth</h1>
-        <p>Enter the 6-digit code from your authenticator app, or use a recovery code.</p>
+        <div class="login-brand">
+            <div class="brand-mark">T</div>
+            <span class="brand-name">Ticketbot</span>
+        </div>
+        <div>
+            <h1>Two-factor auth</h1>
+            <p>Enter the 6-digit code from your authenticator app, or use a recovery code.</p>
+        </div>
         <div class="form-group">
             <input id="totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="20">
         </div>
@@ -41,20 +58,29 @@
     </div>
 </div>
 
-<!-- Password Reset (forced on first login) -->
+<!-- Password Reset -->
 <div id="password-reset" class="screen hidden">
     <div class="login-card">
-        <h1>Change Password</h1>
-        <p>Your password must be changed before continuing.</p>
-        <div class="form-group">
-            <input id="reset-current" type="password" placeholder="Current password" autocomplete="current-password">
+        <div class="login-brand">
+            <div class="brand-mark">T</div>
+            <span class="brand-name">Ticketbot</span>
+        </div>
+        <div>
+            <h1>Change password</h1>
+            <p>Your password must be changed before continuing.</p>
         </div>
         <div class="form-group">
-            <input id="reset-new" type="password" placeholder="New password" autocomplete="new-password">
+            <label>Current password</label>
+            <input id="reset-current" type="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+            <label>New password</label>
+            <input id="reset-new" type="password" placeholder="••••••••" autocomplete="new-password">
             <div id="reset-reqs" class="pwd-reqs"></div>
         </div>
         <div class="form-group">
-            <input id="reset-confirm" type="password" placeholder="Confirm new password" autocomplete="new-password">
+            <label>Confirm new password</label>
+            <input id="reset-confirm" type="password" placeholder="••••••••" autocomplete="new-password">
         </div>
         <button id="reset-btn" class="btn btn-primary" onclick="submitPasswordReset()">Change Password</button>
         <p id="reset-err" class="error-text hidden"></p>
@@ -63,34 +89,40 @@
 
 <!-- App -->
 <div id="app" class="screen hidden">
-    <header class="header">
-        <span class="header-title">Ticketbot Admin</span>
-        <div style="display:flex;align-items:center;gap:8px;">
-        <button id="theme-toggle" class="btn btn-ghost btn-sm" onclick="toggleTheme()" title="Toggle theme"></button>
-        <div class="account-menu">
-            <button class="btn btn-ghost btn-sm account-btn" onclick="toggleAccountMenu(event)">
-                <span id="header-email">Account</span><span class="account-caret">▾</span>
-            </button>
-            <div id="account-dropdown" class="account-dropdown hidden">
-                <div class="account-dropdown-email" id="dropdown-email">—</div>
-                <button class="account-dropdown-item" onclick="showChangePasswordModal()">Change Password</button>
-                <button id="totp-menu-btn" class="account-dropdown-item" onclick="handleTOTPMenuClick()"></button>
-                <button class="account-dropdown-item account-dropdown-item--danger" onclick="confirmRestart()">Restart Server</button>
-                <button class="account-dropdown-item account-dropdown-item--danger" onclick="logout()">Logout</button>
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-mark">T</div>
+            <span class="brand-name">Ticketbot</span>
+        </div>
+        <nav class="sidebar-nav">
+            <button class="nav-item active" data-tab="rules"    onclick="switchTab('rules')">Rules</button>
+            <button class="nav-item"        data-tab="forwards" onclick="switchTab('forwards')">Forwards</button>
+            <button class="nav-item"        data-tab="users"    onclick="switchTab('users')">Users</button>
+            <button class="nav-item"        data-tab="keys"     onclick="switchTab('keys')">Keys</button>
+            <button class="nav-item"        data-tab="sync"     onclick="switchTab('sync')">Sync</button>
+            <button class="nav-item"        data-tab="config"   onclick="switchTab('config')">Config</button>
+            <button class="nav-item"        data-tab="logs"     onclick="switchTab('logs')">Logs</button>
+        </nav>
+        <div class="sidebar-footer">
+            <button id="theme-toggle" class="sidebar-icon-btn" onclick="toggleTheme()" title="Toggle theme"></button>
+            <div class="sidebar-account">
+                <button class="sidebar-account-btn" onclick="toggleAccountMenu(event)">
+                    <span id="header-email" class="sidebar-email">Account</span>
+                    <span class="sidebar-caret">▾</span>
+                </button>
+                <div id="account-dropdown" class="account-dropdown hidden">
+                    <div class="account-dropdown-email" id="dropdown-email">—</div>
+                    <button class="account-dropdown-item" onclick="showChangePasswordModal()">Change Password</button>
+                    <button id="totp-menu-btn" class="account-dropdown-item" onclick="handleTOTPMenuClick()"></button>
+                    <button class="account-dropdown-item account-dropdown-item--danger" onclick="confirmRestart()">Restart Server</button>
+                    <button class="account-dropdown-item account-dropdown-item--danger" onclick="logout()">Logout</button>
+                </div>
             </div>
         </div>
-        </div>
-    </header>
-    <nav class="tab-nav">
-        <button class="tab active" data-tab="rules"    onclick="switchTab('rules')">Rules</button>
-        <button class="tab"        data-tab="forwards" onclick="switchTab('forwards')">Forwards</button>
-        <button class="tab"        data-tab="users"    onclick="switchTab('users')">Users</button>
-        <button class="tab"        data-tab="keys"     onclick="switchTab('keys')">Keys</button>
-        <button class="tab"        data-tab="sync"     onclick="switchTab('sync')">Sync</button>
-        <button class="tab"        data-tab="config"   onclick="switchTab('config')">Config</button>
-        <button class="tab"        data-tab="logs"     onclick="switchTab('logs')">Logs</button>
-    </nav>
-    <main id="content" class="content"></main>
+    </aside>
+    <div class="main-wrap">
+        <main id="content" class="content"></main>
+    </div>
 </div>
 
 <!-- Modal -->

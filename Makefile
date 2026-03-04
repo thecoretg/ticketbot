@@ -1,15 +1,3 @@
-create-bin-dir:
-	mkdir -p bin
-
-build-server: create-bin-dir
-	go build -o bin/server .
-
-build-cli: create-bin-dir
-	go build -o bin/tbot-admin ./cmd/tbot-admin && cp bin/tbot-admin ~/go/bin/tbot-admin
-
-tui:
-	op run --env-file="./testing.env" --no-masking -- go run ./cmd/tbot-admin
-
 gensql:
 	sqlc generate
 
@@ -17,25 +5,14 @@ docker-up:
 	docker compose -f ./docker/docker-compose.yml up --build
 
 docker-down:
-	docker-compose -f ./docker/docker-compose.yml down
-
-sync:
-	op run --env-file="./testing.env" --no-masking -- tbot-admin sync -b -r
-
-reset-test-db: test-db-down test-db-up
+	docker-compose -f ./docker/docker-compose.yml down -v
 
 docker-build:
-	docker buildx build --platform=linux/amd64 -t ticketbot:v1.5.0 --load -f ./docker/DockerfileMain .
+	docker buildx build --platform=linux/amd64 -t ticketbot:v1.5.1 --load -f ./docker/DockerfileMain .
 
 deploy-container: docker-build
 	aws lightsail push-container-image \
 	--region us-west-2 \
 	--service-name ticketbot \
 	--label ticketbot-server \
-	--image ticketbot:v1.5.0
-
-lightsail-logs:
-	aws lightsail get-container-log \
-	--service-name ticketbot \
-	--container-name ticketbot \
-	--output text
+	--image ticketbot:v1.5.1

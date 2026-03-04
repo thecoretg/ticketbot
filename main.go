@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	gooseMigrationVersion = 6
-	serverVersion         = "1.5.0"
+	gooseMigrationVersion = 5
+	serverVersion         = "1.5.1"
 	shutdownTimeout       = 10 * time.Second
 )
 
