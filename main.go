@@ -19,9 +19,10 @@ import (
 
 const (
 	gooseMigrationVersion = 5
-	serverVersion         = "1.5.2"
 	shutdownTimeout       = 10 * time.Second
 )
+
+var serverVersion = "dev"
 
 func main() {
 	if err := Run(); err != nil {

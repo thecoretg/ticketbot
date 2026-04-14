@@ -1,10 +1,12 @@
 *.env
 *.DS_Store
-.idea
 *.db
 *.log
 *config.json
 *.key
+.idea
+ticketbot
 bin/
+
 # Added by goreleaser init:
 dist/

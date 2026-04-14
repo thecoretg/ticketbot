@@ -1,3 +1,5 @@
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+
 gensql:
 	sqlc generate
 
@@ -8,11 +10,11 @@ docker-down:
 	docker-compose -f ./docker/docker-compose.yml down -v
 
 docker-build:
-	docker buildx build --platform=linux/amd64 -t ticketbot:v1.5.2 --load -f ./docker/DockerfileMain .
+	docker buildx build --platform=linux/amd64 -t ticketbot:$(VERSION) --load -f ./docker/DockerfileMain .
 
 deploy-container: docker-build
 	aws lightsail push-container-image \
 	--region us-west-2 \
 	--service-name ticketbot \
 	--label ticketbot-server \
-	--image ticketbot:v1.5.2
+	--image ticketbot:$(VERSION)
