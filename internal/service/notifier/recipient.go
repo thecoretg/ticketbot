@@ -52,6 +52,14 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 		}
 	}
 
+	// if a ticket is closed it removes the resources, but not the owner. Most of the time the owner is also in resources,
+	// but this safeguards edge cases.
+	if t.Owner != nil && t.Owner.PrimaryEmail != "" {
+		if _, excl := excludedEmails[t.Owner.PrimaryEmail]; !excl {
+			includedEmails[t.Owner.PrimaryEmail] = struct{}{}
+		}
+	}
+
 	if isNew {
 		for _, nr := range rules {
 			slog.Debug("getAllRecipients: calling webexsvc.GetRecipient", "room_id", nr.WebexRecipientID)
