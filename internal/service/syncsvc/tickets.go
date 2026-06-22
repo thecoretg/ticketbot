@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 )
 
 func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int) error {
@@ -30,7 +30,7 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 		"conditions": con,
 	}
 
-	tix, err := s.CW.CWClient.ListTickets(params)
+	tix, err := s.CW.CWClient.ListTickets(ctx, params)
 	if err != nil {
 		return fmt.Errorf("getting open tickets from connectwise: %w", err)
 	}

@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/thecoretg/ticketbot/models"
-	"github.com/thecoretg/ticketbot/internal/psa"
-	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/tctg-go/webex"
 )
 
 type Message struct {

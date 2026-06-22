@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/thecoretg/ticketbot/models"
-	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 )
 
 func (s *Service) SyncBoardStatuses(ctx context.Context, boardID int) error {
 	start := time.Now()
 	slog.Info("beginning connectwise status sync", "board_id", boardID)
-	cws, err := s.CW.CWClient.ListBoardStatuss(nil, boardID)
+	cws, err := s.CW.CWClient.ListBoardStatuses(ctx, nil, boardID)
 	if err != nil {
 		return fmt.Errorf("listing connectwise statuses for board %d: %w", boardID, err)
 	}

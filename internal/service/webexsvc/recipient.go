@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/thecoretg/ticketbot/models"
-	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/tctg-go/webex"
 )
 
 func (s *Service) ListRecipients(ctx context.Context) ([]*models.WebexRecipient, error) {
@@ -39,7 +39,7 @@ func (s *Service) EnsurePersonRecipientByEmail(ctx context.Context, email string
 		return getMostActive(recips), nil
 	}
 
-	wxr, err := s.WebexClient.ListPeople(email)
+	wxr, err := s.WebexClient.ListPeople(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("fetching people from webex api: %w", err)
 	}

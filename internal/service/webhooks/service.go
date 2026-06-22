@@ -1,11 +1,12 @@
 package webhooks
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 )
 
 type Service struct {
@@ -20,10 +21,10 @@ func New(cw *psa.Client, rootURL string) *Service {
 	}
 }
 
-func (s *Service) ProcessAllHooks() error {
+func (s *Service) ProcessAllHooks(ctx context.Context) error {
 	start := time.Now()
 
-	if err := s.ProcessCWHooks(); err != nil {
+	if err := s.ProcessCWHooks(ctx); err != nil {
 		return fmt.Errorf("processing connectwise hooks: %w", err)
 	}
 	slog.Info("hook sync complete", "took_seconds", time.Since(start).Seconds())
@@ -31,30 +32,30 @@ func (s *Service) ProcessAllHooks() error {
 	return nil
 }
 
-func (s *Service) ProcessCWHooks() error {
+func (s *Service) ProcessCWHooks(ctx context.Context) error {
 	p := map[string]string{
 		"pageSize": "1000",
 	}
 
-	cwh, err := s.CWClient.ListCallbacks(p)
+	cwh, err := s.CWClient.ListCallbacks(ctx, p)
 	if err != nil {
 		return fmt.Errorf("listing connectwise callbacks: %w", err)
 	}
 	slog.Debug("hook sync: got existing connectwise callbacks", "total", len(cwh))
 
-	if err := s.processCWHook(ticketsWebhookURL(s.RootURL), "ticket", "owner", 1, cwh); err != nil {
+	if err := s.processCWHook(ctx, ticketsWebhookURL(s.RootURL), "ticket", "owner", 1, cwh); err != nil {
 		return fmt.Errorf("processing ticketbot hook: %w", err)
 	}
 
 	return nil
 }
 
-func (s *Service) processCWHook(url, entity, level string, objectID int, currentHooks []psa.Callback) error {
+func (s *Service) processCWHook(ctx context.Context, url, entity, level string, objectID int, currentHooks []psa.Callback) error {
 	expected := psa.Callback{
 		URL:      fmt.Sprintf("https://%s", url),
 		Type:     entity,
 		Level:    level,
-		ObjectId: objectID,
+		ObjectID: objectID,
 	}
 
 	found := false
@@ -65,7 +66,7 @@ func (s *Service) processCWHook(url, entity, level string, objectID int, current
 				found = true
 				continue
 			} else {
-				if err := s.CWClient.DeleteCallback(h.ID); err != nil {
+				if err := s.CWClient.DeleteCallback(ctx, h.ID); err != nil {
 					return fmt.Errorf("deleting callback: %w", err)
 				}
 				slog.Info("hook sync: deleted unused callback", "id", h.ID, "url", h.URL)
@@ -74,7 +75,7 @@ func (s *Service) processCWHook(url, entity, level string, objectID int, current
 	}
 
 	if !found {
-		newHook, err := s.CWClient.PostCallback(&expected)
+		newHook, err := s.CWClient.PostCallback(ctx, &expected)
 		if err != nil {
 			return fmt.Errorf("posting callback: %w", err)
 		}

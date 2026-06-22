@@ -158,7 +158,7 @@ func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
 	)
 
 	logger.Debug("notifier: sending notification")
-	_, err := s.MessageSender.PostMessage(&m.WebexMsg)
+	_, err := s.MessageSender.PostMessage(ctx, &m.WebexMsg)
 	if err != nil {
 		m.SendError = fmt.Errorf("sending webex message: %w", err)
 	}

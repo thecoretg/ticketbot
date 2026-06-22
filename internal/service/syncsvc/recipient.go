@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/thecoretg/ticketbot/models"
-	"github.com/thecoretg/ticketbot/internal/psa"
-	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/tctg-go/webex"
 )
 
 func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
@@ -51,7 +51,7 @@ func (s *Service) syncWebexRooms(ctx context.Context) error {
 		slog.Info("webex room sync complete", "took_time", time.Since(start).Seconds())
 	}()
 	// get rooms from webex as source of truth
-	wr, err := s.Webex.WebexClient.ListRooms(nil)
+	wr, err := s.Webex.WebexClient.ListRooms(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("getting rooms from webex: %w", err)
 	}
@@ -79,7 +79,7 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 		slog.Info("webex people sync complete", "took_time", time.Since(start).Seconds())
 	}()
 
-	cwm, err := s.CW.CWClient.ListMembers(nil)
+	cwm, err := s.CW.CWClient.ListMembers(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("getting members from connectwise: %w", err)
 	}
@@ -91,7 +91,7 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 	}
 	slog.Info("webex people sync: got people from store", "total_people", len(sp))
 
-	wp, err := s.getWxPeopleFromCwMembers(cwm, maxSyncs)
+	wp, err := s.getWxPeopleFromCwMembers(ctx, cwm, maxSyncs)
 	if err != nil {
 		return fmt.Errorf("getting webex people from connectwise members: %w", err)
 	}
@@ -111,7 +111,7 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 	return nil
 }
 
-func (s *Service) getWxPeopleFromCwMembers(members []psa.Member, maxSyncs int) ([]webex.Person, error) {
+func (s *Service) getWxPeopleFromCwMembers(ctx context.Context, members []psa.Member, maxSyncs int) ([]webex.Person, error) {
 	sem := make(chan struct{}, maxSyncs)
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(members))
@@ -132,7 +132,7 @@ func (s *Service) getWxPeopleFromCwMembers(members []psa.Member, maxSyncs int) (
 				return
 			}
 
-			ppl, err := s.Webex.WebexClient.ListPeople(member.PrimaryEmail)
+			ppl, err := s.Webex.WebexClient.ListPeople(ctx, member.PrimaryEmail)
 			if err != nil {
 				errCh <- fmt.Errorf("listing people for email %s: %w", member.PrimaryEmail, err)
 				return

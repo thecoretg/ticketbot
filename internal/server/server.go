@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/logging"
-	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
@@ -61,8 +61,15 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	}
 	slog.Info("using TTL", "ttl", ttl)
 
-	cw := psa.NewClient(cr.CWCreds)
-	ms := makeMessageSender(tf.MockWebex, cr.WebexAPISecret)
+	cw, err := psa.NewClient(ctx, *cr.CWCreds)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating connectwise client: %w", err)
+	}
+
+	ms, err := makeMessageSender(ctx, tf.MockWebex, cr.WebexAPISecret)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating message sender: %w", err)
+	}
 
 	s, err := CreateStores(ctx, cr, migVersion)
 	if err != nil {
@@ -86,7 +93,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		Forwards:      r.NotifierForwards,
 		Pool:          s.Pool,
 		MessageSender: ms,
-		CWCompanyID:   cr.CWCreds.CompanyId,
+		CWCompanyID:   cr.CWCreds.CompanyID,
 	}
 
 	ns := notifier.New(nr)

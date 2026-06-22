@@ -25,7 +25,7 @@ func NewClient(apiKey, baseURL string) (*Client, error) {
 	c.SetHeader("Content-Type", "application/json")
 	c.SetHeader("Accept", "application/json")
 	c.SetRetryCount(3)
-	c.SetDisableWarn(true)
+	c.SetLoggerWarnLevel(false)
 
 	if apiKey != "" {
 		c.SetAuthToken(apiKey)
@@ -37,13 +37,13 @@ func NewClient(apiKey, baseURL string) (*Client, error) {
 func (c *Client) Ping() error {
 	var apiErr APIError
 	res, err := c.restClient.R().
-		SetError(&apiErr).
+		SetResultError(&apiErr).
 		Get("")
 	if err != nil {
 		return err
 	}
 
-	if res.IsError() {
+	if res.IsStatusFailure() {
 		return fmt.Errorf("error response from ticketbot api: %w", err)
 	}
 
@@ -53,13 +53,13 @@ func (c *Client) Ping() error {
 func (c *Client) AuthTest() error {
 	var apiErr APIError
 	res, err := c.restClient.R().
-		SetError(&apiErr).
+		SetResultError(&apiErr).
 		Get("authtest")
 	if err != nil {
 		return err
 	}
 
-	if res.IsError() {
+	if res.IsStatusFailure() {
 		return fmt.Errorf("error response from ticketbot api: %s", res.String())
 	}
 
@@ -75,13 +75,13 @@ func GetOne[T any](c *Client, endpoint string, params map[string]string) (*T, er
 	res, err := c.restClient.R().
 		SetQueryParams(params).
 		SetResult(&target).
-		SetError(&apiErr).
+		SetResultError(&apiErr).
 		Get(endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	if res.IsError() {
+	if res.IsStatusFailure() {
 		return nil, &apiErr
 	}
 
@@ -98,7 +98,7 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 		var target []T
 		req := c.restClient.R().
 			SetQueryParams(params).
-			SetError(&apiErr).
+			SetResultError(&apiErr).
 			SetResult(&target)
 
 		res, err := req.Get(endpoint)
@@ -106,7 +106,7 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 			return nil, err
 		}
 
-		if res.IsError() {
+		if res.IsStatusFailure() {
 			return nil, &apiErr
 		}
 
@@ -122,7 +122,7 @@ func GetMany[T any](c *Client, endpoint string, params map[string]string) ([]T, 
 func (c *Client) Post(endpoint string, body, target any) error {
 	var apiErr APIError
 	req := c.restClient.R().
-		SetError(&apiErr).
+		SetResultError(&apiErr).
 		SetBody(body)
 
 	if target != nil {
@@ -134,7 +134,7 @@ func (c *Client) Post(endpoint string, body, target any) error {
 		return err
 	}
 
-	if res.IsError() {
+	if res.IsStatusFailure() {
 		return &apiErr
 	}
 
@@ -145,7 +145,7 @@ func (c *Client) Put(endpoint string, body, target any) error {
 	var apiErr APIError
 	req := c.restClient.R().
 		SetBody(body).
-		SetError(&apiErr)
+		SetResultError(&apiErr)
 
 	if target != nil {
 		req.SetResult(target)
@@ -156,7 +156,7 @@ func (c *Client) Put(endpoint string, body, target any) error {
 		return err
 	}
 
-	if res.IsError() {
+	if res.IsStatusFailure() {
 		return &apiErr
 	}
 
@@ -166,13 +166,13 @@ func (c *Client) Put(endpoint string, body, target any) error {
 func (c *Client) Delete(endpoint string) error {
 	var apiErr APIError
 	res, err := c.restClient.R().
-		SetError(&apiErr).
+		SetResultError(&apiErr).
 		Delete(endpoint)
 	if err != nil {
 		return err
 	}
 
-	if res.IsError() {
+	if res.IsStatusFailure() {
 		return &apiErr
 	}
 

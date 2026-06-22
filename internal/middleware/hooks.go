@@ -6,8 +6,8 @@ import (
 	"io"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/internal/psa"
-	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/tctg-go/webex"
 )
 
 func RequireConnectwiseSignature() gin.HandlerFunc {

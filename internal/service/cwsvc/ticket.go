@@ -9,7 +9,7 @@ import (
 
 	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
-	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 )
 
 var ErrTicketWasDeleted = errors.New("ticket was deleted from connectwise")
@@ -53,7 +53,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		logRequest(req, err, logger)
 	}()
 
-	cd, err := s.getCwData(id)
+	cd, err := s.getCwData(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrTicketWasDeleted) {
 			req.NoProcReason = "ticket was deleted from connectwise"
@@ -164,8 +164,8 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	return req, nil
 }
 
-func (s *Service) getCwData(ticketID int) (CWData, error) {
-	t, err := s.CWClient.GetTicket(ticketID, nil)
+func (s *Service) getCwData(ctx context.Context, ticketID int) (CWData, error) {
+	t, err := s.CWClient.GetTicket(ctx, ticketID, nil)
 	if err != nil {
 		if errors.Is(err, psa.ErrNotFound) {
 			return CWData{}, ErrTicketWasDeleted
@@ -173,7 +173,7 @@ func (s *Service) getCwData(ticketID int) (CWData, error) {
 		return CWData{}, fmt.Errorf("getting ticket: %w", err)
 	}
 
-	n, err := s.CWClient.GetMostRecentTicketNote(ticketID)
+	n, err := s.CWClient.GetMostRecentTicketNote(ctx, ticketID)
 	if err != nil && !errors.Is(err, psa.ErrNotFound) {
 		return CWData{}, fmt.Errorf("getting most recent ticket note: %w", err)
 	}
@@ -191,7 +191,7 @@ func (s *Service) ensureBoard(ctx context.Context, id int) (*models.Board, error
 		return nil, fmt.Errorf("getting board from store: %w", err)
 	}
 
-	cw, err := s.CWClient.GetBoard(id, nil)
+	cw, err := s.CWClient.GetBoard(ctx, id, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting board from cw: %w", err)
 	}
@@ -222,7 +222,7 @@ func (s *Service) ensureStatus(ctx context.Context, id, boardID int) (*models.Ti
 		return nil, fmt.Errorf("ensuring status board in store: %w", err)
 	}
 
-	cw, err := s.CWClient.GetBoardStatus(id, nil, boardID)
+	cw, err := s.CWClient.GetBoardStatus(ctx, id, nil, boardID)
 	if err != nil {
 		return nil, fmt.Errorf("getting status from cw: %w", err)
 	}
@@ -253,13 +253,13 @@ func (s *Service) ensureCompany(ctx context.Context, id int) (*models.Company, e
 		return nil, fmt.Errorf("getting company from store: %w", err)
 	}
 
-	cw, err := s.CWClient.GetCompany(id, nil)
+	cw, err := s.CWClient.GetCompany(ctx, id, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting company from cw: %w", err)
 	}
 
 	c, err = s.Companies.Upsert(ctx, &models.Company{
-		ID:   cw.Id,
+		ID:   cw.ID,
 		Name: cw.Name,
 	})
 	if err != nil {
@@ -279,7 +279,7 @@ func (s *Service) ensureContact(ctx context.Context, id int) (*models.Contact, e
 		return nil, fmt.Errorf("getting contact from store: %w", err)
 	}
 
-	cw, err := s.CWClient.GetContact(id, nil)
+	cw, err := s.CWClient.GetContact(ctx, id, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting contact from cw: %w", err)
 	}
@@ -316,7 +316,7 @@ func (s *Service) ensureMemberByIdentifier(ctx context.Context, identifier strin
 		return nil, fmt.Errorf("getting member from store: %w", err)
 	}
 
-	cw, err := s.CWClient.GetMemberByIdentifier(identifier)
+	cw, err := s.CWClient.GetMemberByIdentifier(ctx, identifier)
 	if err != nil {
 		return nil, fmt.Errorf("getting member from cw by identifier: %w", err)
 	}
@@ -334,7 +334,7 @@ func (s *Service) ensureMember(ctx context.Context, id int) (*models.Member, err
 		return nil, fmt.Errorf("getting member from store: %w", err)
 	}
 
-	cw, err := s.CWClient.GetMember(id, nil)
+	cw, err := s.CWClient.GetMember(ctx, id, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting member from cw: %w", err)
 	}
@@ -402,7 +402,7 @@ func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNo
 
 	n, err = s.Notes.Upsert(ctx, &models.TicketNote{
 		ID:        cwn.ID,
-		TicketID:  cwn.TicketId,
+		TicketID:  cwn.TicketID,
 		Content:   strToPtr(cwn.Text),
 		MemberID:  memberID,
 		ContactID: contactID,
