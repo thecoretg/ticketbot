@@ -407,7 +407,8 @@ input[type="email"],
 input[type="number"],
 input[type="date"],
 input[type="time"],
-select {
+select,
+textarea {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -419,14 +420,26 @@ select {
     width: 100%;
 }
 
-input:focus, select:focus {
+textarea {
+    resize: vertical;
+    min-height: 84px;
+    line-height: 1.45;
+}
+
+textarea.code-input {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+
+input:focus, select:focus, textarea:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(47,129,247,0.15);
     outline: none;
 }
 
 html[data-theme="light"] input:focus,
-html[data-theme="light"] select:focus {
+html[data-theme="light"] select:focus,
+html[data-theme="light"] textarea:focus {
     box-shadow: 0 0 0 3px rgba(9,105,218,0.15);
 }
 

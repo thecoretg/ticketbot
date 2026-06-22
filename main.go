@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	gooseMigrationVersion = 5
+	gooseMigrationVersion = 7
 	shutdownTimeout       = 10 * time.Second
 )
 
@@ -84,7 +84,7 @@ func Run() error {
 		if a.Creds.InitialAdminPassword != "" {
 			adminPwd = &a.Creds.InitialAdminPassword
 		}
-		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, adminPwd); err != nil {
+		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, adminPwd, !a.TestFlags.SkipInitialPasswordReset); err != nil {
 			return fmt.Errorf("bootstrapping admin: %w", err)
 		}
 	} else {

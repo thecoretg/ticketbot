@@ -55,6 +55,10 @@ func AddRoutes(a *App, g *gin.Engine, shutdown func()) {
 	nh := handlers.NewNotifierHandler(a.Svc.Notifier)
 	registerNotifierRoutes(n, nh)
 
+	tr := g.Group("transformers", auth)
+	trh := handlers.NewTransformerHandler(a.Svc.Transformer)
+	registerTransformerRoutes(tr, trh)
+
 	lh := handlers.NewLogsHandler(a.LogBuffer)
 	g.GET("logs", auth, lh.HandleList)
 
@@ -117,6 +121,15 @@ func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
 	fw.GET(":id", h.GetForward)
 	fw.POST("", h.AddUserForward)
 	fw.DELETE(":id", h.DeleteUserForward)
+}
+
+func registerTransformerRoutes(r *gin.RouterGroup, h *handlers.TransformerHandler) {
+	ru := r.Group("rules")
+	ru.GET("", h.ListRules)
+	ru.GET(":id", h.GetRule)
+	ru.POST("", h.AddRule)
+	ru.PUT(":id", h.UpdateRule)
+	ru.DELETE(":id", h.DeleteRule)
 }
 
 func registerHookRoutes(r *gin.RouterGroup, tb *handlers.TicketbotHandler) {

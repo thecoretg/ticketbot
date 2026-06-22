@@ -6,8 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
@@ -15,6 +15,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
+	"github.com/thecoretg/ticketbot/internal/service/transformer"
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/internal/service/webhooks"
@@ -35,15 +36,16 @@ type App struct {
 }
 
 type Services struct {
-	Auth      *authsvc.Service
-	Config    *config.Service
-	User      *user.Service
-	CW        *cwsvc.Service
-	Hooks     *webhooks.Service
-	Webex     *webexsvc.Service
-	Sync      *syncsvc.Service
-	Notifier  *notifier.Service
-	Ticketbot *ticketbot.Service
+	Auth        *authsvc.Service
+	Config      *config.Service
+	User        *user.Service
+	CW          *cwsvc.Service
+	Hooks       *webhooks.Service
+	Webex       *webexsvc.Service
+	Sync        *syncsvc.Service
+	Notifier    *notifier.Service
+	Transformer *transformer.Service
+	Ticketbot   *ticketbot.Service
 }
 
 const defaultStoreTTL = int64(900)
@@ -98,6 +100,13 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 
 	ns := notifier.New(nr)
 
+	ts := transformer.New(transformer.SvcParams{
+		Cfg:      cfg,
+		CWClient: cw,
+		Rules:    r.TransformerRules,
+		Runs:     r.TransformerRuns,
+	})
+
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
 
 	return &App{
@@ -110,15 +119,16 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		MessageSender: ms,
 		LogBuffer:     logBuf,
 		Svc: &Services{
-			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
-			Config:    config.New(r.Config, cfg, level, logBuf),
-			User:      user.New(r.APIUser, r.APIKey),
-			Hooks:     webhooks.New(cw, cr.RootURL),
-			CW:        cws,
-			Webex:     ws,
-			Sync:      syncsvc.New(s.Pool, cws, ws, ns),
-			Notifier:  notifier.New(nr),
-			Ticketbot: ticketbot.New(cfg, cws, ns),
+			Auth:        authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
+			Config:      config.New(r.Config, cfg, level, logBuf),
+			User:        user.New(r.APIUser, r.APIKey),
+			Hooks:       webhooks.New(cw, cr.RootURL),
+			CW:          cws,
+			Webex:       ws,
+			Sync:        syncsvc.New(s.Pool, cws, ws, ns),
+			Notifier:    notifier.New(nr),
+			Transformer: ts,
+			Ticketbot:   ticketbot.New(cfg, cws, ns, ts),
 		},
 	}, persister, nil
 }

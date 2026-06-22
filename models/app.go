@@ -12,6 +12,15 @@ type Config struct {
 	// all notifier rules will be disregarded.
 	AttemptNotify bool `json:"attempt_notify"`
 
+	// AttemptTransform is a full killswitch for the ticket transformer pipeline. If it is off, no
+	// transformer rules run and tickets are processed exactly as before.
+	AttemptTransform bool `json:"attempt_transform"`
+
+	// CwBotMemberIdentifier is the Connectwise member identifier the bot uses when it writes to tickets
+	// (e.g. authoring notes). It is also used to detect and skip the bot's own webhooks, preventing
+	// transformer loops.
+	CwBotMemberIdentifier string `json:"cw_bot_member_identifier"`
+
 	// MaxMessageLength is the max amount of characters in a notification's ticket note output before
 	// it truncates and adds a "..." to the end.
 	MaxMessageLength int `json:"max_message_length"`
@@ -39,19 +48,23 @@ type Config struct {
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
 // distinguishing between "not provided" and an explicit zero/false value.
 type ConfigUpdateParams struct {
-	AttemptNotify           *bool `json:"attempt_notify"`
-	MaxMessageLength        *int  `json:"max_message_length"`
-	MaxConcurrentSyncs      *int  `json:"max_concurrent_syncs"`
-	RequireTOTP             *bool `json:"require_totp"`
-	DebugLogging            *bool `json:"debug_logging"`
-	LogRetentionDays        *int  `json:"log_retention_days"`
-	LogCleanupIntervalHours *int  `json:"log_cleanup_interval_hours"`
-	LogBufferSize           *int  `json:"log_buffer_size"`
+	AttemptNotify           *bool   `json:"attempt_notify"`
+	MaxMessageLength        *int    `json:"max_message_length"`
+	MaxConcurrentSyncs      *int    `json:"max_concurrent_syncs"`
+	RequireTOTP             *bool   `json:"require_totp"`
+	DebugLogging            *bool   `json:"debug_logging"`
+	LogRetentionDays        *int    `json:"log_retention_days"`
+	LogCleanupIntervalHours *int    `json:"log_cleanup_interval_hours"`
+	LogBufferSize           *int    `json:"log_buffer_size"`
+	AttemptTransform        *bool   `json:"attempt_transform"`
+	CwBotMemberIdentifier   *string `json:"cw_bot_member_identifier"`
 }
 
 var DefaultConfig = Config{
 	ID:                      1,
 	AttemptNotify:           false,
+	AttemptTransform:        false,
+	CwBotMemberIdentifier:   "",
 	MaxMessageLength:        300,
 	MaxConcurrentSyncs:      5,
 	RequireTOTP:             false,

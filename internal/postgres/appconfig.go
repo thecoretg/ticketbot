@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/db"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type ConfigRepo struct {
@@ -67,6 +67,8 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		LogRetentionDays:        c.LogRetentionDays,
 		LogCleanupIntervalHours: c.LogCleanupIntervalHours,
 		LogBufferSize:           c.LogBufferSize,
+		AttemptTransform:        c.AttemptTransform,
+		CwBotMemberIdentifier:   c.CwBotMemberIdentifier,
 	}
 }
 
@@ -81,5 +83,7 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		LogRetentionDays:        pg.LogRetentionDays,
 		LogCleanupIntervalHours: pg.LogCleanupIntervalHours,
 		LogBufferSize:           pg.LogBufferSize,
+		AttemptTransform:        pg.AttemptTransform,
+		CwBotMemberIdentifier:   pg.CwBotMemberIdentifier,
 	}
 }

@@ -7,10 +7,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/thecoretg/ticketbot/internal/mock"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
-	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/tctg-go/webex"
+	"github.com/thecoretg/ticketbot/internal/mock"
+	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/models"
 )
 
@@ -24,11 +24,12 @@ type Creds struct {
 }
 
 type TestFlags struct {
-	APIKey          *string
-	SkipAuth        bool
-	SkipHooks       bool
-	MockWebex       bool
-	StoreTTLSeconds int64
+	APIKey                   *string
+	SkipAuth                 bool
+	SkipHooks                bool
+	MockWebex                bool
+	SkipInitialPasswordReset bool
+	StoreTTLSeconds          int64
 }
 
 func getCreds() *Creds {
@@ -142,10 +143,11 @@ func getTestFlags() *TestFlags {
 	}
 
 	return &TestFlags{
-		APIKey:          apiKey,
-		SkipAuth:        os.Getenv("SKIP_AUTH") == "true",
-		SkipHooks:       os.Getenv("SKIP_HOOKS") == "true",
-		MockWebex:       os.Getenv("MOCK_WEBEX") == "true",
-		StoreTTLSeconds: ttl,
+		APIKey:                   apiKey,
+		SkipAuth:                 os.Getenv("SKIP_AUTH") == "true",
+		SkipHooks:                os.Getenv("SKIP_HOOKS") == "true",
+		MockWebex:                os.Getenv("MOCK_WEBEX") == "true",
+		SkipInitialPasswordReset: os.Getenv("SKIP_INITIAL_PASSWORD_RESET") == "true",
+		StoreTTLSeconds:          ttl,
 	}
 }

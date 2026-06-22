@@ -7,27 +7,30 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/transformer"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type Service struct {
 	Cfg         *models.Config
 	CW          *cwsvc.Service
 	Notifier    *notifier.Service
+	Transformer *transformer.Service
 	ticketLocks sync.Map
 }
 
-func New(cfg *models.Config, cw *cwsvc.Service, ns *notifier.Service) *Service {
+func New(cfg *models.Config, cw *cwsvc.Service, ns *notifier.Service, ts *transformer.Service) *Service {
 	return &Service{
-		Cfg:      cfg,
-		CW:       cw,
-		Notifier: ns,
+		Cfg:         cfg,
+		CW:          cw,
+		Notifier:    ns,
+		Transformer: ts,
 	}
 }
 
-func (s *Service) ProcessTicket(ctx context.Context, id int) (err error) {
+func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID string) (err error) {
 	start := time.Now()
 	slog.Debug("ticketbot: request received", "ticket_id", id)
 
@@ -51,6 +54,15 @@ func (s *Service) ProcessTicket(ctx context.Context, id int) (err error) {
 		return fmt.Errorf("checking if ticket %d exists: %w", id, err)
 	}
 	isNew := !exists
+
+	// Transformer pipeline: mutate the CW ticket before we sync it locally.
+	// No-op when the flag is off, the service is unset, or no rules match. Failures
+	// here are deliberately non-fatal so a bad rule never blocks sync/notify.
+	if s.Cfg.AttemptTransform && s.Transformer != nil {
+		if err := s.Transformer.Run(ctx, id, isNew, actorMemberID); err != nil {
+			slog.Error("ticketbot: transformer pipeline failed", "ticket_id", id, "error", err.Error())
+		}
+	}
 
 	ticket, err := s.CW.ProcessTicket(ctx, id, "ticketbot")
 	if err != nil {

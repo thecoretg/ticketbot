@@ -11,6 +11,8 @@ type AllRepos struct {
 	TicketNotifications TicketNotificationRepository
 	NotifierForwards    NotifierForwardRepository
 	NotifierRules       NotifierRuleRepository
+	TransformerRules    TransformerRuleRepository
+	TransformerRuns     TransformerRunRepository
 	WebexRecipients     WebexRecipientRepository
 	CW                  CWRepos
 }

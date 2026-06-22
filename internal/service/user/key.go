@@ -16,9 +16,10 @@ const defaultBootstrapPassword = "password"
 
 // BootstrapAdmin ensures the initial admin user exists. If the user does not
 // exist yet, it is created and its password is set to initialPassword (or
-// "password" if nil), with password_reset_required = true.
+// "password" if nil). When requireReset is true the account must change its
+// password on first login; pass false (e.g. for local testing) to skip that.
 // If the user already exists, this is a no-op.
-func (s *Service) BootstrapAdmin(ctx context.Context, email string, initialPassword *string) error {
+func (s *Service) BootstrapAdmin(ctx context.Context, email string, initialPassword *string, requireReset bool) error {
 	if email == "" {
 		return errors.New("received empty email")
 	}
@@ -52,11 +53,15 @@ func (s *Service) BootstrapAdmin(ctx context.Context, email string, initialPassw
 		return fmt.Errorf("setting password: %w", err)
 	}
 
-	if err := s.Users.SetPasswordResetRequired(ctx, u.ID, true); err != nil {
+	if err := s.Users.SetPasswordResetRequired(ctx, u.ID, requireReset); err != nil {
 		return fmt.Errorf("setting reset required: %w", err)
 	}
 
-	slog.Info("bootstrap admin created — password change required on first login", "email", email)
+	if requireReset {
+		slog.Info("bootstrap admin created — password change required on first login", "email", email)
+	} else {
+		slog.Warn("bootstrap admin created with password reset skipped (SKIP_INITIAL_PASSWORD_RESET)", "email", email)
+	}
 	return nil
 }
 

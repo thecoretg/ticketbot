@@ -467,7 +467,8 @@ function checkSavedKey() {
 // Tabs
 // ─────────────────────────────────────────────────────────
 const tabLoaders = {
-    rules:    loadRules,
+    rules:        loadRules,
+    transformers: loadTransformers,
     forwards: loadForwards,
     users:    loadUsers,
     keys:     loadKeys,
@@ -653,6 +654,251 @@ async function deleteRule(id) {
         await api('DELETE', `/notifiers/rules/${id}`)
         toast('Rule deleted', 'success')
         loadRules()
+    } catch (e) { toast(e.message, 'error') }
+}
+
+// ─────────────────────────────────────────────────────────
+// Transformers
+// ─────────────────────────────────────────────────────────
+const TRANSFORMER_ACTIONS = [
+    { value: 'update_summary', label: 'Update Summary' },
+    { value: 'add_note',       label: 'Add Note' },
+]
+const TRANSFORMER_APPLY_ON = [
+    { value: 'new',     label: 'New tickets only' },
+    { value: 'both',    label: 'New & Updated' },
+    { value: 'updated', label: 'Updates only' },
+]
+const TRANSFORMER_FIELDS = [
+    { value: 'summary',            label: 'Summary' },
+    { value: 'company_name',       label: 'Company Name' },
+    { value: 'company_identifier', label: 'Company ID' },
+    { value: 'contact_name',       label: 'Contact Name' },
+    { value: 'status_name',        label: 'Status' },
+    { value: 'board_name',         label: 'Board Name' },
+    { value: 'type_name',          label: 'Type' },
+    { value: 'subtype_name',       label: 'Subtype' },
+    { value: 'priority_name',      label: 'Priority' },
+    { value: 'source_name',        label: 'Source' },
+]
+const TRANSFORMER_OPERATORS = [
+    { value: 'contains',     label: 'contains' },
+    { value: 'not_contains', label: 'does not contain' },
+    { value: 'equals',       label: 'equals' },
+    { value: 'not_equals',   label: 'does not equal' },
+    { value: 'starts_with',  label: 'starts with' },
+    { value: 'ends_with',    label: 'ends with' },
+]
+const TRANSFORMER_CONFIG_HINTS = {
+    update_summary: '{"summary": "[{{.Company.Identifier}}] {{.Summary}}"}',
+    add_note:       '{"text": "Auto-note for {{.Company.Name}}", "internal": true}',
+}
+
+function transformerActionLabel(v) {
+    return (TRANSFORMER_ACTIONS.find(a => a.value === v) || {}).label || v
+}
+function transformerApplyOnLabel(v) {
+    return (TRANSFORMER_APPLY_ON.find(a => a.value === v) || {}).label || v
+}
+function transformerFieldLabel(v) {
+    return (TRANSFORMER_FIELDS.find(a => a.value === v) || {}).label || v
+}
+function transformerOperatorLabel(v) {
+    return (TRANSFORMER_OPERATORS.find(a => a.value === v) || {}).label || v
+}
+function transformerConditionSummary(conds) {
+    if (!conds || !conds.length) return '<span style="color:var(--muted)">—</span>'
+    return conds.map(c =>
+        `${esc(transformerFieldLabel(c.field))} <em>${esc(transformerOperatorLabel(c.operator))}</em> "${esc(c.value)}"`
+    ).join('<br>')
+}
+
+let transformerRules = []
+
+async function loadTransformers() {
+    try {
+        const rules = await api('GET', '/transformers/rules')
+        transformerRules = rules || []
+        renderTransformers(transformerRules)
+    } catch (e) {
+        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+    }
+}
+
+function renderTransformers(rules) {
+    const header = `<div class="tab-header">
+        <h2>Transformer Rules</h2>
+        <button class="btn btn-primary btn-sm" onclick="showTransformerModal()">+ New Rule</button>
+    </div>`
+
+    const thead = '<th>Enabled</th><th>Priority</th><th>Name</th><th>Action</th><th>Board</th><th>Applies On</th><th>Conditions</th><th></th>'
+    const rows  = rules.map(r => `<tr>
+        <td>${badge(r.enabled)}</td>
+        <td>${esc(r.priority)}</td>
+        <td>${esc(r.name)}</td>
+        <td>${esc(transformerActionLabel(r.action))}</td>
+        <td>${r.cw_board_id ? esc(r.cw_board_id) : '<span style="color:var(--muted)">All</span>'}</td>
+        <td>${esc(transformerApplyOnLabel(r.apply_on))}</td>
+        <td style="font-size:12px">${transformerConditionSummary(r.conditions)}</td>
+        <td class="actions">
+            <button class="btn btn-ghost btn-sm" onclick="editTransformer(${r.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteTransformer(${r.id})">Delete</button>
+        </td>
+    </tr>`)
+
+    setContent(header + tableWrap(thead, rows))
+}
+
+function editTransformer(id) {
+    const rule = transformerRules.find(r => r.id === id)
+    if (!rule) { toast('Rule not found', 'error'); return }
+    showTransformerModal(rule)
+}
+
+// showTransformerModal opens the create form, or the edit form when `existing` is
+// a rule object.
+async function showTransformerModal(existing = null) {
+    const isEdit = !!existing
+    let boards = []
+    try {
+        boards = await api('GET', '/cw/boards')
+    } catch (e) { toast(e.message, 'error'); return }
+
+    const sel = (cond) => cond ? ' selected' : ''
+    const actionOpts = TRANSFORMER_ACTIONS.map(a =>
+        `<option value="${a.value}"${sel(isEdit && existing.action === a.value)}>${esc(a.label)}</option>`).join('')
+    const applyOpts = TRANSFORMER_APPLY_ON.map(a =>
+        `<option value="${a.value}"${sel(isEdit && existing.apply_on === a.value)}>${esc(a.label)}</option>`).join('')
+    const boardOpts = `<option value="">All boards</option>` + (boards || []).map(b =>
+        `<option value="${b.id}"${sel(isEdit && existing.cw_board_id === b.id)}>${esc(b.name)}</option>`).join('')
+
+    const nameVal       = isEdit ? esc(existing.name) : ''
+    const priorityVal   = isEdit ? esc(existing.priority) : '100'
+    const configVal     = isEdit ? esc(JSON.stringify(existing.config ?? {})) : ''
+    const enabledChecked = (isEdit ? existing.enabled : true) ? 'checked' : ''
+
+    openModal(isEdit ? 'Edit Transformer Rule' : 'New Transformer Rule', `
+        <div class="form-group">
+            <label>Name</label>
+            <input id="t-name" type="text" placeholder="e.g. Prefix summary with company" value="${nameVal}">
+        </div>
+        <div class="form-group">
+            <label>Action</label>
+            <select id="t-action" onchange="updateTransformerHint()">${actionOpts}</select>
+        </div>
+        <div class="form-group">
+            <label>Connectwise Board</label>
+            <select id="t-board">${boardOpts}</select>
+        </div>
+        <div class="form-group">
+            <label>Applies On</label>
+            <select id="t-apply">${applyOpts}</select>
+        </div>
+        <div class="form-group">
+            <label>Conditions <span style="color:var(--muted);font-weight:400">(all must match)</span></label>
+            <div id="t-conditions"></div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addTransformerCondition()">+ Add condition</button>
+        </div>
+        <div class="form-group">
+            <label>Priority</label>
+            <input id="t-priority" type="number" value="${priorityVal}" min="0">
+        </div>
+        <div class="config-row" style="padding:0">
+            <div>
+                <div class="config-label">Enabled</div>
+                <div class="config-desc">Disabled rules are kept but never run</div>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="t-enabled" ${enabledChecked}>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label>Config (JSON, supports Go templates)</label>
+            <textarea id="t-config" class="code-input" rows="4">${configVal}</textarea>
+            <div class="config-desc" id="t-config-hint"></div>
+        </div>`, async () => {
+        const name     = document.getElementById('t-name').value.trim()
+        const action   = document.getElementById('t-action').value
+        const boardVal = document.getElementById('t-board').value
+        const applyOn  = document.getElementById('t-apply').value
+        const priority = parseInt(document.getElementById('t-priority').value)
+        const configRaw = document.getElementById('t-config').value.trim() || '{}'
+
+        if (!name) { toast('Name is required', 'error'); return }
+
+        let config
+        try { config = JSON.parse(configRaw) }
+        catch { toast('Config is not valid JSON', 'error'); return }
+
+        const conditions = [...document.querySelectorAll('#t-conditions .condition-row')].map(row => ({
+            field:    row.querySelector('.cond-field').value,
+            operator: row.querySelector('.cond-op').value,
+            value:    row.querySelector('.cond-value').value,
+        })).filter(c => c.value.trim() !== '')
+
+        const payload = {
+            name,
+            action,
+            cw_board_id: boardVal ? parseInt(boardVal) : null,
+            config,
+            conditions,
+            apply_on: applyOn,
+            priority: Number.isFinite(priority) ? priority : 100,
+            enabled: document.getElementById('t-enabled').checked,
+        }
+
+        try {
+            if (isEdit) {
+                await api('PUT', `/transformers/rules/${existing.id}`, payload)
+            } else {
+                await api('POST', '/transformers/rules', payload)
+            }
+            closeModal()
+            toast(isEdit ? 'Transformer rule updated' : 'Transformer rule created', 'success')
+            loadTransformers()
+        } catch (e) { toast(e.message, 'error') }
+    }, isEdit ? 'Save' : 'Create')
+
+    if (isEdit && Array.isArray(existing.conditions)) {
+        existing.conditions.forEach(c => addTransformerCondition(c.field, c.operator, c.value))
+    }
+    updateTransformerHint()
+}
+
+function addTransformerCondition(field = 'summary', operator = 'contains', value = '') {
+    const wrap = document.getElementById('t-conditions')
+    if (!wrap) return
+    const fieldOpts = TRANSFORMER_FIELDS.map(f => `<option value="${f.value}">${esc(f.label)}</option>`).join('')
+    const opOpts    = TRANSFORMER_OPERATORS.map(o => `<option value="${o.value}">${esc(o.label)}</option>`).join('')
+    const row = document.createElement('div')
+    row.className = 'condition-row'
+    row.style = 'display:flex;gap:6px;margin-bottom:6px;align-items:center'
+    row.innerHTML = `
+        <select class="cond-field" style="flex:0 0 34%">${fieldOpts}</select>
+        <select class="cond-op" style="flex:0 0 30%">${opOpts}</select>
+        <input class="cond-value" type="text" placeholder="value" style="flex:1" value="${esc(value)}">
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.condition-row').remove()">✕</button>`
+    wrap.appendChild(row)
+    row.querySelector('.cond-field').value = field
+    row.querySelector('.cond-op').value = operator
+}
+
+function updateTransformerHint() {
+    const action = document.getElementById('t-action').value
+    const hintEl = document.getElementById('t-config-hint')
+    const cfgEl  = document.getElementById('t-config')
+    const hint   = TRANSFORMER_CONFIG_HINTS[action] || '{}'
+    if (hintEl) hintEl.textContent = `Example: ${hint}`
+    if (cfgEl && !cfgEl.value.trim()) cfgEl.value = hint
+}
+
+async function deleteTransformer(id) {
+    if (!confirm('Delete this transformer rule?')) return
+    try {
+        await api('DELETE', `/transformers/rules/${id}`)
+        toast('Transformer rule deleted', 'success')
+        loadTransformers()
     } catch (e) { toast(e.message, 'error') }
 }
 
@@ -1037,6 +1283,23 @@ function renderConfig(cfg) {
         </div>
         <div class="config-row">
             <div>
+                <div class="config-label">Attempt Transform</div>
+                <div class="config-desc">Master switch for the ticket transformer pipeline</div>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="c-transform" ${cfg.attempt_transform ? 'checked' : ''}>
+                <span class="toggle-track"></span>
+            </label>
+        </div>
+        <div class="config-row">
+            <div>
+                <div class="config-label">Bot Member Identifier</div>
+                <div class="config-desc">Connectwise member the bot writes as; used to skip its own webhooks (prevents transformer loops)</div>
+            </div>
+            <input class="config-input" type="text" id="c-bot-member" value="${esc(cfg.cw_bot_member_identifier || '')}">
+        </div>
+        <div class="config-row">
+            <div>
                 <div class="config-label">Max Message Length</div>
                 <div class="config-desc">Truncation limit for ticket note content</div>
             </div>
@@ -1100,6 +1363,8 @@ async function saveConfig() {
     try {
         await api('PUT', '/config', {
             attempt_notify:             document.getElementById('c-notify').checked,
+            attempt_transform:          document.getElementById('c-transform').checked,
+            cw_bot_member_identifier:   document.getElementById('c-bot-member').value.trim(),
             max_message_length:         parseInt(document.getElementById('c-max-len').value)              || 300,
             max_concurrent_syncs:       parseInt(document.getElementById('c-max-syncs').value)            || 5,
             require_totp:               document.getElementById('c-require-totp').checked,
