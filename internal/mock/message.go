@@ -1,7 +1,9 @@
 package mock
 
 import (
-	"github.com/thecoretg/ticketbot/internal/webex"
+	"context"
+
+	"github.com/thecoretg/tctg-go/webex"
 )
 
 // This isn't ideal at all, but I need it short term just to get this up and running.
@@ -12,28 +14,33 @@ type WebexClient struct {
 	webexClient *webex.Client
 }
 
-func NewWebexClient(token string) *WebexClient {
-	return &WebexClient{
-		webexClient: webex.NewClient(token),
+func NewWebexClient(ctx context.Context, token string) (*WebexClient, error) {
+	c, err := webex.NewClient(ctx, webex.Config{Token: token})
+	if err != nil {
+		return nil, err
 	}
+
+	return &WebexClient{
+		webexClient: c,
+	}, nil
 }
 
-func (w *WebexClient) GetMessage(id string, params map[string]string) (*webex.Message, error) {
+func (w *WebexClient) GetMessage(ctx context.Context, id string, params map[string]string) (*webex.Message, error) {
 	return &webex.Message{}, nil
 }
 
-func (w *WebexClient) GetAttachmentAction(messageID string) (*webex.AttachmentAction, error) {
+func (w *WebexClient) GetAttachmentAction(ctx context.Context, messageID string) (*webex.AttachmentAction, error) {
 	return &webex.AttachmentAction{}, nil
 }
 
-func (w *WebexClient) PostMessage(message *webex.Message) (*webex.Message, error) {
+func (w *WebexClient) PostMessage(ctx context.Context, message *webex.Message) (*webex.Message, error) {
 	return message, nil
 }
 
-func (w *WebexClient) ListRooms(params map[string]string) ([]webex.Room, error) {
-	return w.webexClient.ListRooms(params)
+func (w *WebexClient) ListRooms(ctx context.Context, params map[string]string) ([]webex.Room, error) {
+	return w.webexClient.ListRooms(ctx, params)
 }
 
-func (w *WebexClient) ListPeople(email string) ([]webex.Person, error) {
-	return w.webexClient.ListPeople(email)
+func (w *WebexClient) ListPeople(ctx context.Context, email string) ([]webex.Person, error) {
+	return w.webexClient.ListPeople(ctx, email)
 }

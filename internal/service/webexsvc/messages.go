@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/tctg-go/webex"
 )
 
 var ErrMessageFromBot = errors.New("message is from the bot")
@@ -16,7 +16,7 @@ func (s *Service) GetMessage(ctx context.Context, payload *webex.MessageHookPayl
 		return nil, ErrMessageFromBot
 	}
 
-	msg, err := s.WebexClient.GetMessage(data.ID, nil)
+	msg, err := s.WebexClient.GetMessage(ctx, data.ID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting full message details from webex: %w", err)
 	}
@@ -30,7 +30,7 @@ func (s *Service) GetAttachmentAction(ctx context.Context, payload *webex.Messag
 		return nil, ErrMessageFromBot
 	}
 
-	action, err := s.WebexClient.GetAttachmentAction(data.ID)
+	action, err := s.WebexClient.GetAttachmentAction(ctx, data.ID)
 	if err != nil {
 		return nil, fmt.Errorf("getting attachment action from webex: %w", err)
 	}
@@ -38,6 +38,6 @@ func (s *Service) GetAttachmentAction(ctx context.Context, payload *webex.Messag
 	return action, nil
 }
 
-func (s *Service) PostMessage(msg *webex.Message) (*webex.Message, error) {
-	return s.WebexClient.PostMessage(msg)
+func (s *Service) PostMessage(ctx context.Context, msg *webex.Message) (*webex.Message, error) {
+	return s.WebexClient.PostMessage(ctx, msg)
 }

@@ -8,9 +8,9 @@ import (
 	"strconv"
 
 	"github.com/thecoretg/ticketbot/internal/mock"
-	"github.com/thecoretg/ticketbot/internal/psa"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/repos"
-	"github.com/thecoretg/ticketbot/internal/webex"
+	"github.com/thecoretg/tctg-go/webex"
 	"github.com/thecoretg/ticketbot/models"
 )
 
@@ -20,7 +20,7 @@ type Creds struct {
 	InitialAdminPassword string
 	PostgresDSN          string
 	WebexAPISecret       string
-	CWCreds              *psa.Creds
+	CWCreds              *psa.Config
 }
 
 type TestFlags struct {
@@ -38,11 +38,11 @@ func getCreds() *Creds {
 		InitialAdminPassword: os.Getenv("INITIAL_ADMIN_PASSWORD"),
 		PostgresDSN:          os.Getenv("POSTGRES_DSN"),
 		WebexAPISecret:       os.Getenv("WEBEX_SECRET"),
-		CWCreds: &psa.Creds{
+		CWCreds: &psa.Config{
 			PublicKey:  os.Getenv("CW_PUB_KEY"),
 			PrivateKey: os.Getenv("CW_PRIV_KEY"),
-			ClientId:   os.Getenv("CW_CLIENT_ID"),
-			CompanyId:  os.Getenv("CW_COMPANY_ID"),
+			ClientID:   os.Getenv("CW_CLIENT_ID"),
+			CompanyID:  os.Getenv("CW_COMPANY_ID"),
 		},
 	}
 }
@@ -55,8 +55,8 @@ func (c *Creds) validate(tf *TestFlags) error {
 	cwVals := map[string]string{
 		"CW_PUB_KEY":    c.CWCreds.PublicKey,
 		"CW_PRIV_KEY":   c.CWCreds.PrivateKey,
-		"CW_CLIENT_ID":  c.CWCreds.ClientId,
-		"CW_COMPANY_ID": c.CWCreds.CompanyId,
+		"CW_CLIENT_ID":  c.CWCreds.ClientID,
+		"CW_COMPANY_ID": c.CWCreds.CompanyID,
 	}
 
 	var empty []string
@@ -113,13 +113,13 @@ func getStartupConfig(ctx context.Context, r repos.ConfigRepository) (*models.Co
 	return cfg, nil
 }
 
-func makeMessageSender(mocking bool, webexSecret string) repos.MessageSender {
+func makeMessageSender(ctx context.Context, mocking bool, webexSecret string) (repos.MessageSender, error) {
 	if mocking {
 		slog.Info("running with webex mocking")
-		return mock.NewWebexClient(webexSecret)
+		return mock.NewWebexClient(ctx, webexSecret)
 	}
 
-	return webex.NewClient(webexSecret)
+	return webex.NewClient(ctx, webex.Config{Token: webexSecret})
 }
 
 func getTestFlags() *TestFlags {
