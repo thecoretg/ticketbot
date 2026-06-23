@@ -10,7 +10,6 @@ type Service struct {
 	Recipients  repos.WebexRecipientRepository
 	pool        *pgxpool.Pool
 	WebexClient repos.MessageSender
-	BotEmail    string
 }
 
 func New(pool *pgxpool.Pool, r repos.WebexRecipientRepository, cl repos.MessageSender) *Service {
@@ -25,7 +24,6 @@ func (s *Service) WithTx(tx pgx.Tx) *Service {
 	return &Service{
 		Recipients:  s.Recipients.WithTx(tx),
 		WebexClient: s.WebexClient,
-		BotEmail:    s.BotEmail,
 		pool:        s.pool,
 	}
 }

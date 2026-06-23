@@ -9,8 +9,6 @@ import (
 )
 
 type MessageSender interface {
-	GetMessage(ctx context.Context, id string, params map[string]string) (*webex.Message, error)
-	GetAttachmentAction(ctx context.Context, messageID string) (*webex.AttachmentAction, error)
 	PostMessage(ctx context.Context, message *webex.Message) (*webex.Message, error)
 	ListRooms(ctx context.Context, params map[string]string) ([]webex.Room, error)
 	ListPeople(ctx context.Context, email string) ([]webex.Person, error)
