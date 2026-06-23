@@ -1,4 +1,4 @@
-package transformer
+package workflow
 
 import (
 	"bytes"
@@ -25,6 +25,28 @@ func renderTemplate(tmpl string, data any) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// renderTemplatesFor renders a params struct's templates against the ticket. A
+// params type may implement its own renderer (e.g. PatchTicketParams, whose
+// templates live in a slice of ops); otherwise the generic reflect-based
+// renderParams handles tmpl-tagged string fields.
+func renderTemplatesFor(p Params, t *psa.Ticket) error {
+	if r, ok := p.(interface {
+		renderTemplates(*psa.Ticket) error
+	}); ok {
+		return r.renderTemplates(t)
+	}
+	return renderParams(p, t)
+}
+
+// validateParamsTemplates validates a params struct's templates at save time,
+// using its own validator if it provides one, else the generic field walker.
+func validateParamsTemplates(p Params) error {
+	if v, ok := p.(interface{ validate() error }); ok {
+		return v.validate()
+	}
+	return validateTemplates(p)
 }
 
 // renderParams walks the string fields of a params struct that carry a `tmpl`

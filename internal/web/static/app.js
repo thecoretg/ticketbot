@@ -264,7 +264,7 @@ async function showApp() {
         }
     } catch {}
     const hash = window.location.hash.replace('#', '')
-    switchTab(tabLoaders[hash] ? hash : 'rules')
+    switchTab(tabLoaders[hash] ? hash : 'tickets')
 }
 
 // ─────────────────────────────────────────────────────────
@@ -397,7 +397,7 @@ function finishTOTPSetup() {
     document.getElementById('modal-overlay').classList.add('hidden')
     modalSubmitFn = null
     const hash = window.location.hash.replace('#', '')
-    switchTab(tabLoaders[hash] ? hash : 'rules')
+    switchTab(tabLoaders[hash] ? hash : 'tickets')
 }
 
 function copyRecoveryCodes() {
@@ -467,9 +467,9 @@ function checkSavedKey() {
 // Tabs
 // ─────────────────────────────────────────────────────────
 const tabLoaders = {
-    rules:        loadRules,
-    transformers: loadTransformers,
-    forwards: loadForwards,
+    tickets:   loadTickets,
+    workflows: loadWorkflows,
+    notifier:  loadNotifier,
     users:    loadUsers,
     keys:     loadKeys,
     sync:     loadSync,
@@ -480,6 +480,7 @@ const tabLoaders = {
 function switchTab(tab) {
     stopSyncPoll()
     stopLogsPoll()
+    stopTicketsPoll()
     currentTab = tab
     window.location.hash = tab
     document.querySelectorAll('.nav-item').forEach(el => {
@@ -579,21 +580,258 @@ function tableWrap(thead, rows) {
 }
 
 // ─────────────────────────────────────────────────────────
-// Rules
+// Tickets (per-ticket lifecycle journal)
 // ─────────────────────────────────────────────────────────
-async function loadRules() {
+const TICKET_COLUMNS = [
+    { key: 'ticket_id',    label: '#',             sort: 'num' },
+    { key: 'summary',      label: 'Summary' },
+    { key: 'company_name', label: 'Company' },
+    { key: 'contact_name', label: 'Contact' },
+    { key: 'status_name',  label: 'Status' },
+    { key: 'board_name',   label: 'Board' },
+    { key: 'owner_name',   label: 'Owner' },
+    { key: 'last_run',     label: 'Last Activity', sort: 'date' },
+    { key: 'last_outcome', label: 'Outcome' },
+]
+
+function ticketsPrefs() {
+    try { return JSON.parse(localStorage.getItem('ticketsPrefs') || '{}') } catch { return {} }
+}
+function saveTicketsPrefs(patch) {
+    localStorage.setItem('ticketsPrefs', JSON.stringify({ ...ticketsPrefs(), ...patch }))
+}
+
+let ticketsList      = []
+let ticketsPollTimer = null
+let ticketsView      = 'list'
+const _tp            = ticketsPrefs()
+let ticketsSearch    = ''
+let ticketsOutcome   = _tp.outcome    ?? 'ALL'
+let ticketsHideNoOp  = _tp.hideNoOp   ?? false
+let ticketsSortKey   = _tp.sortKey    ?? 'last_run'
+let ticketsSortDir   = _tp.sortDir    ?? 'desc'
+
+async function loadTickets() {
+    ticketsView = 'list'
     try {
-        const rules = await api('GET', '/notifiers/rules')
-        renderRules(rules || [])
+        const items = await api('GET', '/tickets')
+        ticketsList = items || []
+        renderTickets()
+        startTicketsPoll()
     } catch (e) {
         setContent(`<div class="empty-state">${esc(e.message)}</div>`)
     }
 }
 
-function renderRules(rules) {
-    const header = `<div class="tab-header">
-        <h2>Notifier Rules</h2>
-        <button class="btn btn-primary btn-sm" onclick="showNewRuleModal()">+ New Rule</button>
+function ticketOutcomeMatch(t) {
+    switch (ticketsOutcome) {
+        case 'COMPLETED': return !t.had_error && t.last_outcome === 'Completed'
+        case 'ERRORS':    return !!t.had_error
+        case 'NOOP':      return t.last_outcome === 'Nothing to do'
+        default:          return true
+    }
+}
+
+function renderTickets() {
+    let rows = ticketsList.slice()
+
+    if (ticketsHideNoOp) rows = rows.filter(t => t.last_outcome !== 'Nothing to do')
+    rows = rows.filter(ticketOutcomeMatch)
+
+    if (ticketsSearch) {
+        const term = ticketsSearch.toLowerCase()
+        rows = rows.filter(t => TICKET_COLUMNS.some(c => String(t[c.key] ?? '').toLowerCase().includes(term)))
+    }
+
+    const col = TICKET_COLUMNS.find(c => c.key === ticketsSortKey) || TICKET_COLUMNS[0]
+    rows.sort((a, b) => {
+        let av = a[col.key], bv = b[col.key]
+        if (col.sort === 'num')  { av = +av || 0; bv = +bv || 0 }
+        else if (col.sort === 'date') { av = av ? new Date(av).getTime() : 0; bv = bv ? new Date(bv).getTime() : 0 }
+        else { av = String(av ?? '').toLowerCase(); bv = String(bv ?? '').toLowerCase() }
+        const cmp = av < bv ? -1 : av > bv ? 1 : 0
+        return ticketsSortDir === 'asc' ? cmp : -cmp
+    })
+
+    const arrow = (k) => ticketsSortKey === k ? (ticketsSortDir === 'asc' ? ' ▲' : ' ▼') : ''
+    const thead = TICKET_COLUMNS.map(c =>
+        `<th class="th-sort" onclick="ticketsSort('${c.key}')">${esc(c.label)}${arrow(c.key)}</th>`).join('')
+
+    const body = rows.map(t => `<tr class="row-click" onclick="showTicketJournal(${t.ticket_id})">
+        <td style="color:var(--muted)">${t.ticket_id}</td>
+        <td>${esc(t.summary) || '<span style="color:var(--muted)">—</span>'}</td>
+        <td>${esc(t.company_name) || '—'}</td>
+        <td>${esc(t.contact_name) || '—'}</td>
+        <td>${esc(t.status_name) || '—'}</td>
+        <td>${esc(t.board_name) || '—'}</td>
+        <td>${esc(t.owner_name) || '—'}</td>
+        <td style="white-space:nowrap;color:var(--muted)">${t.last_run ? new Date(t.last_run).toLocaleString() : '—'}</td>
+        <td>${outcomeBadge(t)}</td>
+    </tr>`)
+
+    const table = rows.length
+        ? `<div class="table-wrap"><table><thead><tr>${thead}</tr></thead><tbody>${body.join('')}</tbody></table></div>`
+        : '<div class="empty-state">No tickets found</div>'
+
+    setContent(`<div class="tab-header">
+        <h2>Tickets</h2>
+        <div class="logs-controls">
+            <input class="logs-search-input" type="text" placeholder="Search tickets…" value="${esc(ticketsSearch)}"
+                oninput="ticketsSearch=this.value; renderTickets()">
+            <select class="logs-search-input" style="width:auto" onchange="ticketsOutcome=this.value; saveTicketsPrefs({outcome:this.value}); renderTickets()">
+                ${[['ALL','All outcomes'],['COMPLETED','Completed'],['ERRORS','Errors'],['NOOP','Nothing to do']].map(([v,l]) =>
+                    `<option value="${v}"${ticketsOutcome===v?' selected':''}>${l}</option>`).join('')}
+            </select>
+            <label class="logs-opt"><input type="checkbox" ${ticketsHideNoOp?'checked':''}
+                onchange="ticketsHideNoOp=this.checked; saveTicketsPrefs({hideNoOp:this.checked}); renderTickets()"> Hide no-op tickets</label>
+            <button class="btn btn-ghost btn-sm" onclick="loadTickets()">Refresh</button>
+        </div>
+    </div>${table}`)
+}
+
+function ticketsSort(key) {
+    if (ticketsSortKey === key) ticketsSortDir = ticketsSortDir === 'asc' ? 'desc' : 'asc'
+    else { ticketsSortKey = key; ticketsSortDir = 'asc' }
+    saveTicketsPrefs({ sortKey: ticketsSortKey, sortDir: ticketsSortDir })
+    renderTickets()
+}
+
+function outcomeBadge(t) {
+    if (t.had_error) return `<span class="badge badge-off">${esc(t.last_outcome || 'Error')}</span>`
+    if (t.last_outcome === 'Completed') return `<span class="badge badge-on">Completed</span>`
+    return `<span class="badge badge-neutral">${esc(t.last_outcome || '—')}</span>`
+}
+
+let journalHideNoOp = ticketsPrefs().journalHideNoOp ?? false
+
+async function showTicketJournal(id) {
+    ticketsView = 'detail'
+    stopTicketsPoll()
+    let j
+    try {
+        j = await api('GET', `/tickets/${id}`)
+    } catch (e) { toast(e.message, 'error'); return }
+    renderTicketJournal(j)
+}
+
+function renderTicketJournal(j) {
+    const runs = (j.runs || []).slice().reverse() // newest first
+    const shown = journalHideNoOp ? runs.filter(r => r.outcome !== 'Nothing to do') : runs
+    const hidden = runs.length - shown.length
+
+    const prop = (label, val) => `<div class="jr-prop"><span class="jr-prop-label">${label}</span><span>${esc(val) || '—'}</span></div>`
+
+    const timeline = shown.length ? shown.map(r => `
+        <div class="run-card ${r.had_error ? 'run-error' : ''}">
+            <div class="run-head">
+                <span class="run-trigger">${esc(r.trigger)}</span>
+                <span class="run-time">${r.time ? new Date(r.time).toLocaleString() : ''}</span>
+                ${outcomeBadge({ had_error: r.had_error, last_outcome: r.outcome })}
+            </div>
+            <div class="run-events">
+                ${(r.events || []).map(e => `<div class="journal-event ev-${esc(e.status)}">${esc(e.text)}</div>`).join('') ||
+                    '<div class="journal-event ev-info">No actions taken</div>'}
+            </div>
+        </div>`).join('')
+        : '<div class="empty-state">No runs to show</div>'
+
+    setContent(`<div class="tab-header">
+        <h2><button class="btn btn-ghost btn-sm" onclick="loadTickets()">← Tickets</button> &nbsp; Ticket #${j.ticket_id}</h2>
+        <label class="logs-opt"><input type="checkbox" ${journalHideNoOp ? 'checked' : ''}
+            onchange="journalHideNoOp=this.checked; saveTicketsPrefs({journalHideNoOp:this.checked}); rerenderTicketJournal()"> Hide no-op runs${hidden > 0 ? ` (${hidden} hidden)` : ''}</label>
+    </div>
+    <div class="jr-summary">${esc(j.summary) || '<span style="color:var(--muted)">(no summary)</span>'}</div>
+    <div class="jr-props">
+        ${prop('Company', j.company_name)}
+        ${prop('Contact', j.contact_name)}
+        ${prop('Status', j.status_name)}
+        ${prop('Board', j.board_name)}
+        ${prop('Owner', j.owner_name)}
+    </div>
+    <div class="timeline">${timeline}</div>`)
+
+    window._journalCache = j
+}
+
+function rerenderTicketJournal() {
+    if (window._journalCache) renderTicketJournal(window._journalCache)
+}
+
+function startTicketsPoll() {
+    stopTicketsPoll()
+    ticketsPollTimer = setInterval(async () => {
+        if (currentTab !== 'tickets' || ticketsView !== 'list') { stopTicketsPoll(); return }
+        try {
+            const items = await api('GET', '/tickets')
+            ticketsList = items || []
+            renderTickets()
+        } catch { stopTicketsPoll() }
+    }, 5000)
+}
+
+function stopTicketsPoll() {
+    if (ticketsPollTimer) { clearInterval(ticketsPollTimer); ticketsPollTimer = null }
+}
+
+// ─────────────────────────────────────────────────────────
+// Notifier (Board Settings + Forwards under one menu)
+// ─────────────────────────────────────────────────────────
+let notifierSubtab = 'board-settings'
+
+function loadNotifier() {
+    renderNotifierShell()
+    loadNotifierSubtab()
+}
+
+function renderNotifierShell() {
+    setContent(`
+        <div class="tab-header"><h2>Notifier</h2></div>
+        <div class="subtabs">
+            <button class="subtab" data-sub="board-settings" onclick="switchNotifierSubtab('board-settings')">Board Settings</button>
+            <button class="subtab" data-sub="forwards" onclick="switchNotifierSubtab('forwards')">Forwards</button>
+        </div>
+        <div id="notifier-panel"></div>`)
+    updateNotifierSubtabActive()
+}
+
+function updateNotifierSubtabActive() {
+    document.querySelectorAll('.subtab').forEach(el =>
+        el.classList.toggle('active', el.dataset.sub === notifierSubtab))
+}
+
+function switchNotifierSubtab(sub) {
+    notifierSubtab = sub
+    updateNotifierSubtabActive()
+    loadNotifierSubtab()
+}
+
+function loadNotifierSubtab() {
+    setNotifierPanel('<div class="loading-state">Loading…</div>')
+    if (notifierSubtab === 'forwards') loadForwards()
+    else loadBoardSettings()
+}
+
+function setNotifierPanel(html) {
+    const el = document.getElementById('notifier-panel')
+    if (el) el.innerHTML = html
+}
+
+// ─────────────────────────────────────────────────────────
+// Board Settings (notifier rules: board → recipient routing)
+// ─────────────────────────────────────────────────────────
+async function loadBoardSettings() {
+    try {
+        const rules = await api('GET', '/notifiers/rules')
+        renderBoardSettings(rules || [])
+    } catch (e) {
+        setNotifierPanel(`<div class="empty-state">${esc(e.message)}</div>`)
+    }
+}
+
+function renderBoardSettings(rules) {
+    const header = `<div class="panel-header">
+        <span class="panel-desc">Notify a Webex recipient when a ticket lands on a board.</span>
+        <button class="btn btn-primary btn-sm" onclick="showNewRuleModal()">+ New Board Setting</button>
     </div>`
 
     const thead = '<th>Enabled</th><th>Board</th><th>Recipient</th><th></th>'
@@ -604,7 +842,7 @@ function renderRules(rules) {
         <td class="actions"><button class="btn btn-danger" onclick="deleteRule(${r.id})">Delete</button></td>
     </tr>`)
 
-    setContent(header + tableWrap(thead, rows))
+    setNotifierPanel(header + tableWrap(thead, rows))
 }
 
 async function showNewRuleModal() {
@@ -624,7 +862,7 @@ async function showNewRuleModal() {
     const recipOpts = recipients.map(r =>
         `<option value="${r.id}">${esc(r.name)} (${esc(r.type)})</option>`).join('')
 
-    openModal('New Notifier Rule', `
+    openModal('New Board Setting', `
         <div class="form-group">
             <label>Connectwise Board</label>
             <select id="f-board">${boardOpts}</select>
@@ -642,34 +880,38 @@ async function showNewRuleModal() {
                 notify_enabled: true,
             })
             closeModal()
-            toast('Rule created', 'success')
-            loadRules()
+            toast('Board setting created', 'success')
+            loadBoardSettings()
         } catch (e) { toast(e.message, 'error') }
     })
 }
 
 async function deleteRule(id) {
-    if (!confirm('Delete this rule?')) return
+    if (!confirm('Delete this board setting?')) return
     try {
         await api('DELETE', `/notifiers/rules/${id}`)
-        toast('Rule deleted', 'success')
-        loadRules()
+        toast('Board setting deleted', 'success')
+        loadBoardSettings()
     } catch (e) { toast(e.message, 'error') }
 }
 
 // ─────────────────────────────────────────────────────────
-// Transformers
+// Workflows
 // ─────────────────────────────────────────────────────────
-const TRANSFORMER_ACTIONS = [
-    { value: 'update_summary', label: 'Update Summary' },
-    { value: 'add_note',       label: 'Add Note' },
+const WORKFLOW_ACTIONS = [
+    { value: 'ticket_update',      label: 'Update Ticket' },
+    { value: 'add_note',           label: 'Add Note' },
+    { value: 'send_message',       label: 'Send Notification' },
+    { value: 'skip_notifications', label: 'Skip Default Notifications' },
+    { value: 'add_resource',       label: 'Add Resource' },
+    { value: 'add_email_cc',       label: 'Add Email CC' },
 ]
-const TRANSFORMER_APPLY_ON = [
+const WORKFLOW_ON = [
     { value: 'new',     label: 'New tickets only' },
     { value: 'both',    label: 'New & Updated' },
     { value: 'updated', label: 'Updates only' },
 ]
-const TRANSFORMER_FIELDS = [
+const WORKFLOW_FIELDS = [
     { value: 'summary',            label: 'Summary' },
     { value: 'company_name',       label: 'Company Name' },
     { value: 'company_identifier', label: 'Company ID' },
@@ -680,225 +922,825 @@ const TRANSFORMER_FIELDS = [
     { value: 'subtype_name',       label: 'Subtype' },
     { value: 'priority_name',      label: 'Priority' },
     { value: 'source_name',        label: 'Source' },
+    { value: 'last_note_text',     label: 'Last Note Text' },
+    { value: 'last_note_sender',   label: 'Last Note Sender' },
+    { value: 'last_note_type',     label: 'Last Note Type' },
 ]
-const TRANSFORMER_OPERATORS = [
+const WORKFLOW_OPERATORS = [
     { value: 'contains',     label: 'contains' },
     { value: 'not_contains', label: 'does not contain' },
     { value: 'equals',       label: 'equals' },
     { value: 'not_equals',   label: 'does not equal' },
     { value: 'starts_with',  label: 'starts with' },
     { value: 'ends_with',    label: 'ends with' },
+    { value: 'is_any_of',    label: 'is any of' },
+    { value: 'is_none_of',   label: 'is none of' },
 ]
-const TRANSFORMER_CONFIG_HINTS = {
-    update_summary: '{"summary": "[{{.Company.Identifier}}] {{.Summary}}"}',
-    add_note:       '{"text": "Auto-note for {{.Company.Name}}", "internal": true}',
+// Operators offered for the multi-select Last Note Type field (vs the standard
+// text operators offered for every other field).
+const NOTE_TYPE_OPERATORS = ['is_any_of', 'is_none_of']
+const NOTE_TYPES = ['internal', 'discussion', 'resolution']
+function wfActionLabel(v)   { return (WORKFLOW_ACTIONS.find(a => a.value === v)   || {}).label || v }
+function wfOnLabel(v)       { return (WORKFLOW_ON.find(a => a.value === v)        || {}).label || v }
+function wfFieldLabel(v)    { return (WORKFLOW_FIELDS.find(a => a.value === v)    || {}).label || v }
+function wfOperatorLabel(v) { return (WORKFLOW_OPERATORS.find(a => a.value === v) || {}).label || v }
+
+// wfConditionSummary renders the stored ConditionGroup tree as a compact string,
+// e.g. (Summary contains "x" AND Status equals "y") OR Company ID equals "z".
+function wfConditionSummary(root) {
+    if (!root || !root.children || !root.children.length) return '<span style="color:var(--muted)">—</span>'
+    return wfSummarizeGroup(root, true)
+}
+function wfSummarizeGroup(g, top) {
+    const parts = (g.children || []).map(n => {
+        if (n.group) return '(' + wfSummarizeGroup(n.group, false) + ')'
+        if (n.condition) {
+            const c = n.condition
+            return `${esc(wfFieldLabel(c.field))} <em>${esc(wfOperatorLabel(c.operator))}</em> "${esc(c.value)}"`
+        }
+        return ''
+    }).filter(Boolean)
+    if (!parts.length) return ''
+    const joiner = (g.operator === 'or') ? ' <b>OR</b> ' : ' <b>AND</b> '
+    return parts.join(joiner)
 }
 
-function transformerActionLabel(v) {
-    return (TRANSFORMER_ACTIONS.find(a => a.value === v) || {}).label || v
-}
-function transformerApplyOnLabel(v) {
-    return (TRANSFORMER_APPLY_ON.find(a => a.value === v) || {}).label || v
-}
-function transformerFieldLabel(v) {
-    return (TRANSFORMER_FIELDS.find(a => a.value === v) || {}).label || v
-}
-function transformerOperatorLabel(v) {
-    return (TRANSFORMER_OPERATORS.find(a => a.value === v) || {}).label || v
-}
-function transformerConditionSummary(conds) {
-    if (!conds || !conds.length) return '<span style="color:var(--muted)">—</span>'
-    return conds.map(c =>
-        `${esc(transformerFieldLabel(c.field))} <em>${esc(transformerOperatorLabel(c.operator))}</em> "${esc(c.value)}"`
-    ).join('<br>')
-}
+let workflows = []
+let wfBoardsById = {}
 
-let transformerRules = []
-
-async function loadTransformers() {
+async function loadWorkflows() {
     try {
-        const rules = await api('GET', '/transformers/rules')
-        transformerRules = rules || []
-        renderTransformers(transformerRules)
+        const [wfs, boards] = await Promise.all([
+            api('GET', '/workflows'),
+            api('GET', '/cw/boards'),
+        ])
+        workflows = wfs || []
+        wfBoardsById = {}
+        ;(boards || []).forEach(b => { wfBoardsById[b.id] = b.name })
+        renderWorkflows(workflows)
     } catch (e) {
         setContent(`<div class="empty-state">${esc(e.message)}</div>`)
     }
 }
 
-function renderTransformers(rules) {
+function renderWorkflows(wfs) {
     const header = `<div class="tab-header">
-        <h2>Transformer Rules</h2>
-        <button class="btn btn-primary btn-sm" onclick="showTransformerModal()">+ New Rule</button>
+        <h2>Workflows</h2>
+        <button class="btn btn-primary btn-sm" onclick="showWorkflowModal()">+ New Workflow</button>
     </div>`
 
-    const thead = '<th>Enabled</th><th>Priority</th><th>Name</th><th>Action</th><th>Board</th><th>Applies On</th><th>Conditions</th><th></th>'
-    const rows  = rules.map(r => `<tr>
-        <td>${badge(r.enabled)}</td>
-        <td>${esc(r.priority)}</td>
-        <td>${esc(r.name)}</td>
-        <td>${esc(transformerActionLabel(r.action))}</td>
-        <td>${r.cw_board_id ? esc(r.cw_board_id) : '<span style="color:var(--muted)">All</span>'}</td>
-        <td>${esc(transformerApplyOnLabel(r.apply_on))}</td>
-        <td style="font-size:12px">${transformerConditionSummary(r.conditions)}</td>
+    const thead = '<th>Enabled</th><th>Priority</th><th>Name</th><th>Board</th><th>On</th><th>Actions</th><th>Conditions</th><th></th>'
+    const rows  = wfs.map(w => `<tr>
+        <td>${badge(w.enabled)}</td>
+        <td>${esc(w.priority)}</td>
+        <td>${esc(w.name)}</td>
+        <td>${esc(wfBoardsById[w.cw_board_id] || `#${w.cw_board_id}`)}</td>
+        <td>${esc(wfOnLabel(w.on_ticket_action))}</td>
+        <td>${(w.actions || []).map(a => esc(wfActionLabel(a.type))).join(', ') || '<span style="color:var(--muted)">—</span>'}</td>
+        <td style="font-size:12px">${wfConditionSummary(w.conditions)}</td>
         <td class="actions">
-            <button class="btn btn-ghost btn-sm" onclick="editTransformer(${r.id})">Edit</button>
-            <button class="btn btn-danger" onclick="deleteTransformer(${r.id})">Delete</button>
+            <button class="btn btn-ghost btn-sm" onclick="editWorkflow(${w.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteWorkflow(${w.id})">Delete</button>
         </td>
     </tr>`)
 
     setContent(header + tableWrap(thead, rows))
 }
 
-function editTransformer(id) {
-    const rule = transformerRules.find(r => r.id === id)
-    if (!rule) { toast('Rule not found', 'error'); return }
-    showTransformerModal(rule)
+function editWorkflow(id) {
+    const wf = workflows.find(w => w.id === id)
+    if (!wf) { toast('Workflow not found', 'error'); return }
+    showWorkflowModal(wf)
 }
 
-// showTransformerModal opens the create form, or the edit form when `existing` is
-// a rule object.
-async function showTransformerModal(existing = null) {
+// State for the workflow builder modal, populated when it opens. wfCatalog is the
+// ticket_update field catalog; wfMembers/wfRooms back local pickers. wfBoardId is
+// the required board (scopes status/contact pickers). wfTree is the authoritative
+// nested condition tree and wfActions the authoritative ordered action list — the
+// DOM is rendered from them, never the other way round.
+let wfCatalog = []
+let wfMembers = []
+let wfRooms   = []
+let wfBoardId = ''
+let wfTree    = null
+let wfActions = []
+let wfUid     = 0
+const wfNextId = () => 'n' + (++wfUid)
+
+// showWorkflowModal opens the create form, or the edit form when `existing` is a
+// workflow object.
+async function showWorkflowModal(existing = null) {
     const isEdit = !!existing
-    let boards = []
+    let boards = [], catalog = [], members = [], rooms = []
     try {
-        boards = await api('GET', '/cw/boards')
+        [boards, catalog, members, rooms] = await Promise.all([
+            api('GET', '/cw/boards'),
+            api('GET', '/workflows/update-fields'),
+            api('GET', '/cw/members'),
+            api('GET', '/webex/rooms'),
+        ])
     } catch (e) { toast(e.message, 'error'); return }
 
-    const sel = (cond) => cond ? ' selected' : ''
-    const actionOpts = TRANSFORMER_ACTIONS.map(a =>
-        `<option value="${a.value}"${sel(isEdit && existing.action === a.value)}>${esc(a.label)}</option>`).join('')
-    const applyOpts = TRANSFORMER_APPLY_ON.map(a =>
-        `<option value="${a.value}"${sel(isEdit && existing.apply_on === a.value)}>${esc(a.label)}</option>`).join('')
-    const boardOpts = `<option value="">All boards</option>` + (boards || []).map(b =>
-        `<option value="${b.id}"${sel(isEdit && existing.cw_board_id === b.id)}>${esc(b.name)}</option>`).join('')
+    wfCatalog = catalog || []
+    wfMembers = members || []
+    wfRooms   = rooms || []
+    wfBoardId = (isEdit && existing.cw_board_id) ? String(existing.cw_board_id) : ''
+    wfTree    = hydrateTree(isEdit ? existing.conditions : null)
+    wfActions = (isEdit && Array.isArray(existing.actions) && existing.actions.length)
+        ? existing.actions.map(a => ({ _id: wfNextId(), type: a.type, config: a.config || {} }))
+        : [{ _id: wfNextId(), type: 'ticket_update', config: {} }]
 
-    const nameVal       = isEdit ? esc(existing.name) : ''
-    const priorityVal   = isEdit ? esc(existing.priority) : '100'
-    const configVal     = isEdit ? esc(JSON.stringify(existing.config ?? {})) : ''
+    const sel = (cond) => cond ? ' selected' : ''
+    const boardOpts = `<option value="">Select a board…</option>` + (boards || []).map(b =>
+        `<option value="${b.id}"${sel(isEdit && existing.cw_board_id === b.id)}>${esc(b.name)}</option>`).join('')
+    const onOpts = WORKFLOW_ON.map(a =>
+        `<option value="${a.value}"${sel(isEdit && existing.on_ticket_action === a.value)}>${esc(a.label)}</option>`).join('')
+
+    const nameVal        = isEdit ? esc(existing.name) : ''
+    const priorityVal    = isEdit ? esc(existing.priority) : '100'
     const enabledChecked = (isEdit ? existing.enabled : true) ? 'checked' : ''
 
-    openModal(isEdit ? 'Edit Transformer Rule' : 'New Transformer Rule', `
+    openModal(isEdit ? 'Edit Workflow' : 'New Workflow', `
         <div class="form-group">
             <label>Name</label>
-            <input id="t-name" type="text" placeholder="e.g. Prefix summary with company" value="${nameVal}">
+            <input id="wf-name" type="text" placeholder="e.g. Triage urgent printer tickets" value="${nameVal}">
         </div>
         <div class="form-group">
-            <label>Action</label>
-            <select id="t-action" onchange="updateTransformerHint()">${actionOpts}</select>
+            <label>Board <span style="color:var(--danger)">*</span></label>
+            <select id="wf-board">${boardOpts}</select>
         </div>
         <div class="form-group">
-            <label>Connectwise Board</label>
-            <select id="t-board">${boardOpts}</select>
+            <label>On Ticket Action</label>
+            <select id="wf-on">${onOpts}</select>
         </div>
         <div class="form-group">
-            <label>Applies On</label>
-            <select id="t-apply">${applyOpts}</select>
+            <label>Conditions <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <div id="wf-conditions"></div>
         </div>
         <div class="form-group">
-            <label>Conditions <span style="color:var(--muted);font-weight:400">(all must match)</span></label>
-            <div id="t-conditions"></div>
-            <button type="button" class="btn btn-ghost btn-sm" onclick="addTransformerCondition()">+ Add condition</button>
+            <label>Actions <span style="color:var(--muted);font-weight:400">(run in order)</span></label>
+            <div id="wf-actions"></div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="wfAddAction()">+ Add action</button>
         </div>
         <div class="form-group">
             <label>Priority</label>
-            <input id="t-priority" type="number" value="${priorityVal}" min="0">
+            <input id="wf-priority" type="number" value="${priorityVal}" min="0">
         </div>
         <div class="config-row" style="padding:0">
             <div>
                 <div class="config-label">Enabled</div>
-                <div class="config-desc">Disabled rules are kept but never run</div>
+                <div class="config-desc">Disabled workflows are kept but never run</div>
             </div>
             <label class="toggle">
-                <input type="checkbox" id="t-enabled" ${enabledChecked}>
+                <input type="checkbox" id="wf-enabled" ${enabledChecked}>
                 <span class="toggle-track"></span>
             </label>
-        </div>
-        <div class="form-group">
-            <label>Config (JSON, supports Go templates)</label>
-            <textarea id="t-config" class="code-input" rows="4">${configVal}</textarea>
-            <div class="config-desc" id="t-config-hint"></div>
         </div>`, async () => {
-        const name     = document.getElementById('t-name').value.trim()
-        const action   = document.getElementById('t-action').value
-        const boardVal = document.getElementById('t-board').value
-        const applyOn  = document.getElementById('t-apply').value
-        const priority = parseInt(document.getElementById('t-priority').value)
-        const configRaw = document.getElementById('t-config').value.trim() || '{}'
+        const name     = document.getElementById('wf-name').value.trim()
+        const priority = parseInt(document.getElementById('wf-priority').value)
+        if (!name)      { toast('Name is required', 'error'); return }
+        if (!wfBoardId) { toast('A board is required', 'error'); return }
 
-        if (!name) { toast('Name is required', 'error'); return }
-
-        let config
-        try { config = JSON.parse(configRaw) }
-        catch { toast('Config is not valid JSON', 'error'); return }
-
-        const conditions = [...document.querySelectorAll('#t-conditions .condition-row')].map(row => ({
-            field:    row.querySelector('.cond-field').value,
-            operator: row.querySelector('.cond-op').value,
-            value:    row.querySelector('.cond-value').value,
-        })).filter(c => c.value.trim() !== '')
+        harvestAllActions()
+        if (!wfActions.length) { toast('Add at least one action', 'error'); return }
+        const actions = []
+        for (const a of wfActions) {
+            const cfg = serializeAction(a)
+            if (cfg === null) return // builder already toasted the problem
+            actions.push({ type: a.type, config: cfg })
+        }
 
         const payload = {
             name,
-            action,
-            cw_board_id: boardVal ? parseInt(boardVal) : null,
-            config,
-            conditions,
-            apply_on: applyOn,
+            cw_board_id: parseInt(wfBoardId),
+            on_ticket_action: document.getElementById('wf-on').value,
+            conditions: serializeTree(),
+            actions,
             priority: Number.isFinite(priority) ? priority : 100,
-            enabled: document.getElementById('t-enabled').checked,
+            enabled: document.getElementById('wf-enabled').checked,
         }
 
         try {
-            if (isEdit) {
-                await api('PUT', `/transformers/rules/${existing.id}`, payload)
-            } else {
-                await api('POST', '/transformers/rules', payload)
-            }
+            if (isEdit) await api('PUT', `/workflows/${existing.id}`, payload)
+            else        await api('POST', '/workflows', payload)
             closeModal()
-            toast(isEdit ? 'Transformer rule updated' : 'Transformer rule created', 'success')
-            loadTransformers()
+            toast(isEdit ? 'Workflow updated' : 'Workflow created', 'success')
+            loadWorkflows()
         } catch (e) { toast(e.message, 'error') }
     }, isEdit ? 'Save' : 'Create')
 
-    if (isEdit && Array.isArray(existing.conditions)) {
-        existing.conditions.forEach(c => addTransformerCondition(c.field, c.operator, c.value))
+    const boardSel = document.getElementById('wf-board')
+    boardSel.value = wfBoardId
+    boardSel.addEventListener('change', () => { wfBoardId = boardSel.value; onBoardChanged() })
+
+    renderTree()
+    renderActions()
+}
+
+// onBoardChanged re-renders the action cards so status/contact pickers re-scope to
+// the new board. Harvest first so unsaved edits survive the re-render.
+function onBoardChanged() {
+    harvestAllActions()
+    renderActions()
+}
+
+// ── Condition tree (authoritative state: wfTree) ──────────
+function newLeafNode(field = 'summary', operator = 'contains', value = '') {
+    return { _id: wfNextId(), kind: 'cond', field, operator, value }
+}
+function newGroupNode(op = 'and', children = []) {
+    return { _id: wfNextId(), kind: 'group', op, children }
+}
+function hydrateTree(root) {
+    if (!root || !root.children) return newGroupNode('and', [])
+    return hydrateGroup(root)
+}
+function hydrateGroup(g) {
+    return newGroupNode(g.operator || 'and', (g.children || []).map(hydrateChild))
+}
+function hydrateChild(n) {
+    if (n.group) return hydrateGroup(n.group)
+    const c = n.condition || {}
+    return newLeafNode(c.field || 'summary', c.operator || 'contains', c.value || '')
+}
+function findNode(id, node = wfTree, parent = null) {
+    if (!node) return null
+    if (node._id === id) return { node, parent }
+    if (node.kind === 'group') {
+        for (const c of node.children) {
+            const r = findNode(id, c, node)
+            if (r) return r
+        }
     }
-    updateTransformerHint()
+    return null
+}
+function renderTree() {
+    const host = document.getElementById('wf-conditions')
+    if (host) host.innerHTML = renderGroup(wfTree, true)
+}
+function renderGroup(node, isRoot) {
+    const kids = node.children.map(c => c.kind === 'group' ? renderGroup(c, false) : renderLeaf(c)).join('')
+    return `<div class="cond-group" data-id="${node._id}">
+        <div class="cond-group-head">
+            ${andOrToggle(node)}
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addLeaf('${node._id}')">+ Condition</button>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addGroup('${node._id}')">+ Group</button>
+            ${isRoot ? '' : `<button type="button" class="btn btn-danger btn-sm" onclick="removeNode('${node._id}')">✕</button>`}
+        </div>
+        <div class="cond-group-body">${kids || '<div class="cond-empty">No conditions — this workflow always runs.</div>'}</div>
+    </div>`
+}
+function andOrToggle(node) {
+    const mk = (op, label) => `<button type="button" class="${node.op === op ? 'active' : ''}" onclick="setGroupOp('${node._id}','${op}')">${label}</button>`
+    return `<div class="andor-toggle">${mk('and', 'AND')}${mk('or', 'OR')}</div>`
+}
+function renderLeaf(node) {
+    const isNoteType = node.field === 'last_note_type'
+    const fieldOpts  = WORKFLOW_FIELDS.map(f => `<option value="${f.value}"${f.value === node.field ? ' selected' : ''}>${esc(f.label)}</option>`).join('')
+    const ops        = WORKFLOW_OPERATORS.filter(o => isNoteType ? NOTE_TYPE_OPERATORS.includes(o.value) : !NOTE_TYPE_OPERATORS.includes(o.value))
+    const opOpts     = ops.map(o => `<option value="${o.value}"${o.value === node.operator ? ' selected' : ''}>${esc(o.label)}</option>`).join('')
+
+    let valueControl
+    if (isNoteType) {
+        const sel = new Set((node.value || '').split(',').map(s => s.trim()))
+        valueControl = `<div class="nt-checks">${NOTE_TYPES.map(t =>
+            `<label><input type="checkbox" class="nt-check" value="${t}" ${sel.has(t) ? 'checked' : ''} onchange="setNoteTypes('${node._id}', this)"> ${t[0].toUpperCase() + t.slice(1)}</label>`
+        ).join('')}</div>`
+    } else {
+        valueControl = `<input class="cond-value" type="text" placeholder="value" style="flex:1" value="${esc(node.value)}" oninput="setLeaf('${node._id}','value',this.value)">`
+    }
+
+    return `<div class="cond-leaf" data-id="${node._id}">
+        <select class="cond-field" style="flex:0 0 32%" onchange="setLeafField('${node._id}', this.value)">${fieldOpts}</select>
+        <select class="cond-op" style="flex:0 0 28%" onchange="setLeaf('${node._id}','operator',this.value)">${opOpts}</select>
+        ${valueControl}
+        <button type="button" class="btn btn-danger btn-sm" onclick="removeNode('${node._id}')">✕</button>
+    </div>`
+}
+function addLeaf(groupId)  { const r = findNode(groupId); if (r) { r.node.children.push(newLeafNode()); renderTree() } }
+function addGroup(groupId) { const r = findNode(groupId); if (r) { r.node.children.push(newGroupNode('and', [newLeafNode()])); renderTree() } }
+function removeNode(id)    { const r = findNode(id); if (r && r.parent) { r.parent.children = r.parent.children.filter(c => c._id !== id); renderTree() } }
+function setGroupOp(id, op){ const r = findNode(id); if (r) { r.node.op = op; renderTree() } }
+// setLeaf updates the model in place WITHOUT re-rendering, so the focused input
+// keeps focus while typing.
+function setLeaf(id, key, val) { const r = findNode(id); if (r) r.node[key] = val }
+
+// setLeafField changes a leaf's field and re-renders, since switching to/from the
+// Last Note Type field swaps the operator set and value control. It resets the
+// operator and value so the leaf stays valid for the new field.
+function setLeafField(id, value) {
+    const r = findNode(id)
+    if (!r) return
+    const wasNote = r.node.field === 'last_note_type'
+    const isNote  = value === 'last_note_type'
+    r.node.field = value
+    if (isNote && !wasNote)      { r.node.operator = 'is_any_of'; r.node.value = '' }
+    else if (!isNote && wasNote) { r.node.operator = 'contains';  r.node.value = '' }
+    renderTree()
 }
 
-function addTransformerCondition(field = 'summary', operator = 'contains', value = '') {
-    const wrap = document.getElementById('t-conditions')
-    if (!wrap) return
-    const fieldOpts = TRANSFORMER_FIELDS.map(f => `<option value="${f.value}">${esc(f.label)}</option>`).join('')
-    const opOpts    = TRANSFORMER_OPERATORS.map(o => `<option value="${o.value}">${esc(o.label)}</option>`).join('')
+// setNoteTypes gathers the checked Last Note Type boxes for a leaf into a
+// comma-separated value.
+function setNoteTypes(id, el) {
+    const r = findNode(id)
+    if (!r) return
+    const leaf = el.closest('.cond-leaf')
+    r.node.value = [...leaf.querySelectorAll('.nt-check:checked')].map(c => c.value).join(',')
+}
+
+function serializeTree() {
+    if (!wfTree) return null
+    const g = serializeGroup(wfTree)
+    return (g && g.children.length) ? g : null
+}
+function serializeGroup(node) {
+    return { operator: node.op, children: node.children.map(serializeChild).filter(Boolean) }
+}
+function serializeChild(node) {
+    if (node.kind === 'group') {
+        const g = serializeGroup(node)
+        return g.children.length ? { group: g } : null
+    }
+    if (!node.value.trim()) return null
+    return { condition: { field: node.field, operator: node.operator, value: node.value } }
+}
+
+// ── Action list (authoritative state: wfActions) ──────────
+// renderActions rebuilds the action cards from wfActions, then renders each card's
+// type-specific body (and attaches its comboboxes).
+function renderActions() {
+    const host = document.getElementById('wf-actions')
+    if (!host) return
+    host.innerHTML = wfActions.map((a, i) => actionCardHTML(a, i)).join('')
+    wfActions.forEach(a => {
+        const card = host.querySelector(`.action-card[data-id="${a._id}"]`)
+        if (card) renderActionBody(a, card.querySelector('.action-card-body'))
+    })
+}
+
+function actionCardHTML(a, i) {
+    const typeOpts = WORKFLOW_ACTIONS.map(o => `<option value="${o.value}"${o.value === a.type ? ' selected' : ''}>${esc(o.label)}</option>`).join('')
+    const up = i > 0, down = i < wfActions.length - 1
+    return `<div class="action-card" data-id="${a._id}">
+        <div class="action-card-head">
+            <select class="wf-action-type" onchange="wfChangeActionType('${a._id}', this.value)">${typeOpts}</select>
+            <div class="action-card-tools">
+                <button type="button" class="btn btn-ghost btn-sm" ${up ? '' : 'disabled'} onclick="wfMoveAction('${a._id}',-1)">↑</button>
+                <button type="button" class="btn btn-ghost btn-sm" ${down ? '' : 'disabled'} onclick="wfMoveAction('${a._id}',1)">↓</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="wfRemoveAction('${a._id}')">✕</button>
+            </div>
+        </div>
+        <div class="action-card-body"></div>
+    </div>`
+}
+
+// renderActionBody draws the type-specific config UI into a card body and attaches
+// any comboboxes. Prefill comes from the action's config object.
+function renderActionBody(a, bodyEl) {
+    if (!bodyEl) return
+    if (a.type === 'ticket_update') {
+        bodyEl.innerHTML = `
+            <label>Operations</label>
+            <div class="wf-ops"></div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="wfAddOp(this)">+ Add operation</button>
+            <div class="config-desc">Each value supports Go templates, e.g. <code>[{{.Company.Identifier}}] {{.Summary}}</code></div>`
+        const opsWrap = bodyEl.querySelector('.wf-ops')
+        const ops = (a.config && Array.isArray(a.config.ops)) ? a.config.ops : []
+        if (ops.length) ops.forEach(o => wfAddOpRow(opsWrap, o.path, o.op, o.value || '', o.label || ''))
+        else wfAddOpRow(opsWrap)
+        wfRefreshDependents(opsWrap)
+    } else if (a.type === 'add_note') {
+        const c = a.config || {}
+        const flag = (on) => on ? 'checked' : ''
+        bodyEl.innerHTML = `
+            <label>Note text <span style="color:var(--muted);font-weight:400">(Go templates ok)</span></label>
+            <textarea class="wf-note-text code-input" rows="3" placeholder="e.g. Auto-triaged for {{.Company.Name}}">${esc(c.text || '')}</textarea>
+            <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">
+                <label style="display:inline-flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="wf-note-detail" ${flag(c.detail_description)}> Discussion</label>
+                <label style="display:inline-flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="wf-note-internal" ${flag(c.internal)}> Internal</label>
+                <label style="display:inline-flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" class="wf-note-resolution" ${flag(c.resolution)}> Resolution</label>
+            </div>`
+    } else if (a.type === 'send_message') {
+        const c = a.config || {}
+        const useCard = c.use_ticket_card !== false // default on
+        bodyEl.innerHTML = `
+            <label>Recipient</label>
+            <div class="combobox wf-recip">
+                <input type="hidden" class="po-value">
+                <input type="hidden" class="po-label">
+                <input type="text" class="cb-input" placeholder="Search rooms & people…" autocomplete="off" spellcheck="false">
+                <div class="cb-menu hidden"></div>
+            </div>
+            <div class="wf-opt-row">
+                <div>
+                    <div class="config-label">Use ticket card</div>
+                    <div class="config-desc">Send the standard ticket notification</div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" class="wf-send-card" ${useCard ? 'checked' : ''} onchange="wfToggleSendCard(this)">
+                    <span class="toggle-track"></span>
+                </label>
+            </div>
+            <div class="wf-send-custom form-group" style="${useCard ? 'display:none' : ''};margin-top:10px">
+                <label>Message <span style="color:var(--muted);font-weight:400">(Go templates ok)</span></label>
+                <textarea class="wf-send-text code-input" rows="3" placeholder="e.g. Heads up on {{.Summary}}">${esc(c.text || '')}</textarea>
+            </div>
+            <div class="wf-opt-row">
+                <div>
+                    <div class="config-label">Skip further notifications</div>
+                    <div class="config-desc">Suppress the normal notifier for this ticket once sent</div>
+                </div>
+                <label class="toggle">
+                    <input type="checkbox" class="wf-send-skip" ${c.skip_further_notifications ? 'checked' : ''}>
+                    <span class="toggle-track"></span>
+                </label>
+            </div>`
+        const recipOpts = wfRooms.map(r => ({ label: r.name, value: String(r.id), hint: r.type }))
+        attachCombobox(bodyEl.querySelector('.wf-recip'), { options: recipOpts, initial: c.recipient_id ? String(c.recipient_id) : '' })
+    } else if (a.type === 'skip_notifications') {
+        bodyEl.innerHTML = `<div class="config-desc">Marks this ticket so the default notifier does not run. Send Notification actions in this or other workflows still fire.</div>`
+    } else if (a.type === 'add_resource') {
+        const c = a.config || {}
+        bodyEl.innerHTML = `
+            <label>Member</label>
+            <div class="combobox wf-member">
+                <input type="hidden" class="po-value">
+                <input type="hidden" class="po-label">
+                <input type="text" class="cb-input" placeholder="Search members…" autocomplete="off" spellcheck="false">
+                <div class="cb-menu hidden"></div>
+            </div>`
+        attachCombobox(bodyEl.querySelector('.wf-member'), { options: wfPickerOptions('member'), initial: c.member_identifier || '' })
+    } else if (a.type === 'add_email_cc') {
+        const c = a.config || {}
+        bodyEl.innerHTML = `
+            <label>Email Address <span style="color:var(--muted);font-weight:400">(Go templates ok)</span></label>
+            <input class="wf-cc-email" type="text" style="width:100%" placeholder="e.g. alerts@example.com" value="${esc(c.email || '')}">`
+    }
+}
+
+function wfToggleSendCard(cb) {
+    const custom = cb.closest('.action-card-body').querySelector('.wf-send-custom')
+    if (custom) custom.style.display = cb.checked ? 'none' : ''
+}
+
+// harvestAllActions reads each card's live DOM back into its action config, so
+// edits survive a re-render (reorder / type change / remove / board change).
+function harvestAllActions() {
+    const host = document.getElementById('wf-actions')
+    if (!host) return
+    wfActions.forEach(a => {
+        const card = host.querySelector(`.action-card[data-id="${a._id}"]`)
+        if (card) harvestActionBody(a, card.querySelector('.action-card-body'))
+    })
+}
+
+function harvestActionBody(a, bodyEl) {
+    if (!bodyEl) return
+    if (a.type === 'ticket_update') {
+        const ops = [...bodyEl.querySelectorAll('.wf-ops .patch-op')].map(row => {
+            const path  = row.querySelector('.po-field').value
+            const op    = row.querySelector('.po-op').value
+            const vEl   = row.querySelector('.po-value')
+            const lEl   = row.querySelector('.po-label')
+            const value = op === 'remove' ? '' : (vEl ? vEl.value : '')
+            const o = { op, path, value }
+            if (op !== 'remove' && lEl && lEl.value) o.label = lEl.value
+            return o
+        })
+        a.config = { ops }
+    } else if (a.type === 'add_note') {
+        a.config = {
+            text:               bodyEl.querySelector('.wf-note-text')?.value || '',
+            detail_description: !!bodyEl.querySelector('.wf-note-detail')?.checked,
+            internal:           !!bodyEl.querySelector('.wf-note-internal')?.checked,
+            resolution:         !!bodyEl.querySelector('.wf-note-resolution')?.checked,
+        }
+    } else if (a.type === 'send_message') {
+        const recip = bodyEl.querySelector('.wf-recip .po-value')?.value || ''
+        a.config = {
+            recipient_id:               recip ? parseInt(recip) : 0,
+            use_ticket_card:            !!bodyEl.querySelector('.wf-send-card')?.checked,
+            text:                       bodyEl.querySelector('.wf-send-text')?.value || '',
+            skip_further_notifications: !!bodyEl.querySelector('.wf-send-skip')?.checked,
+        }
+    } else if (a.type === 'skip_notifications') {
+        a.config = {}
+    } else if (a.type === 'add_resource') {
+        a.config = { member_identifier: bodyEl.querySelector('.wf-member .po-value')?.value || '' }
+    } else if (a.type === 'add_email_cc') {
+        a.config = { email: bodyEl.querySelector('.wf-cc-email')?.value || '' }
+    }
+}
+
+// serializeAction validates a harvested action and returns the config object the
+// API expects, or null (after toasting) when it's incomplete.
+function serializeAction(a) {
+    if (a.type === 'ticket_update') {
+        const ops = (a.config.ops || []).filter(o => o.op === 'remove' || (o.value || '').trim() !== '')
+        if (!ops.length) { toast('A Ticket Update action needs at least one operation', 'error'); return null }
+        const has = (p) => ops.some(o => o.path === p)
+        if (has('contact') && !has('company')) { toast('Contact requires a Company operation in the same action', 'error'); return null }
+        if (has('board') && !has('status'))    { toast('Changing the Board also requires a Status operation', 'error'); return null }
+        return { ops }
+    }
+    if (a.type === 'add_note') {
+        if (!(a.config.text || '').trim()) { toast('A Note action needs note text', 'error'); return null }
+        return {
+            text:               a.config.text,
+            detail_description: !!a.config.detail_description,
+            internal:           !!a.config.internal,
+            resolution:         !!a.config.resolution,
+        }
+    }
+    if (a.type === 'send_message') {
+        if (!a.config.recipient_id) { toast('A Send Notification action needs a recipient', 'error'); return null }
+        if (!a.config.use_ticket_card && !(a.config.text || '').trim()) { toast('Add message text or enable “Use ticket card”', 'error'); return null }
+        return {
+            recipient_id:               a.config.recipient_id,
+            use_ticket_card:            !!a.config.use_ticket_card,
+            text:                       a.config.text || '',
+            skip_further_notifications: !!a.config.skip_further_notifications,
+        }
+    }
+    if (a.type === 'skip_notifications') {
+        return {}
+    }
+    if (a.type === 'add_resource') {
+        if (!(a.config.member_identifier || '').trim()) { toast('An Add Resource action needs a member', 'error'); return null }
+        return { member_identifier: a.config.member_identifier }
+    }
+    if (a.type === 'add_email_cc') {
+        if (!(a.config.email || '').trim()) { toast('An Add Email CC action needs an email address', 'error'); return null }
+        return { email: a.config.email.trim() }
+    }
+    return {}
+}
+
+function wfAddAction()        { harvestAllActions(); wfActions.push({ _id: wfNextId(), type: 'ticket_update', config: {} }); renderActions() }
+function wfRemoveAction(id)   { harvestAllActions(); wfActions = wfActions.filter(a => a._id !== id); renderActions() }
+function wfChangeActionType(id, type) {
+    harvestAllActions()
+    const a = wfActions.find(x => x._id === id)
+    if (a) { a.type = type; a.config = {} }
+    renderActions()
+}
+function wfMoveAction(id, dir) {
+    harvestAllActions()
+    const i = wfActions.findIndex(a => a._id === id)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= wfActions.length) return
+    ;[wfActions[i], wfActions[j]] = [wfActions[j], wfActions[i]]
+    renderActions()
+}
+
+// ── ticket_update op builder (card-scoped) ────────────────
+function wfFieldByPath(path) { return wfCatalog.find(f => f.path === path) }
+
+// wfPickerOptions maps local picker rows to {label, value, hint}. Board options
+// come from the boards loaded for the table; member (owner) from the modal fetch.
+// Company/contact/status are not here — they search ConnectWise live.
+function wfPickerOptions(picker) {
+    switch (picker) {
+        case 'member': return wfMembers.map(m => ({ label: `${(m.first_name || '')} ${(m.last_name || '')}`.trim() || m.identifier, value: m.identifier, hint: m.identifier }))
+        case 'board':  return Object.entries(wfBoardsById).map(([id, name]) => ({ label: name, value: String(id) }))
+        default:       return []
+    }
+}
+
+// wfOpValue returns the value held by an op row for a field path within one ops
+// container (or '' if absent) — used to scope dependent pickers.
+function wfOpValue(opsWrap, path) {
+    for (const row of opsWrap.querySelectorAll('.patch-op')) {
+        if (row.querySelector('.po-field').value !== path) continue
+        const v = row.querySelector('.po-value')
+        return v ? v.value : ''
+    }
+    return ''
+}
+
+function wfAddOp(btn) {
+    const opsWrap = btn.closest('.action-card-body').querySelector('.wf-ops')
+    if (opsWrap) wfAddOpRow(opsWrap)
+}
+
+// wfAddOpRow appends an op row (field select + op select + value control) to a card's ops container.
+function wfAddOpRow(opsWrap, field = 'summary', op = 'replace', value = '', label = '') {
+    const fieldOpts = wfCatalog.map(f => `<option value="${esc(f.path)}">${esc(f.label)}</option>`).join('')
     const row = document.createElement('div')
-    row.className = 'condition-row'
-    row.style = 'display:flex;gap:6px;margin-bottom:6px;align-items:center'
+    row.className = 'patch-op'
     row.innerHTML = `
-        <select class="cond-field" style="flex:0 0 34%">${fieldOpts}</select>
-        <select class="cond-op" style="flex:0 0 30%">${opOpts}</select>
-        <input class="cond-value" type="text" placeholder="value" style="flex:1" value="${esc(value)}">
-        <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.condition-row').remove()">✕</button>`
-    wrap.appendChild(row)
-    row.querySelector('.cond-field').value = field
-    row.querySelector('.cond-op').value = operator
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <select class="po-field" style="flex:1">${fieldOpts}</select>
+            <select class="po-op" style="flex:0 0 100px"></select>
+            <button type="button" class="btn btn-danger btn-sm" onclick="wfRemoveOp(this)">✕</button>
+        </div>
+        <div class="po-value-cell" data-initial="${esc(value)}" data-initial-label="${esc(label)}"></div>`
+    opsWrap.appendChild(row)
+
+    const fieldSel = row.querySelector('.po-field')
+    if (wfFieldByPath(field)) fieldSel.value = field
+    wfRenderOpOptions(row, op)
+    wfRenderValueCell(row)
+    fieldSel.addEventListener('change', () => {
+        wfRenderOpOptions(row)
+        wfRenderValueCell(row, { reset: true })
+        if (fieldSel.value === 'board' && !wfHasOp(opsWrap, 'status')) wfAddOpRow(opsWrap, 'status')
+        wfRefreshDependents(opsWrap)
+    })
+    row.querySelector('.po-op').addEventListener('change', () => { wfRenderValueCell(row); wfRefreshDependents(opsWrap) })
 }
 
-function updateTransformerHint() {
-    const action = document.getElementById('t-action').value
-    const hintEl = document.getElementById('t-config-hint')
-    const cfgEl  = document.getElementById('t-config')
-    const hint   = TRANSFORMER_CONFIG_HINTS[action] || '{}'
-    if (hintEl) hintEl.textContent = `Example: ${hint}`
-    if (cfgEl && !cfgEl.value.trim()) cfgEl.value = hint
+function wfRemoveOp(btn) {
+    const opsWrap = btn.closest('.wf-ops')
+    btn.closest('.patch-op').remove()
+    if (opsWrap) wfRefreshDependents(opsWrap)
 }
 
-async function deleteTransformer(id) {
-    if (!confirm('Delete this transformer rule?')) return
+function wfHasOp(opsWrap, path) {
+    return [...opsWrap.querySelectorAll('.po-field')].some(s => s.value === path)
+}
+
+function wfRefreshDependents(opsWrap) {
+    opsWrap.querySelectorAll('.patch-op').forEach(row => {
+        const f = wfFieldByPath(row.querySelector('.po-field').value)
+        if (f && f.depends_on) wfRenderValueCell(row)
+    })
+}
+
+function wfRenderOpOptions(row, selected) {
+    const field = wfFieldByPath(row.querySelector('.po-field').value)
+    const opSel = row.querySelector('.po-op')
+    const cur = selected || opSel.value || 'replace'
+    const opts = [{ value: 'replace', label: 'replace' }]
+    if (field && field.allow_remove) opts.push({ value: 'remove', label: 'remove' })
+    opSel.innerHTML = opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('')
+    opSel.value = opts.some(o => o.value === cur) ? cur : 'replace'
+}
+
+// wfOnParentChanged clears dependent rows whose parent (company/board) changed,
+// then re-scopes their pickers.
+function wfOnParentChanged(opsWrap, parentPath) {
+    opsWrap.querySelectorAll('.patch-op').forEach(row => {
+        const f = wfFieldByPath(row.querySelector('.po-field').value)
+        if (f && f.depends_on === parentPath) {
+            const cell = row.querySelector('.po-value-cell')
+            cell.dataset.initial = ''
+            cell.dataset.initialLabel = ''
+            const v = row.querySelector('.po-value'); if (v) v.value = ''
+            const l = row.querySelector('.po-label'); if (l) l.value = ''
+        }
+    })
+    wfRefreshDependents(opsWrap)
+}
+
+// wfRenderValueCell (re)draws a row's value control: nothing for remove; a
+// search-as-you-type combobox for picker-backed fields; otherwise a plain text
+// input that accepts Go templates. Contact is scoped to the row's Company op and
+// status to the row's Board op or the workflow's board.
+function wfRenderValueCell(row, opts = {}) {
+    const field = wfFieldByPath(row.querySelector('.po-field').value)
+    const op    = row.querySelector('.po-op').value
+    const cell  = row.querySelector('.po-value-cell')
+    const existingV = row.querySelector('.po-value')
+    const existingL = row.querySelector('.po-label')
+    const prev      = opts.reset ? '' : (existingV ? existingV.value : (cell.dataset.initial || ''))
+    const prevLabel = opts.reset ? '' : (existingL ? existingL.value : (cell.dataset.initialLabel || ''))
+
+    if (op === 'remove' || !field) { cell.innerHTML = ''; return }
+
+    const opsWrap = row.closest('.wf-ops')
+
+    if (field.picker) {
+        let fetcher = null, disabledMsg = ''
+        if (field.picker === 'company') {
+            fetcher = q => api('GET', `/cw/companies?q=${encodeURIComponent(q)}`)
+        } else if (field.picker === 'contact') {
+            const company = wfOpValue(opsWrap, 'company')
+            if (!company) disabledMsg = 'Add & choose a Company operation first'
+            else fetcher = q => api('GET', `/cw/contacts?company=${encodeURIComponent(company)}&q=${encodeURIComponent(q)}`)
+        } else if (field.picker === 'status') {
+            const board = wfOpValue(opsWrap, 'board') || wfBoardId
+            if (!board) disabledMsg = 'Select the workflow board first'
+            else fetcher = q => api('GET', `/cw/boards/${board}/statuses?q=${encodeURIComponent(q)}`)
+        }
+
+        if (disabledMsg) {
+            cell.innerHTML = `<input type="hidden" class="po-value">
+                <div class="cb-disabled-msg">${esc(disabledMsg)}</div>`
+            return
+        }
+
+        cell.innerHTML = `<div class="combobox">
+            <input type="hidden" class="po-value">
+            <input type="hidden" class="po-label">
+            <input type="text" class="cb-input" placeholder="Search ${esc(field.picker)}…" autocomplete="off" spellcheck="false">
+            <div class="cb-menu hidden"></div>
+        </div>`
+        const isParent = wfCatalog.some(f => f.depends_on === field.path)
+        const onChange = isParent ? (() => wfOnParentChanged(opsWrap, field.path)) : null
+        const cfg = { initial: prev, initialLabel: prevLabel, onChange }
+        if (fetcher) cfg.fetch = fetcher
+        else cfg.options = wfPickerOptions(field.picker)
+        attachCombobox(cell.querySelector('.combobox'), cfg)
+        return
+    }
+
+    const ph = field.kind === 'text' ? 'value (Go template ok)' : 'name (Go template ok)'
+    cell.innerHTML = `<input class="po-value" type="text" placeholder="${ph}" style="width:100%" value="${esc(prev)}">`
+}
+
+// attachCombobox wires a search-as-you-type picker onto a .combobox wrapper.
+// cfg: { options | fetch, initial, initialLabel, onChange }.
+//   - options: [{label,value,hint?}] filtered client-side (local pickers).
+//   - fetch:   async q => [{label,value,hint?}], debounced (live CW pickers).
+// The visible .cb-input shows only `label`; hidden .po-value holds the selected
+// `value` (what the op stores) and hidden .po-label keeps the display label so
+// edits prefill without a lookup. Typing filters; click / Enter selects; ↑/↓
+// move; Esc/blur close. Text that isn't a selection is discarded on blur.
+function attachCombobox(combo, cfg = {}) {
+    const { options = null, fetch = null, onChange = null } = cfg
+    const hidden = combo.querySelector('.po-value')
+    const label  = combo.querySelector('.po-label')
+    const input  = combo.querySelector('.cb-input')
+    const menu   = combo.querySelector('.cb-menu')
+    let filtered = [], active = -1, selectedLabel = '', seq = 0, debounce = null
+
+    const staticLabelFor = (v) => { const o = (options || []).find(o => o.value === v); return o ? o.label : '' }
+
+    hidden.value  = cfg.initial || ''
+    selectedLabel = cfg.initialLabel || (options ? staticLabelFor(hidden.value) : '') || hidden.value || ''
+    if (label) label.value = hidden.value ? selectedLabel : ''
+    input.value = hidden.value ? selectedLabel : ''
+
+    function render(list) {
+        filtered = list; active = -1
+        menu.innerHTML = list.length
+            ? list.map((o, i) => `<div class="cb-item" data-i="${i}">
+                    <span class="cb-item-label">${esc(o.label)}</span>
+                    ${o.hint ? `<span class="cb-item-hint">${esc(o.hint)}</span>` : ''}
+                </div>`).join('')
+            : `<div class="cb-empty">No matches</div>`
+        menu.classList.remove('hidden')
+    }
+    function close() { menu.classList.add('hidden'); active = -1 }
+    function choose(o) {
+        if (!o) return
+        hidden.value = o.value; selectedLabel = o.label
+        if (label) label.value = o.label
+        input.value = o.label; close()
+        if (onChange) onChange()
+    }
+    function setActive(i) {
+        const items = [...menu.querySelectorAll('.cb-item')]
+        items.forEach(el => el.classList.remove('active'))
+        if (i >= 0 && i < items.length) { items[i].classList.add('active'); items[i].scrollIntoView({ block: 'nearest' }) }
+        active = i
+    }
+    function load(q) {
+        if (options) {
+            const s = (q || '').trim().toLowerCase()
+            render(!s ? options.slice(0, 100)
+                      : options.filter(o => o.label.toLowerCase().includes(s) || (o.hint || '').toLowerCase().includes(s)).slice(0, 100))
+            return
+        }
+        const my = ++seq
+        menu.innerHTML = `<div class="cb-empty">Searching…</div>`; menu.classList.remove('hidden')
+        Promise.resolve(fetch(q || ''))
+            .then(res => { if (my === seq) render(res || []) })
+            .catch(() => { if (my === seq) menu.innerHTML = `<div class="cb-empty">Search failed</div>` })
+    }
+    function loadDebounced(q) {
+        if (options) { load(q); return }
+        clearTimeout(debounce); debounce = setTimeout(() => load(q), 250)
+    }
+
+    input.addEventListener('focus', () => load(input.value === selectedLabel ? '' : input.value))
+    input.addEventListener('input', () => { hidden.value = ''; if (label) label.value = ''; loadDebounced(input.value) })
+    input.addEventListener('keydown', (e) => {
+        if (menu.classList.contains('hidden')) { if (e.key === 'ArrowDown') load(input.value); return }
+        if (e.key === 'ArrowDown')      { e.preventDefault(); setActive(Math.min(active + 1, filtered.length - 1)) }
+        else if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(Math.max(active - 1, 0)) }
+        else if (e.key === 'Enter')     { e.preventDefault(); if (active >= 0) choose(filtered[active]) }
+        else if (e.key === 'Escape')    { close() }
+    })
+    // mousedown (not click) so selection registers before the input's blur fires.
+    menu.addEventListener('mousedown', (e) => {
+        const item = e.target.closest('.cb-item'); if (!item) return
+        e.preventDefault()
+        choose(filtered[parseInt(item.dataset.i, 10)])
+    })
+    input.addEventListener('blur', () => setTimeout(() => {
+        close()
+        input.value = hidden.value ? selectedLabel : '' // discard stray typed text
+    }, 150))
+}
+
+async function deleteWorkflow(id) {
+    if (!confirm('Delete this workflow?')) return
     try {
-        await api('DELETE', `/transformers/rules/${id}`)
-        toast('Transformer rule deleted', 'success')
-        loadTransformers()
+        await api('DELETE', `/workflows/${id}`)
+        toast('Workflow deleted', 'success')
+        loadWorkflows()
     } catch (e) { toast(e.message, 'error') }
 }
 
@@ -910,13 +1752,13 @@ async function loadForwards() {
         const fwds = await api('GET', '/notifiers/forwards?filter=not-expired')
         renderForwards(fwds || [])
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setNotifierPanel(`<div class="empty-state">${esc(e.message)}</div>`)
     }
 }
 
 function renderForwards(fwds) {
-    const header = `<div class="tab-header">
-        <h2>Notification Forwards</h2>
+    const header = `<div class="panel-header">
+        <span class="panel-desc">Redirect a recipient's notifications to another for a time window.</span>
         <button class="btn btn-primary btn-sm" onclick="showNewForwardModal()">+ New Forward</button>
     </div>`
 
@@ -930,7 +1772,7 @@ function renderForwards(fwds) {
         <td class="actions"><button class="btn btn-danger" onclick="deleteForward(${f.id})">Delete</button></td>
     </tr>`)
 
-    setContent(header + tableWrap(thead, rows))
+    setNotifierPanel(header + tableWrap(thead, rows))
 }
 
 async function showNewForwardModal() {
@@ -1266,37 +2108,46 @@ async function loadConfig() {
     }
 }
 
+let configEnvLocked = []
+
 function renderConfig(cfg) {
+    const L = new Set(cfg.env_locked || [])
+    configEnvLocked = cfg.env_locked || []
+    const dis = k => L.has(k) ? 'disabled' : ''
+    const envNote = k => L.has(k) ? '<div class="config-desc" style="color:var(--warning)">Set via environment — change the env var to update</div>' : ''
     setContent(`<div class="tab-header">
         <h2>Configuration</h2>
     </div>
     <div class="config-form">
         <div class="config-row">
             <div>
-                <div class="config-label">Attempt Notify</div>
-                <div class="config-desc">Master switch for sending ticket notifications</div>
+                <div class="config-label">Enable Workflows</div>
+                <div class="config-desc">Master switch for the ticket workflow pipeline</div>
+                ${envNote('attempt_workflow')}
             </div>
             <label class="toggle">
-                <input type="checkbox" id="c-notify" ${cfg.attempt_notify ? 'checked' : ''}>
+                <input type="checkbox" id="c-workflow" ${cfg.attempt_workflow ? 'checked' : ''} ${dis('attempt_workflow')}>
                 <span class="toggle-track"></span>
             </label>
         </div>
         <div class="config-row">
             <div>
-                <div class="config-label">Attempt Transform</div>
-                <div class="config-desc">Master switch for the ticket transformer pipeline</div>
+                <div class="config-label">Enable Notifications</div>
+                <div class="config-desc">Master switch for sending ticket notifications</div>
+                ${envNote('attempt_notify')}
             </div>
             <label class="toggle">
-                <input type="checkbox" id="c-transform" ${cfg.attempt_transform ? 'checked' : ''}>
+                <input type="checkbox" id="c-notify" ${cfg.attempt_notify ? 'checked' : ''} ${dis('attempt_notify')}>
                 <span class="toggle-track"></span>
             </label>
         </div>
         <div class="config-row">
             <div>
                 <div class="config-label">Bot Member Identifier</div>
-                <div class="config-desc">Connectwise member the bot writes as; used to skip its own webhooks (prevents transformer loops)</div>
+                <div class="config-desc">Connectwise member the bot writes as; used to skip its own webhooks (prevents workflow loops)</div>
+                ${envNote('cw_bot_member_identifier')}
             </div>
-            <input class="config-input" type="text" id="c-bot-member" value="${esc(cfg.cw_bot_member_identifier || '')}">
+            <input class="config-input" type="text" id="c-bot-member" value="${esc(cfg.cw_bot_member_identifier || '')}" ${dis('cw_bot_member_identifier')}>
         </div>
         <div class="config-row">
             <div>
@@ -1326,9 +2177,10 @@ function renderConfig(cfg) {
             <div>
                 <div class="config-label">Debug Logging</div>
                 <div class="config-desc">Enable debug-level log output without a server restart</div>
+                ${envNote('debug_logging')}
             </div>
             <label class="toggle">
-                <input type="checkbox" id="c-debug-logging" ${cfg.debug_logging ? 'checked' : ''}>
+                <input type="checkbox" id="c-debug-logging" ${cfg.debug_logging ? 'checked' : ''} ${dis('debug_logging')}>
                 <span class="toggle-track"></span>
             </label>
         </div>
@@ -1353,27 +2205,115 @@ function renderConfig(cfg) {
             </div>
             <input class="config-input" type="number" id="c-log-cleanup-interval" value="${cfg.log_cleanup_interval_hours}" min="1">
         </div>
+        <div class="config-section-title">Connection &amp; Credentials</div>
+        <div class="config-desc" style="margin:-4px 0 4px">Credential changes take effect after a server restart. Fields set via environment variables are locked here.</div>
+        ${credRow(cfg, 'root_url',       'c-root-url',     'Root URL',       'Externally reachable base URL for Connectwise webhook callbacks')}
+        ${credRow(cfg, 'cw_company_id',  'c-cw-company',   'CW Company ID',  'Connectwise company identifier')}
+        ${credRow(cfg, 'cw_client_id',   'c-cw-client',    'CW Client ID',   'Connectwise API client ID')}
+        ${credRow(cfg, 'cw_public_key',  'c-cw-pub',       'CW Public Key',  'Connectwise API public key')}
+        ${credRow(cfg, 'cw_private_key', 'c-cw-priv',      'CW Private Key', 'Connectwise API private key', { secret: true })}
+        ${credRow(cfg, 'webex_secret',   'c-webex-secret', 'Webex Token',    'Webex bot bearer token', { secret: true })}
+        <div class="config-row">
+            <div>
+                <div class="config-label">Connection Test</div>
+                <div class="config-desc">Checks the saved credentials against Connectwise &amp; Webex</div>
+            </div>
+            <div class="conn-test">
+                <button class="btn btn-ghost btn-sm" onclick="testConnections(this)">Test Connection</button>
+                <div id="c-conn-result"></div>
+            </div>
+        </div>
         <div class="config-row">
             <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Changes</button>
         </div>
     </div>`)
 }
 
-async function saveConfig() {
+async function testConnections(btn) {
+    const out = document.getElementById('c-conn-result')
+    btn.disabled = true
+    out.innerHTML = '<span class="conn-pending">Testing…</span>'
     try {
-        await api('PUT', '/config', {
-            attempt_notify:             document.getElementById('c-notify').checked,
-            attempt_transform:          document.getElementById('c-transform').checked,
-            cw_bot_member_identifier:   document.getElementById('c-bot-member').value.trim(),
-            max_message_length:         parseInt(document.getElementById('c-max-len').value)              || 300,
-            max_concurrent_syncs:       parseInt(document.getElementById('c-max-syncs').value)            || 5,
-            require_totp:               document.getElementById('c-require-totp').checked,
-            debug_logging:              document.getElementById('c-debug-logging').checked,
-            log_buffer_size:            parseInt(document.getElementById('c-log-buffer-size').value)      || 500,
-            log_retention_days:         parseInt(document.getElementById('c-log-retention').value)        ?? 7,
-            log_cleanup_interval_hours: parseInt(document.getElementById('c-log-cleanup-interval').value) || 24,
-        })
-        toast('Config saved', 'success')
+        const res = await api('GET', '/config/test')
+        out.innerHTML = connLine('ConnectWise', res.cw) + connLine('Webex', res.webex)
+    } catch (e) {
+        out.innerHTML = `<div class="conn-fail">${esc(e.message)}</div>`
+    } finally {
+        btn.disabled = false
+    }
+}
+
+function connLine(name, c) {
+    return (c && c.ok)
+        ? `<div class="conn-ok">✓ ${esc(name)} connected</div>`
+        : `<div class="conn-fail">✗ ${esc(name)}: ${esc((c && c.error) || 'failed')}</div>`
+}
+
+// credRow renders one credential field. Secrets are write-only: the value is never
+// pre-filled (the API blanks it); the placeholder shows whether it's configured and
+// a blank value on save means "keep current". Fields locked by an env var are
+// disabled and not submitted.
+function credRow(cfg, key, id, label, desc, opts = {}) {
+    const locked   = (cfg.env_locked || []).includes(key)
+    const isSecret = !!opts.secret
+    const type     = isSecret ? 'password' : 'text'
+    const val      = isSecret ? '' : esc(cfg[key] || '')
+    let ph = ''
+    if (isSecret) ph = cfg[key + '_set'] ? '•••••••• (configured)' : 'Not set'
+    if (locked)   ph = 'Set via environment'
+    const note = locked
+        ? '<div class="config-desc" style="color:var(--warning)">Set via environment — change the env var to update</div>'
+        : (isSecret ? '<div class="config-desc">Leave blank to keep the current value</div>' : '')
+    return `<div class="config-row">
+        <div>
+            <div class="config-label">${esc(label)}</div>
+            <div class="config-desc">${esc(desc)}</div>
+            ${note}
+        </div>
+        <input class="config-input" type="${type}" id="${id}" value="${val}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false" ${locked ? 'disabled' : ''}>
+    </div>`
+}
+
+async function saveConfig() {
+    const lockedSet = new Set(configEnvLocked)
+    const payload = {
+        max_message_length:         parseInt(document.getElementById('c-max-len').value)              || 300,
+        max_concurrent_syncs:       parseInt(document.getElementById('c-max-syncs').value)            || 5,
+        require_totp:               document.getElementById('c-require-totp').checked,
+        log_buffer_size:            parseInt(document.getElementById('c-log-buffer-size').value)      || 500,
+        log_retention_days:         parseInt(document.getElementById('c-log-retention').value)        ?? 7,
+        log_cleanup_interval_hours: parseInt(document.getElementById('c-log-cleanup-interval').value) || 24,
+    }
+
+    // Env-lockable fields: only send when not pinned by an environment variable
+    // (an env-locked field would just be overwritten by the env value on restart).
+    if (!lockedSet.has('attempt_workflow'))         payload.attempt_workflow = document.getElementById('c-workflow').checked
+    if (!lockedSet.has('attempt_notify'))           payload.attempt_notify = document.getElementById('c-notify').checked
+    if (!lockedSet.has('debug_logging'))            payload.debug_logging = document.getElementById('c-debug-logging').checked
+    if (!lockedSet.has('cw_bot_member_identifier')) payload.cw_bot_member_identifier = document.getElementById('c-bot-member').value.trim()
+
+    // Credential fields: skip env-locked (disabled) ones; for secrets, a blank value
+    // means "keep current" so we omit it.
+    let credChanged = false
+    const addCred = (key, id, secret) => {
+        const el = document.getElementById(id)
+        if (!el || el.disabled) return
+        const v = el.value.trim()
+        if (secret && v === '') return
+        payload[key] = v
+        credChanged = true
+    }
+    addCred('root_url',       'c-root-url')
+    addCred('cw_company_id',  'c-cw-company')
+    addCred('cw_client_id',   'c-cw-client')
+    addCred('cw_public_key',  'c-cw-pub')
+    addCred('cw_private_key', 'c-cw-priv',      true)
+    addCred('webex_secret',   'c-webex-secret', true)
+
+    try {
+        await api('PUT', '/config', payload)
+        toast(credChanged ? 'Config saved — restart the server to apply credential changes' : 'Config saved', 'success')
+        loadConfig()
     } catch (e) { toast(e.message, 'error') }
 }
 

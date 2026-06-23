@@ -36,6 +36,46 @@ func (h *CWHandler) ListMembers(c *gin.Context) {
 	outputJSON(c, m)
 }
 
+// ListCompanies live-searches CW companies by name (?q=). Used by the workflow
+// company picker.
+func (h *CWHandler) ListCompanies(c *gin.Context) {
+	companies, err := h.Service.SearchCompanies(c.Request.Context(), c.Query("q"))
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, companies)
+}
+
+// ListContacts live-searches CW contacts within a company (?company=<identifier>&q=).
+func (h *CWHandler) ListContacts(c *gin.Context) {
+	contacts, err := h.Service.SearchContacts(c.Request.Context(), c.Query("company"), c.Query("q"))
+	if err != nil {
+		badPayloadError(c, err)
+		return
+	}
+
+	outputJSON(c, contacts)
+}
+
+// ListBoardStatuses live-fetches the active statuses for a board (?q= filters by name).
+func (h *CWHandler) ListBoardStatuses(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	statuses, err := h.Service.LiveBoardStatuses(c.Request.Context(), id, c.Query("q"))
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, statuses)
+}
+
 func (h *CWHandler) GetBoard(c *gin.Context) {
 	id, err := convertID(c)
 	if err != nil {

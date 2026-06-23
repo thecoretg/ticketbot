@@ -55,9 +55,14 @@ func AddRoutes(a *App, g *gin.Engine, shutdown func()) {
 	nh := handlers.NewNotifierHandler(a.Svc.Notifier)
 	registerNotifierRoutes(n, nh)
 
-	tr := g.Group("transformers", auth)
-	trh := handlers.NewTransformerHandler(a.Svc.Transformer)
-	registerTransformerRoutes(tr, trh)
+	wf := g.Group("workflows", auth)
+	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow)
+	registerWorkflowRoutes(wf, wfh)
+
+	tj := g.Group("tickets", auth)
+	tjh := handlers.NewTicketJournalHandler(a.Svc.Journal)
+	tj.GET("", tjh.List)
+	tj.GET(":id", tjh.Get)
 
 	lh := handlers.NewLogsHandler(a.LogBuffer)
 	g.GET("logs", auth, lh.HandleList)
@@ -92,15 +97,23 @@ func registerUserRoutes(r *gin.RouterGroup, h *handlers.UserHandler) {
 func registerConfigRoutes(r *gin.RouterGroup, h *handlers.ConfigHandler) {
 	r.GET("", h.Get)
 	r.PUT("", h.Update)
+	r.GET("test", h.TestConnections)
 }
 
 func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
 	b := r.Group("boards")
 	b.GET("", h.ListBoards)
 	b.GET(":id", h.GetBoard)
+	b.GET(":id/statuses", h.ListBoardStatuses)
 
 	m := r.Group("members")
 	m.GET("", h.ListMembers)
+
+	co := r.Group("companies")
+	co.GET("", h.ListCompanies)
+
+	ct := r.Group("contacts")
+	ct.GET("", h.ListContacts)
 }
 
 func registerWebexRoutes(r *gin.RouterGroup, h *handlers.WebexHandler) {
@@ -123,13 +136,13 @@ func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
 	fw.DELETE(":id", h.DeleteUserForward)
 }
 
-func registerTransformerRoutes(r *gin.RouterGroup, h *handlers.TransformerHandler) {
-	ru := r.Group("rules")
-	ru.GET("", h.ListRules)
-	ru.GET(":id", h.GetRule)
-	ru.POST("", h.AddRule)
-	ru.PUT(":id", h.UpdateRule)
-	ru.DELETE(":id", h.DeleteRule)
+func registerWorkflowRoutes(r *gin.RouterGroup, h *handlers.WorkflowHandler) {
+	r.GET("update-fields", h.UpdateFields)
+	r.GET("", h.ListWorkflows)
+	r.GET(":id", h.GetWorkflow)
+	r.POST("", h.AddWorkflow)
+	r.PUT(":id", h.UpdateWorkflow)
+	r.DELETE(":id", h.DeleteWorkflow)
 }
 
 func registerHookRoutes(r *gin.RouterGroup, tb *handlers.TicketbotHandler) {

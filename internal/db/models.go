@@ -38,8 +38,14 @@ type AppConfig struct {
 	LogRetentionDays        int    `json:"log_retention_days"`
 	LogCleanupIntervalHours int    `json:"log_cleanup_interval_hours"`
 	LogBufferSize           int    `json:"log_buffer_size"`
-	AttemptTransform        bool   `json:"attempt_transform"`
+	AttemptWorkflow         bool   `json:"attempt_workflow"`
 	CwBotMemberIdentifier   string `json:"cw_bot_member_identifier"`
+	RootUrl                 string `json:"root_url"`
+	CwCompanyID             string `json:"cw_company_id"`
+	CwClientID              string `json:"cw_client_id"`
+	CwPublicKey             string `json:"cw_public_key"`
+	CwPrivateKey            string `json:"cw_private_key"`
+	WebexSecret             string `json:"webex_secret"`
 }
 
 type AppLog struct {
@@ -155,6 +161,22 @@ type Session struct {
 	CreatedOn time.Time `json:"created_on"`
 }
 
+type TicketJournal struct {
+	TicketID    int       `json:"ticket_id"`
+	Summary     string    `json:"summary"`
+	BoardName   string    `json:"board_name"`
+	CompanyName string    `json:"company_name"`
+	ContactName string    `json:"contact_name"`
+	StatusName  string    `json:"status_name"`
+	OwnerName   string    `json:"owner_name"`
+	LastTrigger string    `json:"last_trigger"`
+	LastOutcome string    `json:"last_outcome"`
+	HadError    bool      `json:"had_error"`
+	FirstSeen   time.Time `json:"first_seen"`
+	LastRun     time.Time `json:"last_run"`
+	Runs        []byte    `json:"runs"`
+}
+
 type TicketNotification struct {
 	ID              int       `json:"id"`
 	TicketID        int       `json:"ticket_id"`
@@ -183,26 +205,6 @@ type TotpRecoveryCode struct {
 	CreatedOn time.Time `json:"created_on"`
 }
 
-type TransformerRule struct {
-	ID         int       `json:"id"`
-	Name       string    `json:"name"`
-	Action     string    `json:"action"`
-	CwBoardID  *int      `json:"cw_board_id"`
-	Config     []byte    `json:"config"`
-	ApplyOn    string    `json:"apply_on"`
-	Priority   int       `json:"priority"`
-	Enabled    bool      `json:"enabled"`
-	CreatedOn  time.Time `json:"created_on"`
-	UpdatedOn  time.Time `json:"updated_on"`
-	Conditions []byte    `json:"conditions"`
-}
-
-type TransformerRun struct {
-	TicketID  int       `json:"ticket_id"`
-	RuleID    int       `json:"rule_id"`
-	CreatedOn time.Time `json:"created_on"`
-}
-
 type WebexRecipient struct {
 	ID           int       `json:"id"`
 	WebexID      string    `json:"webex_id"`
@@ -212,4 +214,24 @@ type WebexRecipient struct {
 	LastActivity time.Time `json:"last_activity"`
 	CreatedOn    time.Time `json:"created_on"`
 	UpdatedOn    time.Time `json:"updated_on"`
+}
+
+type Workflow struct {
+	ID             int       `json:"id"`
+	Name           string    `json:"name"`
+	CwBoardID      int       `json:"cw_board_id"`
+	OnTicketAction string    `json:"on_ticket_action"`
+	Conditions     []byte    `json:"conditions"`
+	Actions        []byte    `json:"actions"`
+	Priority       int       `json:"priority"`
+	Enabled        bool      `json:"enabled"`
+	CreatedOn      time.Time `json:"created_on"`
+	UpdatedOn      time.Time `json:"updated_on"`
+}
+
+type WorkflowRun struct {
+	TicketID    int       `json:"ticket_id"`
+	WorkflowID  int       `json:"workflow_id"`
+	ActionIndex int       `json:"action_index"`
+	CreatedOn   time.Time `json:"created_on"`
 }

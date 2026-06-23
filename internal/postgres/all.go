@@ -17,8 +17,9 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		TicketNotifications: NewNotificationRepo(pool),
 		NotifierForwards:    NewUserForwardRepo(pool),
 		NotifierRules:       NewNotifierRuleRepo(pool),
-		TransformerRules:    NewTransformerRuleRepo(pool),
-		TransformerRuns:     NewTransformerRunRepo(pool),
+		Workflows:           NewWorkflowRepo(pool),
+		WorkflowRuns:        NewWorkflowRunRepo(pool),
+		TicketJournals:      NewTicketJournalRepo(pool),
 		WebexRecipients:     NewWebexRecipientRepo(pool),
 		CW: repos.CWRepos{
 			Board:        NewBoardRepo(pool),

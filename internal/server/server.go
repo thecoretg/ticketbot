@@ -12,11 +12,12 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
+	"github.com/thecoretg/ticketbot/internal/service/journal"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
-	"github.com/thecoretg/ticketbot/internal/service/transformer"
 	"github.com/thecoretg/ticketbot/internal/service/user"
+	"github.com/thecoretg/ticketbot/internal/service/workflow"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/internal/service/webhooks"
 	"github.com/thecoretg/ticketbot/models"
@@ -44,7 +45,8 @@ type Services struct {
 	Webex       *webexsvc.Service
 	Sync        *syncsvc.Service
 	Notifier    *notifier.Service
-	Transformer *transformer.Service
+	Workflow    *workflow.Service
+	Journal     *journal.Service
 	Ticketbot   *ticketbot.Service
 }
 
@@ -53,7 +55,7 @@ const defaultStoreTTL = int64(900)
 func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf *logging.BufferHandler) (*App, *logging.Persister, error) {
 	cr := getCreds()
 	tf := getTestFlags()
-	if err := cr.validate(tf); err != nil {
+	if err := cr.validateBootstrap(); err != nil {
 		return nil, nil, fmt.Errorf("validating credentials: %w", err)
 	}
 
@@ -62,16 +64,6 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		ttl = tf.StoreTTLSeconds
 	}
 	slog.Info("using TTL", "ttl", ttl)
-
-	cw, err := psa.NewClient(ctx, *cr.CWCreds)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating connectwise client: %w", err)
-	}
-
-	ms, err := makeMessageSender(ctx, tf.MockWebex, cr.WebexAPISecret)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating message sender: %w", err)
-	}
 
 	s, err := CreateStores(ctx, cr, migVersion)
 	if err != nil {
@@ -82,6 +74,33 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	cfg, err := getStartupConfig(ctx, r.Config)
 	if err != nil {
 		return nil, nil, fmt.Errorf("getting initial config: %w", err)
+	}
+
+	// Credentials come from the config (admin panel) with environment variables
+	// taking precedence; env values are written back so the DB keeps a working copy.
+	if locked := mergeEnvConfig(cfg, cr); len(locked) > 0 {
+		slog.Info("config sourced from environment", "fields", locked)
+		if cfg, err = r.Config.Upsert(ctx, cfg); err != nil {
+			return nil, nil, fmt.Errorf("persisting env config: %w", err)
+		}
+	}
+	if err := validateCreds(cfg, tf); err != nil {
+		return nil, nil, fmt.Errorf("validating credentials: %w", err)
+	}
+
+	cw, err := psa.NewClient(ctx, psa.Config{
+		PublicKey:  cfg.CwPublicKey,
+		PrivateKey: cfg.CwPrivateKey,
+		ClientID:   cfg.CwClientID,
+		CompanyID:  cfg.CwCompanyID,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating connectwise client: %w", err)
+	}
+
+	ms, err := makeMessageSender(ctx, tf.MockWebex, cfg.WebexSecret)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating message sender: %w", err)
 	}
 
 	cws := cwsvc.New(s.Pool, r.CW, cw, ttl)
@@ -95,17 +114,22 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		Forwards:      r.NotifierForwards,
 		Pool:          s.Pool,
 		MessageSender: ms,
-		CWCompanyID:   cr.CWCreds.CompanyID,
+		CWCompanyID:   cfg.CwCompanyID,
 	}
 
 	ns := notifier.New(nr)
 
-	ts := transformer.New(transformer.SvcParams{
-		Cfg:      cfg,
-		CWClient: cw,
-		Rules:    r.TransformerRules,
-		Runs:     r.TransformerRuns,
+	wfs := workflow.New(workflow.SvcParams{
+		Cfg:         cfg,
+		CWClient:    cw,
+		Workflows:   r.Workflows,
+		Runs:        r.WorkflowRuns,
+		Webex:       ms,
+		Recips:      r.WebexRecipients,
+		CWCompanyID: cfg.CwCompanyID,
 	})
+
+	js := journal.New(r.TicketJournals, cfg)
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
 
@@ -122,13 +146,14 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 			Auth:        authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
 			Config:      config.New(r.Config, cfg, level, logBuf),
 			User:        user.New(r.APIUser, r.APIKey),
-			Hooks:       webhooks.New(cw, cr.RootURL),
+			Hooks:       webhooks.New(cw, cfg.RootURL),
 			CW:          cws,
 			Webex:       ws,
 			Sync:        syncsvc.New(s.Pool, cws, ws, ns),
 			Notifier:    notifier.New(nr),
-			Transformer: ts,
-			Ticketbot:   ticketbot.New(cfg, cws, ns, ts),
+			Workflow:    wfs,
+			Journal:     js,
+			Ticketbot:   ticketbot.New(cfg, cws, ns, wfs, js),
 		},
 	}, persister, nil
 }

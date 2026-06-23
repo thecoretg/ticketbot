@@ -385,8 +385,44 @@ td.actions  { text-align: right; }
     padding: 2px 8px;
 }
 
-.badge-on  { background: rgba(63,185,80,0.14);  color: var(--success); }
-.badge-off { background: rgba(248,81,73,0.12); color: var(--danger); }
+.badge-on      { background: rgba(63,185,80,0.14);  color: var(--success); }
+.badge-off     { background: rgba(248,81,73,0.12); color: var(--danger); }
+.badge-neutral { background: var(--surface); color: var(--muted); }
+
+/* ── Tickets journal ─────────────────────────────────────────────────────────── */
+.logs-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.logs-opt { align-items: center; color: var(--muted); display: inline-flex; font-size: 12px; gap: 6px; }
+
+th.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+th.th-sort:hover { color: var(--text); }
+tr.row-click { cursor: pointer; }
+
+.jr-summary { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.jr-props { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 18px; }
+.jr-prop { display: flex; flex-direction: column; font-size: 13px; }
+.jr-prop-label { color: var(--muted); font-size: 11px; }
+
+.timeline { display: flex; flex-direction: column; gap: 10px; }
+.run-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--primary);
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+.run-card.run-error { border-left-color: var(--danger); }
+.run-head { align-items: center; display: flex; gap: 10px; margin-bottom: 8px; }
+.run-trigger { font-weight: 600; }
+.run-time { color: var(--muted); font-size: 12px; margin-right: auto; }
+.run-events { display: flex; flex-direction: column; gap: 4px; }
+.journal-event { font-size: 13px; padding-left: 14px; position: relative; }
+.journal-event::before { content: '•'; left: 2px; position: absolute; }
+.journal-event.ev-ok    { color: var(--text); }
+.journal-event.ev-ok::before    { color: var(--success); }
+.journal-event.ev-error { color: var(--danger); }
+.journal-event.ev-error::before { color: var(--danger); }
+.journal-event.ev-skip  { color: var(--muted); }
+.journal-event.ev-info  { color: var(--muted); }
 
 /* ── Forms ───────────────────────────────────────────────────────────────────── */
 .form-group {
@@ -457,6 +493,180 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 select option { background: var(--card); }
 
 .error-text { color: var(--danger); font-size: 12px; }
+
+/* ── Combobox (search-as-you-type picker) ────────────────────────────────────── */
+.combobox { position: relative; }
+
+.cb-menu {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: var(--shadow-md);
+    left: 0;
+    margin-top: 4px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 120;
+}
+
+.cb-menu::-webkit-scrollbar       { width: 5px; }
+.cb-menu::-webkit-scrollbar-track { background: transparent; }
+.cb-menu::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.cb-menu::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.cb-item {
+    align-items: baseline;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    padding: 7px 10px;
+}
+
+.cb-item:hover, .cb-item.active { background: var(--hover-bg); }
+
+.cb-item-label {
+    color: var(--text);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cb-item-hint {
+    color: var(--muted);
+    flex-shrink: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+}
+
+.cb-empty {
+    color: var(--muted);
+    font-size: 12px;
+    padding: 8px 10px;
+}
+
+/* ── Sub-tabs (Notifier) ─────────────────────────────────────────────────────── */
+.subtabs {
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+}
+.subtab {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: -1px;
+    padding: 8px 12px;
+}
+.subtab:hover { color: var(--text); }
+.subtab.active { border-bottom-color: var(--primary); color: var(--text); }
+
+.panel-header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.panel-desc { color: var(--muted); font-size: 13px; }
+
+/* ── Condition tree builder ──────────────────────────────────────────────────── */
+.cond-group {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    padding: 8px;
+}
+.cond-group-head {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+.cond-group-body {
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 12px;
+}
+.cond-leaf { align-items: center; display: flex; gap: 6px; }
+.cond-empty { color: var(--muted); font-size: 12px; padding: 2px 0; }
+
+.nt-checks { align-items: center; display: flex; flex: 1; flex-wrap: wrap; gap: 10px; }
+.nt-checks label { align-items: center; color: var(--text); display: inline-flex; font-size: 12px; font-weight: 400; gap: 4px; }
+
+.andor-toggle {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: inline-flex;
+    margin-right: auto;
+    overflow: hidden;
+}
+.andor-toggle button {
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+}
+.andor-toggle button.active { background: var(--primary); color: #fff; }
+
+/* ── Action cards ────────────────────────────────────────────────────────────── */
+.action-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+.action-card-head {
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    justify-content: space-between;
+    padding: 8px 10px;
+}
+.action-card-head .wf-action-type { flex: 1; max-width: 220px; }
+.action-card-tools { display: flex; gap: 4px; }
+.action-card-body { padding: 10px; }
+
+/* Borderless label+control row used inside action card bodies (e.g. send_message
+   toggles), so cards stay lighter than the bordered .config-row. */
+.wf-opt-row {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.patch-op {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    padding: 8px;
+}
+
+.cb-disabled-msg {
+    color: var(--danger);
+    font-size: 12px;
+    padding: 4px 2px;
+}
 
 /* ── Modal ───────────────────────────────────────────────────────────────────── */
 .modal-overlay {
@@ -608,6 +818,26 @@ select option { background: var(--card); }
 
 .config-row:last-child { border-bottom: none; }
 
+.config-section-title {
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 8px;
+    padding: 16px 20px 4px;
+}
+
+.conn-test {
+    align-items: flex-end;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 320px;
+}
+.conn-test #c-conn-result { font-size: 12px; text-align: right; }
+.conn-ok      { color: var(--success); white-space: nowrap; }
+.conn-fail    { color: var(--danger); word-break: break-word; }
+.conn-pending { color: var(--muted); }
+
 .config-label {
     font-size: 13px;
     font-weight: 500;
@@ -627,9 +857,12 @@ select option { background: var(--card); }
     font-family: inherit;
     font-size: 13px;
     padding: 6px 10px;
-    text-align: right;
-    width: 80px;
+    text-align: left;
+    width: 100%;
 }
+
+/* Numbers read better right-aligned; text/keys/URLs stay left-aligned. */
+.config-input[type="number"] { text-align: right; }
 
 .config-input:focus { border-color: var(--primary); outline: none; }
 

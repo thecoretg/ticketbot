@@ -10,7 +10,7 @@ import (
 )
 
 const getAppConfig = `-- name: GetAppConfig :one
-SELECT id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_transform, cw_bot_member_identifier FROM app_config
+SELECT id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_workflow, cw_bot_member_identifier, root_url, cw_company_id, cw_client_id, cw_public_key, cw_private_key, webex_secret FROM app_config
 WHERE id = 1
 `
 
@@ -27,8 +27,14 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 		&i.LogRetentionDays,
 		&i.LogCleanupIntervalHours,
 		&i.LogBufferSize,
-		&i.AttemptTransform,
+		&i.AttemptWorkflow,
 		&i.CwBotMemberIdentifier,
+		&i.RootUrl,
+		&i.CwCompanyID,
+		&i.CwClientID,
+		&i.CwPublicKey,
+		&i.CwPrivateKey,
+		&i.WebexSecret,
 	)
 	return &i, err
 }
@@ -36,7 +42,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 const insertDefaultAppConfig = `-- name: InsertDefaultAppConfig :one
 INSERT INTO app_config (id) VALUES (1)
 ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_transform, cw_bot_member_identifier
+RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_workflow, cw_bot_member_identifier, root_url, cw_company_id, cw_client_id, cw_public_key, cw_private_key, webex_secret
 `
 
 func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error) {
@@ -52,15 +58,21 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error
 		&i.LogRetentionDays,
 		&i.LogCleanupIntervalHours,
 		&i.LogBufferSize,
-		&i.AttemptTransform,
+		&i.AttemptWorkflow,
 		&i.CwBotMemberIdentifier,
+		&i.RootUrl,
+		&i.CwCompanyID,
+		&i.CwClientID,
+		&i.CwPublicKey,
+		&i.CwPrivateKey,
+		&i.WebexSecret,
 	)
 	return &i, err
 }
 
 const upsertAppConfig = `-- name: UpsertAppConfig :one
-INSERT INTO app_config(id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_transform, cw_bot_member_identifier)
-VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO app_config(id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_workflow, cw_bot_member_identifier, root_url, cw_company_id, cw_client_id, cw_public_key, cw_private_key, webex_secret)
+VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (id) DO UPDATE SET
     attempt_notify = EXCLUDED.attempt_notify,
     max_message_length = EXCLUDED.max_message_length,
@@ -70,9 +82,15 @@ ON CONFLICT (id) DO UPDATE SET
     log_retention_days = EXCLUDED.log_retention_days,
     log_cleanup_interval_hours = EXCLUDED.log_cleanup_interval_hours,
     log_buffer_size = EXCLUDED.log_buffer_size,
-    attempt_transform = EXCLUDED.attempt_transform,
-    cw_bot_member_identifier = EXCLUDED.cw_bot_member_identifier
-RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_transform, cw_bot_member_identifier
+    attempt_workflow = EXCLUDED.attempt_workflow,
+    cw_bot_member_identifier = EXCLUDED.cw_bot_member_identifier,
+    root_url = EXCLUDED.root_url,
+    cw_company_id = EXCLUDED.cw_company_id,
+    cw_client_id = EXCLUDED.cw_client_id,
+    cw_public_key = EXCLUDED.cw_public_key,
+    cw_private_key = EXCLUDED.cw_private_key,
+    webex_secret = EXCLUDED.webex_secret
+RETURNING id, attempt_notify, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, attempt_workflow, cw_bot_member_identifier, root_url, cw_company_id, cw_client_id, cw_public_key, cw_private_key, webex_secret
 `
 
 type UpsertAppConfigParams struct {
@@ -84,8 +102,14 @@ type UpsertAppConfigParams struct {
 	LogRetentionDays        int    `json:"log_retention_days"`
 	LogCleanupIntervalHours int    `json:"log_cleanup_interval_hours"`
 	LogBufferSize           int    `json:"log_buffer_size"`
-	AttemptTransform        bool   `json:"attempt_transform"`
+	AttemptWorkflow         bool   `json:"attempt_workflow"`
 	CwBotMemberIdentifier   string `json:"cw_bot_member_identifier"`
+	RootUrl                 string `json:"root_url"`
+	CwCompanyID             string `json:"cw_company_id"`
+	CwClientID              string `json:"cw_client_id"`
+	CwPublicKey             string `json:"cw_public_key"`
+	CwPrivateKey            string `json:"cw_private_key"`
+	WebexSecret             string `json:"webex_secret"`
 }
 
 func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams) (*AppConfig, error) {
@@ -98,8 +122,14 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		arg.LogRetentionDays,
 		arg.LogCleanupIntervalHours,
 		arg.LogBufferSize,
-		arg.AttemptTransform,
+		arg.AttemptWorkflow,
 		arg.CwBotMemberIdentifier,
+		arg.RootUrl,
+		arg.CwCompanyID,
+		arg.CwClientID,
+		arg.CwPublicKey,
+		arg.CwPrivateKey,
+		arg.WebexSecret,
 	)
 	var i AppConfig
 	err := row.Scan(
@@ -112,8 +142,14 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		&i.LogRetentionDays,
 		&i.LogCleanupIntervalHours,
 		&i.LogBufferSize,
-		&i.AttemptTransform,
+		&i.AttemptWorkflow,
 		&i.CwBotMemberIdentifier,
+		&i.RootUrl,
+		&i.CwCompanyID,
+		&i.CwClientID,
+		&i.CwPublicKey,
+		&i.CwPrivateKey,
+		&i.WebexSecret,
 	)
 	return &i, err
 }
