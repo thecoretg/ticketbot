@@ -478,7 +478,9 @@ func logRequest(req *Request, err error, logger *slog.Logger) {
 	if err != nil {
 		logger.Error("error occured processing ticket", "error", err.Error())
 	} else {
-		logger.Info("ticket processed")
+		// Demoted to DEBUG: the Tickets journal is the audit source for per-ticket
+		// outcomes; slog stays for granular debugging.
+		logger.Debug("ticket processed")
 	}
 }
 

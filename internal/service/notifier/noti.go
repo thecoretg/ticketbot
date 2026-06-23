@@ -27,7 +27,13 @@ func newRequest(ticket *models.FullTicket) *Request {
 	}
 }
 
-func (s *Service) Run(ctx context.Context, t *models.FullTicket, isNew bool) error {
+// Result carries human-readable events describing the notification outcome, for
+// the ticket journal.
+type Result struct {
+	Events []models.JournalEvent
+}
+
+func (s *Service) Run(ctx context.Context, t *models.FullTicket, isNew bool) (*Result, error) {
 	return s.processNotifications(ctx, t, isNew)
 }
 
@@ -70,9 +76,10 @@ func (s *Service) AddSkippedNotification(ctx context.Context, t *models.FullTick
 	return nil
 }
 
-func (s *Service) processNotifications(ctx context.Context, t *models.FullTicket, isNew bool) (err error) {
+func (s *Service) processNotifications(ctx context.Context, t *models.FullTicket, isNew bool) (res *Result, err error) {
+	res = &Result{}
 	if t == nil {
-		return errors.New("nil ticket received")
+		return res, errors.New("nil ticket received")
 	}
 
 	req := newRequest(t)
@@ -84,45 +91,46 @@ func (s *Service) processNotifications(ctx context.Context, t *models.FullTicket
 				logger.Error("adding skipped notification")
 			}
 		}
+		res.Events = requestEvents(req, err)
 	}()
 
 	rules, err := s.NotifierRules.ListByBoard(ctx, t.Board.ID)
 	if err != nil {
-		return fmt.Errorf("listing notifier rules for board: %w", err)
+		return res, fmt.Errorf("listing notifier rules for board: %w", err)
 	}
 	logger = logger.With(ruleLogGroup(rules))
 
 	rules = filterActiveRules(rules)
 	if len(rules) == 0 {
 		req.NoNotiReason = "no notifier rules found for board"
-		return nil
+		return res, nil
 	}
 
 	if !isNew {
 		if t.LatestNote == nil {
 			req.NoNotiReason = "no note found for ticket"
-			return nil
+			return res, nil
 		}
 
 		exists, err := s.Notifications.ExistsForNote(ctx, t.LatestNote.ID)
 		if err != nil {
-			return fmt.Errorf("checking for existing notification for ticket note: %w", err)
+			return res, fmt.Errorf("checking for existing notification for ticket note: %w", err)
 		}
 
 		if exists {
 			req.NoNotiReason = "note already notified"
-			return nil
+			return res, nil
 		}
 	}
 
 	recips, err := s.getAllRecipients(ctx, t, rules, isNew)
 	if err != nil {
-		return fmt.Errorf("getting recipients: %w", err)
+		return res, fmt.Errorf("getting recipients: %w", err)
 	}
 
 	if len(recips) == 0 {
 		req.NoNotiReason = "no recipients to send to"
-		return nil
+		return res, nil
 	}
 
 	req.MessagesToSend = s.makeTicketMessages(t, recips, isNew)
@@ -143,10 +151,45 @@ func (s *Service) processNotifications(ctx context.Context, t *models.FullTicket
 
 	if len(req.MessagesErrored) > 0 {
 		logger = logger.With(msgsLogGroup("messages_errored", req.MessagesErrored))
-		return fmt.Errorf("errors occurred sending %d messages; see logs for details", len(req.MessagesErrored))
+		return res, fmt.Errorf("errors occurred sending %d messages; see logs for details", len(req.MessagesErrored))
 	}
 
-	return nil
+	return res, nil
+}
+
+// requestEvents maps a notification Request into friendly journal lines.
+func requestEvents(req *Request, err error) []models.JournalEvent {
+	var events []models.JournalEvent
+
+	for _, m := range req.MessagesSent {
+		text := "Notified " + m.WebexRecipient.recipient.Name
+		if chain := m.WebexRecipient.forwardChain; len(chain) > 0 {
+			text += " (forwarded from " + chain[0].Name + ")"
+		}
+		events = append(events, models.JournalEvent{Text: text, Status: models.JournalOK})
+	}
+
+	for _, m := range req.MessagesErrored {
+		reason := "unknown error"
+		if m.SendError != nil {
+			reason = m.SendError.Error()
+		}
+		events = append(events, models.JournalEvent{
+			Text:   fmt.Sprintf("Failed to notify %s: %s", m.WebexRecipient.recipient.Name, reason),
+			Status: models.JournalError,
+		})
+	}
+
+	if req.NoNotiReason != "" {
+		events = append(events, models.JournalEvent{Text: "No notification sent: " + req.NoNotiReason, Status: models.JournalSkip})
+	}
+
+	// Surface a processing error that wasn't already represented by per-message failures.
+	if err != nil && len(req.MessagesErrored) == 0 {
+		events = append(events, models.JournalEvent{Text: "Notification error: " + err.Error(), Status: models.JournalError})
+	}
+
+	return events
 }
 
 func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
@@ -236,7 +279,9 @@ func logRequest(req *Request, err error, logger *slog.Logger) {
 	if err != nil {
 		logger.Error("error occured with notification", "error", err.Error())
 	} else {
-		logger.Info("notification processed")
+		// Demoted to DEBUG: the Tickets journal is now the audit source for per-ticket
+		// outcomes; slog stays for granular debugging.
+		logger.Debug("notification processed")
 	}
 }
 

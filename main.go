@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	gooseMigrationVersion = 7
+	gooseMigrationVersion = 10
 	shutdownTimeout       = 10 * time.Second
 )
 
@@ -77,6 +77,7 @@ func Run() error {
 		slog.Warn("failed to seed log buffer from db", "error", err)
 	}
 	persister.Start(ctx)
+	a.Svc.Journal.StartCleanup(ctx)
 
 	if !a.TestFlags.SkipAuth {
 		slog.Info("attempting to bootstrap admin")
