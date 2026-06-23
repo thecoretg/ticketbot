@@ -5,7 +5,7 @@
 *config.json
 *.key
 .idea
-ticketbot
+/ticketbot
 bin/
 
 # Added by goreleaser init:
