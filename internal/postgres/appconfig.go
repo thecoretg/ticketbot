@@ -67,8 +67,14 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		LogRetentionDays:        c.LogRetentionDays,
 		LogCleanupIntervalHours: c.LogCleanupIntervalHours,
 		LogBufferSize:           c.LogBufferSize,
-		AttemptTransform:        c.AttemptTransform,
+		AttemptWorkflow:         c.AttemptWorkflow,
 		CwBotMemberIdentifier:   c.CwBotMemberIdentifier,
+		RootUrl:                 c.RootURL,
+		CwCompanyID:             c.CwCompanyID,
+		CwClientID:              c.CwClientID,
+		CwPublicKey:             c.CwPublicKey,
+		CwPrivateKey:            c.CwPrivateKey,
+		WebexSecret:             c.WebexSecret,
 	}
 }
 
@@ -83,7 +89,13 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		LogRetentionDays:        pg.LogRetentionDays,
 		LogCleanupIntervalHours: pg.LogCleanupIntervalHours,
 		LogBufferSize:           pg.LogBufferSize,
-		AttemptTransform:        pg.AttemptTransform,
+		AttemptWorkflow:         pg.AttemptWorkflow,
 		CwBotMemberIdentifier:   pg.CwBotMemberIdentifier,
+		RootURL:                 pg.RootUrl,
+		CwCompanyID:             pg.CwCompanyID,
+		CwClientID:              pg.CwClientID,
+		CwPublicKey:             pg.CwPublicKey,
+		CwPrivateKey:            pg.CwPrivateKey,
+		WebexSecret:             pg.WebexSecret,
 	}
 }

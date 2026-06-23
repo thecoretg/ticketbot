@@ -12,14 +12,29 @@ type Config struct {
 	// all notifier rules will be disregarded.
 	AttemptNotify bool `json:"attempt_notify"`
 
-	// AttemptTransform is a full killswitch for the ticket transformer pipeline. If it is off, no
-	// transformer rules run and tickets are processed exactly as before.
-	AttemptTransform bool `json:"attempt_transform"`
+	// AttemptWorkflow is a full killswitch for the ticket workflow pipeline. If it is off, no
+	// workflows run and tickets are processed exactly as before.
+	AttemptWorkflow bool `json:"attempt_workflow"`
 
 	// CwBotMemberIdentifier is the Connectwise member identifier the bot uses when it writes to tickets
 	// (e.g. authoring notes). It is also used to detect and skip the bot's own webhooks, preventing
-	// transformer loops.
+	// workflow loops.
 	CwBotMemberIdentifier string `json:"cw_bot_member_identifier"`
+
+	// The following credential/connection fields can be managed from the admin panel.
+	// When the matching environment variable is set it takes precedence and is written
+	// back here on startup (see server.mergeEnvCreds). RootURL is the externally
+	// reachable base URL used for Connectwise webhook callbacks.
+	RootURL string `json:"root_url"`
+
+	// Connectwise PSA API credentials.
+	CwCompanyID  string `json:"cw_company_id"`
+	CwClientID   string `json:"cw_client_id"`
+	CwPublicKey  string `json:"cw_public_key"`
+	CwPrivateKey string `json:"cw_private_key"` // secret: scrubbed from GET responses
+
+	// WebexSecret is the Webex bot bearer token.
+	WebexSecret string `json:"webex_secret"` // secret: scrubbed from GET responses
 
 	// MaxMessageLength is the max amount of characters in a notification's ticket note output before
 	// it truncates and adds a "..." to the end.
@@ -56,14 +71,20 @@ type ConfigUpdateParams struct {
 	LogRetentionDays        *int    `json:"log_retention_days"`
 	LogCleanupIntervalHours *int    `json:"log_cleanup_interval_hours"`
 	LogBufferSize           *int    `json:"log_buffer_size"`
-	AttemptTransform        *bool   `json:"attempt_transform"`
+	AttemptWorkflow         *bool   `json:"attempt_workflow"`
 	CwBotMemberIdentifier   *string `json:"cw_bot_member_identifier"`
+	RootURL                 *string `json:"root_url"`
+	CwCompanyID             *string `json:"cw_company_id"`
+	CwClientID              *string `json:"cw_client_id"`
+	CwPublicKey             *string `json:"cw_public_key"`
+	CwPrivateKey            *string `json:"cw_private_key"`
+	WebexSecret             *string `json:"webex_secret"`
 }
 
 var DefaultConfig = Config{
 	ID:                      1,
 	AttemptNotify:           false,
-	AttemptTransform:        false,
+	AttemptWorkflow:         false,
 	CwBotMemberIdentifier:   "",
 	MaxMessageLength:        300,
 	MaxConcurrentSyncs:      5,

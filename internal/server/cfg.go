@@ -48,49 +48,98 @@ func getCreds() *Creds {
 	}
 }
 
-func (c *Creds) validate(tf *TestFlags) error {
-	req := map[string]string{
-		"INITIAL_ADMIN_EMAIL": c.InitialAdminEmail,
-	}
-
-	cwVals := map[string]string{
-		"CW_PUB_KEY":    c.CWCreds.PublicKey,
-		"CW_PRIV_KEY":   c.CWCreds.PrivateKey,
-		"CW_CLIENT_ID":  c.CWCreds.ClientID,
-		"CW_COMPANY_ID": c.CWCreds.CompanyID,
-	}
-
+// validateBootstrap checks the env variables that must be present before the app
+// can reach its database and seed the first admin. These genuinely cannot live in
+// the app_config table (chicken-and-egg), so they stay env-only.
+func (c *Creds) validateBootstrap() error {
 	var empty []string
-	for k, v := range req {
-		if v == "" {
-			empty = append(empty, k)
-		}
+	if c.InitialAdminEmail == "" {
+		empty = append(empty, "INITIAL_ADMIN_EMAIL")
 	}
-
 	if c.PostgresDSN == "" {
 		empty = append(empty, "POSTGRES_DSN")
 	}
+	if len(empty) > 0 {
+		return fmt.Errorf("1 or more required env variables are empty: %v", empty)
+	}
+	return nil
+}
 
-	if c.RootURL == "" {
-		if tf.SkipHooks {
-			slog.Warn("ROOT_URL is empty, but ok since SKIP_HOOKS is enabled")
-		} else {
-			empty = append(empty, "ROOT_URL")
+// mergeEnvConfig overlays env vars onto the stored config: when an env var is set
+// it wins and is written back to the config so the database keeps a working copy
+// (after which the env var can be dropped). Covers the credentials plus a few
+// operational settings (bot identifier, killswitches, debug logging) that are
+// handy to pin at deploy time. Returns the JSON keys of the fields that were
+// sourced from the environment, so the admin panel can lock them.
+func mergeEnvConfig(cfg *models.Config, c *Creds) []string {
+	var locked []string
+
+	setStr := func(key, val string, dst *string) {
+		if val != "" {
+			*dst = val
+			locked = append(locked, key)
+		}
+	}
+	setBool := func(key, envName string, dst *bool) {
+		v := os.Getenv(envName)
+		if v == "" {
+			return
+		}
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			slog.Warn("ignoring non-boolean env var", "var", envName, "value", v)
+			return
+		}
+		*dst = b
+		locked = append(locked, key)
+	}
+
+	// Credentials.
+	setStr("root_url", c.RootURL, &cfg.RootURL)
+	setStr("cw_company_id", c.CWCreds.CompanyID, &cfg.CwCompanyID)
+	setStr("cw_client_id", c.CWCreds.ClientID, &cfg.CwClientID)
+	setStr("cw_public_key", c.CWCreds.PublicKey, &cfg.CwPublicKey)
+	setStr("cw_private_key", c.CWCreds.PrivateKey, &cfg.CwPrivateKey)
+	setStr("webex_secret", c.WebexAPISecret, &cfg.WebexSecret)
+
+	// Operational settings.
+	setStr("cw_bot_member_identifier", os.Getenv("CW_BOT_MEMBER_IDENTIFIER"), &cfg.CwBotMemberIdentifier)
+	setBool("attempt_notify", "ATTEMPT_NOTIFY", &cfg.AttemptNotify)
+	setBool("attempt_workflow", "ATTEMPT_WORKFLOW", &cfg.AttemptWorkflow)
+	setBool("debug_logging", "DEBUG_LOGGING", &cfg.DebugLogging)
+
+	return locked
+}
+
+// validateCreds checks the effective (env-or-db) credentials needed to talk to
+// Connectwise and Webex are present, so startup fails fast with a clear message
+// rather than at first API call.
+func validateCreds(cfg *models.Config, tf *TestFlags) error {
+	vals := map[string]string{
+		"cw_company_id":  cfg.CwCompanyID,
+		"cw_client_id":   cfg.CwClientID,
+		"cw_public_key":  cfg.CwPublicKey,
+		"cw_private_key": cfg.CwPrivateKey,
+		"webex_secret":   cfg.WebexSecret,
+	}
+
+	var empty []string
+	for k, v := range vals {
+		if v == "" {
+			empty = append(empty, k)
 		}
 	}
 
-	if c.WebexAPISecret == "" {
-		empty = append(empty, "WEBEX_SECRET")
-	}
-
-	for k, v := range cwVals {
-		if v == "" {
-			empty = append(empty, k)
+	if cfg.RootURL == "" {
+		if tf.SkipHooks {
+			slog.Warn("root_url is empty, but ok since SKIP_HOOKS is enabled")
+		} else {
+			empty = append(empty, "root_url")
 		}
 	}
 
 	if len(empty) > 0 {
-		return fmt.Errorf("1 or more required env variables are empty: %v", empty)
+		return fmt.Errorf("missing credentials (set via env or the Config menu): %v", empty)
 	}
 
 	return nil
