@@ -127,12 +127,14 @@ func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
 	ru.GET("", h.ListNotifierRules)
 	ru.GET(":id", h.GetNotifierRule)
 	ru.POST("", h.AddNotifierRule)
+	ru.PUT(":id", h.UpdateNotifierRule)
 	ru.DELETE(":id", h.DeleteNotifierRule)
 
 	fw := r.Group("forwards")
 	fw.GET("", h.ListForwards)
 	fw.GET(":id", h.GetForward)
 	fw.POST("", h.AddUserForward)
+	fw.PUT(":id", h.UpdateUserForward)
 	fw.DELETE(":id", h.DeleteUserForward)
 }
 

@@ -3,6 +3,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -26,6 +27,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -47,6 +49,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -66,6 +69,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -87,6 +91,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -122,8 +127,22 @@ ORDER BY id;
 
 -- name: InsertNotifierForward :one
 INSERT INTO notifier_forward (
-    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy
-) VALUES ($1, $2, $3, $4, $5, $6)
+    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, simulation_mode
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: UpdateNotifierForward :one
+UPDATE notifier_forward
+SET
+    source_id = $2,
+    destination_id = $3,
+    start_date = $4,
+    end_date = $5,
+    enabled = $6,
+    user_keeps_copy = $7,
+    simulation_mode = $8,
+    updated_on = CURRENT_TIMESTAMP
+WHERE id = $1
 RETURNING *;
 
 -- name: DeleteNotifierForward :exec

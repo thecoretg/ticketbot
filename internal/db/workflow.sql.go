@@ -35,7 +35,7 @@ func (q *Queries) DeleteWorkflow(ctx context.Context, id int) error {
 }
 
 const getWorkflow = `-- name: GetWorkflow :one
-SELECT id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on FROM workflow
+SELECT id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on, simulation_mode FROM workflow
 WHERE id = $1 LIMIT 1
 `
 
@@ -53,14 +53,15 @@ func (q *Queries) GetWorkflow(ctx context.Context, id int) (*Workflow, error) {
 		&i.Enabled,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.SimulationMode,
 	)
 	return &i, err
 }
 
 const insertWorkflow = `-- name: InsertWorkflow :one
-INSERT INTO workflow(name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on
+INSERT INTO workflow(name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, simulation_mode)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on, simulation_mode
 `
 
 type InsertWorkflowParams struct {
@@ -71,6 +72,7 @@ type InsertWorkflowParams struct {
 	Actions        []byte `json:"actions"`
 	Priority       int    `json:"priority"`
 	Enabled        bool   `json:"enabled"`
+	SimulationMode bool   `json:"simulation_mode"`
 }
 
 func (q *Queries) InsertWorkflow(ctx context.Context, arg InsertWorkflowParams) (*Workflow, error) {
@@ -82,6 +84,7 @@ func (q *Queries) InsertWorkflow(ctx context.Context, arg InsertWorkflowParams) 
 		arg.Actions,
 		arg.Priority,
 		arg.Enabled,
+		arg.SimulationMode,
 	)
 	var i Workflow
 	err := row.Scan(
@@ -95,12 +98,13 @@ func (q *Queries) InsertWorkflow(ctx context.Context, arg InsertWorkflowParams) 
 		&i.Enabled,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.SimulationMode,
 	)
 	return &i, err
 }
 
 const listEnabledWorkflows = `-- name: ListEnabledWorkflows :many
-SELECT id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on FROM workflow
+SELECT id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on, simulation_mode FROM workflow
 WHERE enabled = true
 ORDER BY priority, id
 `
@@ -125,6 +129,7 @@ func (q *Queries) ListEnabledWorkflows(ctx context.Context) ([]*Workflow, error)
 			&i.Enabled,
 			&i.CreatedOn,
 			&i.UpdatedOn,
+			&i.SimulationMode,
 		); err != nil {
 			return nil, err
 		}
@@ -137,7 +142,7 @@ func (q *Queries) ListEnabledWorkflows(ctx context.Context) ([]*Workflow, error)
 }
 
 const listWorkflows = `-- name: ListWorkflows :many
-SELECT id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on FROM workflow
+SELECT id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on, simulation_mode FROM workflow
 ORDER BY priority, id
 `
 
@@ -161,6 +166,7 @@ func (q *Queries) ListWorkflows(ctx context.Context) ([]*Workflow, error) {
 			&i.Enabled,
 			&i.CreatedOn,
 			&i.UpdatedOn,
+			&i.SimulationMode,
 		); err != nil {
 			return nil, err
 		}
@@ -182,9 +188,10 @@ SET
     actions          = $6,
     priority         = $7,
     enabled          = $8,
+    simulation_mode  = $9,
     updated_on       = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on
+RETURNING id, name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, created_on, updated_on, simulation_mode
 `
 
 type UpdateWorkflowParams struct {
@@ -196,6 +203,7 @@ type UpdateWorkflowParams struct {
 	Actions        []byte `json:"actions"`
 	Priority       int    `json:"priority"`
 	Enabled        bool   `json:"enabled"`
+	SimulationMode bool   `json:"simulation_mode"`
 }
 
 func (q *Queries) UpdateWorkflow(ctx context.Context, arg UpdateWorkflowParams) (*Workflow, error) {
@@ -208,6 +216,7 @@ func (q *Queries) UpdateWorkflow(ctx context.Context, arg UpdateWorkflowParams) 
 		arg.Actions,
 		arg.Priority,
 		arg.Enabled,
+		arg.SimulationMode,
 	)
 	var i Workflow
 	err := row.Scan(
@@ -221,6 +230,7 @@ func (q *Queries) UpdateWorkflow(ctx context.Context, arg UpdateWorkflowParams) 
 		&i.Enabled,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.SimulationMode,
 	)
 	return &i, err
 }

@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -285,6 +286,14 @@ func TestActionEvent(t *testing.T) {
 		{"ticket_update", Change{Applied: false}, "Ticket already up to date", "info"},
 		{"add_resource", Change{Applied: true, To: "jtech"}, "Added resource jtech", "ok"},
 		{"skip_notifications", Change{Applied: true}, "Skipped default notifications", "skip"},
+		// Simulation mode: applied actions become "Would …" with skip status.
+		{"send_message", Change{Applied: true, To: "Helpdesk", Simulated: true}, "Would send notification to Helpdesk", "skip"},
+		{"ticket_update", Change{Applied: true, Field: "summary", Simulated: true}, "Would update ticket (summary)", "skip"},
+		{"add_note", Change{Applied: true, Simulated: true}, "Would add note", "skip"},
+		{"add_email_cc", Change{Applied: true, To: "a@b.com", Simulated: true}, "Would add email CC a@b.com", "skip"},
+		{"skip_notifications", Change{Applied: true, Simulated: true}, "Would skip default notifications", "skip"},
+		// A simulated no-op keeps its accurate "already …" phrasing and info status.
+		{"ticket_update", Change{Applied: false, Simulated: true}, "Ticket already up to date", "info"},
 	}
 	for _, c := range cases {
 		e := actionEvent(c.actionType, c.change)
@@ -292,6 +301,50 @@ func TestActionEvent(t *testing.T) {
 			t.Errorf("%s: got {%q,%q} want {%q,%q}", c.actionType, e.Text, e.Status, c.wantText, c.wantStatus)
 		}
 	}
+}
+
+// TestSimulateSkipsSideEffects verifies that in simulation mode an action reports
+// what it would do without touching the CW/Webex clients. The Exec carries a nil
+// CW client, so any attempt to actually mutate the ticket would panic.
+func TestSimulateSkipsSideEffects(t *testing.T) {
+	ctx := context.Background()
+	ex := &Exec{Simulate: true} // nil CW/Webex on purpose
+
+	t.Run("add_note", func(t *testing.T) {
+		c, err := AddNote{}.Apply(ctx, ex, sampleTicket(), &AddNoteParams{Text: "hello"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !c.Applied || c.Field != "note" {
+			t.Fatalf("got %+v", c)
+		}
+	})
+
+	t.Run("ticket_update", func(t *testing.T) {
+		tk := sampleTicket() // summary "Printer broken"
+		p := &TicketUpdateParams{Ops: []PatchOpConfig{{Op: "replace", Path: "summary", Value: "Changed"}}}
+		c, err := TicketUpdate{}.Apply(ctx, ex, tk, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !c.Applied {
+			t.Fatalf("expected applied change, got %+v", c)
+		}
+		if tk.Summary != "Printer broken" {
+			t.Fatalf("simulation must not mutate the in-memory ticket, got %q", tk.Summary)
+		}
+	})
+
+	t.Run("add_resource", func(t *testing.T) {
+		tk := sampleTicket()
+		c, err := AddResource{}.Apply(ctx, ex, tk, &AddResourceParams{MemberIdentifier: "jtech"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !c.Applied || c.To != "jtech" {
+			t.Fatalf("got %+v", c)
+		}
+	})
 }
 
 func TestIsAnyOfSingleValue(t *testing.T) {

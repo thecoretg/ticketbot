@@ -11,12 +11,13 @@ import (
 )
 
 type Request struct {
-	Ticket          *models.FullTicket
-	Notifications   []*models.TicketNotification
-	MessagesToSend  []Message
-	MessagesSent    []Message
-	MessagesErrored []Message
-	NoNotiReason    string
+	Ticket            *models.FullTicket
+	Notifications     []*models.TicketNotification
+	MessagesToSend    []Message
+	MessagesSent      []Message
+	MessagesErrored   []Message
+	MessagesSimulated []Message
+	NoNotiReason      string
 }
 
 const NoNotiReasonSync = "ticket sync"
@@ -136,6 +137,20 @@ func (s *Service) processNotifications(ctx context.Context, t *models.FullTicket
 	req.MessagesToSend = s.makeTicketMessages(t, recips, isNew)
 
 	for _, m := range req.MessagesToSend {
+		// Simulated recipients: record the skipped notification (so it doesn't
+		// re-fire once simulation mode is turned off, via the ExistsForNote dedup)
+		// but never post to Webex.
+		if m.WebexRecipient.simulated {
+			inserted, err := s.Notifications.Insert(ctx, m.Notification)
+			if err != nil {
+				logger.Error("inserting simulated (skipped) notification", "error", err.Error())
+			} else {
+				m.Notification = inserted
+			}
+			req.MessagesSimulated = append(req.MessagesSimulated, m)
+			continue
+		}
+
 		msg := s.sendNotification(ctx, &m)
 		if msg.SendError != nil {
 			req.MessagesErrored = append(req.MessagesErrored, *msg)
@@ -167,6 +182,14 @@ func requestEvents(req *Request, err error) []models.JournalEvent {
 			text += " (forwarded from " + chain[0].Name + ")"
 		}
 		events = append(events, models.JournalEvent{Text: text, Status: models.JournalOK})
+	}
+
+	for _, m := range req.MessagesSimulated {
+		text := "Would notify " + m.WebexRecipient.recipient.Name
+		if chain := m.WebexRecipient.forwardChain; len(chain) > 0 {
+			text += " (forwarded from " + chain[0].Name + ")"
+		}
+		events = append(events, models.JournalEvent{Text: text, Status: models.JournalSkip, Simulated: true})
 	}
 
 	for _, m := range req.MessagesErrored {

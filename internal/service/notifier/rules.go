@@ -31,6 +31,23 @@ func (s *Service) DeleteNotifierRule(ctx context.Context, id int) error {
 	return s.NotifierRules.Delete(ctx, id)
 }
 
+func (s *Service) UpdateNotifierRule(ctx context.Context, nr *models.NotifierRule) (*models.NotifierRule, error) {
+	if nr == nil {
+		return nil, errors.New("got nil notifier rule")
+	}
+
+	exists, err := s.NotifierRules.Exists(ctx, nr.ID)
+	if err != nil {
+		return nil, fmt.Errorf("checking if notifier rule exists: %w", err)
+	}
+
+	if !exists {
+		return nil, models.ErrNotifierNotFound
+	}
+
+	return s.NotifierRules.Update(ctx, nr)
+}
+
 func (s *Service) AddNotifierRule(ctx context.Context, nr *models.NotifierRule) (*models.NotifierRule, error) {
 	if nr == nil {
 		return nil, errors.New("got nil notifier rule")

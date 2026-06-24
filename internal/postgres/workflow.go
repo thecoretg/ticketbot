@@ -81,6 +81,7 @@ func (p *WorkflowRepo) Insert(ctx context.Context, w *models.Workflow) (*models.
 		Actions:        actionsBytes(w.Actions),
 		Priority:       w.Priority,
 		Enabled:        w.Enabled,
+		SimulationMode: w.SimulationMode,
 	})
 	if err != nil {
 		return nil, err
@@ -99,6 +100,7 @@ func (p *WorkflowRepo) Update(ctx context.Context, w *models.Workflow) (*models.
 		Actions:        actionsBytes(w.Actions),
 		Priority:       w.Priority,
 		Enabled:        w.Enabled,
+		SimulationMode: w.SimulationMode,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -131,6 +133,7 @@ func workflowFromPG(pg *db.Workflow) *models.Workflow {
 		Actions:        actionsFromBytes(pg.Actions),
 		Priority:       pg.Priority,
 		Enabled:        pg.Enabled,
+		SimulationMode: pg.SimulationMode,
 		CreatedOn:      pg.CreatedOn,
 		UpdatedOn:      pg.UpdatedOn,
 	}

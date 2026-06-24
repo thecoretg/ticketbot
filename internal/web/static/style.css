@@ -388,6 +388,7 @@ td.actions  { text-align: right; }
 .badge-on      { background: rgba(63,185,80,0.14);  color: var(--success); }
 .badge-off     { background: rgba(248,81,73,0.12); color: var(--danger); }
 .badge-neutral { background: var(--surface); color: var(--muted); }
+.badge-sim     { background: rgba(56,139,253,0.16); color: #6cb6ff; }
 
 /* ── Tickets journal ─────────────────────────────────────────────────────────── */
 .logs-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
@@ -869,9 +870,11 @@ select option { background: var(--card); }
 /* ── Toggle ──────────────────────────────────────────────────────────────────── */
 .toggle {
     cursor: pointer;
+    display: inline-block;
     flex-shrink: 0;
     height: 20px;
     position: relative;
+    vertical-align: middle;
     width: 36px;
 }
 

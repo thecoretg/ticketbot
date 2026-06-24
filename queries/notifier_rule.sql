@@ -6,6 +6,8 @@ ORDER BY id;
 SELECT
     r.id AS id,
     r.notify_enabled AS enabled,
+    r.simulation_mode AS simulation_mode,
+    r.notify_on_update AS notify_on_update,
     b.id AS board_id,
     b.name AS board_name,
     wr.id AS recipient_id,
@@ -47,8 +49,8 @@ WHERE webex_recipient_id = $1
 ORDER BY id;
 
 -- name: InsertNotifierRule :one
-INSERT INTO notifier_rule(cw_board_id, webex_recipient_id, notify_enabled)
-VALUES ($1, $2, $3)
+INSERT INTO notifier_rule(cw_board_id, webex_recipient_id, notify_enabled, simulation_mode, notify_on_update)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateNotifierRule :one
@@ -56,7 +58,9 @@ UPDATE notifier_rule
 SET
     cw_board_id = $2,
     webex_recipient_id = $3,
-    notify_enabled = $4
+    notify_enabled = $4,
+    simulation_mode = $5,
+    notify_on_update = $6
 WHERE id = $1
 RETURNING *;
 

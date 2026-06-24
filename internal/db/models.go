@@ -170,15 +170,16 @@ type CwTicketType struct {
 }
 
 type NotifierForward struct {
-	ID            int        `json:"id"`
-	SourceID      int        `json:"source_id"`
-	DestinationID int        `json:"destination_id"`
-	StartDate     *time.Time `json:"start_date"`
-	EndDate       *time.Time `json:"end_date"`
-	Enabled       bool       `json:"enabled"`
-	UserKeepsCopy bool       `json:"user_keeps_copy"`
-	CreatedOn     time.Time  `json:"created_on"`
-	UpdatedOn     time.Time  `json:"updated_on"`
+	ID             int        `json:"id"`
+	SourceID       int        `json:"source_id"`
+	DestinationID  int        `json:"destination_id"`
+	StartDate      *time.Time `json:"start_date"`
+	EndDate        *time.Time `json:"end_date"`
+	Enabled        bool       `json:"enabled"`
+	UserKeepsCopy  bool       `json:"user_keeps_copy"`
+	CreatedOn      time.Time  `json:"created_on"`
+	UpdatedOn      time.Time  `json:"updated_on"`
+	SimulationMode bool       `json:"simulation_mode"`
 }
 
 type NotifierRule struct {
@@ -187,6 +188,8 @@ type NotifierRule struct {
 	WebexRecipientID int       `json:"webex_recipient_id"`
 	NotifyEnabled    bool      `json:"notify_enabled"`
 	CreatedOn        time.Time `json:"created_on"`
+	SimulationMode   bool      `json:"simulation_mode"`
+	NotifyOnUpdate   bool      `json:"notify_on_update"`
 }
 
 type Session struct {
@@ -266,6 +269,7 @@ type Workflow struct {
 	Enabled        bool      `json:"enabled"`
 	CreatedOn      time.Time `json:"created_on"`
 	UpdatedOn      time.Time `json:"updated_on"`
+	SimulationMode bool      `json:"simulation_mode"`
 }
 
 type WorkflowRun struct {

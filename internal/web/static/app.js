@@ -721,18 +721,22 @@ function renderTicketJournal(j) {
 
     const prop = (label, val) => `<div class="jr-prop"><span class="jr-prop-label">${label}</span><span>${esc(val) || '—'}</span></div>`
 
-    const timeline = shown.length ? shown.map(r => `
+    const timeline = shown.length ? shown.map(r => {
+        const runSim = (r.events || []).some(e => e.simulated)
+        return `
         <div class="run-card ${r.had_error ? 'run-error' : ''}">
             <div class="run-head">
                 <span class="run-trigger">${esc(r.trigger)}</span>
                 <span class="run-time">${r.time ? new Date(r.time).toLocaleString() : ''}</span>
                 ${outcomeBadge({ had_error: r.had_error, last_outcome: r.outcome })}
+                ${runSim ? '<span class="badge badge-sim">SIM</span>' : ''}
             </div>
             <div class="run-events">
-                ${(r.events || []).map(e => `<div class="journal-event ev-${esc(e.status)}">${esc(e.text)}</div>`).join('') ||
+                ${(r.events || []).map(e => `<div class="journal-event ev-${esc(e.status)}">${e.simulated ? '<span class="badge badge-sim">SIM</span> ' : ''}${esc(e.text)}</div>`).join('') ||
                     '<div class="journal-event ev-info">No actions taken</div>'}
             </div>
-        </div>`).join('')
+        </div>`
+    }).join('')
         : '<div class="empty-state">No runs to show</div>'
 
     setContent(`<div class="tab-header">
@@ -831,21 +835,64 @@ async function loadBoardSettings() {
     }
 }
 
+let notifierRules = []
+
 function renderBoardSettings(rules) {
+    notifierRules = rules
     const header = `<div class="panel-header">
-        <span class="panel-desc">Notify a Webex recipient when a ticket lands on a board.</span>
+        <span class="panel-desc">New tickets notify the recipient; updates notify the ticket's people (owner/resources) when "Notify on updates" is on.</span>
         <button class="btn btn-primary btn-sm" onclick="showNewRuleModal()">+ New Board Setting</button>
     </div>`
 
-    const thead = '<th>Enabled</th><th>Board</th><th>Recipient</th><th></th>'
+    const thead = '<th>Enabled</th><th>Board</th><th>New-ticket recipient</th><th>Notify on updates</th><th>Simulate</th><th></th>'
     const rows  = rules.map(r => `<tr>
         <td>${badge(r.enabled)}</td>
         <td>${esc(r.board_name)}</td>
         <td>${esc(r.recipient_name)} <span style="color:var(--muted);font-size:11px">${esc(r.recipient_type)}</span></td>
+        <td>${simToggle(r.notify_on_update, `toggleRuleUpdates(${r.id}, this.checked)`)}</td>
+        <td>${simToggle(r.simulation_mode, `toggleRuleSim(${r.id}, this.checked)`)}</td>
         <td class="actions"><button class="btn btn-danger" onclick="deleteRule(${r.id})">Delete</button></td>
     </tr>`)
 
     setNotifierPanel(header + tableWrap(thead, rows))
+}
+
+// simToggle renders an inline on/off switch. `onchange` is a JS expression string
+// with `this` bound to the checkbox.
+function simToggle(on, onchange) {
+    return `<label class="toggle"><input type="checkbox" ${on ? 'checked' : ''} onchange="${onchange}"><span class="toggle-track"></span></label>`
+}
+
+// ruleUpdatePayload builds the full PUT body for a board setting from the cached
+// Full row plus any overrides (the API rebinds the whole rule on update).
+function ruleUpdatePayload(r, overrides) {
+    return Object.assign({
+        cw_board_id:      r.board_id,
+        webex_room_id:    r.recipient_id,
+        notify_enabled:   r.enabled,
+        simulation_mode:  r.simulation_mode,
+        notify_on_update: r.notify_on_update,
+    }, overrides)
+}
+
+async function toggleRuleSim(id, on) {
+    const r = notifierRules.find(x => x.id === id)
+    if (!r) return
+    try {
+        await api('PUT', `/notifiers/rules/${id}`, ruleUpdatePayload(r, { simulation_mode: on }))
+        r.simulation_mode = on
+        toast(on ? 'Simulation enabled' : 'Simulation disabled', 'success')
+    } catch (e) { toast(e.message, 'error'); loadBoardSettings() }
+}
+
+async function toggleRuleUpdates(id, on) {
+    const r = notifierRules.find(x => x.id === id)
+    if (!r) return
+    try {
+        await api('PUT', `/notifiers/rules/${id}`, ruleUpdatePayload(r, { notify_on_update: on }))
+        r.notify_on_update = on
+        toast(on ? 'Update notifications enabled' : 'Update notifications disabled', 'success')
+    } catch (e) { toast(e.message, 'error'); loadBoardSettings() }
 }
 
 async function showNewRuleModal() {
@@ -871,16 +918,32 @@ async function showNewRuleModal() {
             <select id="f-board">${boardOpts}</select>
         </div>
         <div class="form-group">
-            <label>Webex Recipient</label>
+            <label>New-ticket recipient <span style="color:var(--muted);font-weight:400">(room or person, notified when a ticket lands on the board)</span></label>
             <select id="f-recipient">${recipOpts}</select>
+        </div>
+        <div class="form-group">
+            <label>Notify on updates <span style="color:var(--muted);font-weight:400">(notify the ticket's people on updated tickets)</span></label>
+            <select id="f-rule-update">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Simulate <span style="color:var(--muted);font-weight:400">(log what would happen, don't send)</span></label>
+            <select id="f-rule-sim">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+            </select>
         </div>`, async () => {
         const boardId = parseInt(document.getElementById('f-board').value)
         const recipId = parseInt(document.getElementById('f-recipient').value)
         try {
             await api('POST', '/notifiers/rules', {
-                cw_board_id:    boardId,
-                webex_room_id:  recipId,
-                notify_enabled: true,
+                cw_board_id:      boardId,
+                webex_room_id:    recipId,
+                notify_enabled:   true,
+                simulation_mode:  document.getElementById('f-rule-sim').value === 'true',
+                notify_on_update: document.getElementById('f-rule-update').value === 'true',
             })
             closeModal()
             toast('Board setting created', 'success')
@@ -994,7 +1057,7 @@ function renderWorkflows(wfs) {
 
     const thead = '<th>Enabled</th><th>Priority</th><th>Name</th><th>Board</th><th>On</th><th>Actions</th><th>Conditions</th><th></th>'
     const rows  = wfs.map(w => `<tr>
-        <td>${badge(w.enabled)}</td>
+        <td>${badge(w.enabled)}${w.simulation_mode ? ' <span class="badge badge-sim">SIM</span>' : ''}</td>
         <td>${esc(w.priority)}</td>
         <td>${esc(w.name)}</td>
         <td>${esc(wfBoardsById[w.cw_board_id] || `#${w.cw_board_id}`)}</td>
@@ -1062,6 +1125,7 @@ async function showWorkflowModal(existing = null) {
     const nameVal        = isEdit ? esc(existing.name) : ''
     const priorityVal    = isEdit ? esc(existing.priority) : '100'
     const enabledChecked = (isEdit ? existing.enabled : true) ? 'checked' : ''
+    const simChecked     = (isEdit && existing.simulation_mode) ? 'checked' : ''
 
     openModal(isEdit ? 'Edit Workflow' : 'New Workflow', `
         <div class="form-group">
@@ -1098,6 +1162,16 @@ async function showWorkflowModal(existing = null) {
                 <input type="checkbox" id="wf-enabled" ${enabledChecked}>
                 <span class="toggle-track"></span>
             </label>
+        </div>
+        <div class="config-row" style="padding:0">
+            <div>
+                <div class="config-label">Simulate</div>
+                <div class="config-desc">Match and evaluate as normal, but only log what the actions <em>would</em> do — nothing is changed or sent</div>
+            </div>
+            <label class="toggle">
+                <input type="checkbox" id="wf-sim" ${simChecked}>
+                <span class="toggle-track"></span>
+            </label>
         </div>`, async () => {
         const name     = document.getElementById('wf-name').value.trim()
         const priority = parseInt(document.getElementById('wf-priority').value)
@@ -1121,6 +1195,7 @@ async function showWorkflowModal(existing = null) {
             actions,
             priority: Number.isFinite(priority) ? priority : 100,
             enabled: document.getElementById('wf-enabled').checked,
+            simulation_mode: document.getElementById('wf-sim').checked,
         }
 
         try {
@@ -1759,23 +1834,45 @@ async function loadForwards() {
     }
 }
 
+let notifierForwards = []
+
 function renderForwards(fwds) {
+    notifierForwards = fwds
     const header = `<div class="panel-header">
         <span class="panel-desc">Redirect a recipient's notifications to another for a time window.</span>
         <button class="btn btn-primary btn-sm" onclick="showNewForwardModal()">+ New Forward</button>
     </div>`
 
-    const thead = '<th>Enabled</th><th>Keep Copy</th><th>Dates</th><th>Source</th><th>Destination</th><th></th>'
+    const thead = '<th>Enabled</th><th>Keep Copy</th><th>Dates</th><th>Source</th><th>Destination</th><th>Simulate</th><th></th>'
     const rows  = fwds.map(f => `<tr>
         <td>${badge(f.enabled)}</td>
         <td>${badge(f.user_keeps_copy)}</td>
         <td style="white-space:nowrap;color:var(--muted)">${fmtDateRange(f.start_date, f.end_date)}</td>
         <td>${esc(f.source_name)} <span style="color:var(--muted);font-size:11px">${esc(f.source_type)}</span></td>
         <td>${esc(f.destination_name)} <span style="color:var(--muted);font-size:11px">${esc(f.destination_type)}</span></td>
+        <td>${simToggle(f.simulation_mode, `toggleForwardSim(${f.id}, this.checked)`)}</td>
         <td class="actions"><button class="btn btn-danger" onclick="deleteForward(${f.id})">Delete</button></td>
     </tr>`)
 
     setNotifierPanel(header + tableWrap(thead, rows))
+}
+
+async function toggleForwardSim(id, on) {
+    const f = notifierForwards.find(x => x.id === id)
+    if (!f) return
+    try {
+        await api('PUT', `/notifiers/forwards/${id}`, {
+            user_email:      f.source_id,
+            dest_email:      f.destination_id,
+            enabled:         f.enabled,
+            user_keeps_copy: f.user_keeps_copy,
+            simulation_mode: on,
+            start_date:      f.start_date,
+            end_date:        f.end_date,
+        })
+        f.simulation_mode = on
+        toast(on ? 'Simulation enabled' : 'Simulation disabled', 'success')
+    } catch (e) { toast(e.message, 'error'); loadForwards() }
 }
 
 async function showNewForwardModal() {
@@ -1818,6 +1915,13 @@ async function showNewForwardModal() {
                 <option value="true">Yes</option>
                 <option value="false">No</option>
             </select>
+        </div>
+        <div class="form-group">
+            <label>Simulate <span style="color:var(--muted);font-weight:400">(log what would happen, don't send)</span></label>
+            <select id="f-fwd-sim">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+            </select>
         </div>`, async () => {
         const sourceId  = parseInt(document.getElementById('f-source').value)
         const destId    = parseInt(document.getElementById('f-dest').value)
@@ -1838,6 +1942,7 @@ async function showNewForwardModal() {
             dest_email:      destId,
             enabled:         true,
             user_keeps_copy: keepCopy,
+            simulation_mode: document.getElementById('f-fwd-sim').value === 'true',
         }
         if (startDT) payload.start_date = new Date(startDT).toISOString()
         if (endDT)   payload.end_date   = new Date(endDT).toISOString()

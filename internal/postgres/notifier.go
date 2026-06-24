@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/db"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type NotifierRuleRepo struct {
@@ -154,6 +154,8 @@ func notifierToInsertParams(n *models.NotifierRule) db.InsertNotifierRuleParams 
 		CwBoardID:        n.CwBoardID,
 		WebexRecipientID: n.WebexRecipientID,
 		NotifyEnabled:    n.NotifyEnabled,
+		SimulationMode:   n.SimulationMode,
+		NotifyOnUpdate:   n.NotifyOnUpdate,
 	}
 }
 
@@ -163,6 +165,8 @@ func notifierToUpdateParams(n *models.NotifierRule) db.UpdateNotifierRuleParams 
 		CwBoardID:        n.CwBoardID,
 		WebexRecipientID: n.WebexRecipientID,
 		NotifyEnabled:    n.NotifyEnabled,
+		SimulationMode:   n.SimulationMode,
+		NotifyOnUpdate:   n.NotifyOnUpdate,
 	}
 }
 
@@ -172,18 +176,22 @@ func notifierFromPG(pg *db.NotifierRule) *models.NotifierRule {
 		CwBoardID:        pg.CwBoardID,
 		WebexRecipientID: pg.WebexRecipientID,
 		NotifyEnabled:    pg.NotifyEnabled,
+		SimulationMode:   pg.SimulationMode,
+		NotifyOnUpdate:   pg.NotifyOnUpdate,
 		CreatedOn:        pg.CreatedOn,
 	}
 }
 
 func fullRuleFromDB(pg *db.ListNotifierRulesFullRow) *models.NotifierRuleFull {
 	return &models.NotifierRuleFull{
-		ID:            pg.ID,
-		Enabled:       pg.Enabled,
-		BoardID:       pg.BoardID,
-		BoardName:     pg.BoardName,
-		RecipientID:   pg.RecipientID,
-		RecipientName: pg.RecipientName,
-		RecipientType: pg.RecipientType,
+		ID:             pg.ID,
+		Enabled:        pg.Enabled,
+		SimulationMode: pg.SimulationMode,
+		NotifyOnUpdate: pg.NotifyOnUpdate,
+		BoardID:        pg.BoardID,
+		BoardName:      pg.BoardName,
+		RecipientID:    pg.RecipientID,
+		RecipientName:  pg.RecipientName,
+		RecipientType:  pg.RecipientType,
 	}
 }

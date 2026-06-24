@@ -33,7 +33,13 @@ func New(cfg *models.Config, cw *cwsvc.Service, ns *notifier.Service, wfs *workf
 	}
 }
 
-func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID string) (err error) {
+// ProcessTicket handles one CW ticket webhook. `added` reports whether the
+// webhook action was "added" (a genuinely new ticket) vs "updated"; it is the
+// authoritative new-vs-updated signal — local DB presence alone is not, because a
+// ticket the bot never synced can still be an update (e.g. its "added" hook was
+// missed). A ticket counts as new only when CW said "added" AND we haven't already
+// synced it (so a re-delivered "added" hook doesn't re-fire new-ticket routing).
+func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID string, added bool) (err error) {
 	start := time.Now()
 	slog.Debug("ticketbot: request received", "ticket_id", id)
 
@@ -68,7 +74,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID strin
 	if err != nil {
 		return fmt.Errorf("checking if ticket %d exists: %w", id, err)
 	}
-	isNew = !exists
+	isNew = added && !exists
 
 	// Workflow pipeline: mutate the CW ticket before we sync it locally. No-op when
 	// the flag is off, the service is unset, or no workflows match. Failures here are

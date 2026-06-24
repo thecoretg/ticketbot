@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/thecoretg/ticketbot/models"
@@ -37,6 +38,23 @@ func (s *Service) GetForward(ctx context.Context, id int) (*models.NotifierForwa
 
 func (s *Service) AddForward(ctx context.Context, f *models.NotifierForward) (*models.NotifierForward, error) {
 	return s.Forwards.Insert(ctx, f)
+}
+
+func (s *Service) UpdateForward(ctx context.Context, f *models.NotifierForward) (*models.NotifierForward, error) {
+	if f == nil {
+		return nil, errors.New("got nil forward")
+	}
+
+	exists, err := s.Forwards.Exists(ctx, f.ID)
+	if err != nil {
+		return nil, fmt.Errorf("checking if forward exists: %w", err)
+	}
+
+	if !exists {
+		return nil, models.ErrUserForwardNotFound
+	}
+
+	return s.Forwards.Update(ctx, f)
 }
 
 func (s *Service) DeleteForward(ctx context.Context, id int) error {
@@ -87,17 +105,38 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 		}
 
 		keep := false
+		hasRealFwd := false
 
 		for _, f := range fwds {
+			// Simulated forward: show what it WOULD do without altering real delivery.
+			// Add the destination as a simulated recipient (unless they're already a
+			// real recipient, in which case they'd be notified anyway), and don't let
+			// it influence the source keep/delete decision.
+			if f.SimulationMode {
+				if existing, ok := in[f.DestinationID]; ok && !existing.simulated {
+					continue
+				}
+				fm, err := s.WebexSvc.GetRecipient(ctx, f.DestinationID)
+				if err != nil {
+					return nil, fmt.Errorf("getting recipient info for forward destination %d: %w", f.DestinationID, err)
+				}
+				rd := newRecipWithFwd(fm, r)
+				rd.simulated = true
+				in[f.DestinationID] = rd
+				queue = append(queue, f.DestinationID)
+				continue
+			}
+
+			hasRealFwd = true
 			// all we need is one forward where the user is marked to keep a copy
 			if f.UserKeepsCopy {
 				keep = true
 			}
 
-			// if the forward destination recipient is in the map already without a forward,
-			// there is no need to treat it as a forward; they are already in the ticket and would
-			// get the notification regardless.
-			if _, ok := in[f.DestinationID]; ok {
+			// if the forward destination recipient is already a real recipient,
+			// there is no need to treat it as a forward; they are already in the ticket
+			// and would get the notification regardless. (Real wins over simulated.)
+			if existing, ok := in[f.DestinationID]; ok && !existing.simulated {
 				continue
 			}
 
@@ -108,12 +147,16 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 				return nil, fmt.Errorf("getting recipient info for forward destination %d: %w", f.DestinationID, err)
 			}
 
-			in[f.DestinationID] = newRecipWithFwd(fm, r)
+			rd := newRecipWithFwd(fm, r)
+			rd.simulated = r.simulated // inherit: forwarding a simulated source is also simulated
+			in[f.DestinationID] = rd
 			queue = append(queue, f.DestinationID)
 		}
 
-		if !keep {
-			// delete the source recipient so the don't get the notification
+		// Only real forwards suppress the source's own notification; a source with
+		// only simulated forwards keeps receiving for real.
+		if hasRealFwd && !keep {
+			// delete the source recipient so they don't get the notification
 			delete(in, r.recipient.ID)
 		}
 	}

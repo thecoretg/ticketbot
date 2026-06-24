@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type NotifierHandler struct {
@@ -61,6 +61,33 @@ func (h *NotifierHandler) AddNotifierRule(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, notifier.ErrNotifierConflict) {
 			conflictError(c, err)
+			return
+		}
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, n)
+}
+
+func (h *NotifierHandler) UpdateNotifierRule(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	p := &models.NotifierRule{}
+	if err := c.ShouldBindJSON(p); err != nil {
+		badPayloadError(c, err)
+		return
+	}
+	p.ID = id
+
+	n, err := h.Svc.UpdateNotifierRule(c.Request.Context(), p)
+	if err != nil {
+		if errors.Is(err, models.ErrNotifierNotFound) {
+			notFoundError(c, err)
 			return
 		}
 		internalServerError(c, err)
@@ -144,6 +171,33 @@ func (h *NotifierHandler) AddUserForward(c *gin.Context) {
 
 	f, err := h.Svc.AddForward(c.Request.Context(), p)
 	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, f)
+}
+
+func (h *NotifierHandler) UpdateUserForward(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	p := &models.NotifierForward{}
+	if err := c.ShouldBindJSON(p); err != nil {
+		badPayloadError(c, err)
+		return
+	}
+	p.ID = id
+
+	f, err := h.Svc.UpdateForward(c.Request.Context(), p)
+	if err != nil {
+		if errors.Is(err, models.ErrUserForwardNotFound) {
+			notFoundError(c, err)
+			return
+		}
 		internalServerError(c, err)
 		return
 	}

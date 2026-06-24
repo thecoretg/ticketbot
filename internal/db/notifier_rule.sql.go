@@ -55,7 +55,7 @@ func (q *Queries) DeleteNotifierRule(ctx context.Context, id int) error {
 }
 
 const getNotifierRule = `-- name: GetNotifierRule :one
-SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on FROM notifier_rule
+SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on, simulation_mode, notify_on_update FROM notifier_rule
 WHERE id = $1 LIMIT 1
 `
 
@@ -68,24 +68,34 @@ func (q *Queries) GetNotifierRule(ctx context.Context, id int) (*NotifierRule, e
 		&i.WebexRecipientID,
 		&i.NotifyEnabled,
 		&i.CreatedOn,
+		&i.SimulationMode,
+		&i.NotifyOnUpdate,
 	)
 	return &i, err
 }
 
 const insertNotifierRule = `-- name: InsertNotifierRule :one
-INSERT INTO notifier_rule(cw_board_id, webex_recipient_id, notify_enabled)
-VALUES ($1, $2, $3)
-RETURNING id, cw_board_id, webex_recipient_id, notify_enabled, created_on
+INSERT INTO notifier_rule(cw_board_id, webex_recipient_id, notify_enabled, simulation_mode, notify_on_update)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, cw_board_id, webex_recipient_id, notify_enabled, created_on, simulation_mode, notify_on_update
 `
 
 type InsertNotifierRuleParams struct {
 	CwBoardID        int  `json:"cw_board_id"`
 	WebexRecipientID int  `json:"webex_recipient_id"`
 	NotifyEnabled    bool `json:"notify_enabled"`
+	SimulationMode   bool `json:"simulation_mode"`
+	NotifyOnUpdate   bool `json:"notify_on_update"`
 }
 
 func (q *Queries) InsertNotifierRule(ctx context.Context, arg InsertNotifierRuleParams) (*NotifierRule, error) {
-	row := q.db.QueryRow(ctx, insertNotifierRule, arg.CwBoardID, arg.WebexRecipientID, arg.NotifyEnabled)
+	row := q.db.QueryRow(ctx, insertNotifierRule,
+		arg.CwBoardID,
+		arg.WebexRecipientID,
+		arg.NotifyEnabled,
+		arg.SimulationMode,
+		arg.NotifyOnUpdate,
+	)
 	var i NotifierRule
 	err := row.Scan(
 		&i.ID,
@@ -93,12 +103,14 @@ func (q *Queries) InsertNotifierRule(ctx context.Context, arg InsertNotifierRule
 		&i.WebexRecipientID,
 		&i.NotifyEnabled,
 		&i.CreatedOn,
+		&i.SimulationMode,
+		&i.NotifyOnUpdate,
 	)
 	return &i, err
 }
 
 const listNotifierRules = `-- name: ListNotifierRules :many
-SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on FROM notifier_rule
+SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on, simulation_mode, notify_on_update FROM notifier_rule
 ORDER BY id
 `
 
@@ -117,6 +129,8 @@ func (q *Queries) ListNotifierRules(ctx context.Context) ([]*NotifierRule, error
 			&i.WebexRecipientID,
 			&i.NotifyEnabled,
 			&i.CreatedOn,
+			&i.SimulationMode,
+			&i.NotifyOnUpdate,
 		); err != nil {
 			return nil, err
 		}
@@ -129,7 +143,7 @@ func (q *Queries) ListNotifierRules(ctx context.Context) ([]*NotifierRule, error
 }
 
 const listNotifierRulesByBoard = `-- name: ListNotifierRulesByBoard :many
-SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on FROM notifier_rule
+SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on, simulation_mode, notify_on_update FROM notifier_rule
 WHERE cw_board_id = $1
 ORDER BY id
 `
@@ -149,6 +163,8 @@ func (q *Queries) ListNotifierRulesByBoard(ctx context.Context, cwBoardID int) (
 			&i.WebexRecipientID,
 			&i.NotifyEnabled,
 			&i.CreatedOn,
+			&i.SimulationMode,
+			&i.NotifyOnUpdate,
 		); err != nil {
 			return nil, err
 		}
@@ -161,7 +177,7 @@ func (q *Queries) ListNotifierRulesByBoard(ctx context.Context, cwBoardID int) (
 }
 
 const listNotifierRulesByRecipient = `-- name: ListNotifierRulesByRecipient :many
-SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on FROM notifier_rule
+SELECT id, cw_board_id, webex_recipient_id, notify_enabled, created_on, simulation_mode, notify_on_update FROM notifier_rule
 WHERE webex_recipient_id = $1
 ORDER BY id
 `
@@ -181,6 +197,8 @@ func (q *Queries) ListNotifierRulesByRecipient(ctx context.Context, webexRecipie
 			&i.WebexRecipientID,
 			&i.NotifyEnabled,
 			&i.CreatedOn,
+			&i.SimulationMode,
+			&i.NotifyOnUpdate,
 		); err != nil {
 			return nil, err
 		}
@@ -196,6 +214,8 @@ const listNotifierRulesFull = `-- name: ListNotifierRulesFull :many
 SELECT
     r.id AS id,
     r.notify_enabled AS enabled,
+    r.simulation_mode AS simulation_mode,
+    r.notify_on_update AS notify_on_update,
     b.id AS board_id,
     b.name AS board_name,
     wr.id AS recipient_id,
@@ -210,13 +230,15 @@ ORDER BY r.id
 `
 
 type ListNotifierRulesFullRow struct {
-	ID            int    `json:"id"`
-	Enabled       bool   `json:"enabled"`
-	BoardID       int    `json:"board_id"`
-	BoardName     string `json:"board_name"`
-	RecipientID   int    `json:"recipient_id"`
-	RecipientName string `json:"recipient_name"`
-	RecipientType string `json:"recipient_type"`
+	ID             int    `json:"id"`
+	Enabled        bool   `json:"enabled"`
+	SimulationMode bool   `json:"simulation_mode"`
+	NotifyOnUpdate bool   `json:"notify_on_update"`
+	BoardID        int    `json:"board_id"`
+	BoardName      string `json:"board_name"`
+	RecipientID    int    `json:"recipient_id"`
+	RecipientName  string `json:"recipient_name"`
+	RecipientType  string `json:"recipient_type"`
 }
 
 func (q *Queries) ListNotifierRulesFull(ctx context.Context) ([]*ListNotifierRulesFullRow, error) {
@@ -231,6 +253,8 @@ func (q *Queries) ListNotifierRulesFull(ctx context.Context) ([]*ListNotifierRul
 		if err := rows.Scan(
 			&i.ID,
 			&i.Enabled,
+			&i.SimulationMode,
+			&i.NotifyOnUpdate,
 			&i.BoardID,
 			&i.BoardName,
 			&i.RecipientID,
@@ -252,9 +276,11 @@ UPDATE notifier_rule
 SET
     cw_board_id = $2,
     webex_recipient_id = $3,
-    notify_enabled = $4
+    notify_enabled = $4,
+    simulation_mode = $5,
+    notify_on_update = $6
 WHERE id = $1
-RETURNING id, cw_board_id, webex_recipient_id, notify_enabled, created_on
+RETURNING id, cw_board_id, webex_recipient_id, notify_enabled, created_on, simulation_mode, notify_on_update
 `
 
 type UpdateNotifierRuleParams struct {
@@ -262,6 +288,8 @@ type UpdateNotifierRuleParams struct {
 	CwBoardID        int  `json:"cw_board_id"`
 	WebexRecipientID int  `json:"webex_recipient_id"`
 	NotifyEnabled    bool `json:"notify_enabled"`
+	SimulationMode   bool `json:"simulation_mode"`
+	NotifyOnUpdate   bool `json:"notify_on_update"`
 }
 
 func (q *Queries) UpdateNotifierRule(ctx context.Context, arg UpdateNotifierRuleParams) (*NotifierRule, error) {
@@ -270,6 +298,8 @@ func (q *Queries) UpdateNotifierRule(ctx context.Context, arg UpdateNotifierRule
 		arg.CwBoardID,
 		arg.WebexRecipientID,
 		arg.NotifyEnabled,
+		arg.SimulationMode,
+		arg.NotifyOnUpdate,
 	)
 	var i NotifierRule
 	err := row.Scan(
@@ -278,6 +308,8 @@ func (q *Queries) UpdateNotifierRule(ctx context.Context, arg UpdateNotifierRule
 		&i.WebexRecipientID,
 		&i.NotifyEnabled,
 		&i.CreatedOn,
+		&i.SimulationMode,
+		&i.NotifyOnUpdate,
 	)
 	return &i, err
 }

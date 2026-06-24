@@ -121,6 +121,49 @@ matches. Failures are **non-fatal** (logged, never block sync/notify).
   - Non-idempotent actions (`add_note`, `send_message`) are guarded by run-once markers (`workflow_run`, keyed
     ticket+workflow+action_index). `ticket_update` is idempotent (no-ops when the field already matches).
 
+## Simulation mode
+
+Per-entity **dry-run** toggle to confirm workflows/notifications detect correctly without side effects. Each
+**workflow**, **notifier_rule**, and **notifier_forward** has a `simulation_mode` BOOLEAN column. Processing
+(`ProcessTicket`) runs end-to-end as normal — sync always uses real ticket data. Simulated outcomes are journaled as
+**"Would …"** events (`JournalEvent.Simulated`, surfaced as a SIM badge in the Tickets UI).
+
+- **Workflows:** a simulated workflow runs against a per-workflow copy of `Exec` with `Exec.Simulate=true` (set in
+  `run.go`'s loop). Each `ActionHandler.Apply` checks `x.Simulate` *immediately before its mutating CW/Webex call* and
+  returns the `Change` it would have made (now with `Change.Simulated`) without performing it or mutating the in-memory
+  ticket. In sim, `runActions` **skips** writing run-once markers and **does not** propagate `SkipNotify` (sim must not
+  change live behavior). `events.go` `actionEvent` renders "Would …" / skip status when `Change.Simulated`.
+- **Notifier rules / forwards:** `recipData.simulated` marks recipients sourced from a simulated rule
+  (`recipient.go`) or simulated forward (`forwards.go`), with **real-wins precedence** (a recipient reachable via any
+  non-simulated path is sent for real; only real forwards suppress the source). Simulated recipients are **recorded as
+  skipped `ticket_notification` rows but never sent** — so the existing `ExistsForNote` dedup stops a delayed re-fire
+  once simulation is turned off (the explicit requirement). Events come from `requestEvents` ("Would notify …").
+  Forward destinations inherit their source's simulated state (forwarding a simulated source is also simulated).
+- **Authoritative for a board setting:** because a board only notifies when it has an enabled rule, simulating a rule
+  authoritatively suppresses everything that rule governs. `getAllRecipients` decides per-event from `peopleGoverning`
+  (the settings governing the ticket's people): the people are simulated unless one of those settings is real. So a
+  board whose only/all relevant settings are simulated sends nothing — recipient *and* people.
+- **CRUD:** toggling is via inline table switches → `PUT /notifiers/rules/:id` and `PUT /notifiers/forwards/:id`
+  (forwards previously had no update path; `UpdateNotifierForward` query + repo `Update` were added). Workflows reuse
+  the existing `PUT /workflows/:id`.
+
+## Notifier rule = board setting (new-ticket recipient + notify-on-update)
+
+A `notifier_rule` ("board setting") routes notifications for one board (`internal/service/notifier/recipient.go`
+`getAllRecipients`):
+
+- **New ticket** → the setting's configured **recipient** (`webex_recipient_id`, a room **or** person) **plus** the
+  ticket's **people** (owner/resources, derived from the ticket — not the rule).
+- **Updated ticket** → the ticket's **people only**, and only when at least one enabled setting for the board has
+  `notify_on_update = true` (migration `00013`, default true to preserve prior behavior). The configured recipient is
+  **never** notified on updates.
+- A board with **no enabled rules notifies nobody** (early return in `processNotifications`) — the rule's existence is
+  the board's notify on/off switch. The note-sender is always excluded.
+- **new-vs-updated is the CW webhook action, not local-DB presence.** `ProcessTicket(…, added bool)` sets
+  `isNew = added && !exists` where `added` is `webhook action == "added"`. A ticket the bot never synced can still be
+  an *update* (its "added" hook was missed) — keying off DB presence alone would wrongly fire new-ticket routing on it.
+  The `&& !exists` guard keeps a re-delivered "added" hook from re-firing new-ticket routing.
+
 ## Ticket journal (Tickets tab)
 
 `internal/service/journal/` — one `ticket_journal` row per ticket; `ticketbot.ProcessTicket` appends a human-readable

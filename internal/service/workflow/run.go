@@ -65,7 +65,17 @@ func (s *Service) Run(ctx context.Context, ticketID int, isNew bool, actorMember
 			continue
 		}
 		res.Events = append(res.Events, matchedEvent(wf))
-		s.runActions(ctx, wf, ex, t, ticketID, res)
+
+		// Simulation mode is per-workflow: actions are evaluated against a copy of
+		// the shared Exec with Simulate set, so they describe what they would do
+		// without performing side effects.
+		exForWf := ex
+		if wf.SimulationMode {
+			c := *ex
+			c.Simulate = true
+			exForWf = &c
+		}
+		s.runActions(ctx, wf, exForWf, t, ticketID, res)
 	}
 
 	return res, nil
@@ -111,19 +121,24 @@ func (s *Service) runActions(ctx context.Context, wf *models.Workflow, ex *Exec,
 			res.Events = append(res.Events, errEvent("%s failed: %s", actionLabel(a.Type), err.Error()))
 			continue
 		}
+		change.Simulated = ex.Simulate
 
-		if !handler.Idempotent() {
-			if err := s.Runs.Insert(ctx, ticketID, wf.ID, i); err != nil {
-				slog.Error("workflow: recording run marker", "workflow_id", wf.ID, "action_index", i, "ticket_id", ticketID, "error", err.Error())
+		// In simulation mode we never write run-once markers (so the action still
+		// fires for real once simulation is turned off) and never suppress the real
+		// notifier (simulation must not change live behavior).
+		if !ex.Simulate {
+			if !handler.Idempotent() {
+				if err := s.Runs.Insert(ctx, ticketID, wf.ID, i); err != nil {
+					slog.Error("workflow: recording run marker", "workflow_id", wf.ID, "action_index", i, "ticket_id", ticketID, "error", err.Error())
+				}
 			}
-		}
-
-		if change.SkipNotify {
-			res.SkipNotify = true
+			if change.SkipNotify {
+				res.SkipNotify = true
+			}
 		}
 		res.Events = append(res.Events, actionEvent(a.Type, change))
 
-		slog.Debug("workflow: action processed", "workflow_id", wf.ID, "action_index", i, "type", a.Type, "ticket_id", ticketID, "changed", change.Applied)
+		slog.Debug("workflow: action processed", "workflow_id", wf.ID, "action_index", i, "type", a.Type, "ticket_id", ticketID, "changed", change.Applied, "simulated", change.Simulated)
 	}
 }
 

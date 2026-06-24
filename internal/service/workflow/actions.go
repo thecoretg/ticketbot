@@ -35,6 +35,10 @@ func (AddNote) Apply(ctx context.Context, x *Exec, t *psa.Ticket, p Params) (Cha
 	// the API key's member, which is the same member the loop guard keys off of
 	// (Cfg.CwBotMemberIdentifier). Setting member/identifier explicitly is rejected
 	// by CW unless it exactly matches an existing member, so we let it default.
+	if x.Simulate {
+		return Change{Applied: true, Field: "note", To: pp.Text}, nil
+	}
+
 	note := &psa.ServiceTicketNote{
 		TicketID:              t.ID,
 		Text:                  pp.Text,

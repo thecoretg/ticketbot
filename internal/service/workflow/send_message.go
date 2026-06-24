@@ -53,6 +53,10 @@ func (SendMessage) Apply(ctx context.Context, x *Exec, t *psa.Ticket, p Params) 
 		return Change{Field: "message"}, nil // nothing to send
 	}
 
+	if x.Simulate {
+		return Change{Applied: true, Field: "message", To: r.Name, SkipNotify: pp.SkipFurtherNotifications}, nil
+	}
+
 	msg := newWebexMsg(r, body)
 	if _, err := x.Webex.PostMessage(ctx, &msg); err != nil {
 		return Change{}, fmt.Errorf("sending webex message to %q: %w", r.Name, err)

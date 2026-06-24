@@ -44,12 +44,24 @@ func actionEvent(actionType string, c Change) models.JournalEvent {
 	if !c.Applied {
 		status = models.JournalInfo
 	}
+	if c.Simulated && c.Applied {
+		status = models.JournalSkip
+	}
+
+	// did picks the verb mood for the applied branch: past tense for a real run,
+	// "Would …" for a simulation.
+	did := func(real, would string) string {
+		if c.Simulated {
+			return would
+		}
+		return real
+	}
 
 	var text string
 	switch actionType {
 	case models.WorkflowActionTicketUpdate:
 		if c.Applied {
-			text = "Updated ticket"
+			text = did("Updated ticket", "Would update ticket")
 			if c.Field != "" && c.Field != "ticket" {
 				text += " (" + c.Field + ")"
 			}
@@ -57,28 +69,29 @@ func actionEvent(actionType string, c Change) models.JournalEvent {
 			text = "Ticket already up to date"
 		}
 	case models.WorkflowActionAddNote:
-		text = "Added note"
-		if !c.Applied {
+		if c.Applied {
+			text = did("Added note", "Would add note")
+		} else {
 			text = "No note added"
 		}
 	case models.WorkflowActionSendMessage:
 		if c.Applied {
-			text = "Sent notification to " + c.To
+			text = did("Sent notification to ", "Would send notification to ") + c.To
 		} else {
 			text = "No notification sent"
 		}
 	case models.WorkflowActionSkipNotifications:
-		text = "Skipped default notifications"
+		text = did("Skipped default notifications", "Would skip default notifications")
 		status = models.JournalSkip
 	case models.WorkflowActionAddResource:
 		if c.Applied {
-			text = "Added resource " + c.To
+			text = did("Added resource ", "Would add resource ") + c.To
 		} else {
 			text = "Resource already present"
 		}
 	case models.WorkflowActionAddEmailCc:
 		if c.Applied {
-			text = "Added email CC " + c.To
+			text = did("Added email CC ", "Would add email CC ") + c.To
 		} else {
 			text = "Email already on CC list"
 		}
@@ -86,7 +99,7 @@ func actionEvent(actionType string, c Change) models.JournalEvent {
 		text = actionLabel(actionType)
 	}
 
-	return models.JournalEvent{Text: text, Status: status}
+	return models.JournalEvent{Text: text, Status: status, Simulated: c.Simulated}
 }
 
 // summarizeConditions renders a condition tree as a compact human-readable string,

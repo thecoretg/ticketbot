@@ -19,8 +19,8 @@ SELECT EXISTS (
 ) AS exists;
 
 -- name: InsertWorkflow :one
-INSERT INTO workflow(name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO workflow(name, cw_board_id, on_ticket_action, conditions, actions, priority, enabled, simulation_mode)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: UpdateWorkflow :one
@@ -33,6 +33,7 @@ SET
     actions          = $6,
     priority         = $7,
     enabled          = $8,
+    simulation_mode  = $9,
     updated_on       = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;

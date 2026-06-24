@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/db"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type UserForwardRepo struct {
@@ -150,6 +150,27 @@ func (p *UserForwardRepo) Insert(ctx context.Context, b *models.NotifierForward)
 	return forwardFromPG(d), nil
 }
 
+func (p *UserForwardRepo) Update(ctx context.Context, b *models.NotifierForward) (*models.NotifierForward, error) {
+	d, err := p.queries.UpdateNotifierForward(ctx, db.UpdateNotifierForwardParams{
+		ID:             b.ID,
+		SourceID:       b.SourceID,
+		DestinationID:  b.DestID,
+		StartDate:      b.StartDate,
+		EndDate:        b.EndDate,
+		Enabled:        b.Enabled,
+		UserKeepsCopy:  b.UserKeepsCopy,
+		SimulationMode: b.SimulationMode,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, models.ErrUserForwardNotFound
+		}
+		return nil, err
+	}
+
+	return forwardFromPG(d), nil
+}
+
 func (p *UserForwardRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteNotifierForward(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -163,26 +184,28 @@ func (p *UserForwardRepo) Delete(ctx context.Context, id int) error {
 
 func forwardToInsertParams(t *models.NotifierForward) db.InsertNotifierForwardParams {
 	return db.InsertNotifierForwardParams{
-		SourceID:      t.SourceID,
-		DestinationID: t.DestID,
-		StartDate:     t.StartDate,
-		EndDate:       t.EndDate,
-		Enabled:       t.Enabled,
-		UserKeepsCopy: t.UserKeepsCopy,
+		SourceID:       t.SourceID,
+		DestinationID:  t.DestID,
+		StartDate:      t.StartDate,
+		EndDate:        t.EndDate,
+		Enabled:        t.Enabled,
+		UserKeepsCopy:  t.UserKeepsCopy,
+		SimulationMode: t.SimulationMode,
 	}
 }
 
 func forwardFromPG(pg *db.NotifierForward) *models.NotifierForward {
 	return &models.NotifierForward{
-		ID:            pg.ID,
-		SourceID:      pg.SourceID,
-		DestID:        pg.DestinationID,
-		StartDate:     pg.StartDate,
-		EndDate:       pg.EndDate,
-		Enabled:       pg.Enabled,
-		UserKeepsCopy: pg.UserKeepsCopy,
-		UpdatedOn:     pg.UpdatedOn,
-		CreatedOn:     pg.CreatedOn,
+		ID:             pg.ID,
+		SourceID:       pg.SourceID,
+		DestID:         pg.DestinationID,
+		StartDate:      pg.StartDate,
+		EndDate:        pg.EndDate,
+		Enabled:        pg.Enabled,
+		UserKeepsCopy:  pg.UserKeepsCopy,
+		SimulationMode: pg.SimulationMode,
+		UpdatedOn:      pg.UpdatedOn,
+		CreatedOn:      pg.CreatedOn,
 	}
 }
 
@@ -191,6 +214,7 @@ func fullForwardFromPG(pg *db.ListNotifierForwardsFullRow) *models.NotifierForwa
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,
 		UserKeepsCopy:   pg.UserKeepsCopy,
+		SimulationMode:  pg.SimulationMode,
 		StartDate:       pg.StartDate,
 		EndDate:         pg.EndDate,
 		SourceID:        pg.SourceID,
@@ -207,6 +231,7 @@ func activeForwardFromPG(pg *db.ListActiveNotifierForwardsRow) *models.NotifierF
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,
 		UserKeepsCopy:   pg.UserKeepsCopy,
+		SimulationMode:  pg.SimulationMode,
 		StartDate:       pg.StartDate,
 		EndDate:         pg.EndDate,
 		SourceID:        pg.SourceID,
@@ -223,6 +248,7 @@ func inactiveForwardFromPG(pg *db.ListInactiveNotifierForwardsRow) *models.Notif
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,
 		UserKeepsCopy:   pg.UserKeepsCopy,
+		SimulationMode:  pg.SimulationMode,
 		StartDate:       pg.StartDate,
 		EndDate:         pg.EndDate,
 		SourceID:        pg.SourceID,
@@ -239,6 +265,7 @@ func notExpiredForwardFromPG(pg *db.ListNotExpiredNotifierForwardsRow) *models.N
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,
 		UserKeepsCopy:   pg.UserKeepsCopy,
+		SimulationMode:  pg.SimulationMode,
 		StartDate:       pg.StartDate,
 		EndDate:         pg.EndDate,
 		SourceID:        pg.SourceID,
@@ -255,6 +282,7 @@ func activeForwardBySourceFromPG(pg *db.ListActiveForwardsBySourceRecipientRow) 
 		ID:              pg.ID,
 		Enabled:         pg.Enabled,
 		UserKeepsCopy:   pg.UserKeepsCopy,
+		SimulationMode:  pg.SimulationMode,
 		StartDate:       pg.StartDate,
 		EndDate:         pg.EndDate,
 		SourceID:        pg.SourceID,

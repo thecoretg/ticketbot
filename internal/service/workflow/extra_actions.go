@@ -56,6 +56,10 @@ func (AddResource) Apply(ctx context.Context, x *Exec, t *psa.Ticket, p Params) 
 		}
 	}
 
+	if x.Simulate {
+		return Change{Applied: true, Field: "resources", To: member}, nil
+	}
+
 	updated, err := x.CW.PatchTicket(ctx, t.ID, []psa.PatchOp{{
 		Op:    psa.Op(patchOpReplace),
 		Path:  "resources",
@@ -96,6 +100,10 @@ func (AddEmailCc) Apply(ctx context.Context, x *Exec, t *psa.Ticket, p Params) (
 		if strings.EqualFold(e, email) {
 			return Change{Field: "email_cc"}, nil // already CC'd — no-op
 		}
+	}
+
+	if x.Simulate {
+		return Change{Applied: true, Field: "email_cc", To: email}, nil
 	}
 
 	updated, err := x.CW.PatchTicket(ctx, t.ID, []psa.PatchOp{

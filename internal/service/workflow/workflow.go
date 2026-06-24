@@ -25,6 +25,10 @@ type Exec struct {
 	CWCompanyID      string
 	MaxMessageLength int
 	LastNote         *psa.ServiceTicketNote
+	// Simulate, when true, makes every action compute what it would do and return
+	// a Change describing it WITHOUT performing the CW/Webex side effect or mutating
+	// the in-memory ticket. Set per-workflow from Workflow.SimulationMode.
+	Simulate bool
 }
 
 // Change describes what an action did, for logging. SkipNotify signals that the
@@ -36,6 +40,7 @@ type Change struct {
 	From       string
 	To         string
 	SkipNotify bool
+	Simulated  bool // true => action was evaluated in simulation mode; the side effect was NOT performed
 }
 
 // RunResult is what a workflow pipeline pass reports back: whether the downstream

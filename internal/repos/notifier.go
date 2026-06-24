@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/tctg-go/webex"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type MessageSender interface {
@@ -26,6 +26,7 @@ type NotifierForwardRepository interface {
 	Get(ctx context.Context, id int) (*models.NotifierForward, error)
 	Exists(ctx context.Context, id int) (bool, error)
 	Insert(ctx context.Context, c *models.NotifierForward) (*models.NotifierForward, error)
+	Update(ctx context.Context, c *models.NotifierForward) (*models.NotifierForward, error)
 	Delete(ctx context.Context, id int) error
 }
 

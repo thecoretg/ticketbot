@@ -91,6 +91,10 @@ func (TicketUpdate) Apply(ctx context.Context, x *Exec, t *psa.Ticket, p Params)
 		return Change{Field: "ticket"}, nil // nothing to do
 	}
 
+	if x.Simulate {
+		return Change{Applied: true, Field: strings.Join(changed, ","), To: fmt.Sprintf("%d op(s)", len(ops))}, nil
+	}
+
 	updated, err := x.CW.PatchTicket(ctx, t.ID, ops)
 	if err != nil {
 		return Change{}, fmt.Errorf("patching ticket: %w", err)

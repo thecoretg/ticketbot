@@ -8,21 +8,23 @@ import (
 var ErrUserForwardNotFound = errors.New("forward rule not found")
 
 type NotifierForward struct {
-	ID            int        `json:"id"`
-	SourceID      int        `json:"user_email"`
-	DestID        int        `json:"dest_email"`
-	StartDate     *time.Time `json:"start_date"`
-	EndDate       *time.Time `json:"end_date"`
-	Enabled       bool       `json:"enabled"`
-	UserKeepsCopy bool       `json:"user_keeps_copy"`
-	CreatedOn     time.Time  `json:"added_on"`
-	UpdatedOn     time.Time  `json:"updated_on"`
+	ID             int        `json:"id"`
+	SourceID       int        `json:"user_email"`
+	DestID         int        `json:"dest_email"`
+	StartDate      *time.Time `json:"start_date"`
+	EndDate        *time.Time `json:"end_date"`
+	Enabled        bool       `json:"enabled"`
+	UserKeepsCopy  bool       `json:"user_keeps_copy"`
+	SimulationMode bool       `json:"simulation_mode"`
+	CreatedOn      time.Time  `json:"added_on"`
+	UpdatedOn      time.Time  `json:"updated_on"`
 }
 
 type NotifierForwardFull struct {
 	ID              int        `json:"id"`
 	Enabled         bool       `json:"enabled"`
 	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	SimulationMode  bool       `json:"simulation_mode"`
 	StartDate       *time.Time `json:"start_date"`
 	EndDate         *time.Time `json:"end_date"`
 	SourceID        int        `json:"source_id"`
@@ -40,17 +42,21 @@ type NotifierRule struct {
 	CwBoardID        int       `json:"cw_board_id"`
 	WebexRecipientID int       `json:"webex_room_id"`
 	NotifyEnabled    bool      `json:"notify_enabled"`
+	SimulationMode   bool      `json:"simulation_mode"`
+	NotifyOnUpdate   bool      `json:"notify_on_update"`
 	CreatedOn        time.Time `json:"created_on"`
 }
 
 type NotifierRuleFull struct {
-	ID            int    `json:"id"`
-	Enabled       bool   `json:"enabled"`
-	BoardID       int    `json:"board_id"`
-	BoardName     string `json:"board_name"`
-	RecipientID   int    `json:"recipient_id"`
-	RecipientName string `json:"recipient_name"`
-	RecipientType string `json:"recipient_type"`
+	ID             int    `json:"id"`
+	Enabled        bool   `json:"enabled"`
+	SimulationMode bool   `json:"simulation_mode"`
+	NotifyOnUpdate bool   `json:"notify_on_update"`
+	BoardID        int    `json:"board_id"`
+	BoardName      string `json:"board_name"`
+	RecipientID    int    `json:"recipient_id"`
+	RecipientName  string `json:"recipient_name"`
+	RecipientType  string `json:"recipient_type"`
 }
 
 var ErrNotificationNotFound = errors.New("notification not found")

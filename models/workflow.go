@@ -16,7 +16,7 @@ const (
 	WorkflowActionSendMessage       = "send_message"       // send a Webex message to a recipient
 	WorkflowActionSkipNotifications = "skip_notifications" // suppress the default notifier for this ticket
 	WorkflowActionAddResource       = "add_resource"       // add a member as a ticket resource
-	WorkflowActionAddEmailCc        = "add_email_cc"        // add an email address to the ticket's CC list
+	WorkflowActionAddEmailCc        = "add_email_cc"       // add an email address to the ticket's CC list
 )
 
 // On-ticket-action values control which webhook events a workflow fires on.
@@ -75,6 +75,7 @@ type Workflow struct {
 	Actions        []Action        `json:"actions"`              // ordered, at least one
 	Priority       int             `json:"priority"`             // lower runs first
 	Enabled        bool            `json:"enabled"`
+	SimulationMode bool            `json:"simulation_mode"` // when true, actions are evaluated but not applied (journaled as "Would ...")
 	CreatedOn      time.Time       `json:"created_on"`
 	UpdatedOn      time.Time       `json:"updated_on"`
 }

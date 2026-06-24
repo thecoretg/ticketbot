@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/tctg-go/webex"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type Message struct {
@@ -48,7 +48,8 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 		n := &models.TicketNotification{
 			TicketID:    t.Ticket.ID,
 			RecipientID: &r.recipient.ID,
-			Sent:        true,
+			Sent:        !r.simulated,
+			Skipped:     r.simulated,
 		}
 
 		if t.LatestNote != nil {

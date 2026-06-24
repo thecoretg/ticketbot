@@ -23,15 +23,16 @@ const (
 
 // Run outcomes.
 const (
-	OutcomeCompleted    = "Completed"
-	OutcomeWithErrors   = "Completed with errors"
-	OutcomeNothingToDo  = "Nothing to do"
+	OutcomeCompleted   = "Completed"
+	OutcomeWithErrors  = "Completed with errors"
+	OutcomeNothingToDo = "Nothing to do"
 )
 
 // JournalEvent is a single human-readable line in a ticket run's timeline.
 type JournalEvent struct {
-	Text   string `json:"text"`
-	Status string `json:"status"` // ok | error | skip | info
+	Text      string `json:"text"`
+	Status    string `json:"status"`              // ok | error | skip | info
+	Simulated bool   `json:"simulated,omitempty"` // true when produced by a simulation-mode workflow/rule/forward ("Would ...")
 }
 
 // TicketRun is one pass of the ticketbot pipeline over a ticket, recorded as a

@@ -36,7 +36,7 @@ func (q *Queries) DeleteNotifierForward(ctx context.Context, id int) error {
 }
 
 const getNotifierForward = `-- name: GetNotifierForward :one
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, simulation_mode FROM notifier_forward
 WHERE id = $1 LIMIT 1
 `
 
@@ -53,24 +53,26 @@ func (q *Queries) GetNotifierForward(ctx context.Context, id int) (*NotifierForw
 		&i.UserKeepsCopy,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.SimulationMode,
 	)
 	return &i, err
 }
 
 const insertNotifierForward = `-- name: InsertNotifierForward :one
 INSERT INTO notifier_forward (
-    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy
-) VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on
+    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, simulation_mode
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, simulation_mode
 `
 
 type InsertNotifierForwardParams struct {
-	SourceID      int        `json:"source_id"`
-	DestinationID int        `json:"destination_id"`
-	StartDate     *time.Time `json:"start_date"`
-	EndDate       *time.Time `json:"end_date"`
-	Enabled       bool       `json:"enabled"`
-	UserKeepsCopy bool       `json:"user_keeps_copy"`
+	SourceID       int        `json:"source_id"`
+	DestinationID  int        `json:"destination_id"`
+	StartDate      *time.Time `json:"start_date"`
+	EndDate        *time.Time `json:"end_date"`
+	Enabled        bool       `json:"enabled"`
+	UserKeepsCopy  bool       `json:"user_keeps_copy"`
+	SimulationMode bool       `json:"simulation_mode"`
 }
 
 func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierForwardParams) (*NotifierForward, error) {
@@ -81,6 +83,7 @@ func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierF
 		arg.EndDate,
 		arg.Enabled,
 		arg.UserKeepsCopy,
+		arg.SimulationMode,
 	)
 	var i NotifierForward
 	err := row.Scan(
@@ -93,6 +96,7 @@ func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierF
 		&i.UserKeepsCopy,
 		&i.CreatedOn,
 		&i.UpdatedOn,
+		&i.SimulationMode,
 	)
 	return &i, err
 }
@@ -102,6 +106,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -124,6 +129,7 @@ type ListActiveForwardsBySourceRecipientRow struct {
 	ID              int        `json:"id"`
 	Enabled         bool       `json:"enabled"`
 	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	SimulationMode  bool       `json:"simulation_mode"`
 	StartDate       *time.Time `json:"start_date"`
 	EndDate         *time.Time `json:"end_date"`
 	SourceID        int        `json:"source_id"`
@@ -147,6 +153,7 @@ func (q *Queries) ListActiveForwardsBySourceRecipient(ctx context.Context, sourc
 			&i.ID,
 			&i.Enabled,
 			&i.UserKeepsCopy,
+			&i.SimulationMode,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -171,6 +178,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -192,6 +200,7 @@ type ListActiveNotifierForwardsRow struct {
 	ID              int        `json:"id"`
 	Enabled         bool       `json:"enabled"`
 	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	SimulationMode  bool       `json:"simulation_mode"`
 	StartDate       *time.Time `json:"start_date"`
 	EndDate         *time.Time `json:"end_date"`
 	SourceID        int        `json:"source_id"`
@@ -215,6 +224,7 @@ func (q *Queries) ListActiveNotifierForwards(ctx context.Context) ([]*ListActive
 			&i.ID,
 			&i.Enabled,
 			&i.UserKeepsCopy,
+			&i.SimulationMode,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -239,6 +249,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -260,6 +271,7 @@ type ListInactiveNotifierForwardsRow struct {
 	ID              int        `json:"id"`
 	Enabled         bool       `json:"enabled"`
 	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	SimulationMode  bool       `json:"simulation_mode"`
 	StartDate       *time.Time `json:"start_date"`
 	EndDate         *time.Time `json:"end_date"`
 	SourceID        int        `json:"source_id"`
@@ -283,6 +295,7 @@ func (q *Queries) ListInactiveNotifierForwards(ctx context.Context) ([]*ListInac
 			&i.ID,
 			&i.Enabled,
 			&i.UserKeepsCopy,
+			&i.SimulationMode,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -307,6 +320,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -326,6 +340,7 @@ type ListNotExpiredNotifierForwardsRow struct {
 	ID              int        `json:"id"`
 	Enabled         bool       `json:"enabled"`
 	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	SimulationMode  bool       `json:"simulation_mode"`
 	StartDate       *time.Time `json:"start_date"`
 	EndDate         *time.Time `json:"end_date"`
 	SourceID        int        `json:"source_id"`
@@ -349,6 +364,7 @@ func (q *Queries) ListNotExpiredNotifierForwards(ctx context.Context) ([]*ListNo
 			&i.ID,
 			&i.Enabled,
 			&i.UserKeepsCopy,
+			&i.SimulationMode,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -369,7 +385,7 @@ func (q *Queries) ListNotExpiredNotifierForwards(ctx context.Context) ([]*ListNo
 }
 
 const listNotifierForwards = `-- name: ListNotifierForwards :many
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, simulation_mode FROM notifier_forward
 ORDER BY id
 `
 
@@ -392,6 +408,7 @@ func (q *Queries) ListNotifierForwards(ctx context.Context) ([]*NotifierForward,
 			&i.UserKeepsCopy,
 			&i.CreatedOn,
 			&i.UpdatedOn,
+			&i.SimulationMode,
 		); err != nil {
 			return nil, err
 		}
@@ -404,7 +421,7 @@ func (q *Queries) ListNotifierForwards(ctx context.Context) ([]*NotifierForward,
 }
 
 const listNotifierForwardsBySourceRecipientID = `-- name: ListNotifierForwardsBySourceRecipientID :many
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on FROM notifier_forward
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, simulation_mode FROM notifier_forward
 WHERE source_id = $1
 ORDER BY id
 `
@@ -428,6 +445,7 @@ func (q *Queries) ListNotifierForwardsBySourceRecipientID(ctx context.Context, s
 			&i.UserKeepsCopy,
 			&i.CreatedOn,
 			&i.UpdatedOn,
+			&i.SimulationMode,
 		); err != nil {
 			return nil, err
 		}
@@ -444,6 +462,7 @@ SELECT
     f.id AS id,
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
+    f.simulation_mode AS simulation_mode,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -463,6 +482,7 @@ type ListNotifierForwardsFullRow struct {
 	ID              int        `json:"id"`
 	Enabled         bool       `json:"enabled"`
 	UserKeepsCopy   bool       `json:"user_keeps_copy"`
+	SimulationMode  bool       `json:"simulation_mode"`
 	StartDate       *time.Time `json:"start_date"`
 	EndDate         *time.Time `json:"end_date"`
 	SourceID        int        `json:"source_id"`
@@ -486,6 +506,7 @@ func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]*ListNotifier
 			&i.ID,
 			&i.Enabled,
 			&i.UserKeepsCopy,
+			&i.SimulationMode,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -503,4 +524,57 @@ func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]*ListNotifier
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateNotifierForward = `-- name: UpdateNotifierForward :one
+UPDATE notifier_forward
+SET
+    source_id = $2,
+    destination_id = $3,
+    start_date = $4,
+    end_date = $5,
+    enabled = $6,
+    user_keeps_copy = $7,
+    simulation_mode = $8,
+    updated_on = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, simulation_mode
+`
+
+type UpdateNotifierForwardParams struct {
+	ID             int        `json:"id"`
+	SourceID       int        `json:"source_id"`
+	DestinationID  int        `json:"destination_id"`
+	StartDate      *time.Time `json:"start_date"`
+	EndDate        *time.Time `json:"end_date"`
+	Enabled        bool       `json:"enabled"`
+	UserKeepsCopy  bool       `json:"user_keeps_copy"`
+	SimulationMode bool       `json:"simulation_mode"`
+}
+
+func (q *Queries) UpdateNotifierForward(ctx context.Context, arg UpdateNotifierForwardParams) (*NotifierForward, error) {
+	row := q.db.QueryRow(ctx, updateNotifierForward,
+		arg.ID,
+		arg.SourceID,
+		arg.DestinationID,
+		arg.StartDate,
+		arg.EndDate,
+		arg.Enabled,
+		arg.UserKeepsCopy,
+		arg.SimulationMode,
+	)
+	var i NotifierForward
+	err := row.Scan(
+		&i.ID,
+		&i.SourceID,
+		&i.DestinationID,
+		&i.StartDate,
+		&i.EndDate,
+		&i.Enabled,
+		&i.UserKeepsCopy,
+		&i.CreatedOn,
+		&i.UpdatedOn,
+		&i.SimulationMode,
+	)
+	return &i, err
 }
