@@ -140,13 +140,6 @@ body {
     z-index: 10;
 }
 
-.sidebar-brand {
-    align-items: center;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    gap: 10px;
-    padding: 16px;
-}
 
 .sidebar-nav {
     flex: 1;
@@ -906,7 +899,6 @@ select option { background: var(--card); }
     border-radius: 8px;
     display: flex;
     flex-direction: column;
-    max-width: 520px;
     overflow: hidden;
 }
 
@@ -962,6 +954,12 @@ select option { background: var(--card); }
     padding: 6px 10px;
     text-align: left;
     width: 100%;
+}
+
+.config-row > .config-input {
+    flex-shrink: 0;
+    max-width: 320px;
+    width: 320px;
 }
 
 /* Numbers read better right-aligned; text/keys/URLs stay left-aligned. */

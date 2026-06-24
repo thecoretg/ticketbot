@@ -636,7 +636,6 @@ let ticketsView      = 'list'
 const _tp            = ticketsPrefs()
 let ticketsSearch    = ''
 let ticketsOutcome   = _tp.outcome    ?? 'ALL'
-let ticketsHideNoOp  = _tp.hideNoOp   ?? false
 let ticketsSortKey   = _tp.sortKey    ?? 'last_run'
 let ticketsSortDir   = _tp.sortDir    ?? 'desc'
 
@@ -656,7 +655,6 @@ function ticketOutcomeMatch(t) {
     switch (ticketsOutcome) {
         case 'COMPLETED': return !t.had_error && t.last_outcome === 'Completed'
         case 'ERRORS':    return !!t.had_error
-        case 'NOOP':      return t.last_outcome === 'Nothing to do'
         default:          return true
     }
 }
@@ -664,7 +662,6 @@ function ticketOutcomeMatch(t) {
 function renderTickets() {
     let rows = ticketsList.slice()
 
-    if (ticketsHideNoOp) rows = rows.filter(t => t.last_outcome !== 'Nothing to do')
     rows = rows.filter(ticketOutcomeMatch)
 
     if (ticketsSearch) {
@@ -708,11 +705,9 @@ function renderTickets() {
             <input class="logs-search-input" type="text" placeholder="Search tickets…" value="${esc(ticketsSearch)}"
                 oninput="ticketsSearch=this.value; renderTickets()">
             <select class="logs-search-input" style="width:auto" onchange="ticketsOutcome=this.value; saveTicketsPrefs({outcome:this.value}); renderTickets()">
-                ${[['ALL','All outcomes'],['COMPLETED','Completed'],['ERRORS','Errors'],['NOOP','Nothing to do']].map(([v,l]) =>
+                ${[['ALL','All outcomes'],['COMPLETED','Completed'],['ERRORS','Errors']].map(([v,l]) =>
                     `<option value="${v}"${ticketsOutcome===v?' selected':''}>${l}</option>`).join('')}
             </select>
-            <label class="logs-opt"><input type="checkbox" ${ticketsHideNoOp?'checked':''}
-                onchange="ticketsHideNoOp=this.checked; saveTicketsPrefs({hideNoOp:this.checked}); renderTickets()"> Hide no-op tickets</label>
             <button class="btn btn-ghost btn-sm" onclick="loadTickets()">Refresh</button>
         </div>
     </div>${table}`)
@@ -732,8 +727,6 @@ function outcomeBadge(t) {
     return `<span class="badge badge-neutral">${esc(t.last_outcome || '—')}</span>`
 }
 
-let journalHideNoOp = ticketsPrefs().journalHideNoOp ?? false
-
 async function showTicketJournal(id) {
     ticketsView = 'detail'
     stopTicketsPoll()
@@ -750,12 +743,10 @@ async function showTicketJournal(id) {
 
 function renderTicketJournal(j) {
     const runs = (j.runs || []).slice().reverse() // newest first
-    const shown = journalHideNoOp ? runs.filter(r => r.outcome !== 'Nothing to do') : runs
-    const hidden = runs.length - shown.length
 
     const prop = (label, val) => `<div class="jr-prop"><span class="jr-prop-label">${label}</span><span>${esc(val) || '—'}</span></div>`
 
-    const timeline = shown.length ? shown.map(r => {
+    const timeline = runs.length ? runs.map(r => {
         const runSim = (r.events || []).some(e => e.simulated)
         return `
         <div class="run-card ${r.had_error ? 'run-error' : ''}">
@@ -775,8 +766,6 @@ function renderTicketJournal(j) {
 
     setContent(`<div class="tab-header">
         <h2><button class="btn btn-ghost btn-sm" onclick="navigate('/tickets')">← Tickets</button> &nbsp; Ticket #${j.ticket_id}</h2>
-        <label class="logs-opt"><input type="checkbox" ${journalHideNoOp ? 'checked' : ''}
-            onchange="journalHideNoOp=this.checked; saveTicketsPrefs({journalHideNoOp:this.checked}); rerenderTicketJournal()"> Hide no-op runs${hidden > 0 ? ` (${hidden} hidden)` : ''}</label>
     </div>
     <div class="jr-summary">${esc(j.summary) || '<span style="color:var(--muted)">(no summary)</span>'}</div>
     <div class="jr-props">
@@ -2531,7 +2520,7 @@ function renderConfig(cfg) {
             <input class="config-input" type="number" id="c-log-cleanup-interval" value="${cfg.log_cleanup_interval_hours}" min="1">
         </div>
         <div class="config-section-title">Connection &amp; Credentials</div>
-        <div class="config-desc" style="margin:-4px 0 4px">Credential changes take effect after a server restart. Fields set via environment variables are locked here.</div>
+        <div class="config-desc" style="padding:0 20px 8px">Credential changes take effect after a server restart. Fields set via environment variables are locked here.</div>
         ${credRow(cfg, 'root_url',       'c-root-url',     'Root URL',       'Externally reachable base URL for Connectwise webhook callbacks')}
         ${credRow(cfg, 'cw_company_id',  'c-cw-company',   'CW Company ID',  'Connectwise company identifier')}
         ${credRow(cfg, 'cw_client_id',   'c-cw-client',    'CW Client ID',   'Connectwise API client ID')}
