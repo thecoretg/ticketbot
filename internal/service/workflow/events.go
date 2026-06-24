@@ -124,7 +124,12 @@ func summarizeConditions(g *models.ConditionGroup) string {
 			}
 		case n.Condition != nil:
 			c := n.Condition
-			parts = append(parts, fmt.Sprintf("%s %s %q", conditionFieldLabel(c.Field), operatorLabel(c.Operator), c.Value))
+			// Boolean conditions (is_true/is_false) carry no value to quote.
+			if c.Operator == "is_true" || c.Operator == "is_false" {
+				parts = append(parts, fmt.Sprintf("%s %s", conditionFieldLabel(c.Field), operatorLabel(c.Operator)))
+			} else {
+				parts = append(parts, fmt.Sprintf("%s %s %q", conditionFieldLabel(c.Field), operatorLabel(c.Operator), c.Value))
+			}
 		}
 	}
 	return strings.Join(parts, joiner)
@@ -133,19 +138,20 @@ func summarizeConditions(g *models.ConditionGroup) string {
 // conditionFieldLabels / operatorLabels give friendly names for the journal
 // summary; they mirror the labels shown in the admin builder.
 var conditionFieldLabels = map[string]string{
-	"summary":            "Summary",
-	"company_name":       "Company Name",
-	"company_identifier": "Company ID",
-	"contact_name":       "Contact Name",
-	"status_name":        "Status",
-	"board_name":         "Board Name",
-	"type_name":          "Type",
-	"subtype_name":       "Subtype",
-	"priority_name":      "Priority",
-	"source_name":        "Source",
-	"last_note_text":     "Last Note Text",
-	"last_note_sender":   "Last Note Sender",
-	"last_note_type":     "Last Note Type",
+	"summary":               "Summary",
+	"company_name":          "Company Name",
+	"company_identifier":    "Company ID",
+	"contact_name":          "Contact Name",
+	"status_name":           "Status",
+	"board_name":            "Board Name",
+	"type_name":             "Type",
+	"subtype_name":          "Subtype",
+	"priority_name":         "Priority",
+	"source_name":           "Source",
+	"last_note_text":        "Last Note Text",
+	"last_note_sender":      "Last Note Sender",
+	"last_note_type":        "Last Note Type",
+	"customer_updated_flag": "Customer Updated",
 }
 
 var operatorLabels = map[string]string{
@@ -157,6 +163,8 @@ var operatorLabels = map[string]string{
 	"ends_with":    "ends with",
 	"is_any_of":    "is any of",
 	"is_none_of":   "is none of",
+	"is_true":      "is on",
+	"is_false":     "is off",
 }
 
 func conditionFieldLabel(f string) string {

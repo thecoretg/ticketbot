@@ -42,6 +42,12 @@ Dependencies are wired explicitly in `internal/server/server.go` `NewApp()` into
 4. **Repos** — interfaces in `internal/repos/`, Postgres impls in `internal/postgres/`. Every repo has `WithTx(pgx.Tx)`.
 5. **DB** — sqlc-generated in `internal/db/` (`DBTX` works with both `*pgxpool.Pool` and `pgx.Tx`).
 6. **Frontend** — `internal/web/static/` (`index.html` nav + `app.js` SPA + `style.css`), embedded via `embed.FS`.
+   The SPA is driven by a **hash router** (`router`/`navigate`/`parseRoute` in `app.js`): the URL hash is the source
+   of truth so views are linkable and back/forward works. Routes are `#/<tab>[/<sub>…]` — e.g. `#/tickets`,
+   `#/tickets/758099` (ticket detail), `#/notifier/forwards`. `tabLoaders[tab](parts)` renders each view; navigation
+   goes through `navigate('/path')` (sets the hash → `hashchange` → `router`). Detail views (ticket journal, notifier
+   subtab) live in the hash; modal-based edits (workflows/users/keys) are not routed. Hash routing needs **no server
+   changes** (the hash isn't sent to the server; `/panel` always serves `index.html`).
 
 CW/Webex client lives in the vendored `github.com/thecoretg/tctg-go` (`connectwise/psa`, `webex`).
 
@@ -107,7 +113,17 @@ matches. Failures are **non-fatal** (logged, never block sync/notify).
   and actions (`models.Action`) are stored as JSONB columns on the `workflow` table.
 - **Conditions** are evaluated in Go (`conditions.go`) against the fetched `psa.Ticket` + most-recent note. Fields
   include `last_note_text`/`last_note_sender`/`last_note_type`; operators include `is_any_of`/`is_none_of` (comma-token
-  sets). Groups nest with AND/OR.
+  sets). Groups nest with AND/OR. Two field kinds: **string** fields (`conditionFields`, string operators) and
+  **boolean** fields (`conditionBoolFields`, e.g. `customer_updated_flag`, matched with `is_true`/`is_false` and no
+  value — rendered as an on/off toggle in the builder). Add a new bool field = one entry in `conditionBoolFields` +
+  one in the UI's `WORKFLOW_FIELDS`/`WORKFLOW_BOOL_FIELDS`.
+- **CW-backed condition pickers (UI only):** `status_name`/`type_name`/`subtype_name`/`company_name`/
+  `company_identifier` are still plain string fields server-side, but the builder renders a **multi-select chips
+  picker** (`CONDITION_PICKERS`/`attachMultiCombobox` in `app.js`) limited to `is_any_of`/`is_none_of` — selecting real
+  CW items, storing the comma-joined names (or company identifier). Statuses use the live `/cw/boards/:id/statuses`
+  endpoint; types/subtypes use `/cw/boards/:id/types`/`/subtypes` (local synced data, `cwsvc.ListBoardTypes/SubTypes`);
+  companies use `/cw/companies`. No matching changes — reuses `tokensIntersect`. (Caveat: comma-delimited, so an item
+  name containing a literal comma would tokenize wrong; CW status/type/subtype names don't.)
 - **Actions:** implement `ActionHandler` and register in `newRegistry()`. Current: `ticket_update`, `add_note`,
   `send_message` (Webex; has `skip_further_notifications`), `skip_notifications`, `add_resource`, `add_email_cc`.
   Templated string fields carry the `tmpl:` tag, rendered against the ticket and validated at save time.
@@ -171,6 +187,12 @@ A `notifier_rule` ("board setting") routes notifications for one board (`interna
 50 runs/ticket, cleaned up after `log_retention_days`. It's the **audit source** — per-ticket/notification INFO slog
 lines were demoted to DEBUG (`notifier`/`cwsvc` `logRequest`). Denormalized name columns drive the overview table
 (`ListSummaries`, runs omitted); the detail view shows the full timeline.
+
+- **Pure no-op runs are NOT journaled.** Connectwise fires many webhooks per change; most do nothing (note already
+  notified, nothing matched). `recordJournal` drops any run whose outcome is `OutcomeNothingToDo`, so the tab only shows
+  runs that did something real, errored, or simulated. (Snapshot columns therefore reflect the last *meaningful* run.)
+- **Outcomes** (`buildRun`): `WithErrors` > `Completed` (any `ok` event) > **`Simulated`** (only simulation "Would …"
+  events — kept, NOT a no-op, and not hidden by "Hide no-op runs") > `NothingToDo` (dropped).
 
 - **Bot-triggered runs are NOT journaled.** The decision is `ticketbot.botTriggeredRun`: trust the workflow's
   pre-action `BotTriggered` when workflows ran; otherwise fall back to post-sync `updatedBy == bot`. Do **not** use the

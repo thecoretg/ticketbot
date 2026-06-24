@@ -105,6 +105,8 @@ func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
 	b.GET("", h.ListBoards)
 	b.GET(":id", h.GetBoard)
 	b.GET(":id/statuses", h.ListBoardStatuses)
+	b.GET(":id/types", h.ListBoardTypes)
+	b.GET(":id/subtypes", h.ListBoardSubTypes)
 
 	m := r.Group("members")
 	m.GET("", h.ListMembers)

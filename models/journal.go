@@ -25,6 +25,7 @@ const (
 const (
 	OutcomeCompleted   = "Completed"
 	OutcomeWithErrors  = "Completed with errors"
+	OutcomeSimulated   = "Simulated" // nothing was actually done, but a simulation-mode entity reported what it would do
 	OutcomeNothingToDo = "Nothing to do"
 )
 

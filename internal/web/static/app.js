@@ -263,8 +263,7 @@ async function showApp() {
             return
         }
     } catch {}
-    const hash = window.location.hash.replace('#', '')
-    switchTab(tabLoaders[hash] ? hash : 'tickets')
+    router()
 }
 
 // ─────────────────────────────────────────────────────────
@@ -396,8 +395,7 @@ async function showTOTPSetupModal(required = false) {
 function finishTOTPSetup() {
     document.getElementById('modal-overlay').classList.add('hidden')
     modalSubmitFn = null
-    const hash = window.location.hash.replace('#', '')
-    switchTab(tabLoaders[hash] ? hash : 'tickets')
+    router()
 }
 
 function copyRecoveryCodes() {
@@ -466,28 +464,58 @@ function checkSavedKey() {
 // ─────────────────────────────────────────────────────────
 // Tabs
 // ─────────────────────────────────────────────────────────
+// Each loader receives the route's sub-path segments (parts). Most ignore them;
+// tickets uses parts[0] as a ticket id (detail view) and notifier as the subtab.
 const tabLoaders = {
-    tickets:   loadTickets,
+    tickets:   (parts) => (parts && parts[0]) ? showTicketJournal(parts[0]) : loadTickets(),
     workflows: loadWorkflows,
-    notifier:  loadNotifier,
-    users:    loadUsers,
-    keys:     loadKeys,
-    sync:     loadSync,
-    config:   loadConfig,
-    logs:     loadLogs,
+    notifier:  (parts) => loadNotifier(parts && parts[0]),
+    users:     loadUsers,
+    keys:      loadKeys,
+    sync:      loadSync,
+    config:    loadConfig,
+    logs:      loadLogs,
 }
 
+// switchTab is kept for the sidebar nav buttons; it just navigates to the tab route.
 function switchTab(tab) {
+    navigate('/' + tab)
+}
+
+// ── Hash router ───────────────────────────────────────────
+// The URL hash is the source of truth so every view is linkable and back/forward
+// works. Routes look like #/<tab>[/<sub>…] — e.g. #/tickets, #/tickets/758099,
+// #/notifier/forwards.
+function parseRoute() {
+    const raw = window.location.hash.replace(/^#\/?/, '')
+    const parts = raw.split('/').filter(Boolean)
+    return { tab: parts[0] || '', parts: parts.slice(1) }
+}
+
+// navigate changes the URL, which drives the router via the hashchange event. When
+// the hash is already the target (e.g. re-clicking the active tab) it re-runs
+// directly since no hashchange would fire.
+function navigate(path) {
+    const target = '#' + path
+    if (window.location.hash === target) router()
+    else window.location.hash = target
+}
+
+// router renders the view described by the current hash. It is the single place that
+// swaps tabs, so it runs on hashchange, on boot, and from navigate().
+function router() {
+    if (document.getElementById('app').classList.contains('hidden')) return // not signed in yet
+    const { tab, parts } = parseRoute()
+    const active = tabLoaders[tab] ? tab : 'tickets'
     stopSyncPoll()
     stopLogsPoll()
     stopTicketsPoll()
-    currentTab = tab
-    window.location.hash = tab
+    currentTab = active
     document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.tab === tab)
+        el.classList.toggle('active', el.dataset.tab === active)
     })
     setContent('<div class="loading-state">Loading…</div>')
-    tabLoaders[tab]()
+    tabLoaders[active](parts)
 }
 
 function setContent(html) {
@@ -509,7 +537,8 @@ function toast(msg, type = 'info') {
 // ─────────────────────────────────────────────────────────
 // Modal
 // ─────────────────────────────────────────────────────────
-function openModal(title, bodyHTML, submitFn, submitLabel = 'Create') {
+function openModal(title, bodyHTML, submitFn, submitLabel = 'Create', size = '') {
+    document.getElementById('modal').className = 'modal' + (size ? ' modal-' + size : '')
     document.getElementById('modal-title').textContent  = title
     document.getElementById('modal-body').innerHTML     = bodyHTML
     document.getElementById('modal-footer').innerHTML   = `
@@ -657,7 +686,7 @@ function renderTickets() {
     const thead = TICKET_COLUMNS.map(c =>
         `<th class="th-sort" onclick="ticketsSort('${c.key}')">${esc(c.label)}${arrow(c.key)}</th>`).join('')
 
-    const body = rows.map(t => `<tr class="row-click" onclick="showTicketJournal(${t.ticket_id})">
+    const body = rows.map(t => `<tr class="row-click" onclick="navigate('/tickets/${t.ticket_id}')">
         <td style="color:var(--muted)">${t.ticket_id}</td>
         <td>${esc(t.summary) || '<span style="color:var(--muted)">—</span>'}</td>
         <td>${esc(t.company_name) || '—'}</td>
@@ -699,6 +728,7 @@ function ticketsSort(key) {
 function outcomeBadge(t) {
     if (t.had_error) return `<span class="badge badge-off">${esc(t.last_outcome || 'Error')}</span>`
     if (t.last_outcome === 'Completed') return `<span class="badge badge-on">Completed</span>`
+    if (t.last_outcome === 'Simulated') return `<span class="badge badge-sim">Simulated</span>`
     return `<span class="badge badge-neutral">${esc(t.last_outcome || '—')}</span>`
 }
 
@@ -710,7 +740,11 @@ async function showTicketJournal(id) {
     let j
     try {
         j = await api('GET', `/tickets/${id}`)
-    } catch (e) { toast(e.message, 'error'); return }
+    } catch (e) {
+        setContent(`<div class="tab-header"><h2><button class="btn btn-ghost btn-sm" onclick="navigate('/tickets')">← Tickets</button> &nbsp; Ticket #${esc(id)}</h2></div>
+            <div class="empty-state">${esc(e.message)}</div>`)
+        return
+    }
     renderTicketJournal(j)
 }
 
@@ -729,7 +763,7 @@ function renderTicketJournal(j) {
                 <span class="run-trigger">${esc(r.trigger)}</span>
                 <span class="run-time">${r.time ? new Date(r.time).toLocaleString() : ''}</span>
                 ${outcomeBadge({ had_error: r.had_error, last_outcome: r.outcome })}
-                ${runSim ? '<span class="badge badge-sim">SIM</span>' : ''}
+                ${runSim && r.outcome !== 'Simulated' ? '<span class="badge badge-sim">SIM</span>' : ''}
             </div>
             <div class="run-events">
                 ${(r.events || []).map(e => `<div class="journal-event ev-${esc(e.status)}">${e.simulated ? '<span class="badge badge-sim">SIM</span> ' : ''}${esc(e.text)}</div>`).join('') ||
@@ -740,7 +774,7 @@ function renderTicketJournal(j) {
         : '<div class="empty-state">No runs to show</div>'
 
     setContent(`<div class="tab-header">
-        <h2><button class="btn btn-ghost btn-sm" onclick="loadTickets()">← Tickets</button> &nbsp; Ticket #${j.ticket_id}</h2>
+        <h2><button class="btn btn-ghost btn-sm" onclick="navigate('/tickets')">← Tickets</button> &nbsp; Ticket #${j.ticket_id}</h2>
         <label class="logs-opt"><input type="checkbox" ${journalHideNoOp ? 'checked' : ''}
             onchange="journalHideNoOp=this.checked; saveTicketsPrefs({journalHideNoOp:this.checked}); rerenderTicketJournal()"> Hide no-op runs${hidden > 0 ? ` (${hidden} hidden)` : ''}</label>
     </div>
@@ -785,7 +819,8 @@ function stopTicketsPoll() {
 // ─────────────────────────────────────────────────────────
 let notifierSubtab = 'board-settings'
 
-function loadNotifier() {
+function loadNotifier(sub) {
+    notifierSubtab = sub === 'forwards' ? 'forwards' : 'board-settings'
     renderNotifierShell()
     loadNotifierSubtab()
 }
@@ -807,9 +842,7 @@ function updateNotifierSubtabActive() {
 }
 
 function switchNotifierSubtab(sub) {
-    notifierSubtab = sub
-    updateNotifierSubtabActive()
-    loadNotifierSubtab()
+    navigate('/notifier/' + sub)
 }
 
 function loadNotifierSubtab() {
@@ -991,7 +1024,26 @@ const WORKFLOW_FIELDS = [
     { value: 'last_note_text',     label: 'Last Note Text' },
     { value: 'last_note_sender',   label: 'Last Note Sender' },
     { value: 'last_note_type',     label: 'Last Note Type' },
+    { value: 'customer_updated_flag', label: 'Customer Updated' },
 ]
+// Boolean fields are matched with a single on/off toggle (operator is_true/is_false,
+// no value) rather than the text operators.
+const WORKFLOW_BOOL_FIELDS = ['customer_updated_flag']
+const wfIsBoolField = v => WORKFLOW_BOOL_FIELDS.includes(v)
+
+// Condition fields backed by a ConnectWise item picker: a multi-select (chips) value
+// control with the is_any_of / is_none_of operators. `store` decides what each chosen
+// item contributes to the stored comma-joined value — its name ('label', what
+// name-based matching compares) or its id/identifier ('value'). `needsBoard` scopes
+// the fetch to the workflow's board.
+const CONDITION_PICKERS = {
+    status_name:        { store: 'label', needsBoard: true,  fetch: (q, b) => api('GET', `/cw/boards/${b}/statuses?q=${encodeURIComponent(q)}`) },
+    type_name:          { store: 'label', needsBoard: true,  fetch: (q, b) => api('GET', `/cw/boards/${b}/types?q=${encodeURIComponent(q)}`) },
+    subtype_name:       { store: 'label', needsBoard: true,  fetch: (q, b) => api('GET', `/cw/boards/${b}/subtypes?q=${encodeURIComponent(q)}`) },
+    company_name:       { store: 'label', needsBoard: false, fetch: (q)    => api('GET', `/cw/companies?q=${encodeURIComponent(q)}`) },
+    company_identifier: { store: 'value', needsBoard: false, fetch: (q)    => api('GET', `/cw/companies?q=${encodeURIComponent(q)}`) },
+}
+const wfIsPickerField = v => Object.prototype.hasOwnProperty.call(CONDITION_PICKERS, v)
 const WORKFLOW_OPERATORS = [
     { value: 'contains',     label: 'contains' },
     { value: 'not_contains', label: 'does not contain' },
@@ -1022,6 +1074,9 @@ function wfSummarizeGroup(g, top) {
         if (n.group) return '(' + wfSummarizeGroup(n.group, false) + ')'
         if (n.condition) {
             const c = n.condition
+            if (wfIsBoolField(c.field)) {
+                return `${esc(wfFieldLabel(c.field))} <em>is ${c.operator === 'is_false' ? 'off' : 'on'}</em>`
+            }
             return `${esc(wfFieldLabel(c.field))} <em>${esc(wfOperatorLabel(c.operator))}</em> "${esc(c.value)}"`
         }
         return ''
@@ -1141,19 +1196,19 @@ async function showWorkflowModal(existing = null) {
             <select id="wf-on">${onOpts}</select>
         </div>
         <div class="form-group">
+            <label>Priority</label>
+            <input id="wf-priority" type="number" value="${priorityVal}" min="0">
+        </div>
+        <div class="form-group wf-span">
             <label>Conditions <span style="color:var(--muted);font-weight:400">(optional)</span></label>
             <div id="wf-conditions"></div>
         </div>
-        <div class="form-group">
+        <div class="form-group wf-span">
             <label>Actions <span style="color:var(--muted);font-weight:400">(run in order)</span></label>
             <div id="wf-actions"></div>
             <button type="button" class="btn btn-ghost btn-sm" onclick="wfAddAction()">+ Add action</button>
         </div>
-        <div class="form-group">
-            <label>Priority</label>
-            <input id="wf-priority" type="number" value="${priorityVal}" min="0">
-        </div>
-        <div class="config-row" style="padding:0">
+        <div class="config-row wf-span" style="padding:0">
             <div>
                 <div class="config-label">Enabled</div>
                 <div class="config-desc">Disabled workflows are kept but never run</div>
@@ -1163,7 +1218,7 @@ async function showWorkflowModal(existing = null) {
                 <span class="toggle-track"></span>
             </label>
         </div>
-        <div class="config-row" style="padding:0">
+        <div class="config-row wf-span" style="padding:0">
             <div>
                 <div class="config-label">Simulate</div>
                 <div class="config-desc">Match and evaluate as normal, but only log what the actions <em>would</em> do — nothing is changed or sent</div>
@@ -1205,7 +1260,7 @@ async function showWorkflowModal(existing = null) {
             toast(isEdit ? 'Workflow updated' : 'Workflow created', 'success')
             loadWorkflows()
         } catch (e) { toast(e.message, 'error') }
-    }, isEdit ? 'Save' : 'Create')
+    }, isEdit ? 'Save' : 'Create', 'wide')
 
     const boardSel = document.getElementById('wf-board')
     boardSel.value = wfBoardId
@@ -1220,6 +1275,7 @@ async function showWorkflowModal(existing = null) {
 function onBoardChanged() {
     harvestAllActions()
     renderActions()
+    renderTree() // re-scope status/type/subtype condition pickers to the new board
 }
 
 // ── Condition tree (authoritative state: wfTree) ──────────
@@ -1239,7 +1295,14 @@ function hydrateGroup(g) {
 function hydrateChild(n) {
     if (n.group) return hydrateGroup(n.group)
     const c = n.condition || {}
-    return newLeafNode(c.field || 'summary', c.operator || 'contains', c.value || '')
+    let op = c.operator || 'contains'
+    // Picker fields only offer is_any_of/is_none_of now. Coerce any legacy operator
+    // (e.g. a status saved with equals/contains) so the builder stays consistent;
+    // negative ops map to is_none_of, everything else to is_any_of.
+    if (wfIsPickerField(c.field) && op !== 'is_any_of' && op !== 'is_none_of') {
+        op = (op === 'not_equals' || op === 'not_contains' || op === 'is_none_of') ? 'is_none_of' : 'is_any_of'
+    }
+    return newLeafNode(c.field || 'summary', op, c.value || '')
 }
 function findNode(id, node = wfTree, parent = null) {
     if (!node) return null
@@ -1254,7 +1317,100 @@ function findNode(id, node = wfTree, parent = null) {
 }
 function renderTree() {
     const host = document.getElementById('wf-conditions')
-    if (host) host.innerHTML = renderGroup(wfTree, true)
+    if (!host) return
+    host.innerHTML = renderGroup(wfTree, true)
+    attachConditionPickers(host, wfTree)
+}
+
+// attachConditionPickers wires the chips multi-select onto every picker-field leaf
+// after the tree HTML is in the DOM (mirrors how renderActions attaches comboboxes).
+function attachConditionPickers(host, node) {
+    for (const c of node.children || []) {
+        if (c.kind === 'group') { attachConditionPickers(host, c); continue }
+        if (!wfIsPickerField(c.field)) continue
+        const spec = CONDITION_PICKERS[c.field]
+        if (spec.needsBoard && !wfBoardId) continue
+        const cell = host.querySelector(`.cond-leaf[data-id="${c._id}"] .cond-multi`)
+        if (!cell) continue
+        const board = wfBoardId
+        attachMultiCombobox(cell, {
+            initial:  c.value || '',
+            store:    spec.store,
+            fetch:    (q) => spec.fetch(q, board),
+            onChange: (csv) => setLeaf(c._id, 'value', csv),
+        })
+    }
+}
+
+// attachMultiCombobox turns `el` into a chips multi-select backed by cfg.fetch(q)
+// (which resolves to [{label,value,hint}]). Chosen items are stored as a
+// comma-joined string of either labels (cfg.store==='label') or values
+// (cfg.store==='value'); cfg.onChange(csv) fires on every change. Chips display the
+// stored token, so they rehydrate from cfg.initial with no extra lookup.
+function attachMultiCombobox(el, cfg) {
+    const store = cfg.store === 'value' ? 'value' : 'label'
+    const selected = (cfg.initial || '').split(',').map(s => s.trim()).filter(Boolean)
+    let opts = [], active = -1, seq = 0, debounce = null
+
+    el.classList.add('multicombo')
+    el.innerHTML = `<div class="mc-box"><span class="mc-chips"></span><input class="mc-input" type="text" placeholder="Search…" autocomplete="off" spellcheck="false"></div><div class="mc-menu hidden"></div>`
+    const chips = el.querySelector('.mc-chips')
+    const input = el.querySelector('.mc-input')
+    const menu  = el.querySelector('.mc-menu')
+
+    const emit = () => cfg.onChange(selected.join(','))
+    const tokenOf = (o) => store === 'value' ? o.value : o.label
+    function renderChips() {
+        chips.innerHTML = selected.map((t, i) =>
+            `<span class="mc-chip">${esc(t)}<button type="button" class="mc-x" data-i="${i}">✕</button></span>`).join('')
+    }
+    function add(token) {
+        token = (token || '').trim()
+        if (!token || selected.includes(token)) return
+        selected.push(token); renderChips(); emit()
+    }
+    function removeAt(i) { selected.splice(i, 1); renderChips(); emit() }
+    function renderMenu() {
+        const items = opts.filter(o => !selected.includes(tokenOf(o)))
+        menu._items = items
+        if (!items.length) { menu.classList.add('hidden'); menu.innerHTML = ''; return }
+        menu.innerHTML = items.map((o, i) =>
+            `<div class="cb-item${i === active ? ' active' : ''}" data-i="${i}"><span class="cb-item-label">${esc(o.label)}</span>${o.hint ? `<span class="cb-item-hint">${esc(o.hint)}</span>` : ''}</div>`).join('')
+        menu.classList.remove('hidden')
+    }
+    function choose(o) {
+        if (!o) return
+        add(tokenOf(o)); input.value = ''; active = -1; load('')
+    }
+    function load(q) {
+        const my = ++seq
+        Promise.resolve(cfg.fetch(q)).then(res => {
+            if (my !== seq) return
+            opts = res || []; active = -1; renderMenu()
+        }).catch(() => {})
+    }
+
+    chips.addEventListener('mousedown', (e) => {
+        const x = e.target.closest('.mc-x'); if (!x) return
+        e.preventDefault(); removeAt(parseInt(x.dataset.i, 10))
+    })
+    input.addEventListener('focus', () => load(input.value))
+    input.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(() => load(input.value), 250) })
+    input.addEventListener('keydown', (e) => {
+        const items = menu._items || []
+        if (e.key === 'ArrowDown')      { e.preventDefault(); active = Math.min(active + 1, items.length - 1); renderMenu() }
+        else if (e.key === 'ArrowUp')   { e.preventDefault(); active = Math.max(active - 1, 0); renderMenu() }
+        else if (e.key === 'Enter')     { e.preventDefault(); if (active >= 0) choose(items[active]) }
+        else if (e.key === 'Escape')    { menu.classList.add('hidden') }
+        else if (e.key === 'Backspace' && !input.value && selected.length) { removeAt(selected.length - 1) }
+    })
+    menu.addEventListener('mousedown', (e) => {
+        const item = e.target.closest('.cb-item'); if (!item) return
+        e.preventDefault(); choose((menu._items || [])[parseInt(item.dataset.i, 10)])
+    })
+    input.addEventListener('blur', () => setTimeout(() => menu.classList.add('hidden'), 150))
+
+    renderChips()
 }
 function renderGroup(node, isRoot) {
     const kids = node.children.map(c => c.kind === 'group' ? renderGroup(c, false) : renderLeaf(c)).join('')
@@ -1274,9 +1430,40 @@ function andOrToggle(node) {
 }
 function renderLeaf(node) {
     const isNoteType = node.field === 'last_note_type'
+    const isBool     = wfIsBoolField(node.field)
     const fieldOpts  = WORKFLOW_FIELDS.map(f => `<option value="${f.value}"${f.value === node.field ? ' selected' : ''}>${esc(f.label)}</option>`).join('')
-    const ops        = WORKFLOW_OPERATORS.filter(o => isNoteType ? NOTE_TYPE_OPERATORS.includes(o.value) : !NOTE_TYPE_OPERATORS.includes(o.value))
-    const opOpts     = ops.map(o => `<option value="${o.value}"${o.value === node.operator ? ' selected' : ''}>${esc(o.label)}</option>`).join('')
+
+    // Boolean field: a single on/off toggle in place of the operator + value
+    // controls. On → is_true, off → is_false.
+    if (isBool) {
+        const on = node.operator !== 'is_false'
+        return `<div class="cond-leaf" data-id="${node._id}">
+            <select class="cond-field" style="flex:0 0 32%" onchange="setLeafField('${node._id}', this.value)">${fieldOpts}</select>
+            <label class="toggle" style="margin:0 8px"><input type="checkbox" ${on ? 'checked' : ''} onchange="setLeafBool('${node._id}', this.checked)"><span class="toggle-track"></span></label>
+            <span style="flex:1;color:var(--muted);font-size:12px">flag is ${on ? 'on (true)' : 'off (false)'}</span>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeNode('${node._id}')">✕</button>
+        </div>`
+    }
+
+    // CW-backed picker field: is_any_of/is_none_of + a multi-select chips control
+    // (attached after render by attachConditionPickers).
+    if (wfIsPickerField(node.field)) {
+        const spec   = CONDITION_PICKERS[node.field]
+        const opOpts = NOTE_TYPE_OPERATORS.map(v =>
+            `<option value="${v}"${v === node.operator ? ' selected' : ''}>${esc(wfOperatorLabel(v))}</option>`).join('')
+        const valueControl = (spec.needsBoard && !wfBoardId)
+            ? `<div class="cb-disabled-msg" style="flex:1">Select the workflow board first</div>`
+            : `<div class="cond-multi" style="flex:1"></div>`
+        return `<div class="cond-leaf" data-id="${node._id}">
+            <select class="cond-field" style="flex:0 0 32%" onchange="setLeafField('${node._id}', this.value)">${fieldOpts}</select>
+            <select class="cond-op" style="flex:0 0 28%" onchange="setLeaf('${node._id}','operator',this.value)">${opOpts}</select>
+            ${valueControl}
+            <button type="button" class="btn btn-danger btn-sm" onclick="removeNode('${node._id}')">✕</button>
+        </div>`
+    }
+
+    const ops    = WORKFLOW_OPERATORS.filter(o => isNoteType ? NOTE_TYPE_OPERATORS.includes(o.value) : !NOTE_TYPE_OPERATORS.includes(o.value))
+    const opOpts = ops.map(o => `<option value="${o.value}"${o.value === node.operator ? ' selected' : ''}>${esc(o.label)}</option>`).join('')
 
     let valueControl
     if (isNoteType) {
@@ -1303,17 +1490,42 @@ function setGroupOp(id, op){ const r = findNode(id); if (r) { r.node.op = op; re
 // keeps focus while typing.
 function setLeaf(id, key, val) { const r = findNode(id); if (r) r.node[key] = val }
 
-// setLeafField changes a leaf's field and re-renders, since switching to/from the
-// Last Note Type field swaps the operator set and value control. It resets the
-// operator and value so the leaf stays valid for the new field.
+// wfFieldKind classifies a condition field so switching fields can reset the leaf
+// to a valid operator/value: 'note' (multi-select), 'bool' (toggle), or 'text'.
+function wfFieldKind(field) {
+    if (field === 'last_note_type') return 'note'
+    if (wfIsBoolField(field))       return 'bool'
+    if (wfIsPickerField(field))     return 'picker'
+    return 'text'
+}
+
+// setLeafField changes a leaf's field and re-renders. When the field's kind
+// changes (text/note/bool) the operator set and value control differ, so it resets
+// the operator and value to keep the leaf valid for the new field.
 function setLeafField(id, value) {
     const r = findNode(id)
     if (!r) return
-    const wasNote = r.node.field === 'last_note_type'
-    const isNote  = value === 'last_note_type'
+    const oldField = r.node.field
+    const oldKind  = wfFieldKind(oldField)
+    const newKind  = wfFieldKind(value)
     r.node.field = value
-    if (isNote && !wasNote)      { r.node.operator = 'is_any_of'; r.node.value = '' }
-    else if (!isNote && wasNote) { r.node.operator = 'contains';  r.node.value = '' }
+    // Reset operator/value when the kind changes, or when moving to a different
+    // field whose value set is field-specific (picker/note) — stale tokens (e.g.
+    // status names) must not carry into another field.
+    const fieldSpecific = newKind === 'picker' || newKind === 'note'
+    if (newKind !== oldKind || (fieldSpecific && value !== oldField)) {
+        r.node.value = ''
+        r.node.operator = fieldSpecific ? 'is_any_of' : newKind === 'bool' ? 'is_true' : 'contains'
+    }
+    renderTree()
+}
+
+// setLeafBool flips a boolean leaf between is_true / is_false and re-renders so the
+// on/off label updates.
+function setLeafBool(id, checked) {
+    const r = findNode(id)
+    if (!r) return
+    r.node.operator = checked ? 'is_true' : 'is_false'
     renderTree()
 }
 
@@ -1338,6 +1550,11 @@ function serializeChild(node) {
     if (node.kind === 'group') {
         const g = serializeGroup(node)
         return g.children.length ? { group: g } : null
+    }
+    // Boolean leaves carry no value (the operator is_true/is_false is the whole
+    // condition); every other field requires a value.
+    if (wfIsBoolField(node.field)) {
+        return { condition: { field: node.field, operator: node.operator || 'is_true', value: '' } }
     }
     if (!node.value.trim()) return null
     return { condition: { field: node.field, operator: node.operator, value: node.value } }
@@ -2625,5 +2842,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('account-dropdown').classList.add('hidden')
         document.getElementById('logs-options-popup')?.classList.add('hidden')
     })
+    window.addEventListener('hashchange', router)
     checkSavedKey()
 })

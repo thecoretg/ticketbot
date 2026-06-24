@@ -140,6 +140,15 @@ func (s *Service) recordJournal(ctx context.Context, id int, isNew bool, full *m
 	}
 
 	run := buildRun(start, isNew, events, err)
+
+	// Drop pure no-op runs. Connectwise fires many webhooks per change; most are
+	// no-ops (note already notified, nothing matched) and would flood the Tickets
+	// tab. Runs that did something real, errored, or reported a simulation are kept.
+	if run.Outcome == models.OutcomeNothingToDo {
+		slog.Debug("ticketbot: skipping no-op journal run", "ticket_id", id)
+		return
+	}
+
 	if rerr := s.Journal.Record(ctx, id, full, run); rerr != nil {
 		slog.Error("ticketbot: recording ticket journal", "ticket_id", id, "error", rerr.Error())
 	}
@@ -171,12 +180,16 @@ func buildRun(start time.Time, isNew bool, events []models.JournalEvent, err err
 
 	hadError := err != nil
 	hasOK := false
+	hasSimulated := false
 	for _, e := range events {
 		switch e.Status {
 		case models.JournalError:
 			hadError = true
 		case models.JournalOK:
 			hasOK = true
+		}
+		if e.Simulated {
+			hasSimulated = true
 		}
 	}
 
@@ -186,6 +199,11 @@ func buildRun(start time.Time, isNew bool, events []models.JournalEvent, err err
 		outcome = models.OutcomeWithErrors
 	case hasOK:
 		outcome = models.OutcomeCompleted
+	case hasSimulated:
+		// A simulation-mode entity reported what it would do — meaningful, but
+		// nothing was actually performed. Distinct from a pure no-op so it survives
+		// the no-op drop and isn't hidden by "Hide no-op runs".
+		outcome = models.OutcomeSimulated
 	}
 
 	return models.TicketRun{

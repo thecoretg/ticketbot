@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type CWHandler struct {
@@ -74,6 +74,40 @@ func (h *CWHandler) ListBoardStatuses(c *gin.Context) {
 	}
 
 	outputJSON(c, statuses)
+}
+
+// ListBoardTypes lists a board's active ticket types (?q= filters by name).
+func (h *CWHandler) ListBoardTypes(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	types, err := h.Service.ListBoardTypes(c.Request.Context(), id, c.Query("q"))
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, types)
+}
+
+// ListBoardSubTypes lists a board's active ticket subtypes (?q= filters by name).
+func (h *CWHandler) ListBoardSubTypes(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	subtypes, err := h.Service.ListBoardSubTypes(c.Request.Context(), id, c.Query("q"))
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, subtypes)
 }
 
 func (h *CWHandler) GetBoard(c *gin.Context) {

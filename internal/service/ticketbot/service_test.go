@@ -41,6 +41,7 @@ func TestBuildRun(t *testing.T) {
 	okEvent := models.JournalEvent{Text: "Sent notification to X", Status: models.JournalOK}
 	errEvent := models.JournalEvent{Text: "boom", Status: models.JournalError}
 	infoEvent := models.JournalEvent{Text: "Matched workflow", Status: models.JournalInfo}
+	simEvent := models.JournalEvent{Text: "Would notify X", Status: models.JournalSkip, Simulated: true}
 
 	cases := []struct {
 		name        string
@@ -56,6 +57,8 @@ func TestBuildRun(t *testing.T) {
 		{"empty nothing", false, nil, nil, models.TriggerUpdated, models.OutcomeNothingToDo, false},
 		{"event error", false, []models.JournalEvent{okEvent, errEvent}, nil, models.TriggerUpdated, models.OutcomeWithErrors, true},
 		{"fatal error", true, nil, errors.New("sync failed"), models.TriggerNew, models.OutcomeWithErrors, true},
+		{"simulated", false, []models.JournalEvent{simEvent}, nil, models.TriggerUpdated, models.OutcomeSimulated, false},
+		{"error beats simulated", false, []models.JournalEvent{simEvent, errEvent}, nil, models.TriggerUpdated, models.OutcomeWithErrors, true},
 	}
 	for _, c := range cases {
 		r := buildRun(now, c.isNew, c.events, c.err)

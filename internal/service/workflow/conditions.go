@@ -68,9 +68,18 @@ var conditionFields = map[string]func(EvalCtx) string{
 	},
 }
 
-// conditionOperators is the allowlist of comparison operators. is_any_of /
-// is_none_of treat both sides as comma-separated token sets (used for
-// last_note_type, but valid on any field).
+// conditionBoolFields is the allowlist of boolean ticket attributes. They are
+// matched with the is_true / is_false operators (a simple on/off toggle in the
+// admin UI) instead of the string operators below; their condition carries no
+// value. Adding a new boolean field = add one entry here (and the matching option
+// in the admin UI).
+var conditionBoolFields = map[string]func(EvalCtx) bool{
+	"customer_updated_flag": func(c EvalCtx) bool { return c.Ticket.CustomerUpdatedFlag },
+}
+
+// conditionOperators is the allowlist of comparison operators for string fields.
+// is_any_of / is_none_of treat both sides as comma-separated token sets (used for
+// last_note_type, but valid on any string field).
 var conditionOperators = map[string]struct{}{
 	"contains":     {},
 	"not_contains": {},
@@ -80,6 +89,12 @@ var conditionOperators = map[string]struct{}{
 	"ends_with":    {},
 	"is_any_of":    {},
 	"is_none_of":   {},
+}
+
+// boolConditionOperators is the allowlist of operators for boolean fields.
+var boolConditionOperators = map[string]struct{}{
+	"is_true":  {},
+	"is_false": {},
 }
 
 // evalGroup reports whether a condition group matches. A nil group or one with no
@@ -124,6 +139,17 @@ func evalNode(n models.ConditionNode, c EvalCtx) bool {
 // comparisons are case-insensitive. An unknown field or operator never matches
 // (these are rejected at save time, so this is only a defensive guard).
 func evalLeaf(cond models.Condition, c EvalCtx) bool {
+	if boolGetter, ok := conditionBoolFields[cond.Field]; ok {
+		switch cond.Operator {
+		case "is_true":
+			return boolGetter(c)
+		case "is_false":
+			return !boolGetter(c)
+		default:
+			return false
+		}
+	}
+
 	getter, ok := conditionFields[cond.Field]
 	if !ok {
 		return false
@@ -172,6 +198,24 @@ func tokensIntersect(a, b string) bool {
 	return false
 }
 
+// validateLeaf checks that a leaf references a known field with an operator valid
+// for that field's kind (string vs boolean).
+func validateLeaf(c models.Condition) error {
+	if _, ok := conditionBoolFields[c.Field]; ok {
+		if _, ok := boolConditionOperators[c.Operator]; !ok {
+			return fmt.Errorf("boolean field %q requires the is_true or is_false operator", c.Field)
+		}
+		return nil
+	}
+	if _, ok := conditionFields[c.Field]; !ok {
+		return fmt.Errorf("unknown field %q", c.Field)
+	}
+	if _, ok := conditionOperators[c.Operator]; !ok {
+		return fmt.Errorf("unknown operator %q", c.Operator)
+	}
+	return nil
+}
+
 // validateGroup recursively checks that every leaf references a known field and
 // operator, every group has a valid operator, every node sets exactly one of
 // condition/group, and the tree does not exceed the depth limit.
@@ -197,11 +241,8 @@ func validateGroup(g *models.ConditionGroup, depth int) error {
 				return err
 			}
 		case n.Condition != nil:
-			if _, ok := conditionFields[n.Condition.Field]; !ok {
-				return fmt.Errorf("child %d: unknown field %q", i+1, n.Condition.Field)
-			}
-			if _, ok := conditionOperators[n.Condition.Operator]; !ok {
-				return fmt.Errorf("child %d: unknown operator %q", i+1, n.Condition.Operator)
+			if err := validateLeaf(*n.Condition); err != nil {
+				return fmt.Errorf("child %d: %w", i+1, err)
 			}
 		default:
 			return fmt.Errorf("child %d: must set either a condition or a group", i+1)

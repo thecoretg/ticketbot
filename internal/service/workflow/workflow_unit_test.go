@@ -196,6 +196,30 @@ func TestLastNoteMissingNote(t *testing.T) {
 	}
 }
 
+func TestBoolCondition(t *testing.T) {
+	mk := func(op string) *models.ConditionGroup {
+		return &models.ConditionGroup{Operator: "and", Children: []models.ConditionNode{leaf("customer_updated_flag", op, "")}}
+	}
+
+	tk := sampleTicket()
+	tk.CustomerUpdatedFlag = true
+	c := EvalCtx{Ticket: tk}
+	if !evalGroup(mk("is_true"), c) {
+		t.Error("is_true should match when CustomerUpdatedFlag is true")
+	}
+	if evalGroup(mk("is_false"), c) {
+		t.Error("is_false should not match when CustomerUpdatedFlag is true")
+	}
+
+	tk.CustomerUpdatedFlag = false
+	if evalGroup(mk("is_true"), c) {
+		t.Error("is_true should not match when CustomerUpdatedFlag is false")
+	}
+	if !evalGroup(mk("is_false"), c) {
+		t.Error("is_false should match when CustomerUpdatedFlag is false")
+	}
+}
+
 func TestValidateGroup(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -206,6 +230,9 @@ func TestValidateGroup(t *testing.T) {
 		{"valid leaf", &models.ConditionGroup{Operator: "and", Children: []models.ConditionNode{leaf("summary", "contains", "x")}}, false},
 		{"unknown field", &models.ConditionGroup{Operator: "and", Children: []models.ConditionNode{leaf("nonsense", "contains", "x")}}, true},
 		{"unknown operator", &models.ConditionGroup{Operator: "and", Children: []models.ConditionNode{leaf("summary", "matches_regex", "x")}}, true},
+		{"bool field is_true", &models.ConditionGroup{Operator: "and", Children: []models.ConditionNode{leaf("customer_updated_flag", "is_true", "")}}, false},
+		{"bool field bad operator", &models.ConditionGroup{Operator: "and", Children: []models.ConditionNode{leaf("customer_updated_flag", "contains", "x")}}, true},
+		{"string field bool operator", &models.ConditionGroup{Operator: "and", Children: []models.ConditionNode{leaf("summary", "is_true", "")}}, true},
 		{"bad group operator", &models.ConditionGroup{Operator: "nand", Children: []models.ConditionNode{leaf("summary", "contains", "x")}}, true},
 		{"nested valid", &models.ConditionGroup{Operator: "or", Children: []models.ConditionNode{
 			group("and", leaf("summary", "contains", "x")),

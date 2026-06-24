@@ -74,6 +74,52 @@ func (s *Service) SearchContacts(ctx context.Context, companyIdentifier, q strin
 	return out, nil
 }
 
+// ListBoardTypes returns a board's active ticket types from the local sync as
+// picker options (q filters by name client-side). Value is the type id; Label is
+// the name a condition matches against.
+func (s *Service) ListBoardTypes(ctx context.Context, boardID int, q string) ([]PickerOption, error) {
+	types, err := s.Types.ListByBoard(ctx, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("listing board types: %w", err)
+	}
+
+	q = strings.ToLower(strings.TrimSpace(q))
+	out := make([]PickerOption, 0, len(types))
+	for _, t := range types {
+		if t.Inactive || t.Deleted {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(t.Name), q) {
+			continue
+		}
+		out = append(out, PickerOption{Label: t.Name, Value: strconv.Itoa(t.ID)})
+	}
+	return out, nil
+}
+
+// ListBoardSubTypes returns a board's active ticket subtypes from the local sync as
+// picker options (q filters by name client-side). Value is the subtype id; Label is
+// the name a condition matches against.
+func (s *Service) ListBoardSubTypes(ctx context.Context, boardID int, q string) ([]PickerOption, error) {
+	subtypes, err := s.SubTypes.ListByBoard(ctx, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("listing board subtypes: %w", err)
+	}
+
+	q = strings.ToLower(strings.TrimSpace(q))
+	out := make([]PickerOption, 0, len(subtypes))
+	for _, st := range subtypes {
+		if st.Inactive || st.Deleted {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(st.Name), q) {
+			continue
+		}
+		out = append(out, PickerOption{Label: st.Name, Value: strconv.Itoa(st.ID)})
+	}
+	return out, nil
+}
+
 // LiveBoardStatuses live-fetches the active statuses for a board (q filters by
 // name client-side, since a board has few statuses). Value is the status id.
 func (s *Service) LiveBoardStatuses(ctx context.Context, boardID int, q string) ([]PickerOption, error) {
