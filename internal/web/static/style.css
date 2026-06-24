@@ -385,10 +385,16 @@ td.actions  { text-align: right; }
 .badge-off     { background: rgba(248,81,73,0.12); color: var(--danger); }
 .badge-neutral { background: var(--surface); color: var(--muted); }
 .badge-sim     { background: rgba(56,139,253,0.16); color: #6cb6ff; }
+.badge-discussion  { background: rgba(56,139,253,0.14); color: #79b8ff; }
+.badge-internal    { background: rgba(210,153,34,0.16);  color: #e3b341; }
+.badge-resolution  { background: rgba(63,185,80,0.14);   color: var(--success); }
+.badge-workflow    { background: rgba(163,113,247,0.16); color: #c9a7f5; }
 
 /* ── Tickets journal ─────────────────────────────────────────────────────────── */
 .logs-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
 .logs-opt { align-items: center; color: var(--muted); display: inline-flex; font-size: 12px; gap: 6px; }
+.logs-count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.timeline-controls { margin-bottom: 12px; }
 
 th.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
 th.th-sort:hover { color: var(--text); }
@@ -407,11 +413,12 @@ tr.row-click { cursor: pointer; }
     border-radius: 8px;
     padding: 10px 14px;
 }
-.run-card.run-error { border-left-color: var(--danger); }
+.run-card.run-error    { border-left-color: var(--danger); }
 .run-head { align-items: center; display: flex; gap: 10px; margin-bottom: 8px; }
 .run-trigger { font-weight: 600; }
 .run-time { color: var(--muted); font-size: 12px; margin-right: auto; }
-.run-events { display: flex; flex-direction: column; gap: 4px; }
+.run-events { display: flex; flex-direction: column; gap: 6px; }
+.run-events:empty { display: none; }
 .journal-event { font-size: 13px; padding-left: 14px; position: relative; }
 .journal-event::before { content: '•'; left: 2px; position: absolute; }
 .journal-event.ev-ok    { color: var(--text); }
@@ -420,6 +427,40 @@ tr.row-click { cursor: pointer; }
 .journal-event.ev-error::before { color: var(--danger); }
 .journal-event.ev-skip  { color: var(--muted); }
 .journal-event.ev-info  { color: var(--muted); }
+
+/* Matched-workflow group — a banner (name + condition readout) with the
+   workflow's own actions nested beneath it. */
+.wf-match {
+    background: rgba(163,113,247,0.07);
+    border: 1px solid rgba(163,113,247,0.22);
+    border-radius: 6px;
+    padding: 7px 10px;
+}
+.wf-match-head { align-items: center; display: flex; gap: 8px; }
+.wf-match-name { font-size: 13px; font-weight: 600; }
+.wf-match-cond {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: 5px;
+}
+.wf-match-actions {
+    border-top: 1px solid rgba(163,113,247,0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 7px;
+    padding-top: 7px;
+}
+.wf-match-empty { color: var(--muted); font-size: 12px; font-style: italic; margin-top: 6px; }
+.cond-val {
+    background: var(--hover-bg);
+    border-radius: 3px;
+    color: var(--text);
+    font-weight: 500;
+    padding: 1px 5px;
+}
+.cond-join { color: #a371f7; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
 
 /* ── Forms ───────────────────────────────────────────────────────────────────── */
 .form-group {

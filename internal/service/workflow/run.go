@@ -64,7 +64,9 @@ func (s *Service) Run(ctx context.Context, ticketID int, isNew bool, actorMember
 		if !workflowApplies(wf, ctxData, isNew) {
 			continue
 		}
-		res.Events = append(res.Events, matchedEvent(wf))
+		me := matchedEvent(wf)
+		me.Workflow = wf.Name
+		res.Events = append(res.Events, me)
 
 		// Simulation mode is per-workflow: actions are evaluated against a copy of
 		// the shared Exec with Simulate set, so they describe what they would do
@@ -84,6 +86,15 @@ func (s *Service) Run(ctx context.Context, ticketID int, isNew bool, actorMember
 // runActions runs a matched workflow's actions in order, appending a timeline
 // event for each and setting SkipNotify on the result.
 func (s *Service) runActions(ctx context.Context, wf *models.Workflow, ex *Exec, t *psa.Ticket, ticketID int, res *RunResult) {
+	// Tag every event this call appends with the workflow name so the journal UI
+	// can group a workflow's actions under its matched-condition banner.
+	start := len(res.Events)
+	defer func() {
+		for i := start; i < len(res.Events); i++ {
+			res.Events[i].Workflow = wf.Name
+		}
+	}()
+
 	for i, a := range wf.Actions {
 		handler, ok := s.registry[a.Type]
 		if !ok {

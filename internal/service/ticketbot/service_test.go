@@ -61,7 +61,7 @@ func TestBuildRun(t *testing.T) {
 		{"error beats simulated", false, []models.JournalEvent{simEvent, errEvent}, nil, models.TriggerUpdated, models.OutcomeWithErrors, true},
 	}
 	for _, c := range cases {
-		r := buildRun(now, c.isNew, c.events, c.err)
+		r := buildRun(now, c.isNew, false, c.events, c.err)
 		if r.Trigger != c.wantTrigger || r.Outcome != c.wantOutcome || r.HadError != c.wantError {
 			t.Errorf("%s: got {trigger:%q outcome:%q err:%v} want {%q %q %v}",
 				c.name, r.Trigger, r.Outcome, r.HadError, c.wantTrigger, c.wantOutcome, c.wantError)
@@ -69,7 +69,7 @@ func TestBuildRun(t *testing.T) {
 	}
 
 	// A fatal error with no events should synthesize an error line.
-	r := buildRun(now, false, nil, errors.New("kaboom"))
+	r := buildRun(now, false, false, nil, errors.New("kaboom"))
 	if len(r.Events) != 1 || r.Events[0].Status != models.JournalError {
 		t.Fatalf("expected a synthesized error event, got %+v", r.Events)
 	}

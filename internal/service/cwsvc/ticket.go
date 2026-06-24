@@ -190,6 +190,14 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		Resources:  rsc,
 	}
 
+	if note != nil && cd.note != nil {
+		req.FullTicket.LatestNote.Flags = &models.NoteFlags{
+			Discussion: cd.note.DetailDescriptionFlag,
+			Internal:   cd.note.InternalFlag || cd.note.InternalAnalysisFlag,
+			Resolution: cd.note.ResolutionFlag,
+		}
+	}
+
 	return req, nil
 }
 

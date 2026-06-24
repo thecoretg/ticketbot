@@ -45,18 +45,22 @@ func (p *TicketJournalRepo) ListSummaries(ctx context.Context, limit int) ([]*mo
 	out := make([]*models.TicketJournal, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, &models.TicketJournal{
-			TicketID:    r.TicketID,
-			Summary:     r.Summary,
-			BoardName:   r.BoardName,
-			CompanyName: r.CompanyName,
-			ContactName: r.ContactName,
-			StatusName:  r.StatusName,
-			OwnerName:   r.OwnerName,
-			LastTrigger: r.LastTrigger,
-			LastOutcome: r.LastOutcome,
-			HadError:    r.HadError,
-			FirstSeen:   r.FirstSeen,
-			LastRun:     r.LastRun,
+			TicketID:      r.TicketID,
+			Summary:       r.Summary,
+			BoardName:     r.BoardName,
+			CompanyName:   r.CompanyName,
+			ContactName:   r.ContactName,
+			StatusName:    r.StatusName,
+			OwnerName:     r.OwnerName,
+			TypeName:      r.TypeName,
+			SubtypeName:   r.SubtypeName,
+			ItemName:      r.ItemName,
+			ResourceNames: r.ResourceNames,
+			LastTrigger:   r.LastTrigger,
+			LastOutcome:   r.LastOutcome,
+			HadError:      r.HadError,
+			FirstSeen:     r.FirstSeen,
+			LastRun:       r.LastRun,
 		})
 	}
 	return out, nil
@@ -64,19 +68,23 @@ func (p *TicketJournalRepo) ListSummaries(ctx context.Context, limit int) ([]*mo
 
 func (p *TicketJournalRepo) Upsert(ctx context.Context, j *models.TicketJournal) (*models.TicketJournal, error) {
 	d, err := p.queries.UpsertTicketJournal(ctx, db.UpsertTicketJournalParams{
-		TicketID:    j.TicketID,
-		Summary:     j.Summary,
-		BoardName:   j.BoardName,
-		CompanyName: j.CompanyName,
-		ContactName: j.ContactName,
-		StatusName:  j.StatusName,
-		OwnerName:   j.OwnerName,
-		LastTrigger: j.LastTrigger,
-		LastOutcome: j.LastOutcome,
-		HadError:    j.HadError,
-		FirstSeen:   j.FirstSeen,
-		LastRun:     j.LastRun,
-		Runs:        runsBytes(j.Runs),
+		TicketID:      j.TicketID,
+		Summary:       j.Summary,
+		BoardName:     j.BoardName,
+		CompanyName:   j.CompanyName,
+		ContactName:   j.ContactName,
+		StatusName:    j.StatusName,
+		OwnerName:     j.OwnerName,
+		TypeName:      j.TypeName,
+		SubtypeName:   j.SubtypeName,
+		ItemName:      j.ItemName,
+		ResourceNames: j.ResourceNames,
+		LastTrigger:   j.LastTrigger,
+		LastOutcome:   j.LastOutcome,
+		HadError:      j.HadError,
+		FirstSeen:     j.FirstSeen,
+		LastRun:       j.LastRun,
+		Runs:          runsBytes(j.Runs),
 	})
 	if err != nil {
 		return nil, err
@@ -90,19 +98,23 @@ func (p *TicketJournalRepo) DeleteOlderThan(ctx context.Context, before time.Tim
 
 func ticketJournalFromPG(pg *db.TicketJournal) *models.TicketJournal {
 	return &models.TicketJournal{
-		TicketID:    pg.TicketID,
-		Summary:     pg.Summary,
-		BoardName:   pg.BoardName,
-		CompanyName: pg.CompanyName,
-		ContactName: pg.ContactName,
-		StatusName:  pg.StatusName,
-		OwnerName:   pg.OwnerName,
-		LastTrigger: pg.LastTrigger,
-		LastOutcome: pg.LastOutcome,
-		HadError:    pg.HadError,
-		FirstSeen:   pg.FirstSeen,
-		LastRun:     pg.LastRun,
-		Runs:        runsFromBytes(pg.Runs),
+		TicketID:      pg.TicketID,
+		Summary:       pg.Summary,
+		BoardName:     pg.BoardName,
+		CompanyName:   pg.CompanyName,
+		ContactName:   pg.ContactName,
+		StatusName:    pg.StatusName,
+		OwnerName:     pg.OwnerName,
+		TypeName:      pg.TypeName,
+		SubtypeName:   pg.SubtypeName,
+		ItemName:      pg.ItemName,
+		ResourceNames: pg.ResourceNames,
+		LastTrigger:   pg.LastTrigger,
+		LastOutcome:   pg.LastOutcome,
+		HadError:      pg.HadError,
+		FirstSeen:     pg.FirstSeen,
+		LastRun:       pg.LastRun,
+		Runs:          runsFromBytes(pg.Runs),
 	}
 }
 

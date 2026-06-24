@@ -623,6 +623,15 @@ const TICKET_COLUMNS = [
     { key: 'last_outcome', label: 'Outcome' },
 ]
 
+// Dropdown filters on the tickets list — each narrows rows to an exact value
+// chosen from the distinct values currently present in the loaded set.
+const TICKET_FILTERS = [
+    { key: 'board_name',   label: 'Board' },
+    { key: 'owner_name',   label: 'Owner' },
+    { key: 'company_name', label: 'Company' },
+    { key: 'status_name',  label: 'Status' },
+]
+
 function ticketsPrefs() {
     try { return JSON.parse(localStorage.getItem('ticketsPrefs') || '{}') } catch { return {} }
 }
@@ -638,6 +647,9 @@ let ticketsSearch    = ''
 let ticketsOutcome   = _tp.outcome    ?? 'ALL'
 let ticketsSortKey   = _tp.sortKey    ?? 'last_run'
 let ticketsSortDir   = _tp.sortDir    ?? 'desc'
+let ticketsFilters   = _tp.filters    ?? {}
+let journalRunFilter = _tp.runFilter  ?? 'ALL'   // ALL | COMPLETED | ERRORS | SIMULATED | WORKFLOW
+let journalRunSort   = _tp.runSort    ?? 'desc'  // desc = newest first
 
 async function loadTickets() {
     ticketsView = 'list'
@@ -663,6 +675,11 @@ function renderTickets() {
     let rows = ticketsList.slice()
 
     rows = rows.filter(ticketOutcomeMatch)
+
+    for (const f of TICKET_FILTERS) {
+        const v = ticketsFilters[f.key]
+        if (v) rows = rows.filter(t => String(t[f.key] ?? '') === v)
+    }
 
     if (ticketsSearch) {
         const term = ticketsSearch.toLowerCase()
@@ -699,6 +716,21 @@ function renderTickets() {
         ? `<div class="table-wrap"><table><thead><tr>${thead}</tr></thead><tbody>${body.join('')}</tbody></table></div>`
         : '<div class="empty-state">No tickets found</div>'
 
+    const filterSelects = TICKET_FILTERS.map(f => {
+        const cur  = ticketsFilters[f.key] || ''
+        const opts = distinctTicketValues(f.key).map(v =>
+            `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(v)}</option>`).join('')
+        return `<select class="logs-search-input" style="width:auto" onchange="setTicketFilter('${f.key}', this.value)">
+            <option value="">All ${esc(f.label)}s</option>${opts}
+        </select>`
+    }).join('')
+
+    const anyFilter = Object.values(ticketsFilters).some(Boolean)
+    const clearBtn  = anyFilter
+        ? `<button class="btn btn-ghost btn-sm" onclick="clearTicketFilters()">Clear filters</button>`
+        : ''
+    const countLbl  = `<span class="logs-count">${rows.length} of ${ticketsList.length}</span>`
+
     setContent(`<div class="tab-header">
         <h2>Tickets</h2>
         <div class="logs-controls">
@@ -708,9 +740,32 @@ function renderTickets() {
                 ${[['ALL','All outcomes'],['COMPLETED','Completed'],['ERRORS','Errors']].map(([v,l]) =>
                     `<option value="${v}"${ticketsOutcome===v?' selected':''}>${l}</option>`).join('')}
             </select>
+            ${filterSelects}
+            ${clearBtn}
+            ${countLbl}
             <button class="btn btn-ghost btn-sm" onclick="loadTickets()">Refresh</button>
         </div>
     </div>${table}`)
+}
+
+// distinctTicketValues returns the sorted unique non-empty values of a column
+// across the loaded ticket set, for populating filter dropdowns.
+function distinctTicketValues(key) {
+    return [...new Set(ticketsList.map(t => t[key]).filter(Boolean).map(String))]
+        .sort((a, b) => a.localeCompare(b))
+}
+
+function setTicketFilter(key, val) {
+    if (val) ticketsFilters[key] = val
+    else delete ticketsFilters[key]
+    saveTicketsPrefs({ filters: ticketsFilters })
+    renderTickets()
+}
+
+function clearTicketFilters() {
+    ticketsFilters = {}
+    saveTicketsPrefs({ filters: ticketsFilters })
+    renderTickets()
 }
 
 function ticketsSort(key) {
@@ -741,31 +796,125 @@ async function showTicketJournal(id) {
     renderTicketJournal(j)
 }
 
+// runHasWorkflow reports whether a workflow actually matched on this run. A run
+// where the engine executed but nothing matched carries no workflow-tagged events
+// (workflow_ran only means the pipeline ran, matched or not — don't use it here).
+function runHasWorkflow(r) {
+    return (r.events || []).some(e => e.workflow)
+}
+
+// runMatchesFilter decides whether a run is shown under the current run filter.
+function runMatchesFilter(r) {
+    const sim = r.outcome === 'Simulated' || (r.events || []).some(e => e.simulated)
+    switch (journalRunFilter) {
+        case 'COMPLETED':  return !r.had_error && r.outcome === 'Completed'
+        case 'ERRORS':     return !!r.had_error
+        case 'SIMULATED':  return sim
+        case 'WORKFLOW':   return runHasWorkflow(r)
+        default:           return true
+    }
+}
+
+// parseMatch splits a 'Matched workflow "Name" — <conditions>' event into its
+// workflow name and (optional) condition summary.
+function parseMatch(text) {
+    const m = text.match(/^Matched workflow "([^"]*)"(?:\s+—\s+([\s\S]*))?$/)
+    if (!m) return { name: text.replace(/^Matched workflow\s*/, ''), cond: '' }
+    return { name: m[1], cond: m[2] || '' }
+}
+
+// formatConditions lightly styles a condition summary: quoted values are
+// highlighted as chips and AND/OR joiners are de-emphasized.
+function formatConditions(s) {
+    return esc(s)
+        .replace(/"([^"]*)"/g, '<span class="cond-val">$1</span>')
+        .replace(/ (AND|OR) /g, ' <span class="cond-join">$1</span> ')
+}
+
 function renderTicketJournal(j) {
-    const runs = (j.runs || []).slice().reverse() // newest first
+    const all = (j.runs || []).slice()
+    let runs = all.filter(runMatchesFilter)
+    runs.sort((a, b) => {
+        const av = a.time ? new Date(a.time).getTime() : 0
+        const bv = b.time ? new Date(b.time).getTime() : 0
+        return journalRunSort === 'asc' ? av - bv : bv - av
+    })
 
     const prop = (label, val) => `<div class="jr-prop"><span class="jr-prop-label">${label}</span><span>${esc(val) || '—'}</span></div>`
 
+    const isMatchEvent = e => e.status === 'info' && e.text.startsWith('Matched workflow')
+
+    const eventLine = e => {
+        const evClass   = `journal-event ev-${esc(e.status)}`
+        const tagBadges = (e.tags || []).map(t => `<span class="badge badge-${esc(t.toLowerCase())}">${esc(t)}</span>`).join(' ')
+        return `<div class="${evClass}">${e.simulated ? '<span class="badge badge-sim">SIM</span> ' : ''}${esc(e.text)}${tagBadges ? ' ' + tagBadges : ''}</div>`
+    }
+
+    // workflowGroup renders a matched workflow as a banner (name + condition
+    // readout) with its own actions nested beneath it.
+    const workflowGroup = grp => {
+        const matchEv = grp.events.find(isMatchEvent)
+        const actions = grp.events.filter(e => !isMatchEvent(e))
+        const cond    = matchEv ? parseMatch(matchEv.text).cond : ''
+        const actionsHtml = actions.map(eventLine).join('')
+        return `<div class="wf-match">
+            <div class="wf-match-head">
+                <span class="badge badge-workflow">Workflow</span>
+                <span class="wf-match-name">${esc(grp.name)}</span>
+            </div>
+            ${cond ? `<div class="wf-match-cond">${formatConditions(cond)}</div>` : ''}
+            ${actionsHtml
+                ? `<div class="wf-match-actions">${actionsHtml}</div>`
+                : '<div class="wf-match-empty">Conditions met — no actions taken this run</div>'}
+        </div>`
+    }
+
     const timeline = runs.length ? runs.map(r => {
-        const runSim = (r.events || []).some(e => e.simulated)
+        const events    = r.events || []
+        const runSim    = events.some(e => e.simulated)
+        const matched   = runHasWorkflow(r)
+        const cardClass = ['run-card', r.had_error ? 'run-error' : ''].filter(Boolean).join(' ')
+
+        // Walk events in order, coalescing consecutive same-workflow events into a
+        // group; everything else (field changes, notifications) stays a loose line.
+        const segments = []
+        let cur = null
+        for (const e of events) {
+            if (e.workflow) {
+                if (!cur || cur.name !== e.workflow) { cur = { name: e.workflow, events: [] }; segments.push({ wf: cur }) }
+                cur.events.push(e)
+            } else {
+                cur = null
+                segments.push({ loose: e })
+            }
+        }
+
+        const body = segments.map(s => s.wf ? workflowGroup(s.wf) : eventLine(s.loose)).join('')
+            || '<div class="journal-event ev-info">No actions taken</div>'
+
         return `
-        <div class="run-card ${r.had_error ? 'run-error' : ''}">
+        <div class="${cardClass}">
             <div class="run-head">
                 <span class="run-trigger">${esc(r.trigger)}</span>
+                ${matched ? '<span class="badge badge-workflow">Workflow</span>' : ''}
                 <span class="run-time">${r.time ? new Date(r.time).toLocaleString() : ''}</span>
                 ${outcomeBadge({ had_error: r.had_error, last_outcome: r.outcome })}
                 ${runSim && r.outcome !== 'Simulated' ? '<span class="badge badge-sim">SIM</span>' : ''}
             </div>
-            <div class="run-events">
-                ${(r.events || []).map(e => `<div class="journal-event ev-${esc(e.status)}">${e.simulated ? '<span class="badge badge-sim">SIM</span> ' : ''}${esc(e.text)}</div>`).join('') ||
-                    '<div class="journal-event ev-info">No actions taken</div>'}
-            </div>
+            <div class="run-events">${body}</div>
         </div>`
     }).join('')
-        : '<div class="empty-state">No runs to show</div>'
+        : `<div class="empty-state">${all.length ? 'No runs match this filter' : 'No runs to show'}</div>`
+
+    const psaBtn = j.psa_url
+        ? `<a href="${esc(j.psa_url)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Open in PSA ↗</a>`
+        : ''
+
+    const sortLabel = journalRunSort === 'asc' ? 'Oldest first' : 'Newest first'
 
     setContent(`<div class="tab-header">
         <h2><button class="btn btn-ghost btn-sm" onclick="navigate('/tickets')">← Tickets</button> &nbsp; Ticket #${j.ticket_id}</h2>
+        ${psaBtn}
     </div>
     <div class="jr-summary">${esc(j.summary) || '<span style="color:var(--muted)">(no summary)</span>'}</div>
     <div class="jr-props">
@@ -778,9 +927,29 @@ function renderTicketJournal(j) {
         ${prop('Subtype', j.subtype_name)}
         ${prop('Item', j.item_name)}
     </div>
+    <div class="logs-controls timeline-controls">
+        <select class="logs-search-input" style="width:auto" onchange="setJournalRunFilter(this.value)">
+            ${[['ALL','All runs'],['COMPLETED','Completed'],['ERRORS','Errors'],['SIMULATED','Simulated'],['WORKFLOW','Workflow runs']].map(([v,l]) =>
+                `<option value="${v}"${journalRunFilter===v?' selected':''}>${l}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="toggleJournalRunSort()">${sortLabel} ${journalRunSort === 'asc' ? '▲' : '▼'}</button>
+        <span class="logs-count">${runs.length} of ${all.length} runs</span>
+    </div>
     <div class="timeline">${timeline}</div>`)
 
     window._journalCache = j
+}
+
+function setJournalRunFilter(v) {
+    journalRunFilter = v
+    saveTicketsPrefs({ runFilter: v })
+    rerenderTicketJournal()
+}
+
+function toggleJournalRunSort() {
+    journalRunSort = journalRunSort === 'asc' ? 'desc' : 'asc'
+    saveTicketsPrefs({ runSort: journalRunSort })
+    rerenderTicketJournal()
 }
 
 function rerenderTicketJournal() {

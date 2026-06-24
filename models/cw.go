@@ -97,10 +97,17 @@ type TicketNote struct {
 	Deleted   bool      `json:"deleted"`
 }
 
+type NoteFlags struct {
+	Discussion bool
+	Internal   bool
+	Resolution bool
+}
+
 type FullTicketNote struct {
 	TicketNote
 	Member  *Member
 	Contact *Contact
+	Flags   *NoteFlags // ephemeral; populated from live CW data during processing, not stored in DB
 }
 
 var ErrTicketStatusNotFound = errors.New("ticket status not found")

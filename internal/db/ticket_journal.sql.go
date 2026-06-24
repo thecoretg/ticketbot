@@ -24,7 +24,7 @@ func (q *Queries) DeleteTicketJournalsOlderThan(ctx context.Context, lastRun tim
 }
 
 const getTicketJournal = `-- name: GetTicketJournal :one
-SELECT ticket_id, summary, board_name, company_name, contact_name, status_name, owner_name, last_trigger, last_outcome, had_error, first_seen, last_run, runs, type_name, subtype_name, item_name FROM ticket_journal
+SELECT ticket_id, summary, board_name, company_name, contact_name, status_name, owner_name, last_trigger, last_outcome, had_error, first_seen, last_run, runs, type_name, subtype_name, item_name, resource_names FROM ticket_journal
 WHERE ticket_id = $1 LIMIT 1
 `
 
@@ -48,35 +48,37 @@ func (q *Queries) GetTicketJournal(ctx context.Context, ticketID int) (*TicketJo
 		&i.TypeName,
 		&i.SubtypeName,
 		&i.ItemName,
+		&i.ResourceNames,
 	)
 	return &i, err
 }
 
 const listTicketJournalSummaries = `-- name: ListTicketJournalSummaries :many
 SELECT ticket_id, summary, board_name, company_name, contact_name, status_name,
-       owner_name, type_name, subtype_name, item_name, last_trigger, last_outcome,
-       had_error, first_seen, last_run
+       owner_name, type_name, subtype_name, item_name, resource_names,
+       last_trigger, last_outcome, had_error, first_seen, last_run
 FROM ticket_journal
 ORDER BY last_run DESC
 LIMIT $1
 `
 
 type ListTicketJournalSummariesRow struct {
-	TicketID    int       `json:"ticket_id"`
-	Summary     string    `json:"summary"`
-	BoardName   string    `json:"board_name"`
-	CompanyName string    `json:"company_name"`
-	ContactName string    `json:"contact_name"`
-	StatusName  string    `json:"status_name"`
-	OwnerName   string    `json:"owner_name"`
-	TypeName    string    `json:"type_name"`
-	SubtypeName string    `json:"subtype_name"`
-	ItemName    string    `json:"item_name"`
-	LastTrigger string    `json:"last_trigger"`
-	LastOutcome string    `json:"last_outcome"`
-	HadError    bool      `json:"had_error"`
-	FirstSeen   time.Time `json:"first_seen"`
-	LastRun     time.Time `json:"last_run"`
+	TicketID      int       `json:"ticket_id"`
+	Summary       string    `json:"summary"`
+	BoardName     string    `json:"board_name"`
+	CompanyName   string    `json:"company_name"`
+	ContactName   string    `json:"contact_name"`
+	StatusName    string    `json:"status_name"`
+	OwnerName     string    `json:"owner_name"`
+	TypeName      string    `json:"type_name"`
+	SubtypeName   string    `json:"subtype_name"`
+	ItemName      string    `json:"item_name"`
+	ResourceNames string    `json:"resource_names"`
+	LastTrigger   string    `json:"last_trigger"`
+	LastOutcome   string    `json:"last_outcome"`
+	HadError      bool      `json:"had_error"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastRun       time.Time `json:"last_run"`
 }
 
 func (q *Queries) ListTicketJournalSummaries(ctx context.Context, limit int32) ([]*ListTicketJournalSummariesRow, error) {
@@ -99,6 +101,7 @@ func (q *Queries) ListTicketJournalSummaries(ctx context.Context, limit int32) (
 			&i.TypeName,
 			&i.SubtypeName,
 			&i.ItemName,
+			&i.ResourceNames,
 			&i.LastTrigger,
 			&i.LastOutcome,
 			&i.HadError,
@@ -118,45 +121,47 @@ func (q *Queries) ListTicketJournalSummaries(ctx context.Context, limit int32) (
 const upsertTicketJournal = `-- name: UpsertTicketJournal :one
 INSERT INTO ticket_journal(
     ticket_id, summary, board_name, company_name, contact_name, status_name,
-    owner_name, type_name, subtype_name, item_name, last_trigger, last_outcome,
-    had_error, first_seen, last_run, runs
+    owner_name, type_name, subtype_name, item_name, resource_names,
+    last_trigger, last_outcome, had_error, first_seen, last_run, runs
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT (ticket_id) DO UPDATE SET
-    summary      = EXCLUDED.summary,
-    board_name   = EXCLUDED.board_name,
-    company_name = EXCLUDED.company_name,
-    contact_name = EXCLUDED.contact_name,
-    status_name  = EXCLUDED.status_name,
-    owner_name   = EXCLUDED.owner_name,
-    type_name    = EXCLUDED.type_name,
-    subtype_name = EXCLUDED.subtype_name,
-    item_name    = EXCLUDED.item_name,
-    last_trigger = EXCLUDED.last_trigger,
-    last_outcome = EXCLUDED.last_outcome,
-    had_error    = EXCLUDED.had_error,
-    last_run     = EXCLUDED.last_run,
-    runs         = EXCLUDED.runs
-RETURNING ticket_id, summary, board_name, company_name, contact_name, status_name, owner_name, last_trigger, last_outcome, had_error, first_seen, last_run, runs, type_name, subtype_name, item_name
+    summary        = EXCLUDED.summary,
+    board_name     = EXCLUDED.board_name,
+    company_name   = EXCLUDED.company_name,
+    contact_name   = EXCLUDED.contact_name,
+    status_name    = EXCLUDED.status_name,
+    owner_name     = EXCLUDED.owner_name,
+    type_name      = EXCLUDED.type_name,
+    subtype_name   = EXCLUDED.subtype_name,
+    item_name      = EXCLUDED.item_name,
+    resource_names = EXCLUDED.resource_names,
+    last_trigger   = EXCLUDED.last_trigger,
+    last_outcome   = EXCLUDED.last_outcome,
+    had_error      = EXCLUDED.had_error,
+    last_run       = EXCLUDED.last_run,
+    runs           = EXCLUDED.runs
+RETURNING ticket_id, summary, board_name, company_name, contact_name, status_name, owner_name, last_trigger, last_outcome, had_error, first_seen, last_run, runs, type_name, subtype_name, item_name, resource_names
 `
 
 type UpsertTicketJournalParams struct {
-	TicketID    int       `json:"ticket_id"`
-	Summary     string    `json:"summary"`
-	BoardName   string    `json:"board_name"`
-	CompanyName string    `json:"company_name"`
-	ContactName string    `json:"contact_name"`
-	StatusName  string    `json:"status_name"`
-	OwnerName   string    `json:"owner_name"`
-	TypeName    string    `json:"type_name"`
-	SubtypeName string    `json:"subtype_name"`
-	ItemName    string    `json:"item_name"`
-	LastTrigger string    `json:"last_trigger"`
-	LastOutcome string    `json:"last_outcome"`
-	HadError    bool      `json:"had_error"`
-	FirstSeen   time.Time `json:"first_seen"`
-	LastRun     time.Time `json:"last_run"`
-	Runs        []byte    `json:"runs"`
+	TicketID      int       `json:"ticket_id"`
+	Summary       string    `json:"summary"`
+	BoardName     string    `json:"board_name"`
+	CompanyName   string    `json:"company_name"`
+	ContactName   string    `json:"contact_name"`
+	StatusName    string    `json:"status_name"`
+	OwnerName     string    `json:"owner_name"`
+	TypeName      string    `json:"type_name"`
+	SubtypeName   string    `json:"subtype_name"`
+	ItemName      string    `json:"item_name"`
+	ResourceNames string    `json:"resource_names"`
+	LastTrigger   string    `json:"last_trigger"`
+	LastOutcome   string    `json:"last_outcome"`
+	HadError      bool      `json:"had_error"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastRun       time.Time `json:"last_run"`
+	Runs          []byte    `json:"runs"`
 }
 
 func (q *Queries) UpsertTicketJournal(ctx context.Context, arg UpsertTicketJournalParams) (*TicketJournal, error) {
@@ -171,6 +176,7 @@ func (q *Queries) UpsertTicketJournal(ctx context.Context, arg UpsertTicketJourn
 		arg.TypeName,
 		arg.SubtypeName,
 		arg.ItemName,
+		arg.ResourceNames,
 		arg.LastTrigger,
 		arg.LastOutcome,
 		arg.HadError,
@@ -196,6 +202,7 @@ func (q *Queries) UpsertTicketJournal(ctx context.Context, arg UpsertTicketJourn
 		&i.TypeName,
 		&i.SubtypeName,
 		&i.ItemName,
+		&i.ResourceNames,
 	)
 	return &i, err
 }

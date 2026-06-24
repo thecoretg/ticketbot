@@ -53,6 +53,17 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID strin
 		wfBotTriggered bool
 	)
 
+	// Prevent a ticket from processing multiple times to prevent duplicate notifications.
+	// Connectwise frequently sends multiple hooks for the same ticket simultaneously.
+	lock := s.getTicketLock(id)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// Registered after the lock so it runs (LIFO) *before* the unlock above: the
+	// journal must be written while the lock is still held. Otherwise a second hook
+	// for the same change could acquire the lock and read a stale journal snapshot
+	// before this run is recorded, re-detecting the same note/change and producing
+	// duplicate journal entries.
 	defer func() {
 		took := time.Since(start).Seconds()
 		if err != nil {
@@ -61,20 +72,17 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID strin
 			slog.Debug("ticketbot: request finished", "ticket_id", id, "took_seconds", took)
 		}
 		botRun := botTriggeredRun(workflowRan, wfBotTriggered, full, s.Cfg.CwBotMemberIdentifier)
-		s.recordJournal(ctx, id, isNew, full, events, err, start, botRun)
+		s.recordJournal(ctx, id, isNew, workflowRan, full, events, err, start, botRun)
 	}()
-
-	// Prevent a ticket from processing multiple times to prevent duplicate notifications.
-	// Connectwise frequently sends multiple hooks for the same ticket simultaneously.
-	lock := s.getTicketLock(id)
-	lock.Lock()
-	defer lock.Unlock()
 
 	exists, err := s.CW.Tickets.Exists(ctx, id)
 	if err != nil {
 		return fmt.Errorf("checking if ticket %d exists: %w", id, err)
 	}
 	isNew = added && !exists
+
+	// Capture snapshot before sync so we can detect field changes afterward.
+	oldJournal, _ := s.Journal.Get(ctx, id)
 
 	// Workflow pipeline: mutate the CW ticket before we sync it locally. No-op when
 	// the flag is off, the service is unset, or no workflows match. Failures here are
@@ -100,6 +108,11 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID strin
 		return fmt.Errorf("processing ticket %d: %w", id, err)
 	}
 	full = ticket
+
+	// Prepend field-change and note events so they appear at the top of the run timeline.
+	if changeEvts := buildChangeEvents(oldJournal, full); len(changeEvts) > 0 {
+		events = append(changeEvts, events...)
+	}
 
 	// A workflow send_message action asked to suppress the normal notification so
 	// it isn't doubled up. Record the skip so the note isn't re-notified later.
@@ -134,12 +147,12 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, actorMemberID strin
 
 // recordJournal writes one timeline run for the ticket, unless the run was
 // triggered by the bot's own prior edit (a loop echo), which we don't audit.
-func (s *Service) recordJournal(ctx context.Context, id int, isNew bool, full *models.FullTicket, events []models.JournalEvent, err error, start time.Time, botRun bool) {
+func (s *Service) recordJournal(ctx context.Context, id int, isNew, workflowRan bool, full *models.FullTicket, events []models.JournalEvent, err error, start time.Time, botRun bool) {
 	if s.Journal == nil || botRun {
 		return
 	}
 
-	run := buildRun(start, isNew, events, err)
+	run := buildRun(start, isNew, workflowRan, events, err)
 
 	// Drop pure no-op runs. Connectwise fires many webhooks per change; most are
 	// no-ops (note already notified, nothing matched) and would flood the Tickets
@@ -168,7 +181,7 @@ func botTriggeredRun(workflowRan, wfBotTriggered bool, full *models.FullTicket, 
 }
 
 // buildRun assembles a TicketRun from the accumulated events and any fatal error.
-func buildRun(start time.Time, isNew bool, events []models.JournalEvent, err error) models.TicketRun {
+func buildRun(start time.Time, isNew, workflowRan bool, events []models.JournalEvent, err error) models.TicketRun {
 	trigger := models.TriggerUpdated
 	if isNew {
 		trigger = models.TriggerNew
@@ -207,8 +220,9 @@ func buildRun(start time.Time, isNew bool, events []models.JournalEvent, err err
 	}
 
 	return models.TicketRun{
-		Time:     start,
-		Trigger:  trigger,
+		Time:        start,
+		Trigger:     trigger,
+		WorkflowRan: workflowRan,
 		Events:   events,
 		Outcome:  outcome,
 		HadError: hadError,

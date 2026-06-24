@@ -201,22 +201,23 @@ type Session struct {
 }
 
 type TicketJournal struct {
-	TicketID    int       `json:"ticket_id"`
-	Summary     string    `json:"summary"`
-	BoardName   string    `json:"board_name"`
-	CompanyName string    `json:"company_name"`
-	ContactName string    `json:"contact_name"`
-	StatusName  string    `json:"status_name"`
-	OwnerName   string    `json:"owner_name"`
-	LastTrigger string    `json:"last_trigger"`
-	LastOutcome string    `json:"last_outcome"`
-	HadError    bool      `json:"had_error"`
-	FirstSeen   time.Time `json:"first_seen"`
-	LastRun     time.Time `json:"last_run"`
-	Runs        []byte    `json:"runs"`
-	TypeName    string    `json:"type_name"`
-	SubtypeName string    `json:"subtype_name"`
-	ItemName    string    `json:"item_name"`
+	TicketID      int       `json:"ticket_id"`
+	Summary       string    `json:"summary"`
+	BoardName     string    `json:"board_name"`
+	CompanyName   string    `json:"company_name"`
+	ContactName   string    `json:"contact_name"`
+	StatusName    string    `json:"status_name"`
+	OwnerName     string    `json:"owner_name"`
+	LastTrigger   string    `json:"last_trigger"`
+	LastOutcome   string    `json:"last_outcome"`
+	HadError      bool      `json:"had_error"`
+	FirstSeen     time.Time `json:"first_seen"`
+	LastRun       time.Time `json:"last_run"`
+	Runs          []byte    `json:"runs"`
+	TypeName      string    `json:"type_name"`
+	SubtypeName   string    `json:"subtype_name"`
+	ItemName      string    `json:"item_name"`
+	ResourceNames string    `json:"resource_names"`
 }
 
 type TicketNotification struct {

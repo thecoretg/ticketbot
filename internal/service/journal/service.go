@@ -7,11 +7,13 @@ package journal
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/models"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 )
 
 // maxRunsPerTicket caps the timeline so a frequently-updated ticket can't grow
@@ -38,7 +40,14 @@ func (s *Service) ListSummaries(ctx context.Context) ([]*models.TicketJournal, e
 
 // Get returns a single ticket's full journal including its run timeline.
 func (s *Service) Get(ctx context.Context, ticketID int) (*models.TicketJournal, error) {
-	return s.repo.Get(ctx, ticketID)
+	j, err := s.repo.Get(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	if s.cfg.CwCompanyID != "" {
+		j.PsaURL = psa.InternalTicketLink(j.TicketID, s.cfg.CwCompanyID)
+	}
+	return j, nil
 }
 
 // Record upserts the ticket's journal: it refreshes the denormalized snapshot
@@ -58,12 +67,13 @@ func (s *Service) Record(ctx context.Context, ticketID int, full *models.FullTic
 		j.Summary = full.Ticket.Summary
 		j.BoardName = full.Board.Name
 		j.CompanyName = full.Company.Name
-		j.ContactName = contactName(full.Contact)
+		j.ContactName = ContactName(full.Contact)
 		j.StatusName = full.Status.Name
-		j.OwnerName = memberName(full.Owner)
-		j.TypeName = typeName(full.Type)
-		j.SubtypeName = subTypeName(full.SubType)
-		j.ItemName = itemName(full.Item)
+		j.OwnerName = MemberName(full.Owner)
+		j.TypeName = TypeName(full.Type)
+		j.SubtypeName = SubTypeName(full.SubType)
+		j.ItemName = ItemName(full.Item)
+		j.ResourceNames = ResourceNames(full.Resources)
 	}
 
 	j.LastTrigger = run.Trigger
@@ -117,7 +127,7 @@ func (s *Service) StartCleanup(ctx context.Context) {
 	}()
 }
 
-func contactName(c *models.Contact) string {
+func ContactName(c *models.Contact) string {
 	if c == nil {
 		return ""
 	}
@@ -128,7 +138,7 @@ func contactName(c *models.Contact) string {
 	return name
 }
 
-func memberName(m *models.Member) string {
+func MemberName(m *models.Member) string {
 	if m == nil {
 		return ""
 	}
@@ -139,23 +149,37 @@ func memberName(m *models.Member) string {
 	return name
 }
 
-func typeName(t *models.TicketType) string {
+func TypeName(t *models.TicketType) string {
 	if t == nil {
 		return ""
 	}
 	return t.Name
 }
 
-func subTypeName(t *models.TicketSubType) string {
+func SubTypeName(t *models.TicketSubType) string {
 	if t == nil {
 		return ""
 	}
 	return t.Name
 }
 
-func itemName(t *models.TicketItem) string {
+func ItemName(t *models.TicketItem) string {
 	if t == nil {
 		return ""
 	}
 	return t.Name
+}
+
+// ResourceNames returns a sorted, comma-joined string of member display names
+// for use as a comparable snapshot value.
+func ResourceNames(members []*models.Member) string {
+	if len(members) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(members))
+	for _, m := range members {
+		names = append(names, MemberName(m))
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }

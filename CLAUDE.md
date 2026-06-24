@@ -194,10 +194,59 @@ lines were demoted to DEBUG (`notifier`/`cwsvc` `logRequest`). Denormalized name
 - **Pure no-op runs are NOT journaled.** Connectwise fires many webhooks per change; most do nothing (note already
   notified, nothing matched). `recordJournal` drops any run whose outcome is `OutcomeNothingToDo`, so the tab only shows
   runs that did something real, errored, or simulated. (Snapshot columns therefore reflect the last *meaningful* run.)
+
+- **The journal must be recorded while the per-ticket lock is still held.** In `ProcessTicket` the `recordJournal`
+  defer is registered **after** `defer lock.Unlock()` so LIFO runs it *before* the unlock. CW delivers several hooks for
+  the same change near-simultaneously; the de-dup that drops them relies on each run's snapshot (`s.Journal.Get` →
+  `old.LastRun`) being current. If the journal write happened after the unlock, the next hook could grab the lock and
+  read a stale snapshot, re-detect the same note/field change, and record a duplicate `Completed` run. Note-change
+  de-dup specifically is `LatestNote.AddedOn.After(old.LastRun)`, and `LastRun = run.Time` (processing start), so a
+  serialized second hook correctly sees the note as already-seen and drops as a no-op.
 - **Outcomes** (`buildRun`): `WithErrors` > `Completed` (any `ok` event) > **`Simulated`** (only simulation "Would …"
-  events — kept, NOT a no-op, and not hidden by "Hide no-op runs") > `NothingToDo` (dropped).
+  events — kept, NOT a no-op, and not hidden by "Hide no-op runs") > `NothingToDo` (dropped). Note: `info`-status events
+  do **not** count toward any outcome — only `ok` events promote a run to `Completed`.
 
 - **Bot-triggered runs are NOT journaled.** The decision is `ticketbot.botTriggeredRun`: trust the workflow's
   pre-action `BotTriggered` when workflows ran; otherwise fall back to post-sync `updatedBy == bot`. Do **not** use the
   post-sync editor when workflows ran — this run's own `ticket_update`/`add_note` actions make the bot the last editor,
   which would falsely skip a legitimate run (this was a real bug).
+
+- **Field-change and note events** are generated in `internal/service/ticketbot/changes.go` (`buildChangeEvents`).
+  Before sync, `ProcessTicket` captures the old journal snapshot (`s.Journal.Get`). After sync, it compares snapshot
+  fields (status, contact, owner, type, subtype, item, `resource_names`) to the new `FullTicket` and prepends `ok`-status
+  events for each difference. If the latest note's `AddedOn` is after `oldJournal.LastRun` (or the journal is new), a
+  note-detail event is prepended: `"Note by <name> (<member|contact>) [flags]"`. Using `JournalOK` (not `JournalInfo`)
+  ensures runs with only field changes are kept as `OutcomeCompleted` rather than dropped.
+
+- **PSA URL** is computed in `journal.Service.Get` via `psa.InternalTicketLink(ticketID, cfg.CwCompanyID)` and set on
+  the returned `TicketJournal.PsaURL` (not stored in DB — the upsert query explicitly lists columns). The detail view
+  renders an "Open in PSA ↗" link when `psa_url` is present.
+
+- **Note flags** (`Discussion`, `Internal`, `Resolution`) are booleans on `psa.ServiceTicketNote` but are not stored
+  locally. `cwsvc.processTicket` populates `FullTicketNote.Flags` (a `*models.NoteFlags`) from the live PSA note after
+  building `FullTicket`. The field is ephemeral — only available during webhook processing, not persisted.
+
+- **Journal name helpers** (`ContactName`, `MemberName`, `TypeName`, `SubTypeName`, `ItemName`, `ResourceNames`) are
+  exported from `internal/service/journal/service.go` so the ticketbot package can use them for change detection without
+  duplicating logic.
+
+- **`resource_names TEXT`** is a denormalized snapshot column on `ticket_journal` (migration `00002`). It stores a
+  sorted, comma-joined list of resource member display names, enabling change detection across runs.
+
+- **`JournalEvent.Workflow`** (`workflow,omitempty`) tags every event a matched workflow produced — its `matchedEvent`
+  line **and** each of its action events — with the workflow name. Set in `workflow/run.go`: the match event inline,
+  and `runActions` tags everything it appends via a deferred loop over the slice it grew (one workflow per call). This
+  is how the journal UI groups a workflow's actions under its banner. **Do not** use `TicketRun.WorkflowRan` to decide
+  whether a workflow matched — it's `true` whenever the engine *ran* (every board, when `attempt_workflow` is on),
+  matched or not. "A workflow matched" == any event has a non-empty `workflow` field.
+
+- **Frontend journal UI** (`app.js` `renderTicketJournal`): a run's events are walked in order and coalesced into
+  segments — consecutive same-`workflow` events become a `.wf-match` group (banner = `Workflow` badge + name +
+  condition readout; the workflow's actions nested beneath in `.wf-match-actions`), everything else (field changes,
+  notifications) stays a loose `journal-event` line. The match line's text is parsed by `parseMatch` (name +
+  conditions) and conditions are styled by `formatConditions` (quoted values → chips, AND/OR de-emphasized) — if you
+  change the `matchedEvent` text format in `workflow/events.go`, update `parseMatch`. The run-head `Workflow` badge and
+  the `WORKFLOW` run filter both key off `runHasWorkflow(r)` (any event tagged with a workflow), **not** `workflow_ran`
+  — this fixed false "Workflow" labels on boards with no matching workflows. There is **no** purple card highlight. The
+  detail view has run filter/sort controls (`journalRunFilter`/`journalRunSort`, persisted in `ticketsPrefs`); the
+  Tickets list has per-column dropdown filters (`TICKET_FILTERS`, `ticketsFilters`) plus search/outcome/column-sort.
