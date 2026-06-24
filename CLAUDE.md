@@ -56,7 +56,10 @@ CW/Webex client lives in the vendored `github.com/thecoretg/tctg-go` (`connectwi
 Mirror the `notifier_rule`, `workflow`, or `ticket_journal` slice exactly:
 
 1. **Migration** `migrations/000NN_*.sql` (goose `-- +goose Up/Down`, wrap in `StatementBegin/End`). Additive only.
-2. **Bump `gooseMigrationVersion`** in `main.go` to the new number — the app migrates up/down to exactly this on boot.
+   The **2.0 baseline is a single consolidated `00001_init.sql`** (the whole schema, fresh — no incremental history);
+   new migrations start at `00002`.
+2. **Bump `gooseMigrationVersion`** in `main.go` to the new number — the app migrates up/down to exactly this on boot
+   (baseline is `1`).
 3. **Queries** in `queries/*.sql` (sqlc annotations) → run `make gensql`.
 4. **Model** in `models/`. **Repo interface** in `internal/repos/` + add to `AllRepos`. **Postgres impl** in
    `internal/postgres/` + add to the `AllRepos` literal in `internal/postgres/all.go`.
