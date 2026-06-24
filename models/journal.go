@@ -54,6 +54,9 @@ type TicketJournal struct {
 	ContactName string      `json:"contact_name"`
 	StatusName  string      `json:"status_name"`
 	OwnerName   string      `json:"owner_name"`
+	TypeName    string      `json:"type_name"`
+	SubtypeName string      `json:"subtype_name"`
+	ItemName    string      `json:"item_name"`
 	LastTrigger string      `json:"last_trigger"`
 	LastOutcome string      `json:"last_outcome"`
 	HadError    bool        `json:"had_error"`

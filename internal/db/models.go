@@ -107,6 +107,19 @@ type CwTicket struct {
 	UpdatedOn time.Time `json:"updated_on"`
 	AddedOn   time.Time `json:"added_on"`
 	Deleted   bool      `json:"deleted"`
+	TypeID    *int      `json:"type_id"`
+	SubtypeID *int      `json:"subtype_id"`
+	ItemID    *int      `json:"item_id"`
+}
+
+type CwTicketItem struct {
+	ID        int       `json:"id"`
+	BoardID   int       `json:"board_id"`
+	Name      string    `json:"name"`
+	Inactive  bool      `json:"inactive"`
+	AddedOn   time.Time `json:"added_on"`
+	UpdatedOn time.Time `json:"updated_on"`
+	Deleted   bool      `json:"deleted"`
 }
 
 type CwTicketNote struct {
@@ -131,6 +144,29 @@ type CwTicketStatus struct {
 	AddedOn        time.Time `json:"added_on"`
 	UpdatedOn      time.Time `json:"updated_on"`
 	Deleted        bool      `json:"deleted"`
+}
+
+type CwTicketSubtype struct {
+	ID                 int       `json:"id"`
+	BoardID            int       `json:"board_id"`
+	Name               string    `json:"name"`
+	Inactive           bool      `json:"inactive"`
+	TypeAssociationIds []byte    `json:"type_association_ids"`
+	AddedOn            time.Time `json:"added_on"`
+	UpdatedOn          time.Time `json:"updated_on"`
+	Deleted            bool      `json:"deleted"`
+}
+
+type CwTicketType struct {
+	ID          int       `json:"id"`
+	BoardID     int       `json:"board_id"`
+	Name        string    `json:"name"`
+	Category    string    `json:"category"`
+	DefaultFlag bool      `json:"default_flag"`
+	Inactive    bool      `json:"inactive"`
+	AddedOn     time.Time `json:"added_on"`
+	UpdatedOn   time.Time `json:"updated_on"`
+	Deleted     bool      `json:"deleted"`
 }
 
 type NotifierForward struct {
@@ -175,6 +211,9 @@ type TicketJournal struct {
 	FirstSeen   time.Time `json:"first_seen"`
 	LastRun     time.Time `json:"last_run"`
 	Runs        []byte    `json:"runs"`
+	TypeName    string    `json:"type_name"`
+	SubtypeName string    `json:"subtype_name"`
+	ItemName    string    `json:"item_name"`
 }
 
 type TicketNotification struct {

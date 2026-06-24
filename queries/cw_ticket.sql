@@ -15,8 +15,8 @@ SELECT EXISTS (
 
 -- name: UpsertTicket :one
 INSERT INTO cw_ticket
-(id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+(id, summary, board_id, status_id, owner_id, company_id, contact_id, type_id, subtype_id, item_id, resources, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (id) DO UPDATE SET
     summary = EXCLUDED.summary,
     board_id = EXCLUDED.board_id,
@@ -24,6 +24,9 @@ ON CONFLICT (id) DO UPDATE SET
     owner_id = EXCLUDED.owner_id,
     company_id = EXCLUDED.company_id,
     contact_id = EXCLUDED.contact_id,
+    type_id = EXCLUDED.type_id,
+    subtype_id = EXCLUDED.subtype_id,
+    item_id = EXCLUDED.item_id,
     resources = EXCLUDED.resources,
     updated_by = EXCLUDED.updated_by,
     updated_on = NOW()

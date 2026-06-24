@@ -1,6 +1,10 @@
 # CLAUDE.md
 
-Guidance for agents working in this repo. Keep this file updated when conventions or architecture change.
+Guidance for agents working in this repo.
+
+> **Keep this file current — required.** If you add or change anything a future Claude session would benefit from
+> knowing (a new architectural pattern, a non-obvious gotcha, a convention, a new subsystem/feature, a build/auth
+> quirk), update the relevant section of this file in the same change. Treat it as part of "done," not optional.
 
 ## What this is
 
@@ -19,6 +23,11 @@ vanilla-JS SPA served at `/panel`; everything else is a JSON REST API.
 - **Tests:** `go test ./...`. Unit tests live in `internal/service/{workflow,journal,ticketbot}` (pure logic; no DB needed).
 - **Regenerate DB code:** `make gensql` (runs `sqlc generate`). Required after any change to `queries/` or `migrations/`.
 - **Vendor:** `make vendor` (`go mod tidy && go mod vendor`). Deps are **vendored** — `vendor/` is committed.
+- **Bumping `tctg-go`** (a **private** repo; `GOPRIVATE` already covers `github.com/thecoretg/*`): a plain
+  `go get`/vendor fails if shell git can't auth to GitHub. If only `gh` is authenticated, point git at its token first:
+  `git config --global url."https://x-access-token:$(gh auth token)@github.com/".insteadOf "https://github.com/"`,
+  then `GOFLAGS=-mod=mod go get github.com/thecoretg/tctg-go@<ver> && make vendor`. **Unset that url rule afterward** —
+  it persists your token in `~/.gitconfig`.
 
 ## Architecture
 
@@ -46,6 +55,16 @@ Mirror the `notifier_rule`, `workflow`, or `ticket_journal` slice exactly:
 4. **Model** in `models/`. **Repo interface** in `internal/repos/` + add to `AllRepos`. **Postgres impl** in
    `internal/postgres/` + add to the `AllRepos` literal in `internal/postgres/all.go`.
 5. **Service**, **handler**, **route registration**, then **frontend** tab/modal in `app.js` (+ nav button in `index.html`).
+
+**CW reference entities** (board, status, type, subtype, item, company, contact, member) follow a narrower variant:
+they live under `cwsvc` (no handler/route of their own), use the **CW id as the primary key**, and have an
+`ensure<X>` method in `internal/service/cwsvc/ticket.go` (get-from-store → TTL check → fetch from CW → upsert) plus a
+`Sync<X>` in `internal/service/syncsvc/`. **Board-scoped** entities (`status`, `type`, `subtype`, `item`) carry a
+`board_id` FK, expose `ListByBoard`, and are synced per-board inside `SyncBoards`' loop (`syncsvc/boards.go`). Mirror
+`cw_ticket_status` as the canonical board-scoped slice. Ticket type/subtype/item ensures run **before** `ensureTicket`
+so the ticket's nullable FK columns resolve. Note: ConnectWise exposes subtype→type associations
+(`BoardSubType.TypeAssociationIds`, stored as `type_association_ids` JSONB) but **no** item→subtype link, so items are
+stored flat.
 
 Config flags **and credentials** live in the single-row `app_config` table (`models/app.go` `Config`/`ConfigUpdateParams`/`DefaultConfig`,
 `queries/app_config.sql` `UpsertAppConfig`, `internal/postgres/appconfig.go`, `internal/service/config/service.go`).

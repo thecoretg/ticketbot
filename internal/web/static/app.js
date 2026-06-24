@@ -747,6 +747,9 @@ function renderTicketJournal(j) {
         ${prop('Status', j.status_name)}
         ${prop('Board', j.board_name)}
         ${prop('Owner', j.owner_name)}
+        ${prop('Type', j.type_name)}
+        ${prop('Subtype', j.subtype_name)}
+        ${prop('Item', j.item_name)}
     </div>
     <div class="timeline">${timeline}</div>`)
 

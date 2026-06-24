@@ -44,6 +44,18 @@ func (s *Service) SyncBoards(ctx context.Context) error {
 		if err := txSvc.SyncBoardStatuses(ctx, b.ID); err != nil {
 			slog.Error("board sync: status sync", "board_id", b.ID, "error", err.Error())
 		}
+
+		if err := txSvc.SyncBoardTypes(ctx, b.ID); err != nil {
+			slog.Error("board sync: type sync", "board_id", b.ID, "error", err.Error())
+		}
+
+		if err := txSvc.SyncBoardSubTypes(ctx, b.ID); err != nil {
+			slog.Error("board sync: subtype sync", "board_id", b.ID, "error", err.Error())
+		}
+
+		if err := txSvc.SyncBoardItems(ctx, b.ID); err != nil {
+			slog.Error("board sync: item sync", "board_id", b.ID, "error", err.Error())
+		}
 	}
 
 	for _, b := range boardsToDelete(cwb, sb) {

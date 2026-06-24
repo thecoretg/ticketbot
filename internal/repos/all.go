@@ -19,11 +19,14 @@ type AllRepos struct {
 }
 
 type CWRepos struct {
-	Board        BoardRepository
-	Company      CompanyRepository
-	Contact      ContactRepository
-	Member       MemberRepository
-	Note         TicketNoteRepository
-	Ticket       TicketRepository
-	TicketStatus TicketStatusRepository
+	Board         BoardRepository
+	Company       CompanyRepository
+	Contact       ContactRepository
+	Member        MemberRepository
+	Note          TicketNoteRepository
+	Ticket        TicketRepository
+	TicketStatus  TicketStatusRepository
+	TicketType    TicketTypeRepository
+	TicketSubType TicketSubTypeRepository
+	TicketItem    TicketItemRepository
 }

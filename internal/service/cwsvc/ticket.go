@@ -117,6 +117,32 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		logger = logger.With(ownerLogGrp(owner))
 	}
 
+	// Type/Subtype/Item are board-scoped and optional. Ensure them before the
+	// ticket so the ticket's FK columns reference existing rows.
+	var ticketType *models.TicketType
+	if cwt.Type.ID != 0 {
+		ticketType, err = txSvc.ensureType(ctx, cwt.Type.ID, cwt.Board.ID)
+		if err != nil {
+			return req, fmt.Errorf("ensuring ticket type in store: %w", err)
+		}
+	}
+
+	var subType *models.TicketSubType
+	if cwt.SubType.ID != 0 {
+		subType, err = txSvc.ensureSubType(ctx, cwt.SubType.ID, cwt.Board.ID)
+		if err != nil {
+			return req, fmt.Errorf("ensuring ticket subtype in store: %w", err)
+		}
+	}
+
+	var item *models.TicketItem
+	if cwt.Item.ID != 0 {
+		item, err = txSvc.ensureItem(ctx, cwt.Item.ID, cwt.Board.ID)
+		if err != nil {
+			return req, fmt.Errorf("ensuring ticket item in store: %w", err)
+		}
+	}
+
 	ticket, err := txSvc.ensureTicket(ctx, cd.ticket)
 	if err != nil {
 		return req, fmt.Errorf("ensuring ticket in store: %w", err)
@@ -157,6 +183,9 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		Company:    *company,
 		Contact:    contact,
 		Owner:      owner,
+		Type:       ticketType,
+		SubType:    subType,
+		Item:       item,
 		LatestNote: note,
 		Resources:  rsc,
 	}
@@ -241,6 +270,108 @@ func (s *Service) ensureStatus(ctx context.Context, id, boardID int) (*models.Ti
 	}
 
 	return st, nil
+}
+
+func (s *Service) ensureType(ctx context.Context, id, boardID int) (*models.TicketType, error) {
+	t, err := s.Types.Get(ctx, id)
+	if err == nil && !s.withinTTL(t.UpdatedOn, "type", id) {
+		return t, nil
+	}
+
+	if err != nil && !errors.Is(err, models.ErrTicketTypeNotFound) {
+		return nil, fmt.Errorf("getting type from store: %w", err)
+	}
+
+	_, err = s.ensureBoard(ctx, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring type board in store: %w", err)
+	}
+
+	cw, err := s.CWClient.GetBoardType(ctx, id, nil, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("getting type from cw: %w", err)
+	}
+
+	t, err = s.Types.Upsert(ctx, &models.TicketType{
+		ID:          id,
+		BoardID:     boardID,
+		Name:        cw.Name,
+		Category:    cw.Category,
+		DefaultFlag: cw.DefaultFlag,
+		Inactive:    cw.InactiveFlag,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("inserting type into store: %w", err)
+	}
+
+	return t, nil
+}
+
+func (s *Service) ensureSubType(ctx context.Context, id, boardID int) (*models.TicketSubType, error) {
+	st, err := s.SubTypes.Get(ctx, id)
+	if err == nil && !s.withinTTL(st.UpdatedOn, "subtype", id) {
+		return st, nil
+	}
+
+	if err != nil && !errors.Is(err, models.ErrTicketSubTypeNotFound) {
+		return nil, fmt.Errorf("getting subtype from store: %w", err)
+	}
+
+	_, err = s.ensureBoard(ctx, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring subtype board in store: %w", err)
+	}
+
+	cw, err := s.CWClient.GetBoardSubType(ctx, id, nil, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("getting subtype from cw: %w", err)
+	}
+
+	st, err = s.SubTypes.Upsert(ctx, &models.TicketSubType{
+		ID:                 id,
+		BoardID:            boardID,
+		Name:               cw.Name,
+		Inactive:           cw.InactiveFlag,
+		TypeAssociationIDs: cw.TypeAssociationIds,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("inserting subtype into store: %w", err)
+	}
+
+	return st, nil
+}
+
+func (s *Service) ensureItem(ctx context.Context, id, boardID int) (*models.TicketItem, error) {
+	it, err := s.Items.Get(ctx, id)
+	if err == nil && !s.withinTTL(it.UpdatedOn, "item", id) {
+		return it, nil
+	}
+
+	if err != nil && !errors.Is(err, models.ErrTicketItemNotFound) {
+		return nil, fmt.Errorf("getting item from store: %w", err)
+	}
+
+	_, err = s.ensureBoard(ctx, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring item board in store: %w", err)
+	}
+
+	cw, err := s.CWClient.GetBoardItem(ctx, id, nil, boardID)
+	if err != nil {
+		return nil, fmt.Errorf("getting item from cw: %w", err)
+	}
+
+	it, err = s.Items.Upsert(ctx, &models.TicketItem{
+		ID:       id,
+		BoardID:  boardID,
+		Name:     cw.Name,
+		Inactive: cw.InactiveFlag,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("inserting item into store: %w", err)
+	}
+
+	return it, nil
 }
 
 func (s *Service) ensureCompany(ctx context.Context, id int) (*models.Company, error) {
@@ -366,6 +497,9 @@ func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (*models.Ti
 		OwnerID:   intToPtr(cwt.Owner.ID),
 		CompanyID: cwt.Company.ID,
 		ContactID: intToPtr(cwt.Contact.ID),
+		TypeID:    intToPtr(cwt.Type.ID),
+		SubTypeID: intToPtr(cwt.SubType.ID),
+		ItemID:    intToPtr(cwt.Item.ID),
 		Resources: &cwt.Resources,
 		UpdatedBy: &cwt.Info.UpdatedBy,
 	})

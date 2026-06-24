@@ -1192,6 +1192,66 @@ type ServiceTicketNoteAll struct {
 	TimeStart string `json:"timeStart,omitempty"`
 }
 
+type BoardType struct {
+	Info   any `json:"_info,omitempty"`
+	Board  struct {
+		Info any    `json:"_info,omitempty"`
+		ID   int    `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"board,omitzero"`
+	Category             string `json:"category,omitempty"`
+	ConnectWiseID        string `json:"connectWiseId,omitempty"`
+	DefaultFlag          bool   `json:"defaultFlag,omitempty"`
+	Department           struct {
+		Info       any    `json:"_info,omitempty"`
+		ID         int    `json:"id,omitempty"`
+		Identifier string `json:"identifier,omitempty"`
+		Name       string `json:"name,omitempty"`
+	} `json:"department,omitzero"`
+	ID           int `json:"id,omitempty"`
+	InactiveFlag bool   `json:"inactiveFlag,omitempty"`
+	Location     struct {
+		Info any    `json:"_info,omitempty"`
+		ID   int    `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"location,omitzero"`
+	Name                   string `json:"name,omitempty"`
+	ParentConnectWiseID    string `json:"parentConnectWiseId,omitempty"`
+	ParentID               int    `json:"parentId,omitempty"`
+	RequestForChangeFlag   bool   `json:"requestForChangeFlag,omitempty"`
+}
+
+type BoardSubType struct {
+	Info  any `json:"_info,omitempty"`
+	Board struct {
+		Info any    `json:"_info,omitempty"`
+		ID   int    `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"board,omitzero"`
+	ConnectWiseID       string `json:"connectWiseId,omitempty"`
+	ID                  int    `json:"id,omitempty"`
+	InactiveFlag        bool   `json:"inactiveFlag,omitempty"`
+	Name                string `json:"name,omitempty"`
+	ParentConnectWiseID string `json:"parentConnectWiseId,omitempty"`
+	ParentID            int    `json:"parentId,omitempty"`
+	TypeAssociationIds  []int  `json:"typeAssociationIds,omitempty"`
+}
+
+type BoardItem struct {
+	Info  any `json:"_info,omitempty"`
+	Board struct {
+		Info any    `json:"_info,omitempty"`
+		ID   int    `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"board,omitzero"`
+	ConnectWiseID       string `json:"connectWiseId,omitempty"`
+	ID                  int    `json:"id,omitempty"`
+	InactiveFlag        bool   `json:"inactiveFlag,omitempty"`
+	Name                string `json:"name,omitempty"`
+	ParentConnectWiseID string `json:"parentConnectWiseId,omitempty"`
+	ParentID            int    `json:"parentId,omitempty"`
+}
+
 type WebhookPayload struct {
 	MessageID         string `json:"MessageID"`
 	FromURL           string `json:"FromUrl"`

@@ -74,6 +74,36 @@ type TicketStatusRepository interface {
 	Delete(ctx context.Context, id int) error
 }
 
+type TicketTypeRepository interface {
+	WithTx(tx pgx.Tx) TicketTypeRepository
+	List(ctx context.Context) ([]*models.TicketType, error)
+	ListByBoard(ctx context.Context, boardID int) ([]*models.TicketType, error)
+	Get(ctx context.Context, id int) (*models.TicketType, error)
+	Upsert(ctx context.Context, t *models.TicketType) (*models.TicketType, error)
+	SoftDelete(ctx context.Context, id int) error
+	Delete(ctx context.Context, id int) error
+}
+
+type TicketSubTypeRepository interface {
+	WithTx(tx pgx.Tx) TicketSubTypeRepository
+	List(ctx context.Context) ([]*models.TicketSubType, error)
+	ListByBoard(ctx context.Context, boardID int) ([]*models.TicketSubType, error)
+	Get(ctx context.Context, id int) (*models.TicketSubType, error)
+	Upsert(ctx context.Context, t *models.TicketSubType) (*models.TicketSubType, error)
+	SoftDelete(ctx context.Context, id int) error
+	Delete(ctx context.Context, id int) error
+}
+
+type TicketItemRepository interface {
+	WithTx(tx pgx.Tx) TicketItemRepository
+	List(ctx context.Context) ([]*models.TicketItem, error)
+	ListByBoard(ctx context.Context, boardID int) ([]*models.TicketItem, error)
+	Get(ctx context.Context, id int) (*models.TicketItem, error)
+	Upsert(ctx context.Context, t *models.TicketItem) (*models.TicketItem, error)
+	SoftDelete(ctx context.Context, id int) error
+	Delete(ctx context.Context, id int) error
+}
+
 func TicketNoteToFullTicketNote(ctx context.Context, note *models.TicketNote, m MemberRepository, c ContactRepository) (*models.FullTicketNote, error) {
 	var (
 		member  *models.Member

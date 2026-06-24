@@ -17,6 +17,9 @@ type Service struct {
 	Members   repos.MemberRepository
 	Tickets   repos.TicketRepository
 	Statuses  repos.TicketStatusRepository
+	Types     repos.TicketTypeRepository
+	SubTypes  repos.TicketSubTypeRepository
+	Items     repos.TicketItemRepository
 	Notes     repos.TicketNoteRepository
 	pool      *pgxpool.Pool
 	CWClient  *psa.Client
@@ -28,6 +31,9 @@ func New(pool *pgxpool.Pool, r repos.CWRepos, cl *psa.Client, ttl int64) *Servic
 		TTL:       t,
 		Boards:    r.Board,
 		Statuses:  r.TicketStatus,
+		Types:     r.TicketType,
+		SubTypes:  r.TicketSubType,
+		Items:     r.TicketItem,
 		Companies: r.Company,
 		Contacts:  r.Contact,
 		Members:   r.Member,
@@ -43,6 +49,9 @@ func (s *Service) WithTX(tx pgx.Tx) *Service {
 		TTL:       s.TTL,
 		Boards:    s.Boards.WithTx(tx),
 		Statuses:  s.Statuses.WithTx(tx),
+		Types:     s.Types.WithTx(tx),
+		SubTypes:  s.SubTypes.WithTx(tx),
+		Items:     s.Items.WithTx(tx),
 		Companies: s.Companies.WithTx(tx),
 		Contacts:  s.Contacts.WithTx(tx),
 		Members:   s.Members.WithTx(tx),

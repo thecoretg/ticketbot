@@ -22,13 +22,16 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		TicketJournals:      NewTicketJournalRepo(pool),
 		WebexRecipients:     NewWebexRecipientRepo(pool),
 		CW: repos.CWRepos{
-			Board:        NewBoardRepo(pool),
-			TicketStatus: NewTicketStatusRepo(pool),
-			Company:      NewCompanyRepo(pool),
-			Contact:      NewContactRepo(pool),
-			Member:       NewMemberRepo(pool),
-			Note:         NewTicketNoteRepo(pool),
-			Ticket:       NewTicketRepo(pool),
+			Board:         NewBoardRepo(pool),
+			TicketStatus:  NewTicketStatusRepo(pool),
+			TicketType:    NewTicketTypeRepo(pool),
+			TicketSubType: NewTicketSubTypeRepo(pool),
+			TicketItem:    NewTicketItemRepo(pool),
+			Company:       NewCompanyRepo(pool),
+			Contact:       NewContactRepo(pool),
+			Member:        NewMemberRepo(pool),
+			Note:          NewTicketNoteRepo(pool),
+			Ticket:        NewTicketRepo(pool),
 		},
 	}
 }

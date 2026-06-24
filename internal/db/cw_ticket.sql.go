@@ -35,7 +35,7 @@ func (q *Queries) DeleteTicket(ctx context.Context, id int) error {
 }
 
 const getTicket = `-- name: GetTicket :one
-SELECT id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted FROM cw_ticket
+SELECT id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted, type_id, subtype_id, item_id FROM cw_ticket
 WHERE id = $1 LIMIT 1
 `
 
@@ -55,12 +55,15 @@ func (q *Queries) GetTicket(ctx context.Context, id int) (*CwTicket, error) {
 		&i.UpdatedOn,
 		&i.AddedOn,
 		&i.Deleted,
+		&i.TypeID,
+		&i.SubtypeID,
+		&i.ItemID,
 	)
 	return &i, err
 }
 
 const listTickets = `-- name: ListTickets :many
-SELECT id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted FROM cw_ticket
+SELECT id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted, type_id, subtype_id, item_id FROM cw_ticket
 ORDER BY id
 `
 
@@ -86,6 +89,9 @@ func (q *Queries) ListTickets(ctx context.Context) ([]*CwTicket, error) {
 			&i.UpdatedOn,
 			&i.AddedOn,
 			&i.Deleted,
+			&i.TypeID,
+			&i.SubtypeID,
+			&i.ItemID,
 		); err != nil {
 			return nil, err
 		}
@@ -112,8 +118,8 @@ func (q *Queries) SoftDeleteTicket(ctx context.Context, id int) error {
 
 const upsertTicket = `-- name: UpsertTicket :one
 INSERT INTO cw_ticket
-(id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+(id, summary, board_id, status_id, owner_id, company_id, contact_id, type_id, subtype_id, item_id, resources, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (id) DO UPDATE SET
     summary = EXCLUDED.summary,
     board_id = EXCLUDED.board_id,
@@ -121,10 +127,13 @@ ON CONFLICT (id) DO UPDATE SET
     owner_id = EXCLUDED.owner_id,
     company_id = EXCLUDED.company_id,
     contact_id = EXCLUDED.contact_id,
+    type_id = EXCLUDED.type_id,
+    subtype_id = EXCLUDED.subtype_id,
+    item_id = EXCLUDED.item_id,
     resources = EXCLUDED.resources,
     updated_by = EXCLUDED.updated_by,
     updated_on = NOW()
-RETURNING id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted
+RETURNING id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted, type_id, subtype_id, item_id
 `
 
 type UpsertTicketParams struct {
@@ -135,6 +144,9 @@ type UpsertTicketParams struct {
 	OwnerID   *int    `json:"owner_id"`
 	CompanyID int     `json:"company_id"`
 	ContactID *int    `json:"contact_id"`
+	TypeID    *int    `json:"type_id"`
+	SubtypeID *int    `json:"subtype_id"`
+	ItemID    *int    `json:"item_id"`
 	Resources *string `json:"resources"`
 	UpdatedBy *string `json:"updated_by"`
 }
@@ -148,6 +160,9 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (*Cw
 		arg.OwnerID,
 		arg.CompanyID,
 		arg.ContactID,
+		arg.TypeID,
+		arg.SubtypeID,
+		arg.ItemID,
 		arg.Resources,
 		arg.UpdatedBy,
 	)
@@ -165,6 +180,9 @@ func (q *Queries) UpsertTicket(ctx context.Context, arg UpsertTicketParams) (*Cw
 		&i.UpdatedOn,
 		&i.AddedOn,
 		&i.Deleted,
+		&i.TypeID,
+		&i.SubtypeID,
+		&i.ItemID,
 	)
 	return &i, err
 }

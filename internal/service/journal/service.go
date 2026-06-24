@@ -61,6 +61,9 @@ func (s *Service) Record(ctx context.Context, ticketID int, full *models.FullTic
 		j.ContactName = contactName(full.Contact)
 		j.StatusName = full.Status.Name
 		j.OwnerName = memberName(full.Owner)
+		j.TypeName = typeName(full.Type)
+		j.SubtypeName = subTypeName(full.SubType)
+		j.ItemName = itemName(full.Item)
 	}
 
 	j.LastTrigger = run.Trigger
@@ -134,4 +137,25 @@ func memberName(m *models.Member) string {
 		return m.Identifier
 	}
 	return name
+}
+
+func typeName(t *models.TicketType) string {
+	if t == nil {
+		return ""
+	}
+	return t.Name
+}
+
+func subTypeName(t *models.TicketSubType) string {
+	if t == nil {
+		return ""
+	}
+	return t.Name
+}
+
+func itemName(t *models.TicketItem) string {
+	if t == nil {
+		return ""
+	}
+	return t.Name
 }

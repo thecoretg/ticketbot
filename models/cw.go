@@ -60,6 +60,9 @@ type Ticket struct {
 	OwnerID   *int      `json:"owner_id"`
 	CompanyID int       `json:"company_id"`
 	ContactID *int      `json:"contact_id"`
+	TypeID    *int      `json:"type_id"`
+	SubTypeID *int      `json:"subtype_id"`
+	ItemID    *int      `json:"item_id"`
 	Resources *string   `json:"resources"`
 	UpdatedBy *string   `json:"updated_by"`
 	UpdatedOn time.Time `json:"updated_on"`
@@ -74,6 +77,9 @@ type FullTicket struct {
 	Company    Company
 	Contact    *Contact
 	Owner      *Member
+	Type       *TicketType
+	SubType    *TicketSubType
+	Item       *TicketItem
 	LatestNote *FullTicketNote
 	Resources  []*Member
 }
@@ -110,4 +116,45 @@ type TicketStatus struct {
 	UpdatedOn      time.Time `json:"updated_on"`
 	AddedOn        time.Time `json:"added_on"`
 	Deleted        bool      `json:"deleted"`
+}
+
+var ErrTicketTypeNotFound = errors.New("ticket type not found")
+
+type TicketType struct {
+	ID          int       `json:"id"`
+	BoardID     int       `json:"board_id"`
+	Name        string    `json:"name"`
+	Category    string    `json:"category"`
+	DefaultFlag bool      `json:"default_flag"`
+	Inactive    bool      `json:"inactive"`
+	UpdatedOn   time.Time `json:"updated_on"`
+	AddedOn     time.Time `json:"added_on"`
+	Deleted     bool      `json:"deleted"`
+}
+
+var ErrTicketSubTypeNotFound = errors.New("ticket subtype not found")
+
+// TicketSubType is a board-scoped subtype. TypeAssociationIDs records which Types
+// the subtype belongs to (a subtype may be shared across multiple types).
+type TicketSubType struct {
+	ID                 int       `json:"id"`
+	BoardID            int       `json:"board_id"`
+	Name               string    `json:"name"`
+	Inactive           bool      `json:"inactive"`
+	TypeAssociationIDs []int     `json:"type_association_ids"`
+	UpdatedOn          time.Time `json:"updated_on"`
+	AddedOn            time.Time `json:"added_on"`
+	Deleted            bool      `json:"deleted"`
+}
+
+var ErrTicketItemNotFound = errors.New("ticket item not found")
+
+type TicketItem struct {
+	ID        int       `json:"id"`
+	BoardID   int       `json:"board_id"`
+	Name      string    `json:"name"`
+	Inactive  bool      `json:"inactive"`
+	UpdatedOn time.Time `json:"updated_on"`
+	AddedOn   time.Time `json:"added_on"`
+	Deleted   bool      `json:"deleted"`
 }
