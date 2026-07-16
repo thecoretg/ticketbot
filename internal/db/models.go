@@ -126,15 +126,16 @@ type CwTicketStatus struct {
 }
 
 type NotifierForward struct {
-	ID            int        `json:"id"`
-	SourceID      int        `json:"source_id"`
-	DestinationID int        `json:"destination_id"`
-	StartDate     *time.Time `json:"start_date"`
-	EndDate       *time.Time `json:"end_date"`
-	Enabled       bool       `json:"enabled"`
-	UserKeepsCopy bool       `json:"user_keeps_copy"`
-	CreatedOn     time.Time  `json:"created_on"`
-	UpdatedOn     time.Time  `json:"updated_on"`
+	ID                 int        `json:"id"`
+	SourceID           int        `json:"source_id"`
+	DestinationID      int        `json:"destination_id"`
+	StartDate          *time.Time `json:"start_date"`
+	EndDate            *time.Time `json:"end_date"`
+	Enabled            bool       `json:"enabled"`
+	UserKeepsCopy      bool       `json:"user_keeps_copy"`
+	CreatedOn          time.Time  `json:"created_on"`
+	UpdatedOn          time.Time  `json:"updated_on"`
+	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
 }
 
 type NotifierRule struct {

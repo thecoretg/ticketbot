@@ -7,8 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/db"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type UserForwardRepo struct {
@@ -163,105 +163,112 @@ func (p *UserForwardRepo) Delete(ctx context.Context, id int) error {
 
 func forwardToInsertParams(t *models.NotifierForward) db.InsertNotifierForwardParams {
 	return db.InsertNotifierForwardParams{
-		SourceID:      t.SourceID,
-		DestinationID: t.DestID,
-		StartDate:     t.StartDate,
-		EndDate:       t.EndDate,
-		Enabled:       t.Enabled,
-		UserKeepsCopy: t.UserKeepsCopy,
+		SourceID:           t.SourceID,
+		DestinationID:      t.DestID,
+		StartDate:          t.StartDate,
+		EndDate:            t.EndDate,
+		Enabled:            t.Enabled,
+		UserKeepsCopy:      t.UserKeepsCopy,
+		OnlyIfSoleResource: t.OnlyIfSoleResource,
 	}
 }
 
 func forwardFromPG(pg *db.NotifierForward) *models.NotifierForward {
 	return &models.NotifierForward{
-		ID:            pg.ID,
-		SourceID:      pg.SourceID,
-		DestID:        pg.DestinationID,
-		StartDate:     pg.StartDate,
-		EndDate:       pg.EndDate,
-		Enabled:       pg.Enabled,
-		UserKeepsCopy: pg.UserKeepsCopy,
-		UpdatedOn:     pg.UpdatedOn,
-		CreatedOn:     pg.CreatedOn,
+		ID:                 pg.ID,
+		SourceID:           pg.SourceID,
+		DestID:             pg.DestinationID,
+		StartDate:          pg.StartDate,
+		EndDate:            pg.EndDate,
+		Enabled:            pg.Enabled,
+		UserKeepsCopy:      pg.UserKeepsCopy,
+		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		UpdatedOn:          pg.UpdatedOn,
+		CreatedOn:          pg.CreatedOn,
 	}
 }
 
 func fullForwardFromPG(pg *db.ListNotifierForwardsFullRow) *models.NotifierForwardFull {
 	return &models.NotifierForwardFull{
-		ID:              pg.ID,
-		Enabled:         pg.Enabled,
-		UserKeepsCopy:   pg.UserKeepsCopy,
-		StartDate:       pg.StartDate,
-		EndDate:         pg.EndDate,
-		SourceID:        pg.SourceID,
-		SourceName:      pg.SourceName,
-		SourceType:      pg.SourceType,
-		DestinationID:   pg.DestinationID,
-		DestinationName: pg.DestinationName,
-		DestinationType: pg.DestinationType,
+		ID:                 pg.ID,
+		Enabled:            pg.Enabled,
+		UserKeepsCopy:      pg.UserKeepsCopy,
+		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		StartDate:          pg.StartDate,
+		EndDate:            pg.EndDate,
+		SourceID:           pg.SourceID,
+		SourceName:         pg.SourceName,
+		SourceType:         pg.SourceType,
+		DestinationID:      pg.DestinationID,
+		DestinationName:    pg.DestinationName,
+		DestinationType:    pg.DestinationType,
 	}
 }
 
 func activeForwardFromPG(pg *db.ListActiveNotifierForwardsRow) *models.NotifierForwardFull {
 	return &models.NotifierForwardFull{
-		ID:              pg.ID,
-		Enabled:         pg.Enabled,
-		UserKeepsCopy:   pg.UserKeepsCopy,
-		StartDate:       pg.StartDate,
-		EndDate:         pg.EndDate,
-		SourceID:        pg.SourceID,
-		SourceName:      pg.SourceName,
-		SourceType:      pg.SourceType,
-		DestinationID:   pg.DestinationID,
-		DestinationName: pg.DestinationName,
-		DestinationType: pg.DestinationType,
+		ID:                 pg.ID,
+		Enabled:            pg.Enabled,
+		UserKeepsCopy:      pg.UserKeepsCopy,
+		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		StartDate:          pg.StartDate,
+		EndDate:            pg.EndDate,
+		SourceID:           pg.SourceID,
+		SourceName:         pg.SourceName,
+		SourceType:         pg.SourceType,
+		DestinationID:      pg.DestinationID,
+		DestinationName:    pg.DestinationName,
+		DestinationType:    pg.DestinationType,
 	}
 }
 
 func inactiveForwardFromPG(pg *db.ListInactiveNotifierForwardsRow) *models.NotifierForwardFull {
 	return &models.NotifierForwardFull{
-		ID:              pg.ID,
-		Enabled:         pg.Enabled,
-		UserKeepsCopy:   pg.UserKeepsCopy,
-		StartDate:       pg.StartDate,
-		EndDate:         pg.EndDate,
-		SourceID:        pg.SourceID,
-		SourceName:      pg.SourceName,
-		SourceType:      pg.SourceType,
-		DestinationID:   pg.DestinationID,
-		DestinationName: pg.DestinationName,
-		DestinationType: pg.DestinationType,
+		ID:                 pg.ID,
+		Enabled:            pg.Enabled,
+		UserKeepsCopy:      pg.UserKeepsCopy,
+		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		StartDate:          pg.StartDate,
+		EndDate:            pg.EndDate,
+		SourceID:           pg.SourceID,
+		SourceName:         pg.SourceName,
+		SourceType:         pg.SourceType,
+		DestinationID:      pg.DestinationID,
+		DestinationName:    pg.DestinationName,
+		DestinationType:    pg.DestinationType,
 	}
 }
 
 func notExpiredForwardFromPG(pg *db.ListNotExpiredNotifierForwardsRow) *models.NotifierForwardFull {
 	return &models.NotifierForwardFull{
-		ID:              pg.ID,
-		Enabled:         pg.Enabled,
-		UserKeepsCopy:   pg.UserKeepsCopy,
-		StartDate:       pg.StartDate,
-		EndDate:         pg.EndDate,
-		SourceID:        pg.SourceID,
-		SourceName:      pg.SourceName,
-		SourceType:      pg.SourceType,
-		DestinationID:   pg.DestinationID,
-		DestinationName: pg.DestinationName,
-		DestinationType: pg.DestinationType,
+		ID:                 pg.ID,
+		Enabled:            pg.Enabled,
+		UserKeepsCopy:      pg.UserKeepsCopy,
+		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		StartDate:          pg.StartDate,
+		EndDate:            pg.EndDate,
+		SourceID:           pg.SourceID,
+		SourceName:         pg.SourceName,
+		SourceType:         pg.SourceType,
+		DestinationID:      pg.DestinationID,
+		DestinationName:    pg.DestinationName,
+		DestinationType:    pg.DestinationType,
 	}
 }
 
 func activeForwardBySourceFromPG(pg *db.ListActiveForwardsBySourceRecipientRow) *models.NotifierForwardFull {
 	return &models.NotifierForwardFull{
-		ID:              pg.ID,
-		Enabled:         pg.Enabled,
-		UserKeepsCopy:   pg.UserKeepsCopy,
-		StartDate:       pg.StartDate,
-		EndDate:         pg.EndDate,
-		SourceID:        pg.SourceID,
-		SourceName:      pg.SourceName,
-		SourceType:      pg.SourceType,
-		DestinationID:   pg.DestinationID,
-		DestinationName: pg.DestinationName,
-		DestinationType: pg.DestinationType,
+		ID:                 pg.ID,
+		Enabled:            pg.Enabled,
+		UserKeepsCopy:      pg.UserKeepsCopy,
+		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		StartDate:          pg.StartDate,
+		EndDate:            pg.EndDate,
+		SourceID:           pg.SourceID,
+		SourceName:         pg.SourceName,
+		SourceType:         pg.SourceType,
+		DestinationID:      pg.DestinationID,
+		DestinationName:    pg.DestinationName,
+		DestinationType:    pg.DestinationType,
 	}
 }

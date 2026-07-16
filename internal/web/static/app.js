@@ -674,10 +674,11 @@ function renderForwards(fwds) {
         <button class="btn btn-primary btn-sm" onclick="showNewForwardModal()">+ New Forward</button>
     </div>`
 
-    const thead = '<th>Enabled</th><th>Keep Copy</th><th>Dates</th><th>Source</th><th>Destination</th><th></th>'
+    const thead = '<th>Enabled</th><th>Keep Copy</th><th>Sole Only</th><th>Dates</th><th>Source</th><th>Destination</th><th></th>'
     const rows  = fwds.map(f => `<tr>
         <td>${badge(f.enabled)}</td>
         <td>${badge(f.user_keeps_copy)}</td>
+        <td>${badge(f.only_if_sole_resource)}</td>
         <td style="white-space:nowrap;color:var(--muted)">${fmtDateRange(f.start_date, f.end_date)}</td>
         <td>${esc(f.source_name)} <span style="color:var(--muted);font-size:11px">${esc(f.source_type)}</span></td>
         <td>${esc(f.destination_name)} <span style="color:var(--muted);font-size:11px">${esc(f.destination_type)}</span></td>
@@ -727,6 +728,13 @@ async function showNewForwardModal() {
                 <option value="true">Yes</option>
                 <option value="false">No</option>
             </select>
+        </div>
+        <div class="form-group">
+            <label>Only Forward If Sole Resource?</label>
+            <select id="f-sole">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+            </select>
         </div>`, async () => {
         const sourceId  = parseInt(document.getElementById('f-source').value)
         const destId    = parseInt(document.getElementById('f-dest').value)
@@ -735,6 +743,7 @@ async function showNewForwardModal() {
         const endDate   = document.getElementById('f-end-date').value
         const endTime   = document.getElementById('f-end-time').value
         const keepCopy  = document.getElementById('f-keep').value === 'true'
+        const soleResource = document.getElementById('f-sole').value === 'true'
 
         const startDT = startDate ? `${startDate}T${startTime || '00:00'}` : null
         const endDT   = endDate   ? `${endDate}T${endTime   || '23:59'}` : null
@@ -747,6 +756,7 @@ async function showNewForwardModal() {
             dest_email:      destId,
             enabled:         true,
             user_keeps_copy: keepCopy,
+            only_if_sole_resource: soleResource,
         }
         if (startDT) payload.start_date = new Date(startDT).toISOString()
         if (endDT)   payload.end_date   = new Date(endDT).toISOString()

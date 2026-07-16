@@ -56,6 +56,16 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 	queue := make([]int, 0, len(in))
 	seen := make(map[int]struct{})
 
+	// count natural (non-forwarded) person recipients on the ticket. sole-resource
+	// forwards only fire when their source is the only person on the ticket; rooms
+	// (board-rule recipients) don't count.
+	naturalPeople := 0
+	for _, r := range in {
+		if r.isNaturalRecipient() && r.recipient.Type == models.RecipientTypePerson {
+			naturalPeople++
+		}
+	}
+
 	for id := range in {
 		queue = append(queue, id)
 	}
@@ -87,8 +97,17 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 		}
 
 		keep := false
+		applied := false
 
 		for _, f := range fwds {
+			// sole-resource forwards only fire when the source is the only person
+			// on the ticket; if others are present, someone will already see the
+			// response, so skip without redirecting or dropping the source.
+			if f.OnlyIfSoleResource && naturalPeople > 1 {
+				continue
+			}
+			applied = true
+
 			// all we need is one forward where the user is marked to keep a copy
 			if f.UserKeepsCopy {
 				keep = true
@@ -112,7 +131,7 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 			queue = append(queue, f.DestinationID)
 		}
 
-		if !keep {
+		if applied && !keep {
 			// delete the source recipient so the don't get the notification
 			delete(in, r.recipient.ID)
 		}
