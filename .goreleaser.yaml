@@ -23,11 +23,6 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
 
-after:
-  hooks:
-    - make docker-build
-    - make deploy-container
-
 changelog:
   sort: asc
   filters:

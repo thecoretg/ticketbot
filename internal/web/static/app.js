@@ -563,6 +563,17 @@ function fmtDateRange(start, end) {
     return `${s} – ${e}`
 }
 
+// splits a UTC ISO string into local ['YYYY-MM-DD', 'HH:MM'] for date/time inputs
+function splitLocalDT(iso) {
+    if (!iso) return ['', '']
+    const d = new Date(iso)
+    const p = n => String(n).padStart(2, '0')
+    return [
+        `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+        `${p(d.getHours())}:${p(d.getMinutes())}`,
+    ]
+}
+
 function badge(val) {
     return val
         ? '<span class="badge badge-on">Yes</span>'
@@ -659,6 +670,8 @@ async function deleteRule(id) {
 // ─────────────────────────────────────────────────────────
 // Forwards
 // ─────────────────────────────────────────────────────────
+let forwardsCache = []
+
 async function loadForwards() {
     try {
         const fwds = await api('GET', '/notifiers/forwards?filter=not-expired')
@@ -669,26 +682,38 @@ async function loadForwards() {
 }
 
 function renderForwards(fwds) {
+    forwardsCache = fwds
+
     const header = `<div class="tab-header">
         <h2>Notification Forwards</h2>
-        <button class="btn btn-primary btn-sm" onclick="showNewForwardModal()">+ New Forward</button>
+        <button class="btn btn-primary btn-sm" onclick="showForwardModal()">+ New Forward</button>
     </div>`
 
-    const thead = '<th>Enabled</th><th>Keep Copy</th><th>Sole Only</th><th>Dates</th><th>Source</th><th>Destination</th><th></th>'
+    const thead = '<th>Enabled</th><th>Keep Copy</th><th>Sole Only</th><th>Public Only</th><th>Dates</th><th>Source</th><th>Destination</th><th></th>'
     const rows  = fwds.map(f => `<tr>
         <td>${badge(f.enabled)}</td>
         <td>${badge(f.user_keeps_copy)}</td>
         <td>${badge(f.only_if_sole_resource)}</td>
+        <td>${badge(f.public_only)}</td>
         <td style="white-space:nowrap;color:var(--muted)">${fmtDateRange(f.start_date, f.end_date)}</td>
         <td>${esc(f.source_name)} <span style="color:var(--muted);font-size:11px">${esc(f.source_type)}</span></td>
         <td>${esc(f.destination_name)} <span style="color:var(--muted);font-size:11px">${esc(f.destination_type)}</span></td>
-        <td class="actions"><button class="btn btn-danger" onclick="deleteForward(${f.id})">Delete</button></td>
+        <td class="actions">
+            <button class="btn btn-ghost btn-sm" onclick="editForward(${f.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteForward(${f.id})">Delete</button>
+        </td>
     </tr>`)
 
     setContent(header + tableWrap(thead, rows))
 }
 
-async function showNewForwardModal() {
+function editForward(id) {
+    const f = forwardsCache.find(x => x.id === id)
+    if (!f) { toast('Forward not found — reload the tab', 'error'); return }
+    showForwardModal(f)
+}
+
+async function showForwardModal(existing = null) {
     let recipients
     try {
         recipients = await api('GET', '/webex/rooms')
@@ -696,45 +721,57 @@ async function showNewForwardModal() {
 
     if (!recipients?.length) { toast('No recipients found — run a sync first', 'error'); return }
 
-    const recipOpts = recipients.map(r =>
-        `<option value="${r.id}">${esc(r.name)} (${esc(r.type)})</option>`).join('')
+    const recipOpts = sel => recipients.map(r =>
+        `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>${esc(r.name)} (${esc(r.type)})</option>`).join('')
 
-    openModal('New Forward', `
+    // yes/no select where the first option listed is the one shown when adding a new forward
+    const yesNo = (val, yesFirst) => {
+        const opts = yesFirst ? [true, false] : [false, true]
+        return opts.map(o =>
+            `<option value="${o}"${o === val ? ' selected' : ''}>${o ? 'Yes' : 'No'}</option>`).join('')
+    }
+
+    const [startDate, startTime] = splitLocalDT(existing?.start_date)
+    const [endDate, endTime]     = splitLocalDT(existing?.end_date)
+
+    openModal(existing ? 'Edit Forward' : 'New Forward', `
         <div class="form-group">
             <label>Source</label>
-            <select id="f-source">${recipOpts}</select>
+            <select id="f-source">${recipOpts(existing?.source_id)}</select>
         </div>
         <div class="form-group">
             <label>Destination</label>
-            <select id="f-dest">${recipOpts}</select>
+            <select id="f-dest">${recipOpts(existing?.destination_id)}</select>
         </div>
         <div class="form-group">
             <label>Start Date &amp; Time <span style="color:var(--muted)">(optional)</span></label>
             <div style="display:flex;gap:8px">
-                <input type="date" id="f-start-date" style="flex:2">
-                <input type="time" id="f-start-time" style="flex:1">
+                <input type="date" id="f-start-date" style="flex:2" value="${startDate}">
+                <input type="time" id="f-start-time" style="flex:1" value="${startTime}">
             </div>
         </div>
         <div class="form-group">
             <label>End Date &amp; Time <span style="color:var(--muted)">(optional)</span></label>
             <div style="display:flex;gap:8px">
-                <input type="date" id="f-end-date" style="flex:2">
-                <input type="time" id="f-end-time" style="flex:1">
+                <input type="date" id="f-end-date" style="flex:2" value="${endDate}">
+                <input type="time" id="f-end-time" style="flex:1" value="${endTime}">
             </div>
         </div>
         <div class="form-group">
+            <label>Enabled?</label>
+            <select id="f-enabled">${yesNo(existing ? existing.enabled : true, true)}</select>
+        </div>
+        <div class="form-group">
             <label>Source Keeps Copy?</label>
-            <select id="f-keep">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-            </select>
+            <select id="f-keep">${yesNo(existing ? existing.user_keeps_copy : true, true)}</select>
         </div>
         <div class="form-group">
             <label>Only Forward If Sole Resource?</label>
-            <select id="f-sole">
-                <option value="false">No</option>
-                <option value="true">Yes</option>
-            </select>
+            <select id="f-sole">${yesNo(existing ? existing.only_if_sole_resource : false, false)}</select>
+        </div>
+        <div class="form-group">
+            <label>Public Notes Only?</label>
+            <select id="f-public">${yesNo(existing ? existing.public_only : false, false)}</select>
         </div>`, async () => {
         const sourceId  = parseInt(document.getElementById('f-source').value)
         const destId    = parseInt(document.getElementById('f-dest').value)
@@ -742,8 +779,10 @@ async function showNewForwardModal() {
         const startTime = document.getElementById('f-start-time').value
         const endDate   = document.getElementById('f-end-date').value
         const endTime   = document.getElementById('f-end-time').value
+        const enabled   = document.getElementById('f-enabled').value === 'true'
         const keepCopy  = document.getElementById('f-keep').value === 'true'
         const soleResource = document.getElementById('f-sole').value === 'true'
+        const publicOnly   = document.getElementById('f-public').value === 'true'
 
         const startDT = startDate ? `${startDate}T${startTime || '00:00'}` : null
         const endDT   = endDate   ? `${endDate}T${endTime   || '23:59'}` : null
@@ -754,20 +793,25 @@ async function showNewForwardModal() {
         const payload = {
             user_email:      sourceId,
             dest_email:      destId,
-            enabled:         true,
+            enabled:         enabled,
             user_keeps_copy: keepCopy,
             only_if_sole_resource: soleResource,
+            public_only:     publicOnly,
         }
         if (startDT) payload.start_date = new Date(startDT).toISOString()
         if (endDT)   payload.end_date   = new Date(endDT).toISOString()
 
         try {
-            await api('POST', '/notifiers/forwards', payload)
+            if (existing) {
+                await api('PUT', `/notifiers/forwards/${existing.id}`, payload)
+            } else {
+                await api('POST', '/notifiers/forwards', payload)
+            }
             closeModal()
-            toast('Forward created', 'success')
+            toast(existing ? 'Forward updated' : 'Forward created', 'success')
             loadForwards()
         } catch (e) { toast(e.message, 'error') }
-    })
+    }, existing ? 'Save' : 'Create')
 }
 
 async function deleteForward(id) {

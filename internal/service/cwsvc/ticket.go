@@ -401,11 +401,12 @@ func (s *Service) ensureTicketNote(ctx context.Context, cwn *psa.ServiceTicketNo
 	}
 
 	n, err = s.Notes.Upsert(ctx, &models.TicketNote{
-		ID:        cwn.ID,
-		TicketID:  cwn.TicketID,
-		Content:   strToPtr(cwn.Text),
-		MemberID:  memberID,
-		ContactID: contactID,
+		ID:                   cwn.ID,
+		TicketID:             cwn.TicketID,
+		Content:              strToPtr(cwn.Text),
+		MemberID:             memberID,
+		ContactID:            contactID,
+		InternalAnalysisFlag: cwn.InternalAnalysisFlag,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("inserting note into store: %w", err)

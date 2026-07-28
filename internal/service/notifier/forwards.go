@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/thecoretg/ticketbot/models"
@@ -39,6 +40,25 @@ func (s *Service) AddForward(ctx context.Context, f *models.NotifierForward) (*m
 	return s.Forwards.Insert(ctx, f)
 }
 
+func (s *Service) UpdateForward(ctx context.Context, id int, f *models.NotifierForward) (*models.NotifierForward, error) {
+	if f == nil {
+		return nil, errors.New("got nil forward rule")
+	}
+
+	exists, err := s.Forwards.Exists(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("checking if forward exists: %w", err)
+	}
+
+	if !exists {
+		return nil, models.ErrUserForwardNotFound
+	}
+
+	f.ID = id
+
+	return s.Forwards.Update(ctx, f)
+}
+
 func (s *Service) DeleteForward(ctx context.Context, id int) error {
 	exists, err := s.Forwards.Exists(ctx, id)
 	if err != nil {
@@ -52,7 +72,7 @@ func (s *Service) DeleteForward(ctx context.Context, id int) error {
 	return s.Forwards.Delete(ctx, id)
 }
 
-func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, error) {
+func (s *Service) processAllFwds(ctx context.Context, in recipMap, noteIsInternal bool) (recipMap, error) {
 	queue := make([]int, 0, len(in))
 	seen := make(map[int]struct{})
 
@@ -111,6 +131,12 @@ func (s *Service) processAllFwds(ctx context.Context, in recipMap) (recipMap, er
 			// all we need is one forward where the user is marked to keep a copy
 			if f.UserKeepsCopy {
 				keep = true
+			}
+
+			// public-only forwards don't redirect internal notes. the forward still counts as
+			// applied, so the source is only notified if they keep a copy.
+			if f.PublicOnly && noteIsInternal {
+				continue
 			}
 
 			// if the forward destination recipient is in the map already without a forward,

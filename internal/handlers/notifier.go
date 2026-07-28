@@ -151,6 +151,32 @@ func (h *NotifierHandler) AddUserForward(c *gin.Context) {
 	outputJSON(c, f)
 }
 
+func (h *NotifierHandler) UpdateUserForward(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	p := &models.NotifierForward{}
+	if err := c.ShouldBindJSON(p); err != nil {
+		badPayloadError(c, err)
+		return
+	}
+
+	f, err := h.Svc.UpdateForward(c.Request.Context(), id, p)
+	if err != nil {
+		if errors.Is(err, models.ErrUserForwardNotFound) {
+			notFoundError(c, err)
+			return
+		}
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, f)
+}
+
 func (h *NotifierHandler) DeleteUserForward(c *gin.Context) {
 	id, err := convertID(c)
 	if err != nil {

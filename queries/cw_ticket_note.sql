@@ -13,13 +13,14 @@ ORDER BY id;
 
 -- name: UpsertTicketNote :one
 INSERT INTO cw_ticket_note
-(id, ticket_id, content, member_id, contact_id)
-VALUES ($1, $2, $3, $4, $5)
+(id, ticket_id, content, member_id, contact_id, internal_analysis_flag)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO UPDATE SET
     ticket_id = EXCLUDED.ticket_id,
     content = EXCLUDED.content,
     member_id = EXCLUDED.member_id,
     contact_id = EXCLUDED.contact_id,
+    internal_analysis_flag = EXCLUDED.internal_analysis_flag,
     updated_on = NOW()
 RETURNING *;
 

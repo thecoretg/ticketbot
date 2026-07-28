@@ -4,6 +4,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -28,6 +29,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -50,6 +52,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -70,6 +73,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -92,6 +96,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -127,8 +132,23 @@ ORDER BY id;
 
 -- name: InsertNotifierForward :one
 INSERT INTO notifier_forward (
-    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, only_if_sole_resource
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, only_if_sole_resource, public_only
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING *;
+
+-- name: UpdateNotifierForward :one
+UPDATE notifier_forward
+SET
+    source_id = $2,
+    destination_id = $3,
+    start_date = $4,
+    end_date = $5,
+    enabled = $6,
+    user_keeps_copy = $7,
+    only_if_sole_resource = $8,
+    public_only = $9,
+    updated_on = NOW()
+WHERE id = $1
 RETURNING *;
 
 -- name: DeleteNotifierForward :exec

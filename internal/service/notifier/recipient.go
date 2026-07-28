@@ -83,7 +83,10 @@ func (s *Service) getAllRecipients(ctx context.Context, t *models.FullTicket, ru
 		recips[r.ID] = newRecip(r)
 	}
 
-	fwdProcd, err := s.processAllFwds(ctx, recips)
+	// notes flagged for internal analysis never redirect through a public-only forward
+	noteIsInternal := t.LatestNote != nil && t.LatestNote.InternalAnalysisFlag
+
+	fwdProcd, err := s.processAllFwds(ctx, recips, noteIsInternal)
 	if err != nil {
 		// return pre-fwd processing
 		slog.Error("forward processing failed; using original recipients", "ticket_id", t.Ticket.ID, "error", err.Error())

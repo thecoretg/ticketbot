@@ -57,6 +57,19 @@ func (c *Client) CreateUserForward(payload *models.NotifierForward) (*models.Not
 	return uf, nil
 }
 
+func (c *Client) UpdateUserForward(id int, payload *models.NotifierForward) (*models.NotifierForward, error) {
+	if id == 0 {
+		return nil, errors.New("no id provided")
+	}
+
+	uf := &models.NotifierForward{}
+	if err := c.Put(fmt.Sprintf("notifiers/forwards/%d", id), payload, uf); err != nil {
+		return nil, fmt.Errorf("sending update request: %w", err)
+	}
+
+	return uf, nil
+}
+
 func (c *Client) DeleteUserForward(id int) error {
 	if id == 0 {
 		return errors.New("no id provided")

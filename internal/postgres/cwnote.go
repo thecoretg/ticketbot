@@ -92,23 +92,25 @@ func (p *TicketNoteRepo) Delete(ctx context.Context, id int) error {
 
 func ticketNoteToUpsertParams(t *models.TicketNote) db.UpsertTicketNoteParams {
 	return db.UpsertTicketNoteParams{
-		ID:        t.ID,
-		TicketID:  t.TicketID,
-		Content:   t.Content,
-		MemberID:  t.MemberID,
-		ContactID: t.ContactID,
+		ID:                   t.ID,
+		TicketID:             t.TicketID,
+		Content:              t.Content,
+		MemberID:             t.MemberID,
+		ContactID:            t.ContactID,
+		InternalAnalysisFlag: t.InternalAnalysisFlag,
 	}
 }
 
 func ticketNoteFromPG(pg *db.CwTicketNote) *models.TicketNote {
 	return &models.TicketNote{
-		ID:        pg.ID,
-		TicketID:  pg.TicketID,
-		Content:   pg.Content,
-		MemberID:  pg.MemberID,
-		ContactID: pg.ContactID,
-		UpdatedOn: pg.UpdatedOn,
-		AddedOn:   pg.AddedOn,
-		Deleted:   pg.Deleted,
+		ID:                   pg.ID,
+		TicketID:             pg.TicketID,
+		Content:              pg.Content,
+		MemberID:             pg.MemberID,
+		ContactID:            pg.ContactID,
+		InternalAnalysisFlag: pg.InternalAnalysisFlag,
+		UpdatedOn:            pg.UpdatedOn,
+		AddedOn:              pg.AddedOn,
+		Deleted:              pg.Deleted,
 	}
 }

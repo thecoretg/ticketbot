@@ -16,6 +16,7 @@ type NotifierForward struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 	CreatedOn          time.Time  `json:"added_on"`
 	UpdatedOn          time.Time  `json:"updated_on"`
 }
@@ -25,6 +26,7 @@ type NotifierForwardFull struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 	StartDate          *time.Time `json:"start_date"`
 	EndDate            *time.Time `json:"end_date"`
 	SourceID           int        `json:"source_id"`

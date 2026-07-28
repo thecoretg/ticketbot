@@ -36,7 +36,7 @@ func (q *Queries) DeleteNotifierForward(ctx context.Context, id int) error {
 }
 
 const getNotifierForward = `-- name: GetNotifierForward :one
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource FROM notifier_forward
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource, public_only FROM notifier_forward
 WHERE id = $1 LIMIT 1
 `
 
@@ -54,15 +54,16 @@ func (q *Queries) GetNotifierForward(ctx context.Context, id int) (*NotifierForw
 		&i.CreatedOn,
 		&i.UpdatedOn,
 		&i.OnlyIfSoleResource,
+		&i.PublicOnly,
 	)
 	return &i, err
 }
 
 const insertNotifierForward = `-- name: InsertNotifierForward :one
 INSERT INTO notifier_forward (
-    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, only_if_sole_resource
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource
+    source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, only_if_sole_resource, public_only
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource, public_only
 `
 
 type InsertNotifierForwardParams struct {
@@ -73,6 +74,7 @@ type InsertNotifierForwardParams struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 }
 
 func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierForwardParams) (*NotifierForward, error) {
@@ -84,6 +86,7 @@ func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierF
 		arg.Enabled,
 		arg.UserKeepsCopy,
 		arg.OnlyIfSoleResource,
+		arg.PublicOnly,
 	)
 	var i NotifierForward
 	err := row.Scan(
@@ -97,6 +100,7 @@ func (q *Queries) InsertNotifierForward(ctx context.Context, arg InsertNotifierF
 		&i.CreatedOn,
 		&i.UpdatedOn,
 		&i.OnlyIfSoleResource,
+		&i.PublicOnly,
 	)
 	return &i, err
 }
@@ -107,6 +111,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -130,6 +135,7 @@ type ListActiveForwardsBySourceRecipientRow struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 	StartDate          *time.Time `json:"start_date"`
 	EndDate            *time.Time `json:"end_date"`
 	SourceID           int        `json:"source_id"`
@@ -154,6 +160,7 @@ func (q *Queries) ListActiveForwardsBySourceRecipient(ctx context.Context, sourc
 			&i.Enabled,
 			&i.UserKeepsCopy,
 			&i.OnlyIfSoleResource,
+			&i.PublicOnly,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -179,6 +186,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -201,6 +209,7 @@ type ListActiveNotifierForwardsRow struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 	StartDate          *time.Time `json:"start_date"`
 	EndDate            *time.Time `json:"end_date"`
 	SourceID           int        `json:"source_id"`
@@ -225,6 +234,7 @@ func (q *Queries) ListActiveNotifierForwards(ctx context.Context) ([]*ListActive
 			&i.Enabled,
 			&i.UserKeepsCopy,
 			&i.OnlyIfSoleResource,
+			&i.PublicOnly,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -250,6 +260,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -272,6 +283,7 @@ type ListInactiveNotifierForwardsRow struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 	StartDate          *time.Time `json:"start_date"`
 	EndDate            *time.Time `json:"end_date"`
 	SourceID           int        `json:"source_id"`
@@ -296,6 +308,7 @@ func (q *Queries) ListInactiveNotifierForwards(ctx context.Context) ([]*ListInac
 			&i.Enabled,
 			&i.UserKeepsCopy,
 			&i.OnlyIfSoleResource,
+			&i.PublicOnly,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -321,6 +334,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -341,6 +355,7 @@ type ListNotExpiredNotifierForwardsRow struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 	StartDate          *time.Time `json:"start_date"`
 	EndDate            *time.Time `json:"end_date"`
 	SourceID           int        `json:"source_id"`
@@ -365,6 +380,7 @@ func (q *Queries) ListNotExpiredNotifierForwards(ctx context.Context) ([]*ListNo
 			&i.Enabled,
 			&i.UserKeepsCopy,
 			&i.OnlyIfSoleResource,
+			&i.PublicOnly,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -385,7 +401,7 @@ func (q *Queries) ListNotExpiredNotifierForwards(ctx context.Context) ([]*ListNo
 }
 
 const listNotifierForwards = `-- name: ListNotifierForwards :many
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource FROM notifier_forward
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource, public_only FROM notifier_forward
 ORDER BY id
 `
 
@@ -409,6 +425,7 @@ func (q *Queries) ListNotifierForwards(ctx context.Context) ([]*NotifierForward,
 			&i.CreatedOn,
 			&i.UpdatedOn,
 			&i.OnlyIfSoleResource,
+			&i.PublicOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -421,7 +438,7 @@ func (q *Queries) ListNotifierForwards(ctx context.Context) ([]*NotifierForward,
 }
 
 const listNotifierForwardsBySourceRecipientID = `-- name: ListNotifierForwardsBySourceRecipientID :many
-SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource FROM notifier_forward
+SELECT id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource, public_only FROM notifier_forward
 WHERE source_id = $1
 ORDER BY id
 `
@@ -446,6 +463,7 @@ func (q *Queries) ListNotifierForwardsBySourceRecipientID(ctx context.Context, s
 			&i.CreatedOn,
 			&i.UpdatedOn,
 			&i.OnlyIfSoleResource,
+			&i.PublicOnly,
 		); err != nil {
 			return nil, err
 		}
@@ -463,6 +481,7 @@ SELECT
     f.enabled AS enabled,
     f.user_keeps_copy AS user_keeps_copy,
     f.only_if_sole_resource AS only_if_sole_resource,
+    f.public_only AS public_only,
     f.start_date AS start_date,
     f.end_date AS end_date,
     src.id AS source_id,
@@ -483,6 +502,7 @@ type ListNotifierForwardsFullRow struct {
 	Enabled            bool       `json:"enabled"`
 	UserKeepsCopy      bool       `json:"user_keeps_copy"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
 	StartDate          *time.Time `json:"start_date"`
 	EndDate            *time.Time `json:"end_date"`
 	SourceID           int        `json:"source_id"`
@@ -507,6 +527,7 @@ func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]*ListNotifier
 			&i.Enabled,
 			&i.UserKeepsCopy,
 			&i.OnlyIfSoleResource,
+			&i.PublicOnly,
 			&i.StartDate,
 			&i.EndDate,
 			&i.SourceID,
@@ -524,4 +545,61 @@ func (q *Queries) ListNotifierForwardsFull(ctx context.Context) ([]*ListNotifier
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateNotifierForward = `-- name: UpdateNotifierForward :one
+UPDATE notifier_forward
+SET
+    source_id = $2,
+    destination_id = $3,
+    start_date = $4,
+    end_date = $5,
+    enabled = $6,
+    user_keeps_copy = $7,
+    only_if_sole_resource = $8,
+    public_only = $9,
+    updated_on = NOW()
+WHERE id = $1
+RETURNING id, source_id, destination_id, start_date, end_date, enabled, user_keeps_copy, created_on, updated_on, only_if_sole_resource, public_only
+`
+
+type UpdateNotifierForwardParams struct {
+	ID                 int        `json:"id"`
+	SourceID           int        `json:"source_id"`
+	DestinationID      int        `json:"destination_id"`
+	StartDate          *time.Time `json:"start_date"`
+	EndDate            *time.Time `json:"end_date"`
+	Enabled            bool       `json:"enabled"`
+	UserKeepsCopy      bool       `json:"user_keeps_copy"`
+	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
+	PublicOnly         bool       `json:"public_only"`
+}
+
+func (q *Queries) UpdateNotifierForward(ctx context.Context, arg UpdateNotifierForwardParams) (*NotifierForward, error) {
+	row := q.db.QueryRow(ctx, updateNotifierForward,
+		arg.ID,
+		arg.SourceID,
+		arg.DestinationID,
+		arg.StartDate,
+		arg.EndDate,
+		arg.Enabled,
+		arg.UserKeepsCopy,
+		arg.OnlyIfSoleResource,
+		arg.PublicOnly,
+	)
+	var i NotifierForward
+	err := row.Scan(
+		&i.ID,
+		&i.SourceID,
+		&i.DestinationID,
+		&i.StartDate,
+		&i.EndDate,
+		&i.Enabled,
+		&i.UserKeepsCopy,
+		&i.CreatedOn,
+		&i.UpdatedOn,
+		&i.OnlyIfSoleResource,
+		&i.PublicOnly,
+	)
+	return &i, err
 }

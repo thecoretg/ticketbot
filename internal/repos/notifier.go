@@ -28,6 +28,7 @@ type NotifierForwardRepository interface {
 	Get(ctx context.Context, id int) (*models.NotifierForward, error)
 	Exists(ctx context.Context, id int) (bool, error)
 	Insert(ctx context.Context, c *models.NotifierForward) (*models.NotifierForward, error)
+	Update(ctx context.Context, c *models.NotifierForward) (*models.NotifierForward, error)
 	Delete(ctx context.Context, id int) error
 }
 

@@ -55,13 +55,20 @@ func fwd(dest int, sole, keep bool) *models.NotifierForwardFull {
 	}
 }
 
-func TestProcessAllFwds_SoleResource(t *testing.T) {
+// publicOnly marks a forward as public-notes-only.
+func publicOnly(f *models.NotifierForwardFull) *models.NotifierForwardFull {
+	f.PublicOnly = true
+	return f
+}
+
+func TestProcessAllFwds(t *testing.T) {
 	tests := []struct {
-		name    string
-		natural []*models.WebexRecipient           // recipients present before forward processing
-		fwds    map[int][]*models.NotifierForwardFull
-		destDB  map[int]*models.WebexRecipient      // recipients GetRecipient can resolve
-		wantIDs []int                               // expected recipient IDs after processing
+		name     string
+		natural  []*models.WebexRecipient // recipients present before forward processing
+		fwds     map[int][]*models.NotifierForwardFull
+		destDB   map[int]*models.WebexRecipient // recipients GetRecipient can resolve
+		internal bool                           // the triggering note is flagged for internal analysis
+		wantIDs  []int                          // expected recipient IDs after processing
 	}{
 		{
 			name:    "sole-resource forward fires when source is only person",
@@ -98,6 +105,45 @@ func TestProcessAllFwds_SoleResource(t *testing.T) {
 			destDB:  map[int]*models.WebexRecipient{2: person(2)},
 			wantIDs: []int{2, 9}, // source is sole person, so forward fires; room remains
 		},
+		{
+			name:     "public-only forward on internal note notifies nobody without keep-copy",
+			natural:  []*models.WebexRecipient{person(1)},
+			fwds:     map[int][]*models.NotifierForwardFull{1: {publicOnly(fwd(2, false, false))}},
+			destDB:   map[int]*models.WebexRecipient{2: person(2)},
+			internal: true,
+			wantIDs:  nil, // forward applied, so source dropped; dest never added
+		},
+		{
+			name:     "public-only forward on internal note keeps source with keep-copy",
+			natural:  []*models.WebexRecipient{person(1)},
+			fwds:     map[int][]*models.NotifierForwardFull{1: {publicOnly(fwd(2, false, true))}},
+			destDB:   map[int]*models.WebexRecipient{2: person(2)},
+			internal: true,
+			wantIDs:  []int{1},
+		},
+		{
+			name:    "public-only forward on public note forwards normally",
+			natural: []*models.WebexRecipient{person(1)},
+			fwds:    map[int][]*models.NotifierForwardFull{1: {publicOnly(fwd(2, false, false))}},
+			destDB:  map[int]*models.WebexRecipient{2: person(2)},
+			wantIDs: []int{2},
+		},
+		{
+			name:     "non-public-only forward on internal note forwards normally",
+			natural:  []*models.WebexRecipient{person(1)},
+			fwds:     map[int][]*models.NotifierForwardFull{1: {fwd(2, false, false)}},
+			destDB:   map[int]*models.WebexRecipient{2: person(2)},
+			internal: true,
+			wantIDs:  []int{2},
+		},
+		{
+			name:     "sole-resource check runs before public-only, leaving source notified",
+			natural:  []*models.WebexRecipient{person(1), person(3)},
+			fwds:     map[int][]*models.NotifierForwardFull{1: {publicOnly(fwd(2, true, false))}},
+			destDB:   map[int]*models.WebexRecipient{2: person(2)},
+			internal: true,
+			wantIDs:  []int{1, 3},
+		},
 	}
 
 	for _, tc := range tests {
@@ -109,7 +155,7 @@ func TestProcessAllFwds_SoleResource(t *testing.T) {
 				in[r.ID] = newRecip(r)
 			}
 
-			out, err := s.processAllFwds(context.Background(), in)
+			out, err := s.processAllFwds(context.Background(), in, tc.internal)
 			if err != nil {
 				t.Fatalf("processAllFwds: %v", err)
 			}

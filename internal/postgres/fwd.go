@@ -150,6 +150,18 @@ func (p *UserForwardRepo) Insert(ctx context.Context, b *models.NotifierForward)
 	return forwardFromPG(d), nil
 }
 
+func (p *UserForwardRepo) Update(ctx context.Context, b *models.NotifierForward) (*models.NotifierForward, error) {
+	d, err := p.queries.UpdateNotifierForward(ctx, forwardToUpdateParams(b))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, models.ErrUserForwardNotFound
+		}
+		return nil, err
+	}
+
+	return forwardFromPG(d), nil
+}
+
 func (p *UserForwardRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteNotifierForward(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -170,6 +182,21 @@ func forwardToInsertParams(t *models.NotifierForward) db.InsertNotifierForwardPa
 		Enabled:            t.Enabled,
 		UserKeepsCopy:      t.UserKeepsCopy,
 		OnlyIfSoleResource: t.OnlyIfSoleResource,
+		PublicOnly:         t.PublicOnly,
+	}
+}
+
+func forwardToUpdateParams(t *models.NotifierForward) db.UpdateNotifierForwardParams {
+	return db.UpdateNotifierForwardParams{
+		ID:                 t.ID,
+		SourceID:           t.SourceID,
+		DestinationID:      t.DestID,
+		StartDate:          t.StartDate,
+		EndDate:            t.EndDate,
+		Enabled:            t.Enabled,
+		UserKeepsCopy:      t.UserKeepsCopy,
+		OnlyIfSoleResource: t.OnlyIfSoleResource,
+		PublicOnly:         t.PublicOnly,
 	}
 }
 
@@ -183,6 +210,7 @@ func forwardFromPG(pg *db.NotifierForward) *models.NotifierForward {
 		Enabled:            pg.Enabled,
 		UserKeepsCopy:      pg.UserKeepsCopy,
 		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		PublicOnly:         pg.PublicOnly,
 		UpdatedOn:          pg.UpdatedOn,
 		CreatedOn:          pg.CreatedOn,
 	}
@@ -194,6 +222,7 @@ func fullForwardFromPG(pg *db.ListNotifierForwardsFullRow) *models.NotifierForwa
 		Enabled:            pg.Enabled,
 		UserKeepsCopy:      pg.UserKeepsCopy,
 		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		PublicOnly:         pg.PublicOnly,
 		StartDate:          pg.StartDate,
 		EndDate:            pg.EndDate,
 		SourceID:           pg.SourceID,
@@ -211,6 +240,7 @@ func activeForwardFromPG(pg *db.ListActiveNotifierForwardsRow) *models.NotifierF
 		Enabled:            pg.Enabled,
 		UserKeepsCopy:      pg.UserKeepsCopy,
 		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		PublicOnly:         pg.PublicOnly,
 		StartDate:          pg.StartDate,
 		EndDate:            pg.EndDate,
 		SourceID:           pg.SourceID,
@@ -228,6 +258,7 @@ func inactiveForwardFromPG(pg *db.ListInactiveNotifierForwardsRow) *models.Notif
 		Enabled:            pg.Enabled,
 		UserKeepsCopy:      pg.UserKeepsCopy,
 		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		PublicOnly:         pg.PublicOnly,
 		StartDate:          pg.StartDate,
 		EndDate:            pg.EndDate,
 		SourceID:           pg.SourceID,
@@ -245,6 +276,7 @@ func notExpiredForwardFromPG(pg *db.ListNotExpiredNotifierForwardsRow) *models.N
 		Enabled:            pg.Enabled,
 		UserKeepsCopy:      pg.UserKeepsCopy,
 		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		PublicOnly:         pg.PublicOnly,
 		StartDate:          pg.StartDate,
 		EndDate:            pg.EndDate,
 		SourceID:           pg.SourceID,
@@ -262,6 +294,7 @@ func activeForwardBySourceFromPG(pg *db.ListActiveForwardsBySourceRecipientRow) 
 		Enabled:            pg.Enabled,
 		UserKeepsCopy:      pg.UserKeepsCopy,
 		OnlyIfSoleResource: pg.OnlyIfSoleResource,
+		PublicOnly:         pg.PublicOnly,
 		StartDate:          pg.StartDate,
 		EndDate:            pg.EndDate,
 		SourceID:           pg.SourceID,

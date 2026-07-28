@@ -20,7 +20,7 @@ func (q *Queries) DeleteTicketNote(ctx context.Context, id int) error {
 }
 
 const getTicketNote = `-- name: GetTicketNote :one
-SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted FROM cw_ticket_note
+SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted, internal_analysis_flag FROM cw_ticket_note
 WHERE id = $1 LIMIT 1
 `
 
@@ -36,12 +36,13 @@ func (q *Queries) GetTicketNote(ctx context.Context, id int) (*CwTicketNote, err
 		&i.UpdatedOn,
 		&i.AddedOn,
 		&i.Deleted,
+		&i.InternalAnalysisFlag,
 	)
 	return &i, err
 }
 
 const listAllTicketNotes = `-- name: ListAllTicketNotes :many
-SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted FROM cw_ticket_note
+SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted, internal_analysis_flag FROM cw_ticket_note
 ORDER BY id
 `
 
@@ -63,6 +64,7 @@ func (q *Queries) ListAllTicketNotes(ctx context.Context) ([]*CwTicketNote, erro
 			&i.UpdatedOn,
 			&i.AddedOn,
 			&i.Deleted,
+			&i.InternalAnalysisFlag,
 		); err != nil {
 			return nil, err
 		}
@@ -75,7 +77,7 @@ func (q *Queries) ListAllTicketNotes(ctx context.Context) ([]*CwTicketNote, erro
 }
 
 const listTicketNotesByTicket = `-- name: ListTicketNotesByTicket :many
-SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted FROM cw_ticket_note
+SELECT id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted, internal_analysis_flag FROM cw_ticket_note
 WHERE ticket_id = $1
 ORDER BY id
 `
@@ -98,6 +100,7 @@ func (q *Queries) ListTicketNotesByTicket(ctx context.Context, ticketID int) ([]
 			&i.UpdatedOn,
 			&i.AddedOn,
 			&i.Deleted,
+			&i.InternalAnalysisFlag,
 		); err != nil {
 			return nil, err
 		}
@@ -124,23 +127,25 @@ func (q *Queries) SoftDeleteTicketNote(ctx context.Context, id int) error {
 
 const upsertTicketNote = `-- name: UpsertTicketNote :one
 INSERT INTO cw_ticket_note
-(id, ticket_id, content, member_id, contact_id)
-VALUES ($1, $2, $3, $4, $5)
+(id, ticket_id, content, member_id, contact_id, internal_analysis_flag)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO UPDATE SET
     ticket_id = EXCLUDED.ticket_id,
     content = EXCLUDED.content,
     member_id = EXCLUDED.member_id,
     contact_id = EXCLUDED.contact_id,
+    internal_analysis_flag = EXCLUDED.internal_analysis_flag,
     updated_on = NOW()
-RETURNING id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted
+RETURNING id, ticket_id, member_id, contact_id, content, updated_on, added_on, deleted, internal_analysis_flag
 `
 
 type UpsertTicketNoteParams struct {
-	ID        int     `json:"id"`
-	TicketID  int     `json:"ticket_id"`
-	Content   *string `json:"content"`
-	MemberID  *int    `json:"member_id"`
-	ContactID *int    `json:"contact_id"`
+	ID                   int     `json:"id"`
+	TicketID             int     `json:"ticket_id"`
+	Content              *string `json:"content"`
+	MemberID             *int    `json:"member_id"`
+	ContactID            *int    `json:"contact_id"`
+	InternalAnalysisFlag bool    `json:"internal_analysis_flag"`
 }
 
 func (q *Queries) UpsertTicketNote(ctx context.Context, arg UpsertTicketNoteParams) (*CwTicketNote, error) {
@@ -150,6 +155,7 @@ func (q *Queries) UpsertTicketNote(ctx context.Context, arg UpsertTicketNotePara
 		arg.Content,
 		arg.MemberID,
 		arg.ContactID,
+		arg.InternalAnalysisFlag,
 	)
 	var i CwTicketNote
 	err := row.Scan(
@@ -161,6 +167,7 @@ func (q *Queries) UpsertTicketNote(ctx context.Context, arg UpsertTicketNotePara
 		&i.UpdatedOn,
 		&i.AddedOn,
 		&i.Deleted,
+		&i.InternalAnalysisFlag,
 	)
 	return &i, err
 }
