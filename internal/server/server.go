@@ -90,7 +90,6 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	nr := notifier.SvcParams{
 		Cfg:           cfg,
 		WebexSvc:      ws,
-		NotifierRules: r.NotifierRules,
 		Notifications: r.TicketNotifications,
 		Forwards:      r.NotifierForwards,
 		Pool:          s.Pool,
@@ -99,7 +98,16 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	}
 
 	ns := notifier.New(nr)
-	tb := ticketbot.New(cfg, cws, ns, r.TicketEvents)
+	cfgSvc := config.New(r.Config, cfg, level, logBuf)
+	tb := ticketbot.New(ticketbot.Params{
+		Cfg:       cfg,
+		ConfigSvc: cfgSvc,
+		CW:        cws,
+		Workflows: r.Workflows,
+		Events:    r.TicketEvents,
+		Engine:    workflow.NewEngine(cw),
+		Notifier:  ns,
+	})
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
 
@@ -114,7 +122,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		LogBuffer:     logBuf,
 		Svc: &Services{
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
-			Config:    config.New(r.Config, cfg, level, logBuf),
+			Config:    cfgSvc,
 			User:      user.New(r.APIUser, r.APIKey),
 			Hooks:     webhooks.New(cw, cr.RootURL),
 			CW:        cws,

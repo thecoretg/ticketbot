@@ -5,20 +5,27 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/workflow"
 	"github.com/thecoretg/ticketbot/models"
 )
 
 type Service struct {
-	Cfg         *models.Config
-	CW          *cwsvc.Service
-	Notifier    *notifier.Service
-	Events      repos.TicketEventRepository
+	Cfg       *models.Config
+	ConfigSvc *config.Service
+	CW        *cwsvc.Service
+	Workflows repos.WorkflowRepository
+	Events    repos.TicketEventRepository
+	Engine    *workflow.Engine
+	Notifier  *notifier.Service
+
 	ticketLocks sync.Map
 	now         func() time.Time
 }
@@ -32,18 +39,32 @@ type ProcessOpts struct {
 	RunRules bool
 }
 
-func New(cfg *models.Config, cw *cwsvc.Service, ns *notifier.Service, events repos.TicketEventRepository) *Service {
+type Params struct {
+	Cfg       *models.Config
+	ConfigSvc *config.Service
+	CW        *cwsvc.Service
+	Workflows repos.WorkflowRepository
+	Events    repos.TicketEventRepository
+	Engine    *workflow.Engine
+	Notifier  *notifier.Service
+}
+
+func New(p Params) *Service {
 	return &Service{
-		Cfg:      cfg,
-		CW:       cw,
-		Notifier: ns,
-		Events:   events,
-		now:      time.Now,
+		Cfg:       p.Cfg,
+		ConfigSvc: p.ConfigSvc,
+		CW:        p.CW,
+		Workflows: p.Workflows,
+		Events:    p.Events,
+		Engine:    p.Engine,
+		Notifier:  p.Notifier,
+		now:       time.Now,
 	}
 }
 
-// ProcessTicket ingests one ticket: fetch from ConnectWise, compare with what is stored, save,
-// record events, and (for now) run the legacy notifier when something changed.
+// ProcessTicket ingests one ticket: fetch from ConnectWise, compare with what is stored, run the
+// board's workflow (actions may write to ConnectWise), save the post-action ticket, send queued
+// notifications, and record every step as ticket events.
 func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (err error) {
 	start := s.now()
 	logger := slog.Default().With("ticket_id", id, "source", opts.Source)
@@ -92,33 +113,124 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (
 		return nil
 	}
 
-	ft, err := s.CW.SaveTicket(ctx, f, string(opts.Source))
-	if err != nil {
-		run.add(models.EventError, models.ErrorPayload{Stage: "save", Error: err.Error()})
-		return fmt.Errorf("saving ticket %d: %w", id, err)
-	}
-
 	kind := models.EventUpdated
 	if d.IsNew {
 		kind = models.EventCreated
 	}
 	run.add(kind, changePayload(d, f))
 
-	if !opts.RunRules {
-		return nil
+	if guard := s.loopGuard(opts, f, d); guard != nil {
+		run.add(models.EventLoopGuard, guard)
+		logger.Debug("ticketbot: loop guard tripped", "reason", guard.Reason)
+		_, err := s.CW.SaveTicket(ctx, f, string(opts.Source))
+		return err
 	}
 
-	if s.Cfg.MasterDryRun {
-		logger.Debug("ticketbot: master dry run enabled; skipping notifications")
-		return nil
+	var res *workflow.Result
+	if opts.RunRules {
+		res = s.runWorkflow(ctx, run, f, d)
+		if res != nil {
+			f = &cwsvc.Fetched{Ticket: res.Ticket, Note: res.LatestNote, TriggerNote: res.TriggerNote}
+		}
 	}
 
-	if err := s.Notifier.Run(ctx, ft, d.IsNew); err != nil {
-		run.add(models.EventError, models.ErrorPayload{Stage: "notify", Error: err.Error()})
-		return fmt.Errorf("running notifier for ticket %d: %w", id, err)
+	ft, err := s.CW.SaveTicket(ctx, f, string(opts.Source))
+	if err != nil {
+		run.add(models.EventError, models.ErrorPayload{Stage: "save", Error: err.Error()})
+		return fmt.Errorf("saving ticket %d: %w", id, err)
+	}
+
+	if res != nil && len(res.Notifies) > 0 {
+		s.sendNotifications(ctx, run, ft, d.IsNew, res)
 	}
 
 	return nil
+}
+
+// loopGuard reports why rules must not run for a change ticketbot made itself, or nil.
+func (s *Service) loopGuard(opts ProcessOpts, f *cwsvc.Fetched, d decision) *models.LoopGuardPayload {
+	apiID := strings.TrimSpace(s.Cfg.CWAPIMemberIdentifier)
+	if apiID == "" {
+		return nil
+	}
+
+	switch {
+	case strings.EqualFold(opts.WebhookMemberID, apiID):
+		return &models.LoopGuardPayload{Reason: "webhook_member", Identifier: apiID}
+	case d.NewNote && f.Note != nil && strings.EqualFold(f.Note.Member.Identifier, apiID):
+		return &models.LoopGuardPayload{Reason: "note_author", Identifier: apiID}
+	case len(d.Changes) > 0 && !d.NewNote && strings.EqualFold(f.Ticket.Info.UpdatedBy, apiID):
+		return &models.LoopGuardPayload{Reason: "updated_by", Identifier: apiID}
+	}
+
+	return nil
+}
+
+// runWorkflow looks up the board's workflow and runs it, recording workflow and action events.
+// It returns nil when there is no runnable workflow.
+func (s *Service) runWorkflow(ctx context.Context, run *run, f *cwsvc.Fetched, d decision) *workflow.Result {
+	wf, err := s.Workflows.GetByBoard(ctx, f.Ticket.Board.ID)
+	if err != nil {
+		if !errors.Is(err, models.ErrWorkflowNotFound) {
+			run.add(models.EventError, models.ErrorPayload{Stage: "workflow", Error: err.Error()})
+			return nil
+		}
+		run.add(models.EventWorkflow, models.WorkflowPayload{Found: false})
+		return nil
+	}
+
+	if !wf.Enabled {
+		run.add(models.EventWorkflow, models.WorkflowPayload{WorkflowID: &wf.ID, WorkflowName: wf.Name, Found: true, Enabled: false})
+		return nil
+	}
+
+	run.dryRun = s.Cfg.MasterDryRun || wf.DryRun
+
+	res, err := s.Engine.Run(ctx, wf, workflow.Input{
+		Ticket:      f.Ticket,
+		TriggerNote: f.Note,
+		IsNew:       d.IsNew,
+		NewNote:     d.NewNote,
+		Changes:     d.Changes,
+		DryRun:      run.dryRun,
+	})
+	if err != nil {
+		run.add(models.EventError, models.ErrorPayload{Stage: "workflow", Error: err.Error()})
+		return nil
+	}
+
+	run.add(models.EventWorkflow, workflowPayload(wf, res))
+	for _, a := range res.Actions {
+		run.add(models.EventAction, actionPayload(a))
+	}
+
+	if res.LearnedAPIMember != "" && strings.TrimSpace(s.Cfg.CWAPIMemberIdentifier) == "" && s.ConfigSvc != nil {
+		id := res.LearnedAPIMember
+		if _, err := s.ConfigSvc.Update(ctx, &models.ConfigUpdateParams{CWAPIMemberIdentifier: &id}); err != nil {
+			slog.Error("ticketbot: saving learned api member identifier", "identifier", id, "error", err.Error())
+		} else {
+			slog.Info("ticketbot: learned connectwise api member identifier", "identifier", id)
+		}
+	}
+
+	return res
+}
+
+func (s *Service) sendNotifications(ctx context.Context, run *run, ft *models.FullTicket, isNew bool, res *workflow.Result) {
+	outs, err := s.Notifier.Send(ctx, notifier.SendRequest{
+		Ticket:  ft,
+		IsNew:   isNew,
+		DryRun:  run.dryRun,
+		Intents: res.Notifies,
+	})
+	if err != nil {
+		run.add(models.EventError, models.ErrorPayload{Stage: "notify", Error: err.Error()})
+		return
+	}
+
+	for _, o := range outs {
+		run.add(models.EventNotification, notificationPayload(o))
+	}
 }
 
 func (s *Service) handleDeleted(ctx context.Context, run *run, stored *models.Ticket) error {
