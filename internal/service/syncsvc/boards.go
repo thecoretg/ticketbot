@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 func (s *Service) SyncBoards(ctx context.Context) error {

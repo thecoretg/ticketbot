@@ -39,8 +39,11 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	}
 
 	merged := *current
-	if p.AttemptNotify != nil {
-		merged.AttemptNotify = *p.AttemptNotify
+	if p.MasterDryRun != nil {
+		merged.MasterDryRun = *p.MasterDryRun
+	}
+	if p.CWAPIMemberIdentifier != nil {
+		merged.CWAPIMemberIdentifier = *p.CWAPIMemberIdentifier
 	}
 	if p.MaxMessageLength != nil {
 		merged.MaxMessageLength = *p.MaxMessageLength
@@ -75,7 +78,8 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 
 func (s *Service) applyChanges(src *models.Config) {
 	cfg := s.ConfigRef
-	cfg.AttemptNotify = src.AttemptNotify
+	cfg.MasterDryRun = src.MasterDryRun
+	cfg.CWAPIMemberIdentifier = src.CWAPIMemberIdentifier
 	cfg.MaxConcurrentSyncs = src.MaxConcurrentSyncs
 	cfg.MaxMessageLength = src.MaxMessageLength
 	cfg.RequireTOTP = src.RequireTOTP

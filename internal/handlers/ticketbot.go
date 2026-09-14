@@ -5,8 +5,9 @@ import (
 	"log/slog"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type TicketbotHandler struct {
@@ -29,7 +30,8 @@ func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
 	ctx := context.WithoutCancel(c.Request.Context())
 	switch action {
 	case "added", "updated":
-		go h.processTicket(ctx, id)
+		opts := ticketbot.ProcessOpts{Source: models.SourceWebhook, WebhookMemberID: w.MemberID, RunRules: true}
+		go h.processTicket(ctx, id, opts)
 	case "deleted":
 		go h.deleteTicket(ctx, id)
 	default:
@@ -39,14 +41,14 @@ func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
 	resultJSON(c, "ticket payload received")
 }
 
-func (h *TicketbotHandler) processTicket(ctx context.Context, id int) {
-	if err := h.Service.ProcessTicket(ctx, id); err != nil {
+func (h *TicketbotHandler) processTicket(ctx context.Context, id int, opts ticketbot.ProcessOpts) {
+	if err := h.Service.ProcessTicket(ctx, id, opts); err != nil {
 		slog.Error("processing ticket webhook", "ticket_id", id, "error", err.Error())
 	}
 }
 
 func (h *TicketbotHandler) deleteTicket(ctx context.Context, id int) {
-	if err := h.Service.CW.SoftDeleteTicket(ctx, id); err != nil {
+	if err := h.Service.SoftDeleteTicket(ctx, id, models.SourceWebhook); err != nil {
 		slog.Error("soft deleting ticket from webhook", "ticket_id", id, "error", err.Error())
 	}
 }

@@ -55,6 +55,10 @@ func AddRoutes(a *App, g *gin.Engine, shutdown func()) {
 	nh := handlers.NewNotifierHandler(a.Svc.Notifier)
 	registerNotifierRoutes(n, nh)
 
+	t := g.Group("tickets", auth)
+	tkh := handlers.NewTicketsHandler(a.Svc.CW)
+	registerTicketRoutes(t, tkh)
+
 	lh := handlers.NewLogsHandler(a.LogBuffer)
 	g.GET("logs", auth, lh.HandleList)
 
@@ -94,6 +98,7 @@ func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
 	b := r.Group("boards")
 	b.GET("", h.ListBoards)
 	b.GET(":id", h.GetBoard)
+	b.GET(":id/statuses", h.ListBoardStatuses)
 
 	m := r.Group("members")
 	m.GET("", h.ListMembers)
@@ -118,6 +123,13 @@ func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
 	fw.POST("", h.AddUserForward)
 	fw.PUT(":id", h.UpdateUserForward)
 	fw.DELETE(":id", h.DeleteUserForward)
+}
+
+func registerTicketRoutes(r *gin.RouterGroup, h *handlers.TicketsHandler) {
+	r.GET("", h.List)
+	r.GET(":id", h.Get)
+	r.GET(":id/raw", h.Raw)
+	r.GET(":id/events", h.Events)
 }
 
 func registerHookRoutes(r *gin.RouterGroup, tb *handlers.TicketbotHandler) {

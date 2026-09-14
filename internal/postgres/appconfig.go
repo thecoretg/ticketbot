@@ -59,7 +59,8 @@ func (p *ConfigRepo) Upsert(ctx context.Context, c *models.Config) (*models.Conf
 
 func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 	return db.UpsertAppConfigParams{
-		AttemptNotify:           c.AttemptNotify,
+		MasterDryRun:            c.MasterDryRun,
+		CwApiMemberIdentifier:   c.CWAPIMemberIdentifier,
 		MaxMessageLength:        c.MaxMessageLength,
 		MaxConcurrentSyncs:      c.MaxConcurrentSyncs,
 		RequireTotp:             c.RequireTOTP,
@@ -73,7 +74,8 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 func configFromPG(pg *db.AppConfig) *models.Config {
 	return &models.Config{
 		ID:                      pg.ID,
-		AttemptNotify:           pg.AttemptNotify,
+		MasterDryRun:            pg.MasterDryRun,
+		CWAPIMemberIdentifier:   pg.CwApiMemberIdentifier,
 		MaxMessageLength:        pg.MaxMessageLength,
 		MaxConcurrentSyncs:      pg.MaxConcurrentSyncs,
 		RequireTOTP:             pg.RequireTotp,

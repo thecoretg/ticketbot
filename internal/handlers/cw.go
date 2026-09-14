@@ -55,3 +55,22 @@ func (h *CWHandler) GetBoard(c *gin.Context) {
 
 	outputJSON(c, b)
 }
+
+func (h *CWHandler) ListBoardStatuses(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	st, err := h.Service.ListStatusesByBoard(c.Request.Context(), id)
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	if st == nil {
+		st = []*models.TicketStatus{}
+	}
+	outputJSON(c, st)
+}

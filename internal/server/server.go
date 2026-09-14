@@ -6,8 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
@@ -82,7 +82,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		return nil, nil, fmt.Errorf("getting initial config: %w", err)
 	}
 
-	cws := cwsvc.New(s.Pool, r.CW, cw, ttl)
+	cws := cwsvc.New(s.Pool, r.CW, r.TicketEvents, cw, cr.CWCreds.CompanyID, ttl)
 	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms)
 
 	nr := notifier.SvcParams{
@@ -97,6 +97,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	}
 
 	ns := notifier.New(nr)
+	tb := ticketbot.New(cfg, cws, ns, r.TicketEvents)
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
 
@@ -116,9 +117,9 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 			Hooks:     webhooks.New(cw, cr.RootURL),
 			CW:        cws,
 			Webex:     ws,
-			Sync:      syncsvc.New(s.Pool, cws, ws, ns),
-			Notifier:  notifier.New(nr),
-			Ticketbot: ticketbot.New(cfg, cws, ns),
+			Sync:      syncsvc.New(s.Pool, cws, ws, tb),
+			Notifier:  ns,
+			Ticketbot: tb,
 		},
 	}, persister, nil
 }

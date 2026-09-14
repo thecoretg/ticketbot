@@ -8,9 +8,14 @@ type Config struct {
 	// The app will only ever have one config in the config table, so this will always just be 1.
 	ID int `json:"id"`
 
-	// AttemptNotify is a full killswitch for attempting to process notifications for tickets. If it is off,
-	// all notifier rules will be disregarded.
-	AttemptNotify bool `json:"attempt_notify"`
+	// MasterDryRun forces every workflow to run as a dry run: tickets are still ingested and events
+	// recorded, but nothing is written to ConnectWise and no Webex messages are sent.
+	MasterDryRun bool `json:"master_dry_run"`
+
+	// CWAPIMemberIdentifier is the identifier of the ConnectWise member the API credentials belong to.
+	// Updates authored by this member are ticketbot's own writes and never trigger workflows.
+	// It is learned automatically from the first note ticketbot posts, but can be set by hand.
+	CWAPIMemberIdentifier string `json:"cw_api_member_identifier"`
 
 	// MaxMessageLength is the max amount of characters in a notification's ticket note output before
 	// it truncates and adds a "..." to the end.
@@ -39,19 +44,20 @@ type Config struct {
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
 // distinguishing between "not provided" and an explicit zero/false value.
 type ConfigUpdateParams struct {
-	AttemptNotify           *bool `json:"attempt_notify"`
-	MaxMessageLength        *int  `json:"max_message_length"`
-	MaxConcurrentSyncs      *int  `json:"max_concurrent_syncs"`
-	RequireTOTP             *bool `json:"require_totp"`
-	DebugLogging            *bool `json:"debug_logging"`
-	LogRetentionDays        *int  `json:"log_retention_days"`
-	LogCleanupIntervalHours *int  `json:"log_cleanup_interval_hours"`
-	LogBufferSize           *int  `json:"log_buffer_size"`
+	MasterDryRun            *bool   `json:"master_dry_run"`
+	CWAPIMemberIdentifier   *string `json:"cw_api_member_identifier"`
+	MaxMessageLength        *int    `json:"max_message_length"`
+	MaxConcurrentSyncs      *int    `json:"max_concurrent_syncs"`
+	RequireTOTP             *bool   `json:"require_totp"`
+	DebugLogging            *bool   `json:"debug_logging"`
+	LogRetentionDays        *int    `json:"log_retention_days"`
+	LogCleanupIntervalHours *int    `json:"log_cleanup_interval_hours"`
+	LogBufferSize           *int    `json:"log_buffer_size"`
 }
 
 var DefaultConfig = Config{
 	ID:                      1,
-	AttemptNotify:           false,
+	MasterDryRun:            true,
 	MaxMessageLength:        300,
 	MaxConcurrentSyncs:      5,
 	RequireTOTP:             false,
