@@ -2,15 +2,14 @@ package notifier
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type Service struct {
 	Cfg           *models.Config
 	WebexSvc      *webexsvc.Service
-	NotifierRules repos.NotifierRuleRepository
 	Notifications repos.TicketNotificationRepository
 	Forwards      repos.NotifierForwardRepository
 	Pool          *pgxpool.Pool
@@ -21,7 +20,6 @@ type Service struct {
 type SvcParams struct {
 	Cfg           *models.Config
 	WebexSvc      *webexsvc.Service
-	NotifierRules repos.NotifierRuleRepository
 	Notifications repos.TicketNotificationRepository
 	Forwards      repos.NotifierForwardRepository
 	Pool          *pgxpool.Pool
@@ -33,7 +31,6 @@ func New(p SvcParams) *Service {
 	return &Service{
 		Cfg:           p.Cfg,
 		WebexSvc:      p.WebexSvc,
-		NotifierRules: p.NotifierRules,
 		Notifications: p.Notifications,
 		Forwards:      p.Forwards,
 		Pool:          p.Pool,
