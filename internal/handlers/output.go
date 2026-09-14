@@ -42,6 +42,10 @@ func badPayloadError(c *gin.Context, err error) {
 	errJSON(c, http.StatusBadRequest, e)
 }
 
+func badQueryError(c *gin.Context, err error) {
+	errJSON(c, http.StatusBadRequest, fmt.Errorf("bad query parameter: %w", err))
+}
+
 func notFoundError(c *gin.Context, err error) {
 	errJSON(c, http.StatusNotFound, err)
 }
