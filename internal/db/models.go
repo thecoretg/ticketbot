@@ -217,3 +217,14 @@ type WebexRecipient struct {
 	CreatedOn    time.Time `json:"created_on"`
 	UpdatedOn    time.Time `json:"updated_on"`
 }
+
+type Workflow struct {
+	ID        int       `json:"id"`
+	BoardID   int       `json:"board_id"`
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	DryRun    bool      `json:"dry_run"`
+	Rules     []byte    `json:"rules"`
+	CreatedOn time.Time `json:"created_on"`
+	UpdatedOn time.Time `json:"updated_on"`
+}
