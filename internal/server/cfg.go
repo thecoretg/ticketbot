@@ -7,10 +7,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/thecoretg/ticketbot/internal/mock"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
-	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/tctg-go/webex"
+	"github.com/thecoretg/ticketbot/internal/mock"
+	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/models"
 )
 
