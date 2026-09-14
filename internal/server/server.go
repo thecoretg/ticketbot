@@ -18,6 +18,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/internal/service/webhooks"
+	"github.com/thecoretg/ticketbot/internal/service/workflow"
 	"github.com/thecoretg/ticketbot/models"
 )
 
@@ -44,6 +45,7 @@ type Services struct {
 	Sync      *syncsvc.Service
 	Notifier  *notifier.Service
 	Ticketbot *ticketbot.Service
+	Workflow  *workflow.Service
 }
 
 const defaultStoreTTL = int64(900)
@@ -120,6 +122,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 			Sync:      syncsvc.New(s.Pool, cws, ws, tb),
 			Notifier:  ns,
 			Ticketbot: tb,
+			Workflow:  workflow.New(r.Workflows, r.WebexRecipients, r.CW.Board),
 		},
 	}, persister, nil
 }
