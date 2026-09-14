@@ -10,7 +10,6 @@ type AllRepos struct {
 	TOTPRecovery        TOTPRecoveryRepository
 	TicketNotifications TicketNotificationRepository
 	NotifierForwards    NotifierForwardRepository
-	NotifierRules       NotifierRuleRepository
 	WebexRecipients     WebexRecipientRepository
 	TicketEvents        TicketEventRepository
 	Workflows           WorkflowRepository

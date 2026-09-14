@@ -16,7 +16,6 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		TOTPRecovery:        NewTOTPRecoveryRepo(pool),
 		TicketNotifications: NewNotificationRepo(pool),
 		NotifierForwards:    NewUserForwardRepo(pool),
-		NotifierRules:       NewNotifierRuleRepo(pool),
 		WebexRecipients:     NewWebexRecipientRepo(pool),
 		TicketEvents:        NewTicketEventRepo(pool),
 		Workflows:           NewWorkflowRepo(pool),

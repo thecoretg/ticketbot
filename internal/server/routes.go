@@ -115,12 +115,6 @@ func registerWebexRoutes(r *gin.RouterGroup, h *handlers.WebexHandler) {
 }
 
 func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
-	ru := r.Group("rules")
-	ru.GET("", h.ListNotifierRules)
-	ru.GET(":id", h.GetNotifierRule)
-	ru.POST("", h.AddNotifierRule)
-	ru.DELETE(":id", h.DeleteNotifierRule)
-
 	fw := r.Group("forwards")
 	fw.GET("", h.ListForwards)
 	fw.GET(":id", h.GetForward)

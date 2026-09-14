@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	gooseMigrationVersion = 9
+	gooseMigrationVersion = 10
 	shutdownTimeout       = 10 * time.Second
 )
 

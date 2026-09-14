@@ -152,14 +152,6 @@ type NotifierForward struct {
 	PublicOnly         bool       `json:"public_only"`
 }
 
-type NotifierRule struct {
-	ID               int       `json:"id"`
-	CwBoardID        int       `json:"cw_board_id"`
-	WebexRecipientID int       `json:"webex_recipient_id"`
-	NotifyEnabled    bool      `json:"notify_enabled"`
-	CreatedOn        time.Time `json:"created_on"`
-}
-
 type Session struct {
 	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`

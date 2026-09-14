@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/tctg-go/webex"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type MessageSender interface {
@@ -29,20 +29,6 @@ type NotifierForwardRepository interface {
 	Exists(ctx context.Context, id int) (bool, error)
 	Insert(ctx context.Context, c *models.NotifierForward) (*models.NotifierForward, error)
 	Update(ctx context.Context, c *models.NotifierForward) (*models.NotifierForward, error)
-	Delete(ctx context.Context, id int) error
-}
-
-type NotifierRuleRepository interface {
-	WithTx(tx pgx.Tx) NotifierRuleRepository
-	ListAll(ctx context.Context) ([]*models.NotifierRule, error)
-	ListAllFull(ctx context.Context) ([]*models.NotifierRuleFull, error)
-	ListByBoard(ctx context.Context, boardID int) ([]*models.NotifierRule, error)
-	ListByRoom(ctx context.Context, roomID int) ([]*models.NotifierRule, error)
-	Get(ctx context.Context, id int) (*models.NotifierRule, error)
-	Exists(ctx context.Context, id int) (bool, error)
-	ExistsByBoardAndRecipient(ctx context.Context, boardID, roomID int) (bool, error)
-	Insert(ctx context.Context, n *models.NotifierRule) (*models.NotifierRule, error)
-	Update(ctx context.Context, n *models.NotifierRule) (*models.NotifierRule, error)
 	Delete(ctx context.Context, id int) error
 }
 

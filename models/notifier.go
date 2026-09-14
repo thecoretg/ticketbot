@@ -39,24 +39,6 @@ type NotifierForwardFull struct {
 
 var ErrNotifierNotFound = errors.New("notifier not found")
 
-type NotifierRule struct {
-	ID               int       `json:"id"`
-	CwBoardID        int       `json:"cw_board_id"`
-	WebexRecipientID int       `json:"webex_room_id"`
-	NotifyEnabled    bool      `json:"notify_enabled"`
-	CreatedOn        time.Time `json:"created_on"`
-}
-
-type NotifierRuleFull struct {
-	ID            int    `json:"id"`
-	Enabled       bool   `json:"enabled"`
-	BoardID       int    `json:"board_id"`
-	BoardName     string `json:"board_name"`
-	RecipientID   int    `json:"recipient_id"`
-	RecipientName string `json:"recipient_name"`
-	RecipientType string `json:"recipient_type"`
-}
-
 var ErrNotificationNotFound = errors.New("notification not found")
 
 type TicketNotification struct {
