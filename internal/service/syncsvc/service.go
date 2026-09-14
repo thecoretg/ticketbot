@@ -6,24 +6,24 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
-	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 )
 
 type Service struct {
-	CW       *cwsvc.Service
-	Webex    *webexsvc.Service
-	Notifier *notifier.Service
-	pool     *pgxpool.Pool
-	syncing  atomic.Bool
+	CW        *cwsvc.Service
+	Webex     *webexsvc.Service
+	Ticketbot *ticketbot.Service
+	pool      *pgxpool.Pool
+	syncing   atomic.Bool
 }
 
-func New(pool *pgxpool.Pool, cw *cwsvc.Service, wx *webexsvc.Service, ns *notifier.Service) *Service {
+func New(pool *pgxpool.Pool, cw *cwsvc.Service, wx *webexsvc.Service, tb *ticketbot.Service) *Service {
 	return &Service{
-		CW:       cw,
-		Webex:    wx,
-		Notifier: ns,
-		pool:     pool,
+		CW:        cw,
+		Webex:     wx,
+		Ticketbot: tb,
+		pool:      pool,
 	}
 }
 

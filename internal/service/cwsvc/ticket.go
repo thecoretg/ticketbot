@@ -2,27 +2,26 @@ package cwsvc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 
-	"github.com/thecoretg/ticketbot/models"
-	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 var ErrTicketWasDeleted = errors.New("ticket was deleted from connectwise")
 
-type Request struct {
-	*models.FullTicket
-	NoProcReason string
-	cd           CWData
-}
-
-type CWData struct {
-	ticket *psa.Ticket
-	note   *psa.ServiceTicketNote
+// Fetched is a ticket as read from ConnectWise. Note is the most recent note (nil if none).
+// TriggerNote is the note that was most recent when intake began; it differs from Note only when a
+// workflow action posted a note in between. When nil it is treated as Note.
+type Fetched struct {
+	Ticket      *psa.Ticket
+	Note        *psa.ServiceTicketNote
+	TriggerNote *psa.ServiceTicketNote
 }
 
 func (s *Service) SoftDeleteTicket(ctx context.Context, id int) error {
@@ -33,69 +32,81 @@ func (s *Service) PermDeleteTicket(ctx context.Context, id int) error {
 	return s.Tickets.Delete(ctx, id)
 }
 
+// ProcessTicket fetches a ticket from ConnectWise and stores it. It is Fetch followed by Save.
 func (s *Service) ProcessTicket(ctx context.Context, id int, caller string) (*models.FullTicket, error) {
-	req, err := s.processTicket(ctx, id, caller)
+	f, err := s.FetchTicket(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	return req.FullTicket, nil
+	return s.SaveTicket(ctx, f, caller)
 }
 
-func (s *Service) processTicket(ctx context.Context, id int, caller string) (req *Request, err error) {
-	req = &Request{
-		NoProcReason: "",
-		cd:           CWData{},
-	}
-
-	logger := slog.Default()
-	defer func() {
-		logRequest(req, err, logger)
-	}()
-
-	cd, err := s.getCwData(ctx, id)
+// FetchTicket reads the ticket and its most recent note from ConnectWise.
+// It returns ErrTicketWasDeleted when ConnectWise no longer has the ticket.
+func (s *Service) FetchTicket(ctx context.Context, ticketID int) (*Fetched, error) {
+	t, err := s.CWClient.GetTicket(ctx, ticketID, nil)
 	if err != nil {
-		if errors.Is(err, ErrTicketWasDeleted) {
-			req.NoProcReason = "ticket was deleted from connectwise"
-			return req, nil
+		if errors.Is(err, psa.ErrNotFound) {
+			return nil, ErrTicketWasDeleted
 		}
-
-		return req, fmt.Errorf("getting ticket data from connectwise: %w", err)
+		return nil, fmt.Errorf("getting ticket: %w", err)
+	}
+	if t == nil {
+		return nil, fmt.Errorf("no data returned from connectwise for ticket %d", ticketID)
 	}
 
-	if cd.ticket == nil {
-		return req, fmt.Errorf("no data returned from connectwise for ticket %d", id)
+	n, err := s.CWClient.GetMostRecentTicketNote(ctx, ticketID)
+	if err != nil && !errors.Is(err, psa.ErrNotFound) {
+		return nil, fmt.Errorf("getting most recent ticket note: %w", err)
 	}
+
+	return &Fetched{Ticket: t, Note: n}, nil
+}
+
+// SaveTicket upserts the ticket and everything it references (board, status, company, contact,
+// owner, resources, notes) in one transaction and returns the stored aggregate. The returned
+// FullTicket.LatestNote is the trigger note, which is what notifications describe.
+func (s *Service) SaveTicket(ctx context.Context, f *Fetched, caller string) (ft *models.FullTicket, err error) {
+	if f == nil || f.Ticket == nil {
+		return nil, errors.New("received nil ticket")
+	}
+
+	cwt := f.Ticket
+	logger := slog.Default().With(slog.Int("ticket_id", cwt.ID), slog.String("caller", caller))
+	defer func() {
+		if err != nil {
+			logger.Error("error occured processing ticket", "error", err.Error())
+			return
+		}
+		logger.Info("ticket processed")
+	}()
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return req, fmt.Errorf("beginning tx: %w", err)
+		return nil, fmt.Errorf("beginning tx: %w", err)
 	}
-
-	txSvc := s.WithTX(tx)
-
 	defer func() {
 		_ = tx.Rollback(ctx)
 	}()
 
-	cwt := cd.ticket
-	logger = logger.With(slog.Int("ticket_id", cwt.ID), slog.String("caller", caller))
+	txSvc := s.WithTX(tx)
 
 	board, err := txSvc.ensureBoard(ctx, cwt.Board.ID)
 	if err != nil {
-		return req, fmt.Errorf("ensuring board in store: %w", err)
+		return nil, fmt.Errorf("ensuring board in store: %w", err)
 	}
 	logger = logger.With(boardLogGrp(board))
 
 	status, err := txSvc.ensureStatus(ctx, cwt.Status.ID, cwt.Board.ID)
 	if err != nil {
-		return req, fmt.Errorf("ensuring status in store: %w", err)
+		return nil, fmt.Errorf("ensuring status in store: %w", err)
 	}
 	logger = logger.With(statusLogGrp(status))
 
 	company, err := txSvc.ensureCompany(ctx, cwt.Company.ID)
 	if err != nil {
-		return req, fmt.Errorf("ensuring company in store: %w", err)
+		return nil, fmt.Errorf("ensuring company in store: %w", err)
 	}
 	logger = logger.With(companyLogGrp(company))
 
@@ -103,7 +114,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	if cwt.Contact.ID != 0 {
 		contact, err = txSvc.ensureContact(ctx, cwt.Contact.ID)
 		if err != nil {
-			return req, fmt.Errorf("ensuring ticket contact in store: %w", err)
+			return nil, fmt.Errorf("ensuring ticket contact in store: %w", err)
 		}
 		logger = logger.With(contactLogGrp(contact))
 	}
@@ -112,21 +123,20 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 	if cwt.Owner.ID != 0 {
 		owner, err = txSvc.ensureMember(ctx, cwt.Owner.ID)
 		if err != nil {
-			return req, fmt.Errorf("ensuring ticket owner in store: %w", err)
+			return nil, fmt.Errorf("ensuring ticket owner in store: %w", err)
 		}
 		logger = logger.With(ownerLogGrp(owner))
 	}
 
-	ticket, err := txSvc.ensureTicket(ctx, cd.ticket)
+	ticket, err := txSvc.ensureTicket(ctx, cwt, f.Note)
 	if err != nil {
-		return req, fmt.Errorf("ensuring ticket in store: %w", err)
+		return nil, fmt.Errorf("ensuring ticket in store: %w", err)
 	}
 
 	var rsc []*models.Member
 	if ticket.Resources != nil && *ticket.Resources != "" {
 		logger = logger.With(slog.String("resources", *ticket.Resources))
-		ids := resourceStringToSlice(*ticket.Resources)
-		for _, i := range ids {
+		for _, i := range resourceStringToSlice(*ticket.Resources) {
 			member, err := txSvc.ensureMemberByIdentifier(ctx, i)
 			if err != nil {
 				logger.Warn("cwsvc: error getting resource member by identifier", "identifier", i, "error", err.Error())
@@ -137,20 +147,34 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		}
 	}
 
+	// Store the latest note and, when a workflow action posted a newer one, the trigger note too.
+	trigger := f.TriggerNote
+	if trigger == nil {
+		trigger = f.Note
+	}
+
 	var note *models.FullTicketNote
-	if cd.note != nil && cd.note.ID != 0 {
-		note, err = txSvc.ensureTicketNote(ctx, cd.note)
+	if f.Note != nil && f.Note.ID != 0 {
+		note, err = txSvc.ensureTicketNote(ctx, f.Note)
 		if err != nil {
-			return req, fmt.Errorf("ensuring ticket note in store: %w", err)
+			return nil, fmt.Errorf("ensuring ticket note in store: %w", err)
 		}
+	}
+	if trigger != nil && trigger.ID != 0 && (f.Note == nil || trigger.ID != f.Note.ID) {
+		note, err = txSvc.ensureTicketNote(ctx, trigger)
+		if err != nil {
+			return nil, fmt.Errorf("ensuring trigger note in store: %w", err)
+		}
+	}
+	if note != nil {
 		logger = logger.With(noteLogGrp(note))
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return req, fmt.Errorf("committing transaction: %w", err)
+		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
-	req.FullTicket = &models.FullTicket{
+	return &models.FullTicket{
 		Board:      *board,
 		Status:     *status,
 		Ticket:     *ticket,
@@ -159,26 +183,7 @@ func (s *Service) processTicket(ctx context.Context, id int, caller string) (req
 		Owner:      owner,
 		LatestNote: note,
 		Resources:  rsc,
-	}
-
-	return req, nil
-}
-
-func (s *Service) getCwData(ctx context.Context, ticketID int) (CWData, error) {
-	t, err := s.CWClient.GetTicket(ctx, ticketID, nil)
-	if err != nil {
-		if errors.Is(err, psa.ErrNotFound) {
-			return CWData{}, ErrTicketWasDeleted
-		}
-		return CWData{}, fmt.Errorf("getting ticket: %w", err)
-	}
-
-	n, err := s.CWClient.GetMostRecentTicketNote(ctx, ticketID)
-	if err != nil && !errors.Is(err, psa.ErrNotFound) {
-		return CWData{}, fmt.Errorf("getting most recent ticket note: %w", err)
-	}
-
-	return CWData{ticket: t, note: n}, nil
+	}, nil
 }
 
 func (s *Service) ensureBoard(ctx context.Context, id int) (*models.Board, error) {
@@ -353,21 +358,42 @@ func (s *Service) ensureMember(ctx context.Context, id int) (*models.Member, err
 	return m, nil
 }
 
-func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket) (*models.Ticket, error) {
+func (s *Service) ensureTicket(ctx context.Context, cwt *psa.Ticket, latest *psa.ServiceTicketNote) (*models.Ticket, error) {
 	if cwt == nil {
 		return nil, errors.New("received nil ticket")
 	}
 
+	raw, err := json.Marshal(cwt)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling ticket: %w", err)
+	}
+
+	var latestNoteID *int
+	if latest != nil && latest.ID != 0 {
+		latestNoteID = intToPtr(latest.ID)
+	}
+
 	t, err := s.Tickets.Upsert(ctx, &models.Ticket{
-		ID:        cwt.ID,
-		Summary:   cwt.Summary,
-		BoardID:   cwt.Board.ID,
-		StatusID:  cwt.Status.ID,
-		OwnerID:   intToPtr(cwt.Owner.ID),
-		CompanyID: cwt.Company.ID,
-		ContactID: intToPtr(cwt.Contact.ID),
-		Resources: &cwt.Resources,
-		UpdatedBy: &cwt.Info.UpdatedBy,
+		ID:           cwt.ID,
+		Summary:      cwt.Summary,
+		BoardID:      cwt.Board.ID,
+		StatusID:     cwt.Status.ID,
+		OwnerID:      intToPtr(cwt.Owner.ID),
+		CompanyID:    cwt.Company.ID,
+		ContactID:    intToPtr(cwt.Contact.ID),
+		Resources:    &cwt.Resources,
+		UpdatedBy:    &cwt.Info.UpdatedBy,
+		PriorityID:   intToPtr(cwt.Priority.ID),
+		PriorityName: strToPtr(cwt.Priority.Name),
+		TypeID:       intToPtr(cwt.Type.ID),
+		TypeName:     strToPtr(cwt.Type.Name),
+		SubTypeID:    intToPtr(cwt.SubType.ID),
+		SubTypeName:  strToPtr(cwt.SubType.Name),
+		ItemID:       intToPtr(cwt.Item.ID),
+		ItemName:     strToPtr(cwt.Item.Name),
+		ClosedFlag:   cwt.ClosedFlag,
+		LatestNoteID: latestNoteID,
+		Raw:          raw,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("upserting ticket: %w", err)
@@ -464,23 +490,6 @@ func strToPtr(s string) *string {
 	}
 	val := s
 	return &val
-}
-
-func logRequest(req *Request, err error, logger *slog.Logger) {
-	if req == nil {
-		logger.Error("received nil request")
-		return
-	}
-
-	if req.NoProcReason != "" {
-		logger = logger.With("no_process_reason", req.NoProcReason)
-	}
-
-	if err != nil {
-		logger.Error("error occured processing ticket", "error", err.Error())
-	} else {
-		logger.Info("ticket processed")
-	}
 }
 
 func companyLogGrp(company *models.Company) slog.Attr {

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int) error {
@@ -45,14 +47,9 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 		go func(ticket psa.Ticket) {
 			defer func() { <-sem }()
 			defer wg.Done()
-			ft, err := s.CW.ProcessTicket(ctx, ticket.ID, "sync")
-			if err != nil {
+			opts := ticketbot.ProcessOpts{Source: models.SourceSync, RunRules: false}
+			if err := s.Ticketbot.ProcessTicket(ctx, ticket.ID, opts); err != nil {
 				errCh <- fmt.Errorf("error syncing ticket %d: %w", ticket.ID, err)
-				return
-			}
-
-			if err := s.Notifier.AddSkippedNotification(ctx, ft, "ticket sync"); err != nil {
-				errCh <- fmt.Errorf("skipping notification for ticket %d note %d: %w", ft.Ticket.ID, ft.LatestNote.ID, err)
 				return
 			}
 		}(t)

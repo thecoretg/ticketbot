@@ -5,8 +5,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/repos"
 )
 
 type Service struct {
@@ -18,23 +18,29 @@ type Service struct {
 	Tickets   repos.TicketRepository
 	Statuses  repos.TicketStatusRepository
 	Notes     repos.TicketNoteRepository
+	Events    repos.TicketEventRepository
 	pool      *pgxpool.Pool
 	CWClient  *psa.Client
+
+	// CWCompanyID is the ConnectWise company identifier, used to build ticket links.
+	CWCompanyID string
 }
 
-func New(pool *pgxpool.Pool, r repos.CWRepos, cl *psa.Client, ttl int64) *Service {
+func New(pool *pgxpool.Pool, r repos.CWRepos, events repos.TicketEventRepository, cl *psa.Client, companyID string, ttl int64) *Service {
 	t := time.Second * time.Duration(ttl)
 	return &Service{
-		TTL:       t,
-		Boards:    r.Board,
-		Statuses:  r.TicketStatus,
-		Companies: r.Company,
-		Contacts:  r.Contact,
-		Members:   r.Member,
-		Tickets:   r.Ticket,
-		Notes:     r.Note,
-		pool:      pool,
-		CWClient:  cl,
+		TTL:         t,
+		Events:      events,
+		CWCompanyID: companyID,
+		Boards:      r.Board,
+		Statuses:    r.TicketStatus,
+		Companies:   r.Company,
+		Contacts:    r.Contact,
+		Members:     r.Member,
+		Tickets:     r.Ticket,
+		Notes:       r.Note,
+		pool:        pool,
+		CWClient:    cl,
 	}
 }
 
@@ -48,7 +54,10 @@ func (s *Service) WithTX(tx pgx.Tx) *Service {
 		Members:   s.Members.WithTx(tx),
 		Tickets:   s.Tickets.WithTx(tx),
 		Notes:     s.Notes.WithTx(tx),
+		Events:    s.Events.WithTx(tx),
 		pool:      s.pool,
 		CWClient:  s.CWClient,
+
+		CWCompanyID: s.CWCompanyID,
 	}
 }
