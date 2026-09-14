@@ -12,6 +12,7 @@ type AllRepos struct {
 	NotifierForwards    NotifierForwardRepository
 	NotifierRules       NotifierRuleRepository
 	WebexRecipients     WebexRecipientRepository
+	TicketEvents        TicketEventRepository
 	CW                  CWRepos
 }
 

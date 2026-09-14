@@ -47,6 +47,7 @@ type MemberRepository interface {
 type TicketRepository interface {
 	WithTx(tx pgx.Tx) TicketRepository
 	List(ctx context.Context) ([]*models.Ticket, error)
+	ListPaged(ctx context.Context, f models.TicketFilter) ([]*models.TicketListItem, int, error)
 	Get(ctx context.Context, id int) (*models.Ticket, error)
 	Exists(ctx context.Context, id int) (bool, error)
 	Upsert(ctx context.Context, c *models.Ticket) (*models.Ticket, error)
