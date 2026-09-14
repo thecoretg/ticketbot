@@ -16,7 +16,8 @@ import (
 //     and '_' (single character) wildcards and is anchored.
 //   - A numeric string is coerced to a number when compared against a number literal.
 //   - Zero values are frequently omitted from ConnectWise JSON, so null compares loosely:
-//     null = false, null = 0 and null = ” are all true. Ordering operators against null are false.
+//     null = false, null = 0 and null = (empty string) are all true. Ordering operators against
+//     null are false.
 //   - Type mismatches evaluate to false rather than erroring.
 func (q *Query) Eval(doc map[string]any) (bool, error) {
 	return eval(q.Expr, doc)
