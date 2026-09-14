@@ -30,7 +30,7 @@ func TestE2EProcessTicket(t *testing.T) {
 	ctx := context.Background()
 	level := new(slog.LevelVar)
 	logBuf := logging.NewBufferHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}), 100)
-	app, _, err := NewApp(ctx, 8, level, logBuf)
+	app, _, err := NewApp(ctx, 10, level, logBuf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,5 +113,80 @@ func TestE2EProcessTicket(t *testing.T) {
 	}
 	if len(up.Changes) != 1 || up.Changes[0].Field != "summary" {
 		t.Errorf("summary change not recorded: %s", events[0].Payload)
+	}
+
+	// fourth pass: run a dry-run workflow with notify + add_note against a forced change.
+	// Master dry run guarantees nothing is written to ConnectWise or Webex.
+	dry := true
+	if _, err := app.Svc.Config.Update(ctx, &models.ConfigUpdateParams{MasterDryRun: &dry}); err != nil {
+		t.Fatal(err)
+	}
+	room, err := app.Stores.WebexRecipients.Upsert(ctx, &models.WebexRecipient{WebexID: "e2e-room", Name: "E2E Room", Type: models.RecipientTypeRoom})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Stores.WebexRecipients.Delete(ctx, room.ID) })
+
+	if existing, err := app.Stores.Workflows.GetByBoard(ctx, stored.BoardID); err == nil {
+		_ = app.Stores.Workflows.Delete(ctx, existing.ID)
+	}
+	wf, err := app.Svc.Workflow.Create(ctx, &models.Workflow{BoardID: stored.BoardID, Enabled: true, Rules: []models.Rule{{
+		Name: "e2e", Enabled: true, Trigger: models.TriggerUpdate, Condition: "changed/summary = true",
+		Actions: []models.Action{
+			{Kind: models.ActionNotify, Enabled: true, Notify: &models.NotifyAction{Target: models.TargetRoom, RecipientID: &room.ID}},
+			{Kind: models.ActionAddNote, Enabled: true, AddNote: &models.AddNoteAction{Text: "e2e dry run", Internal: true}},
+			{Kind: models.ActionNotify, Enabled: true, Notify: &models.NotifyAction{Target: models.TargetResourcesOwner}},
+		},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Stores.Workflows.Delete(ctx, wf.ID) })
+
+	stored, _ = app.Stores.CW.Ticket.Get(ctx, id)
+	stored.Summary += " (stale again)"
+	stored.Raw = nil
+	if _, err := app.Stores.CW.Ticket.Upsert(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Svc.Ticketbot.ProcessTicket(ctx, id, ticketbot.ProcessOpts{Source: models.SourceManual, RunRules: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err = app.Stores.TicketEvents.ListByTicket(ctx, id, 20, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[models.EventKind]int{}
+	for _, e := range events {
+		if e.RunID == events[0].RunID {
+			kinds[e.Kind]++
+			if e.Kind != models.EventUpdated && !e.DryRun {
+				t.Errorf("event %s should be flagged dry_run", e.Kind)
+			}
+			t.Logf("%s: %s", e.Kind, e.Payload)
+		}
+	}
+	if kinds[models.EventUpdated] != 1 || kinds[models.EventWorkflow] != 1 || kinds[models.EventAction] != 3 || kinds[models.EventNotification] < 1 {
+		t.Errorf("unexpected event mix for dry run: %v", kinds)
+	}
+	for _, e := range events {
+		if e.RunID != events[0].RunID || e.Kind != models.EventAction {
+			continue
+		}
+		var ap models.ActionPayload
+		_ = json.Unmarshal(e.Payload, &ap)
+		if ap.Kind == string(models.ActionAddNote) && ap.Result != "would_run" {
+			t.Errorf("add_note in dry run should be would_run: %+v", ap)
+		}
+	}
+	notifs, err := app.Stores.TicketNotifications.ListAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range notifs {
+		if n.TicketID == id {
+			t.Errorf("dry run must not store ticket_notification rows: %+v", n)
+		}
 	}
 }
