@@ -873,3 +873,74 @@ tr.clickable { cursor: pointer; }
 .section-head h3 { font-size: 14px; font-weight: 600; }
 
 .back-row { align-items: center; display: flex; gap: 12px; }
+
+/* ── Tickets ────────────────────────────────────────────────────────────────── */
+.filter-select { width: auto; min-width: 130px; padding: 6px 10px; font-size: 12px; }
+.nowrap { white-space: nowrap; }
+.muted  { color: var(--muted); }
+.tk-id  { color: var(--primary); font-weight: 500; text-decoration: none; }
+.tk-id:hover { text-decoration: underline; }
+.cell-ellipsis { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pager { align-items: center; color: var(--muted); display: flex; font-size: 12px; justify-content: space-between; margin-top: 12px; }
+.pager-btns { align-items: center; display: flex; gap: 8px; }
+
+.tk-title { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.tk-summary { font-weight: 500; }
+.ext-link { color: var(--primary); text-decoration: none; white-space: nowrap; }
+.ext-link:hover { text-decoration: underline; }
+
+.ticket-meta {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: grid;
+    font-size: 13px;
+    gap: 12px 24px;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    margin-bottom: 24px;
+    padding: 16px 20px;
+}
+.ticket-meta > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.meta-label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+
+.timeline { display: flex; flex-direction: column; gap: 12px; max-width: 900px; padding-left: 22px; position: relative; }
+.timeline::before { background: var(--border); bottom: 6px; content: ''; left: 5px; position: absolute; top: 6px; width: 2px; }
+.tl-item { position: relative; }
+.tl-dot { background: var(--muted); border: 2px solid var(--bg); border-radius: 50%; height: 12px; left: -22px; position: absolute; top: 12px; width: 12px; }
+.tl-created .tl-dot      { background: var(--success); }
+.tl-updated .tl-dot      { background: var(--primary); }
+.tl-workflow .tl-dot     { background: var(--primary); }
+.tl-action .tl-dot       { background: var(--warning); }
+.tl-notification .tl-dot { background: var(--warning); }
+.tl-loop_guard .tl-dot   { background: var(--border); }
+.tl-deleted .tl-dot      { background: var(--danger); }
+.tl-error .tl-dot        { background: var(--danger); }
+.tl-error .tl-card       { border-color: var(--danger); }
+.tl-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+.tl-head { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.tl-title { flex: 1; font-weight: 600; min-width: 0; }
+.tl-source { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+.tl-time { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.tl-body { color: var(--text); display: flex; flex-direction: column; font-size: 13px; gap: 6px; margin-top: 8px; }
+.tl-row { align-items: center; display: flex; gap: 8px; }
+.tl-detail { color: var(--muted); font-size: 12px; }
+.tl-detail code { background: var(--surface); border-radius: 4px; font-size: 11px; padding: 1px 5px; }
+.tl-error-text { color: var(--danger); font-family: 'SF Mono', 'Fira Code', Consolas, monospace; font-size: 12px; white-space: pre-wrap; }
+
+.rule-chips { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.rule-chip { align-items: center; display: inline-flex; font-size: 12px; gap: 6px; }
+
+.diff-table { font-size: 12px; width: auto; min-width: 50%; }
+.diff-table th { background: transparent; border-bottom: 1px solid var(--border); padding: 4px 10px; }
+.diff-table td { border-top: none; padding: 4px 10px; }
+.diff-table tr:hover td { background: transparent; }
+.diff-field { color: var(--muted); font-family: 'SF Mono', 'Fira Code', Consolas, monospace; }
+.diff-old { color: var(--danger); opacity: 0.85; text-decoration: line-through; }
+.diff-new { color: var(--success); }
+
+.note-preview { background: var(--surface); border-left: 3px solid var(--border); border-radius: 4px; font-size: 12px; padding: 8px 10px; }
+.note-text { white-space: pre-wrap; }
+.note-author { color: var(--muted); font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+.filter-bar .logs-search-input { width: 240px; }
+.tab-header .filter-bar { justify-content: flex-end; }
