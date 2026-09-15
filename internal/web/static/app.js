@@ -24,7 +24,10 @@ initTheme()
 // ─────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────
-let currentTab        = 'rules'
+let currentTab        = 'workflows'
+let currentHash       = ''
+let appConfig         = null   // last-loaded /config, shared across pages
+let tabGuard          = null   // page-installed veto for navigation (unsaved changes)
 let currentUser       = null
 let pendingToken      = null   // pending TOTP token after password login
 let totpEnabled       = false  // cached TOTP status for account menu
@@ -254,6 +257,7 @@ async function showApp() {
         ])
         currentUser = me
         totpEnabled = totp.enabled
+        appConfig   = cfg
         requireTOTP = cfg.require_totp
         document.getElementById('header-email').textContent   = currentUser.email_address
         document.getElementById('dropdown-email').textContent = currentUser.email_address
@@ -263,8 +267,7 @@ async function showApp() {
             return
         }
     } catch {}
-    const hash = window.location.hash.replace('#', '')
-    switchTab(tabLoaders[hash] ? hash : 'rules')
+    routeFromHash()
 }
 
 // ─────────────────────────────────────────────────────────
@@ -396,8 +399,7 @@ async function showTOTPSetupModal(required = false) {
 function finishTOTPSetup() {
     document.getElementById('modal-overlay').classList.add('hidden')
     modalSubmitFn = null
-    const hash = window.location.hash.replace('#', '')
-    switchTab(tabLoaders[hash] ? hash : 'rules')
+    routeFromHash()
 }
 
 function copyRecoveryCodes() {
@@ -467,7 +469,6 @@ function checkSavedKey() {
 // Tabs
 // ─────────────────────────────────────────────────────────
 const tabLoaders = {
-    rules:    loadRules,
     forwards: loadForwards,
     users:    loadUsers,
     keys:     loadKeys,
@@ -476,17 +477,46 @@ const tabLoaders = {
     logs:     loadLogs,
 }
 
-function switchTab(tab) {
+// hash is "tab" or "tab/sub" (e.g. tickets/123)
+function parseHash() {
+    const [tab, ...rest] = window.location.hash.replace(/^#/, '').split('/')
+    return { tab: tabLoaders[tab] ? tab : 'workflows', sub: rest.join('/') || null }
+}
+
+function switchTab(tab, sub = null) {
+    if (tabGuard && !tabGuard()) {
+        window.location.hash = currentHash
+        return
+    }
+    tabGuard = null
     stopSyncPoll()
     stopLogsPoll()
-    currentTab = tab
-    window.location.hash = tab
+    currentTab  = tab
+    currentHash = sub ? `${tab}/${sub}` : tab
+    window.location.hash = currentHash
     document.querySelectorAll('.nav-item').forEach(el => {
         el.classList.toggle('active', el.dataset.tab === tab)
     })
     setContent('<div class="loading-state">Loading…</div>')
-    tabLoaders[tab]()
+    tabLoaders[tab](sub)
 }
+
+function routeFromHash() {
+    const { tab, sub } = parseHash()
+    switchTab(tab, sub)
+}
+
+window.addEventListener('hashchange', () => {
+    if (window.location.hash.replace(/^#/, '') === currentHash) return
+    routeFromHash()
+})
+
+window.addEventListener('beforeunload', e => {
+    if (tabGuard?.isDirty?.()) {
+        e.preventDefault()
+        e.returnValue = ''
+    }
+})
 
 function setContent(html) {
     document.getElementById('content').innerHTML = html
@@ -547,7 +577,7 @@ function handleOverlayClick(e) {
 // Utilities
 // ─────────────────────────────────────────────────────────
 function esc(str) {
-    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
 function fmtDateTime(d) {
@@ -574,6 +604,11 @@ function splitLocalDT(iso) {
     ]
 }
 
+// badgeTag renders a labelled badge; variant is on | off | warn | muted
+function badgeTag(label, variant = 'muted') {
+    return `<span class="badge badge-${variant}">${esc(label)}</span>`
+}
+
 function badge(val) {
     return val
         ? '<span class="badge badge-on">Yes</span>'
@@ -586,85 +621,6 @@ function tableWrap(thead, rows) {
         <thead><tr>${thead}</tr></thead>
         <tbody>${rows.join('')}</tbody>
     </table></div>`
-}
-
-// ─────────────────────────────────────────────────────────
-// Rules
-// ─────────────────────────────────────────────────────────
-async function loadRules() {
-    try {
-        const rules = await api('GET', '/notifiers/rules')
-        renderRules(rules || [])
-    } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
-    }
-}
-
-function renderRules(rules) {
-    const header = `<div class="tab-header">
-        <h2>Notifier Rules</h2>
-        <button class="btn btn-primary btn-sm" onclick="showNewRuleModal()">+ New Rule</button>
-    </div>`
-
-    const thead = '<th>Enabled</th><th>Board</th><th>Recipient</th><th></th>'
-    const rows  = rules.map(r => `<tr>
-        <td>${badge(r.enabled)}</td>
-        <td>${esc(r.board_name)}</td>
-        <td>${esc(r.recipient_name)} <span style="color:var(--muted);font-size:11px">${esc(r.recipient_type)}</span></td>
-        <td class="actions"><button class="btn btn-danger" onclick="deleteRule(${r.id})">Delete</button></td>
-    </tr>`)
-
-    setContent(header + tableWrap(thead, rows))
-}
-
-async function showNewRuleModal() {
-    let boards, recipients
-    try {
-        [boards, recipients] = await Promise.all([
-            api('GET', '/cw/boards'),
-            api('GET', '/webex/rooms'),
-        ])
-    } catch (e) { toast(e.message, 'error'); return }
-
-    if (!boards?.length)     { toast('No boards found — run a sync first', 'error'); return }
-    if (!recipients?.length) { toast('No recipients found — run a sync first', 'error'); return }
-
-    const boardOpts = boards.map(b =>
-        `<option value="${b.id}">${esc(b.name)}</option>`).join('')
-    const recipOpts = recipients.map(r =>
-        `<option value="${r.id}">${esc(r.name)} (${esc(r.type)})</option>`).join('')
-
-    openModal('New Notifier Rule', `
-        <div class="form-group">
-            <label>Connectwise Board</label>
-            <select id="f-board">${boardOpts}</select>
-        </div>
-        <div class="form-group">
-            <label>Webex Recipient</label>
-            <select id="f-recipient">${recipOpts}</select>
-        </div>`, async () => {
-        const boardId = parseInt(document.getElementById('f-board').value)
-        const recipId = parseInt(document.getElementById('f-recipient').value)
-        try {
-            await api('POST', '/notifiers/rules', {
-                cw_board_id:    boardId,
-                webex_room_id:  recipId,
-                notify_enabled: true,
-            })
-            closeModal()
-            toast('Rule created', 'success')
-            loadRules()
-        } catch (e) { toast(e.message, 'error') }
-    })
-}
-
-async function deleteRule(id) {
-    if (!confirm('Delete this rule?')) return
-    try {
-        await api('DELETE', `/notifiers/rules/${id}`)
-        toast('Rule deleted', 'success')
-        loadRules()
-    } catch (e) { toast(e.message, 'error') }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1081,13 +1037,20 @@ function renderConfig(cfg) {
     <div class="config-form">
         <div class="config-row">
             <div>
-                <div class="config-label">Attempt Notify</div>
-                <div class="config-desc">Master switch for sending ticket notifications</div>
+                <div class="config-label">Master Dry Run</div>
+                <div class="config-desc">Run every workflow as a dry run: no ConnectWise writes, Webex messages are mocked</div>
             </div>
             <label class="toggle">
-                <input type="checkbox" id="c-notify" ${cfg.attempt_notify ? 'checked' : ''}>
+                <input type="checkbox" id="c-master-dry-run" ${cfg.master_dry_run ? 'checked' : ''}>
                 <span class="toggle-track"></span>
             </label>
+        </div>
+        <div class="config-row">
+            <div>
+                <div class="config-label">CW API Member Identifier</div>
+                <div class="config-desc">ConnectWise member the API key belongs to; its own updates never trigger workflows. Auto-filled after the first note ticketbot posts</div>
+            </div>
+            <input class="config-input config-input--wide" type="text" id="c-api-member" value="${esc(cfg.cw_api_member_identifier || '')}" placeholder="e.g. ticketbot">
         </div>
         <div class="config-row">
             <div>
@@ -1152,8 +1115,9 @@ function renderConfig(cfg) {
 
 async function saveConfig() {
     try {
-        await api('PUT', '/config', {
-            attempt_notify:             document.getElementById('c-notify').checked,
+        const res = await api('PUT', '/config', {
+            master_dry_run:             document.getElementById('c-master-dry-run').checked,
+            cw_api_member_identifier:   document.getElementById('c-api-member').value.trim(),
             max_message_length:         parseInt(document.getElementById('c-max-len').value)              || 300,
             max_concurrent_syncs:       parseInt(document.getElementById('c-max-syncs').value)            || 5,
             require_totp:               document.getElementById('c-require-totp').checked,
@@ -1162,6 +1126,7 @@ async function saveConfig() {
             log_retention_days:         parseInt(document.getElementById('c-log-retention').value)        ?? 7,
             log_cleanup_interval_hours: parseInt(document.getElementById('c-log-cleanup-interval').value) || 24,
         })
+        if (res) appConfig = res
         toast('Config saved', 'success')
     } catch (e) { toast(e.message, 'error') }
 }

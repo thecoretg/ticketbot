@@ -1127,6 +1127,14 @@ type Ticket struct {
 	Zip string `json:"zip,omitempty"`
 }
 
+type TicketConfiguration struct {
+	ID               int    `json:"id"`
+	DeviceIdentifier string `json:"deviceIdentifier"`
+	Info             struct {
+		Name string `json:"name"`
+	} `json:"_info"`
+}
+
 type ServiceTicketNote struct {
 	Info    any `json:"_info,omitempty"`
 	Contact struct {
@@ -1207,4 +1215,94 @@ type WebhookPayload struct {
 		KeyURL string `json:"key_url"`
 	} `json:"Metadata"`
 	CallbackObjectRecID int `json:"CallbackObjectRecID"`
+}
+
+type Configuration struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Type struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Info struct {
+			TypeHref string `json:"type_href"`
+		} `json:"_info"`
+	} `json:"type"`
+	Status struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Info struct {
+			StatusHref string `json:"status_href"`
+		} `json:"_info"`
+	} `json:"status"`
+	Company struct {
+		ID         int    `json:"id"`
+		Identifier string `json:"identifier"`
+		Name       string `json:"name"`
+		Info       struct {
+			CompanyHref string `json:"company_href"`
+		} `json:"_info"`
+	} `json:"company"`
+	Contact struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Info struct {
+			ContactHref string `json:"contact_href"`
+		} `json:"_info"`
+	} `json:"contact"`
+	Site struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Info struct {
+			SiteHref string `json:"site_href"`
+		} `json:"_info"`
+	} `json:"site"`
+	LocationID int `json:"locationId"`
+	Location   struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Info struct {
+			LocationHref string `json:"location_href"`
+		} `json:"_info"`
+	} `json:"location"`
+	BusinessUnitID int `json:"businessUnitId"`
+	Department     struct {
+		ID         int    `json:"id"`
+		Identifier string `json:"identifier"`
+		Name       string `json:"name"`
+		Info       struct {
+			DepartmentHref string `json:"department_href"`
+		} `json:"_info"`
+	} `json:"department"`
+	DeviceIdentifier string `json:"deviceIdentifier"`
+	SerialNumber     string `json:"serialNumber"`
+	Notes            string `json:"notes"`
+	MacAddress       string `json:"macAddress"`
+	LastLoginName    string `json:"lastLoginName"`
+	BillFlag         bool   `json:"billFlag"`
+	IPAddress        string `json:"ipAddress"`
+	OsType           string `json:"osType"`
+	OsInfo           string `json:"osInfo"`
+	CPUSpeed         string `json:"cpuSpeed"`
+	RAM              string `json:"ram"`
+	Questions        []struct {
+		AnswerID         int     `json:"answerId"`
+		QuestionID       int     `json:"questionId"`
+		Question         string  `json:"question"`
+		SequenceNumber   float64 `json:"sequenceNumber"`
+		NumberOfDecimals int     `json:"numberOfDecimals"`
+		FieldType        string  `json:"fieldType"`
+		RequiredFlag     bool    `json:"requiredFlag"`
+	} `json:"questions"`
+	ActiveFlag        bool   `json:"activeFlag"`
+	MobileGUID        string `json:"mobileGuid"`
+	CompanyLocationID int    `json:"companyLocationId"`
+	ShowRemoteFlag    bool   `json:"showRemoteFlag"`
+	ShowAutomateFlag  bool   `json:"showAutomateFlag"`
+	NeedsRenewalFlag  bool   `json:"needsRenewalFlag"`
+	Info              struct {
+		LastUpdated time.Time `json:"lastUpdated"`
+		UpdatedBy   string    `json:"updatedBy"`
+		DateEntered time.Time `json:"dateEntered"`
+		EnteredBy   string    `json:"enteredBy"`
+	} `json:"_info"`
 }
