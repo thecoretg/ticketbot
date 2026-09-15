@@ -944,3 +944,56 @@ tr.clickable { cursor: pointer; }
 .note-author { color: var(--muted); font-size: 11px; font-weight: 600; margin-bottom: 2px; }
 .filter-bar .logs-search-input { width: 240px; }
 .tab-header .filter-bar { justify-content: flex-end; }
+
+/* ── Workflows ──────────────────────────────────────────────────────────────── */
+.dirty-dot { background: var(--warning); border-radius: 50%; display: inline-block; height: 8px; width: 8px; }
+.wf-head { margin-bottom: 24px; max-width: none; }
+.rule-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 14px; }
+.rule-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+}
+.rule-card.is-disabled, .action-row.is-disabled { opacity: 0.55; }
+.rule-card-head { align-items: center; display: flex; gap: 10px; }
+.rule-index { color: var(--muted); font-size: 12px; font-weight: 600; text-align: center; width: 18px; }
+.rule-name { flex: 1; font-weight: 500; }
+.order-btns { display: flex; flex-direction: column; }
+.order-btns .btn-icon { font-size: 9px; line-height: 1.2; padding: 1px 6px; }
+.rule-grid { align-items: end; display: grid; gap: 16px; grid-template-columns: 220px 1fr; }
+.check-inline { align-items: center; color: var(--text); display: flex; font-size: 13px; gap: 8px; padding: 6px 0; }
+.check-inline input { width: auto; }
+.form-group label code { background: var(--surface); border-radius: 4px; font-size: 11px; padding: 1px 5px; }
+.cond-textarea { font-family: 'SF Mono', 'Fira Code', Consolas, monospace; font-size: 12px; line-height: 1.5; min-height: 56px; resize: vertical; }
+.cond-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.cond-ticket { text-align: left; width: 110px; }
+.cond-spacer { flex: 1; }
+.cond-result { font-size: 12px; color: var(--muted); }
+.cond-result.ok  { color: var(--success); }
+.cond-result.err { color: var(--danger); }
+.action-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.action-empty { font-size: 12px; padding: 4px 0; }
+.action-row {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 10px;
+}
+.action-row select { min-width: 150px; width: auto; }
+.action-row .fill { flex: 1; min-width: 200px; }
+.action-row .muted { font-size: 12px; }
+.action-note { display: flex; flex-direction: column; gap: 6px; }
+.action-note textarea { min-height: 44px; resize: vertical; width: 100%; }
+.action-flags { display: flex; gap: 16px; }
+.action-flags .check-inline { padding: 0; font-size: 12px; }
+.toggle-sm { transform: scale(0.85); }
+.cond-tools input.cond-ticket { width: 110px; }
+.config-row input.config-input--wide { width: 260px; }

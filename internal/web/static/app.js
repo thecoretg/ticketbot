@@ -85,7 +85,12 @@ async function api(method, path, body = null) {
     }
 
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`)
+    if (!res.ok) {
+        const err = new Error(data.error || `Request failed: ${res.status}`)
+        err.status = res.status
+        err.data   = data
+        throw err
+    }
     return data
 }
 
