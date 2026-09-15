@@ -130,3 +130,58 @@ func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
 
 	return m
 }
+
+// RecipientPreview describes who a notify intent would reach, without sending anything.
+type RecipientPreview struct {
+	RuleID        string   `json:"rule_id"`
+	RuleName      string   `json:"rule_name"`
+	RecipientID   int      `json:"recipient_id"`
+	RecipientName string   `json:"recipient_name"`
+	RecipientType string   `json:"recipient_type"`
+	ForwardedFrom []string `json:"forwarded_from,omitempty"`
+	Error         string   `json:"error,omitempty"`
+}
+
+// PreviewRecipients resolves intents and applies forwards exactly like Send, but delivers nothing
+// and stores nothing. Unresolvable intents are reported as previews carrying an error.
+func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, intents []workflow.NotifyIntent) ([]RecipientPreview, error) {
+	if t == nil {
+		return nil, errors.New("nil ticket received")
+	}
+
+	natural := make(recipMap)
+	attribution := make(map[int]workflow.RuleRef)
+	var out []RecipientPreview
+
+	for _, in := range intents {
+		recips, err := s.resolveTarget(ctx, t, in.Target)
+		if err != nil {
+			out = append(out, RecipientPreview{RuleID: in.Rule.RuleID, RuleName: in.Rule.RuleName, Error: err.Error()})
+			continue
+		}
+		for id, r := range recips {
+			if _, seen := natural[id]; seen {
+				continue
+			}
+			natural[id] = r
+			attribution[id] = in.Rule
+		}
+	}
+
+	for _, r := range s.applyForwards(ctx, t, natural).toSlice() {
+		rule := attribution[r.origin().ID]
+		p := RecipientPreview{
+			RuleID:        rule.RuleID,
+			RuleName:      rule.RuleName,
+			RecipientID:   r.recipient.ID,
+			RecipientName: r.recipient.Name,
+			RecipientType: string(r.recipient.Type),
+		}
+		for _, f := range r.forwardChain {
+			p.ForwardedFrom = append(p.ForwardedFrom, f.Name)
+		}
+		out = append(out, p)
+	}
+
+	return out, nil
+}

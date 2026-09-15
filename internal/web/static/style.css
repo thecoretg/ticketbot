@@ -997,3 +997,9 @@ tr.clickable { cursor: pointer; }
 .toggle-sm { transform: scale(0.85); }
 .cond-tools input.cond-ticket { width: 110px; }
 .config-row input.config-input--wide { width: 260px; }
+.sim-bar { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.sim-bar input.cond-ticket { width: 110px; }
+.sim-panel { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: 8px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; padding: 14px 16px; }
+.sim-head { font-size: 13px; font-weight: 600; }
+.sim-section { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.sim-line { align-items: center; display: flex; gap: 8px; }

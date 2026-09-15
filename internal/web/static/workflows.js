@@ -4,6 +4,7 @@
 let wf           = null   // working copy of the workflow being edited
 let wfOriginal   = ''     // JSON.stringify(wf) at load/save time, for dirty compare
 let wfRecipients = []     // /webex/rooms cache (rooms + people)
+let wfSimTicket  = ''     // last simulated ticket number, kept across re-renders
 
 const WF_TRIGGERS = [['create', 'New tickets'], ['update', 'Updated tickets'], ['both', 'New and updated']]
 const WF_KINDS    = [['notify', 'Notify'], ['add_note', 'Add note'], ['skip_notify', 'Skip notify']]
@@ -164,6 +165,17 @@ function renderWorkflowEditor() {
             <label class="toggle"><input type="checkbox" ${wf.dry_run ? 'checked' : ''} onchange="wfSet('dry_run', this.checked)"><span class="toggle-track"></span></label>
         </div>
     </div>
+    <div class="sim-bar">
+        <span class="config-label">Simulate</span>
+        <input type="number" id="sim-ticket" class="config-input cond-ticket" placeholder="Ticket #" min="1" value="${esc(wfSimTicket)}">
+        <select id="sim-mode" class="filter-select">
+            <option value="update">as an update</option>
+            <option value="create">as a new ticket</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="wfSimulate()">Run</button>
+        <span class="config-desc">Runs the rules as shown (saved or not) against a stored ticket. Nothing is sent or written.</span>
+    </div>
+    <div id="sim-result"></div>
     <div class="section-head"><h3>Rules</h3><span class="config-desc">Evaluated top to bottom for every new or updated ticket</span></div>
     <div class="rule-list" id="rule-list">${rules || '<div class="empty-state">No rules yet</div>'}</div>
     <button class="btn btn-ghost btn-sm" onclick="wfAddRule()">+ Add rule</button>`)
@@ -417,6 +429,53 @@ async function wfTest(i) {
         out.className = 'cond-result err'
         out.textContent = e.message
     }
+}
+
+// ── Simulate ─────────────────────────────────────────────
+async function wfSimulate() {
+    const out = document.getElementById('sim-result')
+    const id  = parseInt(document.getElementById('sim-ticket').value)
+    wfSimTicket = id ? String(id) : ''
+    if (!id) { out.innerHTML = '<div class="cond-result err">Enter a ticket number</div>'; return }
+
+    const bad = wfClientValidate()
+    if (bad) { out.innerHTML = `<div class="cond-result err">Rule ${bad.i + 1}: ${esc(bad.msg)}</div>`; return }
+
+    out.innerHTML = '<div class="loading-state">Simulating…</div>'
+    try {
+        const draft = JSON.parse(JSON.stringify(wf))
+        for (const r of draft.rules) for (const a of r.actions) {
+            if (a.kind === 'notify' && a.notify.recipient_id === null) delete a.notify.recipient_id
+        }
+        const res = await api('POST', `/workflows/${wf.id}/simulate`, {
+            ticket_id: id,
+            as_new: document.getElementById('sim-mode').value === 'create',
+            workflow: draft,
+        })
+        out.innerHTML = wfSimResultHTML(id, res)
+    } catch (e) {
+        const d = e.data?.details?.[0]
+        out.innerHTML = `<div class="cond-result err">${esc(d ? `Rule ${d.rule_index + 1}: ${d.field}: ${d.message}` : e.message)}</div>`
+    }
+}
+
+function wfSimResultHTML(id, res) {
+    const rules = (res.workflow?.rules || []).map(tkRuleChip).join('') || '<span class="muted">No rules</span>'
+    const actions = (res.actions || []).map(a => `<div class="sim-line">
+        ${tkResultBadge(a.result, true)}
+        <span><strong>${esc(a.rule_name)}</strong> · ${tkActionLabel(a.kind)}${a.output?.target ? ` → ${esc(tkTargetLabel(a.output.target))}` : ''}${a.kind === 'add_note' && a.output?.text ? `: <span class="muted">${esc(a.output.text)}</span>` : ''}${a.reason ? ` <span class="muted">(${esc(a.reason)})</span>` : ''}${a.error ? ` <span class="cond-result err">${esc(a.error)}</span>` : ''}</span>
+    </div>`).join('') || '<div class="muted">No actions would run</div>'
+    const recips = (res.recipients || []).map(r => `<div class="sim-line">
+        ${r.error ? badgeTag('Error', 'off') : badgeTag(r.recipient_type, 'muted')}
+        <span>${r.error ? `<strong>${esc(r.rule_name)}</strong>: ${esc(r.error)}` : `<strong>${esc(r.recipient_name)}</strong> <span class="muted">via ${esc(r.rule_name)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
+    </div>`).join('') || '<div class="muted">Nobody would be notified</div>'
+
+    return `<div class="sim-panel">
+        <div class="sim-head">Simulation for <a class="tk-id" href="#tickets/${id}">#${id}</a> <span class="muted">(${esc(res.source)} snapshot)</span></div>
+        <div class="sim-section"><div class="meta-label">Rules</div><div class="rule-chips">${rules}</div></div>
+        <div class="sim-section"><div class="meta-label">Actions</div>${actions}</div>
+        <div class="sim-section"><div class="meta-label">Would notify</div>${recips}</div>
+    </div>`
 }
 
 // ── Save ─────────────────────────────────────────────────

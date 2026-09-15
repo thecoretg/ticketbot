@@ -1,25 +1,185 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/cwquery"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
+	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/workflow"
 	"github.com/thecoretg/ticketbot/models"
 )
 
 type WorkflowHandler struct {
-	Service *workflow.Service
-	CW      *cwsvc.Service
+	Service  *workflow.Service
+	CW       *cwsvc.Service
+	Notifier *notifier.Service
 }
 
-func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service) *WorkflowHandler {
-	return &WorkflowHandler{Service: svc, CW: cw}
+func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service, ns *notifier.Service) *WorkflowHandler {
+	return &WorkflowHandler{Service: svc, CW: cw, Notifier: ns}
+}
+
+// Fields handles GET /workflows/fields.
+func (h *WorkflowHandler) Fields(c *gin.Context) {
+	outputJSON(c, workflow.ConditionFields)
+}
+
+type simulateRequest struct {
+	TicketID int  `json:"ticket_id"`
+	AsNew    bool `json:"as_new"`
+	// Workflow, when present, is an unsaved draft to simulate instead of the stored workflow.
+	Workflow *models.Workflow `json:"workflow,omitempty"`
+}
+
+type simulateResponse struct {
+	Source     string                      `json:"source"` // stored | live
+	Workflow   models.WorkflowPayload      `json:"workflow"`
+	Actions    []models.ActionPayload      `json:"actions"`
+	Recipients []notifier.RecipientPreview `json:"recipients"`
+}
+
+// Simulate handles POST /workflows/:id/simulate. It runs the workflow (or a posted draft) against a
+// ticket snapshot as a dry run, resolves notification recipients, and returns what would happen.
+// Nothing is written to ConnectWise, Webex, or the ticket history.
+func (h *WorkflowHandler) Simulate(c *gin.Context) {
+	id, err := convertID(c)
+	if err != nil {
+		badIntError(c)
+		return
+	}
+
+	dec := json.NewDecoder(c.Request.Body)
+	dec.DisallowUnknownFields()
+	var req simulateRequest
+	if err := dec.Decode(&req); err != nil {
+		badPayloadError(c, err)
+		return
+	}
+	if req.TicketID == 0 {
+		badPayloadError(c, errors.New("ticket_id is required"))
+		return
+	}
+
+	ctx := c.Request.Context()
+	wf, err := h.Service.Get(ctx, id)
+	if err != nil {
+		h.workflowError(c, err)
+		return
+	}
+	if req.Workflow != nil {
+		draft := req.Workflow
+		draft.ID, draft.BoardID, draft.BoardName = wf.ID, wf.BoardID, wf.BoardName
+		if errs := h.Service.Validate(ctx, draft); len(errs) > 0 {
+			h.workflowError(c, errs)
+			return
+		}
+		wf = draft
+	}
+
+	t, note, live, err := h.CW.TicketSnapshot(ctx, req.TicketID)
+	if err != nil {
+		if errors.Is(err, models.ErrTicketNotFound) {
+			notFoundError(c, err)
+			return
+		}
+		internalServerError(c, err)
+		return
+	}
+	if t.Board.ID != wf.BoardID {
+		badPayloadError(c, fmt.Errorf("ticket %d is on board %d, not this workflow's board %d", req.TicketID, t.Board.ID, wf.BoardID))
+		return
+	}
+
+	engine := workflow.NewEngine(noopCW{})
+	res, err := engine.Run(ctx, wf, workflow.Input{
+		Ticket:      t,
+		TriggerNote: note,
+		IsNew:       req.AsNew,
+		NewNote:     note != nil,
+		DryRun:      true,
+	})
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	out := simulateResponse{
+		Source:     map[bool]string{true: "live", false: "stored"}[live],
+		Workflow:   workflowRunPayload(wf, res),
+		Actions:    []models.ActionPayload{},
+		Recipients: []notifier.RecipientPreview{},
+	}
+	for _, a := range res.Actions {
+		p := models.ActionPayload{RuleID: a.Rule.RuleID, RuleName: a.Rule.RuleName, Index: a.Index, Kind: string(a.Kind), Result: a.Result, Reason: a.Reason, Output: a.Output}
+		if a.Err != nil {
+			p.Error = a.Err.Error()
+		}
+		out.Actions = append(out.Actions, p)
+	}
+
+	if len(res.Notifies) > 0 {
+		detail, err := h.CW.GetTicketDetail(ctx, req.TicketID)
+		if err != nil {
+			internalServerError(c, err)
+			return
+		}
+		ft := &models.FullTicket{
+			Ticket:     detail.Ticket.Ticket,
+			Board:      detail.Board,
+			Status:     detail.Status,
+			Company:    detail.Company,
+			Contact:    detail.Contact,
+			Owner:      detail.Owner,
+			LatestNote: detail.LatestNote,
+			Resources:  detail.Resources,
+		}
+		recips, err := h.Notifier.PreviewRecipients(ctx, ft, res.Notifies)
+		if err != nil {
+			internalServerError(c, err)
+			return
+		}
+		if recips != nil {
+			out.Recipients = recips
+		}
+	}
+
+	outputJSON(c, out)
+}
+
+func workflowRunPayload(wf *models.Workflow, res *workflow.Result) models.WorkflowPayload {
+	p := models.WorkflowPayload{WorkflowID: &wf.ID, WorkflowName: wf.Name, Found: true, Enabled: wf.Enabled, Rules: []models.RuleOutcomePayload{}}
+	for _, r := range res.Rules {
+		rp := models.RuleOutcomePayload{RuleID: r.Rule.RuleID, RuleName: r.Rule.RuleName, Matched: r.Matched, Skipped: r.Skipped, Stopped: r.Stopped}
+		if r.Err != nil {
+			rp.Error = r.Err.Error()
+		}
+		p.Rules = append(p.Rules, rp)
+	}
+	return p
+}
+
+// noopCW satisfies workflow.CWClient for simulations; the engine never writes in dry run, and the
+// read methods are only reached after a write, so none of these should be called.
+type noopCW struct{}
+
+func (noopCW) GetTicket(context.Context, int, map[string]string) (*psa.Ticket, error) {
+	return nil, errors.New("simulation: connectwise reads are disabled")
+}
+func (noopCW) GetMostRecentTicketNote(context.Context, int) (*psa.ServiceTicketNote, error) {
+	return nil, errors.New("simulation: connectwise reads are disabled")
+}
+func (noopCW) PatchTicket(context.Context, int, []psa.PatchOp) (*psa.Ticket, error) {
+	return nil, errors.New("simulation: connectwise writes are disabled")
+}
+func (noopCW) PostServiceTicketNote(context.Context, *psa.ServiceTicketNote, int) (*psa.ServiceTicketNote, error) {
+	return nil, errors.New("simulation: connectwise writes are disabled")
 }
 
 func (h *WorkflowHandler) List(c *gin.Context) {

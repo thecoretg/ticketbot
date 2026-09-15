@@ -56,7 +56,7 @@ func AddRoutes(a *App, g *gin.Engine, shutdown func()) {
 	registerNotifierRoutes(n, nh)
 
 	wf := g.Group("workflows", auth)
-	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW)
+	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW, a.Svc.Notifier)
 	registerWorkflowRoutes(wf, wfh)
 
 	t := g.Group("tickets", auth)
@@ -126,10 +126,12 @@ func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
 func registerWorkflowRoutes(r *gin.RouterGroup, h *handlers.WorkflowHandler) {
 	r.GET("", h.List)
 	r.POST("", h.Create)
+	r.GET("fields", h.Fields)
 	r.POST("validate-condition", h.ValidateCondition)
 	r.POST("evaluate-condition", h.EvaluateCondition)
 	r.GET("board/:id", h.GetByBoard)
 	r.GET(":id", h.Get)
+	r.POST(":id/simulate", h.Simulate)
 	r.PUT(":id", h.Replace)
 	r.DELETE(":id", h.Delete)
 }
