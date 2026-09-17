@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/tctg-go/webex"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type Message struct {

@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type WebexHandler struct {

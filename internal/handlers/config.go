@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thecoretg/ticketbot/models"
 	"github.com/thecoretg/ticketbot/internal/service/config"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 type ConfigHandler struct {

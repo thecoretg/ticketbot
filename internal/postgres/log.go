@@ -88,7 +88,7 @@ func (r *LogRepo) DeleteOlderThan(ctx context.Context, before time.Time) (int64,
 // pgxCopyRows adapts a [][]any slice to pgx's CopyFromSource interface.
 type pgxCopyRows [][]any
 
-func (r pgxCopyRows) Next() bool             { return len(r) > 0 }
+func (r pgxCopyRows) Next() bool { return len(r) > 0 }
 func (r *pgxCopyRows) Values() ([]any, error) {
 	row := (*r)[0]
 	*r = (*r)[1:]

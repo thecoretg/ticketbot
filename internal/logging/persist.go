@@ -22,15 +22,15 @@ type LogConfig interface {
 // Persister batches log entries from a BufferHandler into the DB and
 // runs a periodic cleanup goroutine to enforce the retention policy.
 type Persister struct {
-	repo   LogPersistRepository
-	buf    *BufferHandler
-	cfg    LogConfig
-	ch     chan LogEntry
+	repo LogPersistRepository
+	buf  *BufferHandler
+	cfg  LogConfig
+	ch   chan LogEntry
 }
 
 const (
-	flushInterval  = 5 * time.Second
-	channelBuf     = 2000
+	flushInterval = 5 * time.Second
+	channelBuf    = 2000
 )
 
 // NewPersister wires the persister to the buffer handler.
