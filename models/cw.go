@@ -28,6 +28,21 @@ type Company struct {
 
 var ErrContactNotFound = errors.New("contact not found")
 
+// CompanySearch filters the stored company list. Empty Query and nil IDs match everything.
+type CompanySearch struct {
+	Query string
+	IDs   []int
+	Limit int
+}
+
+// ContactSearch filters the stored contact list. CompanyID narrows to one company's contacts.
+type ContactSearch struct {
+	Query     string
+	CompanyID *int
+	IDs       []int
+	Limit     int
+}
+
 type Contact struct {
 	ID        int       `json:"id"`
 	FirstName string    `json:"first_name"`

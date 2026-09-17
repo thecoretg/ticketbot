@@ -108,6 +108,8 @@ func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
 	m.GET("", h.ListMembers)
 
 	r.GET("priorities", h.ListPriorities)
+	r.GET("companies", h.ListCompanies)
+	r.GET("contacts", h.ListContacts)
 }
 
 func registerWebexRoutes(r *gin.RouterGroup, h *handlers.WebexHandler) {
@@ -131,6 +133,7 @@ func registerWorkflowRoutes(r *gin.RouterGroup, h *handlers.WorkflowHandler) {
 	r.GET("fields", h.Fields)
 	r.GET("placeholders", h.Placeholders)
 	r.POST("validate-condition", h.ValidateCondition)
+	r.POST("parse-condition", h.ParseCondition)
 	r.POST("evaluate-condition", h.EvaluateCondition)
 	r.GET("board/:id", h.GetByBoard)
 	r.GET(":id", h.Get)

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -38,6 +39,36 @@ func (p *CompanyRepo) List(ctx context.Context) ([]*models.Company, error) {
 	}
 
 	return b, nil
+}
+
+func (p *CompanyRepo) Search(ctx context.Context, f models.CompanySearch) ([]*models.Company, error) {
+	params := db.SearchCompaniesParams{Ids: f.IDs, Lim: int32(searchLimit(f.Limit))}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		params.Search = &q
+	}
+
+	dbs, err := p.queries.SearchCompanies(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*models.Company, 0, len(dbs))
+	for _, d := range dbs {
+		out = append(out, companyFromPG(d))
+	}
+
+	return out, nil
+}
+
+// searchLimit caps typeahead result sizes.
+func searchLimit(n int) int {
+	switch {
+	case n <= 0:
+		return 25
+	case n > 200:
+		return 200
+	}
+	return n
 }
 
 func (p *CompanyRepo) Get(ctx context.Context, id int) (*models.Company, error) {

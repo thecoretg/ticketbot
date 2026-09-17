@@ -147,3 +147,46 @@ func TestTicketEventRepo(t *testing.T) {
 		t.Errorf("single insert: %+v", single)
 	}
 }
+
+func TestCompanyAndContactSearch(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `
+		INSERT INTO cw_company (id, name) VALUES (900200, 'Zeta Widgets'), (900201, 'Zeta Gadgets') ON CONFLICT DO NOTHING;
+		INSERT INTO cw_company (id, name, deleted) VALUES (900202, 'Zeta Gone', true) ON CONFLICT DO NOTHING;
+		INSERT INTO cw_contact (id, first_name, last_name, company_id)
+			VALUES (900300, 'Quinn', 'Zzyzxbrowski', 900200), (900301, 'Quill', 'Zzyzxother', 900201) ON CONFLICT DO NOTHING;`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM cw_contact WHERE id IN (900300, 900301); DELETE FROM cw_company WHERE id IN (900200, 900201, 900202)`)
+	})
+
+	companies, err := NewCompanyRepo(pool).Search(ctx, models.CompanySearch{Query: "zeta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(companies) != 2 || companies[0].Name != "Zeta Gadgets" || companies[1].Name != "Zeta Widgets" {
+		t.Errorf("company search = %+v", companies)
+	}
+
+	byID, err := NewCompanyRepo(pool).Search(ctx, models.CompanySearch{IDs: []int{900201}})
+	if err != nil || len(byID) != 1 || byID[0].ID != 900201 {
+		t.Errorf("company by id = %+v, %v", byID, err)
+	}
+
+	contacts, err := NewContactRepo(pool).Search(ctx, models.ContactSearch{Query: "zzyzx"})
+	if err != nil || len(contacts) != 2 {
+		t.Fatalf("contact search = %+v, %v", contacts, err)
+	}
+	company := 900200
+	scoped, err := NewContactRepo(pool).Search(ctx, models.ContactSearch{Query: "zzyzx", CompanyID: &company})
+	if err != nil || len(scoped) != 1 || scoped[0].ID != 900300 {
+		t.Errorf("scoped contact search = %+v, %v", scoped, err)
+	}
+	full, err := NewContactRepo(pool).Search(ctx, models.ContactSearch{Query: "quinn zzyzx"})
+	if err != nil || len(full) != 1 {
+		t.Errorf("full-name contact search = %+v, %v", full, err)
+	}
+}

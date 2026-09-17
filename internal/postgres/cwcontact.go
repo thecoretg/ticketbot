@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -38,6 +39,25 @@ func (p *ContactRepo) List(ctx context.Context) ([]*models.Contact, error) {
 	}
 
 	return b, nil
+}
+
+func (p *ContactRepo) Search(ctx context.Context, f models.ContactSearch) ([]*models.Contact, error) {
+	params := db.SearchContactsParams{CompanyID: f.CompanyID, Ids: f.IDs, Lim: int32(searchLimit(f.Limit))}
+	if q := strings.TrimSpace(f.Query); q != "" {
+		params.Search = &q
+	}
+
+	dbs, err := p.queries.SearchContacts(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*models.Contact, 0, len(dbs))
+	for _, d := range dbs {
+		out = append(out, contactFromPG(d))
+	}
+
+	return out, nil
 }
 
 func (p *ContactRepo) Get(ctx context.Context, id int) (*models.Contact, error) {

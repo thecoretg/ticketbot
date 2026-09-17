@@ -72,6 +72,59 @@ func (q *Queries) ListContacts(ctx context.Context) ([]*CwContact, error) {
 	return items, nil
 }
 
+const searchContacts = `-- name: SearchContacts :many
+SELECT id, first_name, last_name, company_id, updated_on, added_on, deleted FROM cw_contact
+WHERE deleted = FALSE
+  AND ($1::text IS NULL
+       OR first_name ILIKE '%' || $1::text || '%'
+       OR last_name ILIKE '%' || $1::text || '%'
+       OR (first_name || ' ' || COALESCE(last_name, '')) ILIKE '%' || $1::text || '%')
+  AND ($2::int IS NULL OR company_id = $2::int)
+  AND ($3::int[] IS NULL OR id = ANY($3::int[]))
+ORDER BY first_name, last_name
+LIMIT $4
+`
+
+type SearchContactsParams struct {
+	Search    *string `json:"search"`
+	CompanyID *int    `json:"company_id"`
+	Ids       []int   `json:"ids"`
+	Lim       int32   `json:"lim"`
+}
+
+func (q *Queries) SearchContacts(ctx context.Context, arg SearchContactsParams) ([]*CwContact, error) {
+	rows, err := q.db.Query(ctx, searchContacts,
+		arg.Search,
+		arg.CompanyID,
+		arg.Ids,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*CwContact
+	for rows.Next() {
+		var i CwContact
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.CompanyID,
+			&i.UpdatedOn,
+			&i.AddedOn,
+			&i.Deleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteContact = `-- name: SoftDeleteContact :exec
 UPDATE cw_contact
 SET

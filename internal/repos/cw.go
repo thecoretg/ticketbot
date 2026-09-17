@@ -19,6 +19,7 @@ type BoardRepository interface {
 type CompanyRepository interface {
 	WithTx(tx pgx.Tx) CompanyRepository
 	List(ctx context.Context) ([]*models.Company, error)
+	Search(ctx context.Context, f models.CompanySearch) ([]*models.Company, error)
 	Get(ctx context.Context, id int) (*models.Company, error)
 	Upsert(ctx context.Context, c *models.Company) (*models.Company, error)
 	SoftDelete(ctx context.Context, id int) error
@@ -28,6 +29,7 @@ type CompanyRepository interface {
 type ContactRepository interface {
 	WithTx(tx pgx.Tx) ContactRepository
 	List(ctx context.Context) ([]*models.Contact, error)
+	Search(ctx context.Context, f models.ContactSearch) ([]*models.Contact, error)
 	Get(ctx context.Context, id int) (*models.Contact, error)
 	Upsert(ctx context.Context, c *models.Contact) (*models.Contact, error)
 	SoftDelete(ctx context.Context, id int) error

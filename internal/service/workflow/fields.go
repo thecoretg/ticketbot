@@ -1,54 +1,87 @@
 package workflow
 
-// ConditionField documents a commonly used condition path for editor autocomplete.
+// ConditionField documents one path the visual condition builder offers. Any field on the
+// ConnectWise ticket JSON works in a hand-written condition; this list is what the builder knows
+// how to render, and how the advanced editor's text is mapped back onto builder rows.
 type ConditionField struct {
-	Path        string `json:"path"`
-	Type        string `json:"type"` // string | number | bool
-	Description string `json:"description"`
-	Example     string `json:"example"`
+	Path  string `json:"path"`
+	Label string `json:"label"`
+	Group string `json:"group"`
+	// Type drives the operator list and value widget:
+	//   string      free text
+	//   number      free numeric
+	//   bool        is true / is false
+	//   ref         an id chosen from Source (compiles to `path = 123` / `path in (…)`)
+	//   identifier  a member identifier chosen from Source (compiles to `path = 'jdoe'`)
+	//   list        a comma-separated string of member identifiers; `contains` against Source
+	Type string `json:"type"`
+	// Source names the lookup that supplies values: statuses, priorities, members, boards,
+	// companies, contacts. Empty for free-form fields.
+	Source      string `json:"source,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
-// ConditionFields lists the ticket paths most rules are written against. Any field on the
-// ConnectWise ticket JSON works; this is guidance, not a whitelist.
+const (
+	groupTicket   = "Ticket"
+	groupNote     = "Latest note"
+	groupChanged  = "What changed"
+	groupPrevious = "Previous values"
+)
+
+// ConditionFields is served by GET /workflows/fields.
 var ConditionFields = []ConditionField{
-	{"id", "number", "Ticket number", "id = 12345"},
-	{"summary", "string", "Ticket summary", "summary contains 'vpn'"},
-	{"board/id", "number", "Board id", "board/id = 34"},
-	{"board/name", "string", "Board name", "board/name = 'Help Desk'"},
-	{"status/id", "number", "Status id", "status/id = 16"},
-	{"status/name", "string", "Status name", "status/name in ('New', 'Assigned')"},
-	{"priority/id", "number", "Priority id", "priority/id = 4"},
-	{"priority/name", "string", "Priority name", "priority/name like 'Priority 1*'"},
-	{"company/id", "number", "Company id", "company/id = 250"},
-	{"company/identifier", "string", "Company identifier", "company/identifier = 'ACME'"},
-	{"company/name", "string", "Company name", "company/name contains 'Acme'"},
-	{"contact/id", "number", "Contact id", "contact/id = 900"},
-	{"contact/name", "string", "Contact name", "contact/name contains 'Smith'"},
-	{"owner/id", "number", "Owner member id", "owner/id != null"},
-	{"owner/identifier", "string", "Owner member identifier", "owner/identifier = 'jdoe'"},
-	{"resources", "string", "Comma-separated resource identifiers", "resources contains 'jdoe'"},
-	{"type/name", "string", "Ticket type", "type/name = 'Incident'"},
-	{"subType/name", "string", "Ticket subtype", "subType/name = 'Network'"},
-	{"item/name", "string", "Ticket item", "item/name = 'VPN'"},
-	{"closedFlag", "bool", "Ticket is closed", "closedFlag = true"},
-	{"_info/updatedBy", "string", "Identifier of the last member to update the ticket", "_info/updatedBy != 'ticketbot'"},
-	{"latestNote/text", "string", "Text of the note that triggered this run", "latestNote/text contains 'urgent'"},
-	{"latestNote/internalAnalysisFlag", "bool", "Triggering note is internal", "latestNote/internalAnalysisFlag = true"},
-	{"latestNote/member/identifier", "string", "Member who wrote the triggering note", "latestNote/member/identifier = 'jdoe'"},
-	{"latestNote/contact/id", "number", "Contact who wrote the triggering note (customer replies)", "latestNote/contact/id != null"},
-	{"changed/status", "bool", "Status changed in this update", "changed/status = true"},
-	{"changed/priority", "bool", "Priority changed in this update", "changed/priority = true"},
-	{"changed/owner", "bool", "Owner changed in this update", "changed/owner = true"},
-	{"changed/resources", "bool", "Resources changed in this update", "changed/resources = true"},
-	{"changed/board", "bool", "Ticket moved boards in this update", "changed/board = true"},
-	{"changed/summary", "bool", "Summary changed in this update", "changed/summary = true"},
-	{"changed/closedFlag", "bool", "Ticket opened or closed in this update", "changed/closedFlag = true"},
-	{"newNote", "bool", "A new note arrived in this update (as opposed to a field-only change)", "newNote = true and latestNote/contact/id != null"},
-	{"old/status/name", "string", "Status before this update (only set when status changed)", "old/status/name = 'New' and status/name = 'Assigned'"},
-	{"old/status/id", "number", "Status id before this update", "old/status/id = 16"},
-	{"old/priority/name", "string", "Priority before this update", "old/priority/name like 'Priority 3*'"},
-	{"old/owner/name", "string", "Owner before this update", "old/owner/name = null"},
-	{"old/board/name", "string", "Board before this update (when the ticket moved boards)", "old/board/name = 'Triage'"},
-	{"old/resources", "string", "Comma-separated resources before this update", "old/resources = null"},
-	{"old/closedFlag", "bool", "Closed flag before this update", "old/closedFlag = true"},
+	// Ticket
+	{"summary", "Summary", groupTicket, "string", "", "Ticket summary"},
+	{"id", "Ticket number", groupTicket, "number", "", ""},
+	{"status/id", "Status", groupTicket, "ref", "statuses", ""},
+	{"status/name", "Status (by name)", groupTicket, "string", "", "Matches the status name as text"},
+	{"priority/id", "Priority", groupTicket, "ref", "priorities", ""},
+	{"priority/name", "Priority (by name)", groupTicket, "string", "", ""},
+	{"board/id", "Board", groupTicket, "ref", "boards", ""},
+	{"owner/id", "Owner", groupTicket, "ref", "members", ""},
+	{"owner/identifier", "Owner (by identifier)", groupTicket, "identifier", "members", ""},
+	{"resources", "Resources", groupTicket, "list", "members", "Comma-separated resource identifiers"},
+	{"company/id", "Company", groupTicket, "ref", "companies", ""},
+	{"company/identifier", "Company (by identifier)", groupTicket, "string", "", ""},
+	{"contact/id", "Contact", groupTicket, "ref", "contacts", ""},
+	{"contact/name", "Contact (by name)", groupTicket, "string", "", ""},
+	{"type/name", "Type", groupTicket, "string", "", ""},
+	{"subType/name", "Subtype", groupTicket, "string", "", ""},
+	{"item/name", "Item", groupTicket, "string", "", ""},
+	{"closedFlag", "Closed", groupTicket, "bool", "", ""},
+	{"_info/updatedBy", "Last updated by", groupTicket, "identifier", "members", "Member who made this update"},
+
+	// Latest note
+	{"newNote", "A new note arrived", groupNote, "bool", "", "True when this update added a note, not just a field change"},
+	{"latestNote/text", "Note text", groupNote, "string", "", ""},
+	{"latestNote/internalAnalysisFlag", "Note is internal", groupNote, "bool", "", ""},
+	{"latestNote/member/identifier", "Note author (member)", groupNote, "identifier", "members", ""},
+	{"latestNote/contact/id", "Note author (contact)", groupNote, "ref", "contacts", "Use \"is not empty\" for any customer reply"},
+
+	// What changed
+	{"changed/status", "Status changed", groupChanged, "bool", "", ""},
+	{"changed/priority", "Priority changed", groupChanged, "bool", "", ""},
+	{"changed/owner", "Owner changed", groupChanged, "bool", "", ""},
+	{"changed/resources", "Resources changed", groupChanged, "bool", "", ""},
+	{"changed/board", "Moved boards", groupChanged, "bool", "", ""},
+	{"changed/company", "Company changed", groupChanged, "bool", "", ""},
+	{"changed/contact", "Contact changed", groupChanged, "bool", "", ""},
+	{"changed/summary", "Summary changed", groupChanged, "bool", "", ""},
+	{"changed/type", "Type changed", groupChanged, "bool", "", ""},
+	{"changed/subType", "Subtype changed", groupChanged, "bool", "", ""},
+	{"changed/item", "Item changed", groupChanged, "bool", "", ""},
+	{"changed/closedFlag", "Opened or closed", groupChanged, "bool", "", ""},
+
+	// Previous values (only set when the field changed in this update)
+	{"old/status/id", "Previous status", groupPrevious, "ref", "statuses", ""},
+	{"old/status/name", "Previous status (by name)", groupPrevious, "string", "", ""},
+	{"old/priority/id", "Previous priority", groupPrevious, "ref", "priorities", ""},
+	{"old/priority/name", "Previous priority (by name)", groupPrevious, "string", "", ""},
+	{"old/owner/id", "Previous owner", groupPrevious, "ref", "members", ""},
+	{"old/board/id", "Previous board", groupPrevious, "ref", "boards", ""},
+	{"old/company/id", "Previous company", groupPrevious, "ref", "companies", ""},
+	{"old/contact/id", "Previous contact", groupPrevious, "ref", "contacts", ""},
+	{"old/resources", "Previous resources", groupPrevious, "list", "members", ""},
+	{"old/summary", "Previous summary", groupPrevious, "string", "", ""},
+	{"old/closedFlag", "Previously closed", groupPrevious, "bool", "", ""},
 }

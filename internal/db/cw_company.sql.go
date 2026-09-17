@@ -68,6 +68,47 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]*CwCompany, error) {
 	return items, nil
 }
 
+const searchCompanies = `-- name: SearchCompanies :many
+SELECT id, name, updated_on, added_on, deleted FROM cw_company
+WHERE deleted = FALSE
+  AND ($1::text IS NULL OR name ILIKE '%' || $1::text || '%')
+  AND ($2::int[] IS NULL OR id = ANY($2::int[]))
+ORDER BY name
+LIMIT $3
+`
+
+type SearchCompaniesParams struct {
+	Search *string `json:"search"`
+	Ids    []int   `json:"ids"`
+	Lim    int32   `json:"lim"`
+}
+
+func (q *Queries) SearchCompanies(ctx context.Context, arg SearchCompaniesParams) ([]*CwCompany, error) {
+	rows, err := q.db.Query(ctx, searchCompanies, arg.Search, arg.Ids, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*CwCompany
+	for rows.Next() {
+		var i CwCompany
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.UpdatedOn,
+			&i.AddedOn,
+			&i.Deleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteCompany = `-- name: SoftDeleteCompany :exec
 UPDATE cw_company
 SET

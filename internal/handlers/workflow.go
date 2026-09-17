@@ -337,6 +337,37 @@ func (h *WorkflowHandler) ValidateCondition(c *gin.Context) {
 	outputJSON(c, validateConditionResponse{Valid: true})
 }
 
+type parseConditionResponse struct {
+	Valid bool          `json:"valid"`
+	Error string        `json:"error,omitempty"`
+	Pos   *int          `json:"pos,omitempty"`
+	Expr  *cwquery.Node `json:"expr,omitempty"`
+}
+
+// ParseCondition handles POST /workflows/parse-condition: returns the condition's syntax tree so
+// the dashboard can rebuild visual builder rows from hand-written text.
+func (h *WorkflowHandler) ParseCondition(c *gin.Context) {
+	var req conditionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		badPayloadError(c, err)
+		return
+	}
+
+	expr, err := cwquery.Parse(req.Condition)
+	if err != nil {
+		var se *cwquery.SyntaxError
+		if errors.As(err, &se) {
+			pos := se.Pos
+			outputJSON(c, parseConditionResponse{Valid: false, Error: se.Msg, Pos: &pos})
+			return
+		}
+		outputJSON(c, parseConditionResponse{Valid: false, Error: err.Error()})
+		return
+	}
+
+	outputJSON(c, parseConditionResponse{Valid: true, Expr: cwquery.ToNode(expr)})
+}
+
 type evaluateConditionResponse struct {
 	Matches  bool           `json:"matches"`
 	Source   string         `json:"source"` // stored | live

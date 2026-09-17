@@ -27,3 +27,15 @@ WHERE id = $1;
 -- name: DeleteContact :exec
 DELETE FROM cw_contact
 WHERE id = $1;
+
+-- name: SearchContacts :many
+SELECT * FROM cw_contact
+WHERE deleted = FALSE
+  AND (sqlc.narg('search')::text IS NULL
+       OR first_name ILIKE '%' || sqlc.narg('search')::text || '%'
+       OR last_name ILIKE '%' || sqlc.narg('search')::text || '%'
+       OR (first_name || ' ' || COALESCE(last_name, '')) ILIKE '%' || sqlc.narg('search')::text || '%')
+  AND (sqlc.narg('company_id')::int IS NULL OR company_id = sqlc.narg('company_id')::int)
+  AND (sqlc.narg('ids')::int[] IS NULL OR id = ANY(sqlc.narg('ids')::int[]))
+ORDER BY first_name, last_name
+LIMIT sqlc.arg('lim');

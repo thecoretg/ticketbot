@@ -33,3 +33,11 @@ WHERE id = $1;
 -- name: DeleteCompany :exec
 DELETE FROM cw_company
 WHERE id = $1;
+
+-- name: SearchCompanies :many
+SELECT * FROM cw_company
+WHERE deleted = FALSE
+  AND (sqlc.narg('search')::text IS NULL OR name ILIKE '%' || sqlc.narg('search')::text || '%')
+  AND (sqlc.narg('ids')::int[] IS NULL OR id = ANY(sqlc.narg('ids')::int[]))
+ORDER BY name
+LIMIT sqlc.arg('lim');
