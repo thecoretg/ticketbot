@@ -50,8 +50,9 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 	logger := slog.Default().With("ticket_id", t.Ticket.ID, "dry_run", req.DryRun)
 
 	// union natural recipients across intents; the first rule to name a recipient gets credit
+	// (and its message template)
 	natural := make(recipMap)
-	attribution := make(map[int]workflow.RuleRef)
+	attribution := make(map[int]workflow.NotifyIntent)
 	var outcomes []Outcome
 
 	for _, in := range req.Intents {
@@ -66,7 +67,7 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 				continue
 			}
 			natural[id] = r
-			attribution[id] = in.Rule
+			attribution[id] = in
 		}
 	}
 
@@ -76,11 +77,11 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 	}
 
 	final := s.applyForwards(ctx, t, natural)
-	msgs := s.makeTicketMessages(t, final.toSlice(), req.IsNew)
+	msgs := s.makeTicketMessages(t, final.toSlice(), req.IsNew, attribution)
 
 	for _, m := range msgs {
 		out := Outcome{
-			Rule:      attribution[m.WebexRecipient.origin().ID],
+			Rule:      attribution[m.WebexRecipient.origin().ID].Rule,
 			Recipient: m.WebexRecipient.recipient,
 		}
 		for _, f := range m.WebexRecipient.forwardChain {
@@ -139,18 +140,19 @@ type RecipientPreview struct {
 	RecipientName string   `json:"recipient_name"`
 	RecipientType string   `json:"recipient_type"`
 	ForwardedFrom []string `json:"forwarded_from,omitempty"`
+	Message       string   `json:"message,omitempty"` // rendered body this recipient would get
 	Error         string   `json:"error,omitempty"`
 }
 
 // PreviewRecipients resolves intents and applies forwards exactly like Send, but delivers nothing
 // and stores nothing. Unresolvable intents are reported as previews carrying an error.
-func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, intents []workflow.NotifyIntent) ([]RecipientPreview, error) {
+func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, isNew bool, intents []workflow.NotifyIntent) ([]RecipientPreview, error) {
 	if t == nil {
 		return nil, errors.New("nil ticket received")
 	}
 
 	natural := make(recipMap)
-	attribution := make(map[int]workflow.RuleRef)
+	attribution := make(map[int]workflow.NotifyIntent)
 	var out []RecipientPreview
 
 	for _, in := range intents {
@@ -164,18 +166,20 @@ func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, i
 				continue
 			}
 			natural[id] = r
-			attribution[id] = in.Rule
+			attribution[id] = in
 		}
 	}
 
-	for _, r := range s.applyForwards(ctx, t, natural).toSlice() {
-		rule := attribution[r.origin().ID]
+	for _, m := range s.makeTicketMessages(t, s.applyForwards(ctx, t, natural).toSlice(), isNew, attribution) {
+		r := m.WebexRecipient
+		rule := attribution[r.origin().ID].Rule
 		p := RecipientPreview{
 			RuleID:        rule.RuleID,
 			RuleName:      rule.RuleName,
 			RecipientID:   r.recipient.ID,
 			RecipientName: r.recipient.Name,
 			RecipientType: string(r.recipient.Type),
+			Message:       m.WebexMsg.Markdown,
 		}
 		for _, f := range r.forwardChain {
 			p.ForwardedFrom = append(p.ForwardedFrom, f.Name)

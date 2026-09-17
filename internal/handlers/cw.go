@@ -36,6 +36,16 @@ func (h *CWHandler) ListMembers(c *gin.Context) {
 	outputJSON(c, m)
 }
 
+func (h *CWHandler) ListPriorities(c *gin.Context) {
+	p, err := h.Service.ListPriorities(c.Request.Context())
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+
+	outputJSON(c, p)
+}
+
 func (h *CWHandler) GetBoard(c *gin.Context) {
 	id, err := convertID(c)
 	if err != nil {

@@ -156,6 +156,14 @@ type FullTicketNote struct {
 
 var ErrTicketStatusNotFound = errors.New("ticket status not found")
 
+// Priority is a ConnectWise service priority, fetched live rather than stored.
+type Priority struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Level string `json:"level,omitempty"`
+	Sort  int    `json:"sort,omitempty"`
+}
+
 type TicketStatus struct {
 	ID             int       `json:"id"`
 	BoardID        int       `json:"board_id"`

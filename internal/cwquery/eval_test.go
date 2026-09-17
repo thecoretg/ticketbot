@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/ticketdiff"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 func testDoc() map[string]any {
@@ -148,13 +150,15 @@ func TestEval(t *testing.T) {
 }
 
 func TestEvalNoNote(t *testing.T) {
-	doc := NewDocument(&psa.Ticket{ID: 1}, nil, nil)
+	doc := NewDocument(&psa.Ticket{ID: 1}, nil, Changes{})
 	for src, want := range map[string]bool{
 		"latestNote = null":                       true,
 		"latestNote/text contains 'x'":            false,
 		"latestNote/internalAnalysisFlag = true":  false,
 		"latestNote/internalAnalysisFlag = false": true,
 		"changed/status = true":                   false,
+		"newNote = true":                          false,
+		"old/status/name = 'New'":                 false,
 	} {
 		q, err := Compile(src)
 		if err != nil {
@@ -182,23 +186,32 @@ func TestNewDocumentFromTicket(t *testing.T) {
 	note := &psa.ServiceTicketNote{ID: 10, Text: "Checked the firewall", InternalAnalysisFlag: true}
 	note.Member.Identifier = "asmith"
 
-	doc := NewDocument(tk, note, []string{"status", "priority"})
+	doc := NewDocument(tk, note, Changes{NewNote: true, Fields: []models.FieldChange{
+		{Field: "status", Old: ticketdiff.Ref{ID: 8, Name: "Assigned"}, New: ticketdiff.Ref{ID: 9, Name: "New"}},
+		{Field: "priority", Old: ticketdiff.Ref{ID: 1}, New: ticketdiff.Ref{ID: 2}},
+		{Field: "resources", Old: []string{"asmith", "jdoe"}, New: []string{"jdoe"}},
+	}})
 
 	for src, want := range map[string]bool{
 		"id = 555":               true,
 		"summary contains 'vpn'": true,
-		"board/id = 3 and board/name = 'network'":           true,
-		"company/identifier = 'acme'":                       true,
-		"priority/name like 'Priority 1*'":                  true,
-		"closedFlag = false":                                true, // omitted zero value -> null -> loose false
-		"closedFlag = true":                                 false,
-		"owner/id = null":                                   true,
-		"_info/updatedBy = 'jdoe'":                          true,
-		"latestNote/text contains 'firewall'":               true,
-		"latestNote/internalAnalysisFlag = true":            true,
-		"latestNote/member/identifier = 'asmith'":           true,
-		"changed/status = true and changed/priority = true": true,
-		"changed/summary = true":                            false,
+		"board/id = 3 and board/name = 'network'":            true,
+		"company/identifier = 'acme'":                        true,
+		"priority/name like 'Priority 1*'":                   true,
+		"closedFlag = false":                                 true, // omitted zero value -> null -> loose false
+		"closedFlag = true":                                  false,
+		"owner/id = null":                                    true,
+		"_info/updatedBy = 'jdoe'":                           true,
+		"latestNote/text contains 'firewall'":                true,
+		"latestNote/internalAnalysisFlag = true":             true,
+		"latestNote/member/identifier = 'asmith'":            true,
+		"changed/status = true and changed/priority = true":  true,
+		"changed/summary = true":                             false,
+		"newNote = true":                                     true,
+		"old/status/name = 'assigned' and old/status/id = 8": true,
+		"old/priority/id = 1":                                true,
+		"old/resources contains 'asmith'":                    true,
+		"old/summary = null":                                 true,
 	} {
 		q, err := Compile(src)
 		if err != nil {
@@ -215,7 +228,7 @@ func TestNewDocumentFromTicket(t *testing.T) {
 }
 
 func TestNewDocumentNilTicket(t *testing.T) {
-	doc := NewDocument(nil, nil, nil)
+	doc := NewDocument(nil, nil, Changes{})
 	q, err := Compile("id = null and latestNote = null")
 	if err != nil {
 		t.Fatal(err)

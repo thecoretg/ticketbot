@@ -3,6 +3,7 @@ package notifier
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/thecoretg/tctg-go/webex"
@@ -268,5 +269,37 @@ func TestSendNoIntents(t *testing.T) {
 	}
 	if _, err := fx.svc.Send(context.Background(), SendRequest{Intents: []workflow.NotifyIntent{roomIntent("r", 1)}}); err == nil {
 		t.Error("nil ticket should error")
+	}
+}
+
+func TestSendCustomMessageFollowsAttribution(t *testing.T) {
+	fx := newSendFixture(nil)
+	custom := roomIntent("custom", 1)
+	custom.Target.Message = "{{event}}: {{ticket.summary}} ({{rule}})"
+	outs, err := fx.svc.Send(context.Background(), SendRequest{
+		Ticket:  fullTicket(),
+		IsNew:   true,
+		Intents: []workflow.NotifyIntent{custom, ownerIntent("default")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outs) != 2 || len(fx.sender.sent) != 2 {
+		t.Fatalf("outcomes = %+v", outs)
+	}
+
+	var roomBody, personBody string
+	for _, m := range fx.sender.sent {
+		if m.RoomID != "" {
+			roomBody = m.Markdown
+		} else {
+			personBody = m.Markdown
+		}
+	}
+	if roomBody != "New Ticket: Printer down (custom)\n\n---" {
+		t.Errorf("room body = %q", roomBody)
+	}
+	if !strings.HasPrefix(personBody, "**New Ticket:** [42](") || !strings.Contains(personBody, "**Company:** Acme") {
+		t.Errorf("person should get the default body: %q", personBody)
 	}
 }

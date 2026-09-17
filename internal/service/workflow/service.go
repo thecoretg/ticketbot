@@ -5,11 +5,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/thecoretg/ticketbot/internal/cwquery"
+	"github.com/thecoretg/ticketbot/internal/msgtemplate"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -18,10 +20,20 @@ type Service struct {
 	Workflows  repos.WorkflowRepository
 	Recipients repos.WebexRecipientRepository
 	Boards     repos.BoardRepository
+	Statuses   repos.TicketStatusRepository
+	Members    repos.MemberRepository
 }
 
-func New(w repos.WorkflowRepository, r repos.WebexRecipientRepository, b repos.BoardRepository) *Service {
-	return &Service{Workflows: w, Recipients: r, Boards: b}
+type Params struct {
+	Workflows  repos.WorkflowRepository
+	Recipients repos.WebexRecipientRepository
+	Boards     repos.BoardRepository
+	Statuses   repos.TicketStatusRepository
+	Members    repos.MemberRepository
+}
+
+func New(p Params) *Service {
+	return &Service{Workflows: p.Workflows, Recipients: p.Recipients, Boards: p.Boards, Statuses: p.Statuses, Members: p.Members}
 }
 
 func (s *Service) List(ctx context.Context) ([]*models.Workflow, error) {
@@ -149,7 +161,7 @@ func (s *Service) Validate(ctx context.Context, w *models.Workflow) models.Valid
 			r.Actions = []models.Action{}
 		}
 		for j := range r.Actions {
-			for _, msg := range s.validateAction(ctx, &r.Actions[j]) {
+			for _, msg := range s.validateAction(ctx, w.BoardID, &r.Actions[j]) {
 				add(i, j, r.ID, msg.field, msg.text, nil)
 			}
 		}
@@ -160,26 +172,61 @@ func (s *Service) Validate(ctx context.Context, w *models.Workflow) models.Valid
 
 type fieldMsg struct{ field, text string }
 
-func (s *Service) validateAction(ctx context.Context, a *models.Action) []fieldMsg {
+// settingsFor maps each action kind to the JSON key of its settings block.
+var settingsFor = map[models.ActionKind]string{
+	models.ActionNotify:      "notify",
+	models.ActionAddNote:     "add_note",
+	models.ActionSetStatus:   "set_status",
+	models.ActionSetPriority: "set_priority",
+	models.ActionSetOwner:    "set_owner",
+	models.ActionAddResource: "add_resource",
+	models.ActionSkipNotify:  "",
+}
+
+func (s *Service) validateAction(ctx context.Context, boardID int, a *models.Action) []fieldMsg {
+	if _, ok := settingsFor[a.Kind]; !ok && a.Kind != models.ActionPatch {
+		return []fieldMsg{{"kind", fmt.Sprintf("unknown action kind %q", a.Kind)}}
+	}
+
+	// exactly the settings block for this kind may be present
 	var out []fieldMsg
+	present := []struct {
+		key string
+		set bool
+	}{
+		{"notify", a.Notify != nil},
+		{"add_note", a.AddNote != nil},
+		{"set_status", a.SetStatus != nil},
+		{"set_priority", a.SetPriority != nil},
+		{"set_owner", a.SetOwner != nil},
+		{"add_resource", a.AddResource != nil},
+		{"patch", a.Patch != nil},
+	}
+	want := settingsFor[a.Kind]
+	if a.Kind == models.ActionPatch {
+		want = "patch"
+	}
+	found := false
+	for _, p := range present {
+		switch {
+		case !p.set:
+		case p.key == want:
+			found = true
+		case a.Kind == models.ActionSkipNotify:
+			out = append(out, fieldMsg{"kind", "skip_notify takes no settings"})
+		default:
+			out = append(out, fieldMsg{p.key, fmt.Sprintf("not allowed for a %s action", a.Kind)})
+		}
+	}
+	if want != "" && !found {
+		return append(out, fieldMsg{want, want + " settings are required"})
+	}
 
 	switch a.Kind {
 	case models.ActionNotify:
-		if a.AddNote != nil {
-			out = append(out, fieldMsg{"add_note", "not allowed for a notify action"})
-		}
-		if a.Notify == nil {
-			return append(out, fieldMsg{"notify", "notify settings are required"})
-		}
 		out = append(out, s.validateNotify(ctx, a.Notify)...)
 
 	case models.ActionAddNote:
-		if a.Notify != nil {
-			out = append(out, fieldMsg{"notify", "not allowed for an add_note action"})
-		}
-		if a.AddNote == nil {
-			return append(out, fieldMsg{"add_note", "note settings are required"})
-		}
 		if strings.TrimSpace(a.AddNote.Text) == "" {
 			out = append(out, fieldMsg{"add_note.text", "note text is required"})
 		}
@@ -187,19 +234,79 @@ func (s *Service) validateAction(ctx context.Context, a *models.Action) []fieldM
 			out = append(out, fieldMsg{"add_note", "at least one of internal, discussion or resolution must be set"})
 		}
 
-	case models.ActionSkipNotify:
-		if a.Notify != nil || a.AddNote != nil {
-			out = append(out, fieldMsg{"kind", "skip_notify takes no settings"})
+	case models.ActionSetStatus:
+		out = append(out, s.validateStatus(ctx, boardID, a.SetStatus)...)
+
+	case models.ActionSetPriority:
+		if a.SetPriority.PriorityID <= 0 {
+			out = append(out, fieldMsg{"set_priority.priority_id", "priority is required"})
 		}
 
-	default:
-		out = append(out, fieldMsg{"kind", fmt.Sprintf("unknown action kind %q", a.Kind)})
+	case models.ActionSetOwner:
+		if msg, ok := s.lookupMember(ctx, a.SetOwner.MemberID, "set_owner.member_id", &a.SetOwner.Identifier); !ok {
+			out = append(out, msg)
+		}
+
+	case models.ActionAddResource:
+		if msg, ok := s.lookupMember(ctx, a.AddResource.MemberID, "add_resource.member_id", &a.AddResource.Identifier); !ok {
+			out = append(out, msg)
+		}
+
+	case models.ActionPatch:
+		ops, err := DecodePatchOps(a.Patch.Ops)
+		if err != nil {
+			out = append(out, fieldMsg{"patch.ops", err.Error()})
+		} else if normalized, err := json.Marshal(ops); err == nil {
+			a.Patch.Ops = normalized
+		}
 	}
 
 	return out
 }
 
+func (s *Service) validateStatus(ctx context.Context, boardID int, st *models.SetStatusAction) []fieldMsg {
+	if st.StatusID <= 0 {
+		return []fieldMsg{{"set_status.status_id", "status is required"}}
+	}
+	rec, err := s.Statuses.Get(ctx, st.StatusID)
+	if err != nil {
+		return []fieldMsg{{"set_status.status_id", fmt.Sprintf("status %d not found", st.StatusID)}}
+	}
+	if rec.BoardID != boardID {
+		return []fieldMsg{{"set_status.status_id", fmt.Sprintf("status %q belongs to another board", rec.Name)}}
+	}
+	if rec.Deleted || rec.Inactive {
+		return []fieldMsg{{"set_status.status_id", fmt.Sprintf("status %q is inactive", rec.Name)}}
+	}
+	st.StatusName = rec.Name
+	return nil
+}
+
+// lookupMember checks a member id and fills identifier from the member table.
+func (s *Service) lookupMember(ctx context.Context, id int, field string, identifier *string) (fieldMsg, bool) {
+	if id <= 0 {
+		return fieldMsg{field, "member is required"}, false
+	}
+	m, err := s.Members.Get(ctx, id)
+	if err != nil {
+		return fieldMsg{field, fmt.Sprintf("member %d not found", id)}, false
+	}
+	if m.Deleted {
+		return fieldMsg{field, fmt.Sprintf("member %s is deleted", m.Identifier)}, false
+	}
+	*identifier = m.Identifier
+	return fieldMsg{}, true
+}
+
 func (s *Service) validateNotify(ctx context.Context, n *models.NotifyAction) []fieldMsg {
+	var out []fieldMsg
+	if err := msgtemplate.Validate(n.Message); err != nil {
+		out = append(out, fieldMsg{"notify.message", err.Error()})
+	}
+	return append(out, s.validateNotifyTarget(ctx, n)...)
+}
+
+func (s *Service) validateNotifyTarget(ctx context.Context, n *models.NotifyAction) []fieldMsg {
 	switch n.Target {
 	case models.TargetResourcesOwner:
 		if n.RecipientID != nil {

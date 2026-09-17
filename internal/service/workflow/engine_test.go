@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/ticketdiff"
 	"github.com/thecoretg/ticketbot/models"
 )
 
@@ -19,6 +20,8 @@ type fakeCW struct {
 	nextNote  int
 	getCalls  int
 	patchOps  [][]psa.PatchOp
+	patchErr  error
+	onPatch   func([]psa.PatchOp) // mutate ticket to simulate the CW response
 	apiMember string
 }
 
@@ -35,7 +38,13 @@ func (f *fakeCW) GetMostRecentTicketNote(_ context.Context, _ int) (*psa.Service
 }
 
 func (f *fakeCW) PatchTicket(_ context.Context, _ int, ops []psa.PatchOp) (*psa.Ticket, error) {
+	if f.patchErr != nil {
+		return nil, f.patchErr
+	}
 	f.patchOps = append(f.patchOps, ops)
+	if f.onPatch != nil {
+		f.onPatch(ops)
+	}
 	return f.ticket, nil
 }
 
@@ -322,5 +331,144 @@ func TestRunNilInputs(t *testing.T) {
 	}
 	if _, err := e.Run(context.Background(), wf(), Input{}); err == nil {
 		t.Error("nil ticket should error")
+	}
+}
+
+func setStatus(id int) models.Action {
+	return models.Action{Kind: models.ActionSetStatus, Enabled: true, SetStatus: &models.SetStatusAction{StatusID: id, StatusName: "S"}}
+}
+
+func TestNewNoteAndOldValuesInConditions(t *testing.T) {
+	cw := &fakeCW{ticket: ticket()}
+	w := wf(
+		rule("reply", models.TriggerUpdate, "newNote = true", false, notify(models.TargetRoom, rid(1))),
+		rule("left new", models.TriggerUpdate, "changed/status = true and old/status/name = 'Assigned'", false, notify(models.TargetRoom, rid(2))),
+		rule("wrong old", models.TriggerUpdate, "old/status/name = 'Closed'", false, notify(models.TargetRoom, rid(3))),
+	)
+
+	res := run(t, cw, w, Input{NewNote: true, Changes: []models.FieldChange{
+		{Field: "status", Old: ticketdiff.Ref{ID: 8, Name: "Assigned"}, New: ticketdiff.Ref{ID: 10, Name: "New"}},
+	}})
+	if len(res.Notifies) != 2 || *res.Notifies[0].Target.RecipientID != 1 || *res.Notifies[1].Target.RecipientID != 2 {
+		t.Fatalf("notifies = %+v", res.Notifies)
+	}
+
+	// a field-only update is not a new note
+	res = run(t, cw, w, Input{Changes: []models.FieldChange{{Field: "summary", Old: "a", New: "b"}}})
+	if len(res.Notifies) != 0 {
+		t.Errorf("field-only update should not match newNote or old/status: %+v", res.Notifies)
+	}
+}
+
+func TestSetStatusPatchesAndLaterRulesSeeIt(t *testing.T) {
+	cw := &fakeCW{ticket: ticket()}
+	cw.onPatch = func(ops []psa.PatchOp) {
+		updated := ticket()
+		updated.Status.ID, updated.Status.Name = 11, "Escalated"
+		updated.Info.UpdatedBy = "ticketbot"
+		cw.ticket = updated
+	}
+	w := wf(
+		rule("escalate", models.TriggerBoth, "", false, setStatus(11)),
+		rule("after", models.TriggerBoth, "status/name = 'Escalated'", false, notify(models.TargetRoom, rid(1))),
+	)
+	res := run(t, cw, w, Input{})
+
+	if len(cw.patchOps) != 1 || cw.patchOps[0][0].Path != "status/id" || cw.patchOps[0][0].Value != 11 {
+		t.Fatalf("patch ops = %+v", cw.patchOps)
+	}
+	if res.Actions[0].Result != ResultOK || res.CWWrites != 1 || res.LearnedAPIMember != "ticketbot" {
+		t.Errorf("outcome=%+v writes=%d learned=%q", res.Actions[0], res.CWWrites, res.LearnedAPIMember)
+	}
+	if res.Ticket.Status.Name != "Escalated" || len(res.Notifies) != 1 {
+		t.Errorf("later rule should see patched status: %+v %+v", res.Ticket.Status, res.Notifies)
+	}
+	if cw.getCalls != 0 {
+		t.Error("patch response should replace the ticket without a refetch")
+	}
+}
+
+func TestMutatingActionsSkipWhenAlreadyApplied(t *testing.T) {
+	tk := ticket()
+	tk.Priority.ID = 4
+	tk.Owner.ID = 77
+	tk.Resources = "jdoe, asmith"
+	cw := &fakeCW{ticket: tk}
+
+	w := wf(rule("r", models.TriggerBoth, "", false,
+		setStatus(10),
+		models.Action{Kind: models.ActionSetPriority, Enabled: true, SetPriority: &models.SetPriorityAction{PriorityID: 4}},
+		models.Action{Kind: models.ActionSetOwner, Enabled: true, SetOwner: &models.SetOwnerAction{MemberID: 77}},
+		models.Action{Kind: models.ActionAddResource, Enabled: true, AddResource: &models.AddResourceAction{MemberID: 1, Identifier: "JDOE"}},
+	))
+	res := run(t, cw, w, Input{})
+
+	for i, a := range res.Actions {
+		if a.Result != ResultSkipped {
+			t.Errorf("action %d should be skipped: %+v", i, a)
+		}
+	}
+	if len(cw.patchOps) != 0 {
+		t.Errorf("no patches expected: %+v", cw.patchOps)
+	}
+}
+
+func TestAddResourceAppendsIdentifier(t *testing.T) {
+	tk := ticket()
+	tk.Resources = "jdoe"
+	cw := &fakeCW{ticket: tk}
+	w := wf(rule("r", models.TriggerBoth, "", false,
+		models.Action{Kind: models.ActionAddResource, Enabled: true, AddResource: &models.AddResourceAction{MemberID: 2, Identifier: "asmith"}},
+	))
+	res := run(t, cw, w, Input{})
+
+	if res.Actions[0].Result != ResultOK || len(cw.patchOps) != 1 {
+		t.Fatalf("outcome=%+v ops=%+v", res.Actions[0], cw.patchOps)
+	}
+	if op := cw.patchOps[0][0]; op.Path != "resources" || op.Value != "jdoe,asmith" {
+		t.Errorf("op = %+v", op)
+	}
+}
+
+func TestPatchActionAndDryRun(t *testing.T) {
+	cw := &fakeCW{ticket: ticket()}
+	raw := []byte(`[{"op":"replace","path":"severity","value":"High"},{"op":"remove","path":"contact"}]`)
+	w := wf(rule("r", models.TriggerBoth, "", false,
+		models.Action{Kind: models.ActionPatch, Enabled: true, Patch: &models.PatchAction{Ops: raw}},
+		setStatus(11),
+	))
+
+	res := run(t, cw, w, Input{DryRun: true})
+	if res.Actions[0].Result != ResultWouldRun || res.Actions[1].Result != ResultWouldRun || len(cw.patchOps) != 0 {
+		t.Fatalf("dry run must not patch: %+v", res.Actions)
+	}
+
+	res = run(t, cw, w, Input{})
+	if res.Actions[0].Result != ResultOK || len(cw.patchOps) != 2 || len(cw.patchOps[0]) != 2 {
+		t.Fatalf("live run: %+v ops=%+v", res.Actions, cw.patchOps)
+	}
+	if cw.patchOps[0][1].Op != "remove" || cw.patchOps[0][1].Path != "contact" {
+		t.Errorf("ops = %+v", cw.patchOps[0])
+	}
+}
+
+func TestPatchActionRejectsBadOps(t *testing.T) {
+	for _, raw := range []string{``, `{}`, `[]`, `[{"op":"move","path":"x","value":1}]`, `[{"op":"replace","path":"","value":1}]`, `[{"op":"replace","path":"x"}]`} {
+		if _, err := DecodePatchOps([]byte(raw)); err == nil {
+			t.Errorf("%s should be rejected", raw)
+		}
+	}
+	ops, err := DecodePatchOps([]byte(`[{"op":"remove","path":"contact"}]`))
+	if err != nil || len(ops) != 1 {
+		t.Errorf("remove without value should be accepted: %v %v", ops, err)
+	}
+}
+
+func TestPatchError(t *testing.T) {
+	cw := &fakeCW{ticket: ticket(), patchErr: errors.New("boom")}
+	w := wf(rule("r", models.TriggerBoth, "", false, setStatus(11), notify(models.TargetRoom, rid(1))))
+	res := run(t, cw, w, Input{})
+	if res.Actions[0].Result != ResultError || res.CWWrites != 0 || len(res.Notifies) != 1 {
+		t.Errorf("failed patch should record error and not stop later actions: %+v", res.Actions)
 	}
 }

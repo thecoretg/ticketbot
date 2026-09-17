@@ -43,4 +43,12 @@ var ConditionFields = []ConditionField{
 	{"changed/board", "bool", "Ticket moved boards in this update", "changed/board = true"},
 	{"changed/summary", "bool", "Summary changed in this update", "changed/summary = true"},
 	{"changed/closedFlag", "bool", "Ticket opened or closed in this update", "changed/closedFlag = true"},
+	{"newNote", "bool", "A new note arrived in this update (as opposed to a field-only change)", "newNote = true and latestNote/contact/id != null"},
+	{"old/status/name", "string", "Status before this update (only set when status changed)", "old/status/name = 'New' and status/name = 'Assigned'"},
+	{"old/status/id", "number", "Status id before this update", "old/status/id = 16"},
+	{"old/priority/name", "string", "Priority before this update", "old/priority/name like 'Priority 3*'"},
+	{"old/owner/name", "string", "Owner before this update", "old/owner/name = null"},
+	{"old/board/name", "string", "Board before this update (when the ticket moved boards)", "old/board/name = 'Triage'"},
+	{"old/resources", "string", "Comma-separated resources before this update", "old/resources = null"},
+	{"old/closedFlag", "bool", "Closed flag before this update", "old/closedFlag = true"},
 }

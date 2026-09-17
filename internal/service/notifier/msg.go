@@ -6,6 +6,8 @@ import (
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/tctg-go/webex"
+	"github.com/thecoretg/ticketbot/internal/msgtemplate"
+	"github.com/thecoretg/ticketbot/internal/service/workflow"
 	"github.com/thecoretg/ticketbot/models"
 )
 
@@ -31,18 +33,19 @@ func newMessage(wm webex.Message, r recipData, n *models.TicketNotification, isN
 	}
 }
 
-func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, isNew bool) []Message {
-	mainHeader := s.notificationHeader(t, isNew)
-
+// makeTicketMessages builds one Webex message per recipient. intents maps a natural recipient id
+// to the notify intent that named it; a forwarded recipient uses its origin's intent, so a rule's
+// custom message follows the notification through forwards.
+func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, isNew bool, intents map[int]workflow.NotifyIntent) []Message {
 	var msgs []Message
 	for _, r := range recips {
-		var h string
-		if !r.isNaturalRecipient() {
-			h += fmt.Sprintf("%s\n", fwdChainStr(r.recipient, r.forwardChain))
-		}
+		in := intents[r.origin().ID]
 
-		h += mainHeader
-		body := makeMessageBody(t, h, s.Cfg.MaxMessageLength)
+		var body string
+		if !r.isNaturalRecipient() {
+			body = fwdChainStr(r.recipient, r.forwardChain) + "\n"
+		}
+		body += s.messageBody(t, in, isNew)
 
 		wm := newWebexMsg(r.recipient, body)
 		n := &models.TicketNotification{
@@ -63,6 +66,22 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 	}
 
 	return msgs
+}
+
+// messageBody renders the rule's custom message when it has one, or the default layout.
+func (s *Service) messageBody(t *models.FullTicket, in workflow.NotifyIntent, isNew bool) string {
+	if tpl := strings.TrimSpace(in.Target.Message); tpl != "" {
+		rendered := msgtemplate.Render(tpl, msgtemplate.Context{
+			Ticket:     t,
+			RuleName:   in.Rule.RuleName,
+			IsNew:      isNew,
+			CompanyID:  s.CWCompanyID,
+			MaxNoteLen: s.Cfg.MaxMessageLength,
+		})
+		return rendered + "\n\n---"
+	}
+
+	return makeMessageBody(t, s.notificationHeader(t, isNew), s.Cfg.MaxMessageLength)
 }
 
 func fwdChainStr(recip *models.WebexRecipient, fwdChain []*models.WebexRecipient) string {
@@ -103,63 +122,14 @@ func makeMessageBody(ticket *models.FullTicket, header string, maxLen int) strin
 	}
 
 	if ticket.Contact != nil {
-		name := fullName(ticket.Contact.FirstName, ticket.Contact.LastName)
-		body += fmt.Sprintf("\n**Ticket Contact:** %s", name)
+		body += fmt.Sprintf("\n**Ticket Contact:** %s", msgtemplate.FullName(ticket.Contact.FirstName, ticket.Contact.LastName))
 	}
 
-	if ticket.LatestNote != nil && ticket.LatestNote.Content != nil {
-		body += messageText(ticket, maxLen)
+	if q := msgtemplate.NoteQuote(ticket, maxLen); q != "" {
+		body += "\n" + q
 	}
 
 	// Divider line for easily distinguishable breaks in notifications
 	body += "\n\n---"
 	return body
-}
-
-func messageText(t *models.FullTicket, maxLen int) string {
-	var body string
-	sender := getSenderName(t)
-	if sender != "" {
-		body += fmt.Sprintf("\n**Latest Note Sent By:** %s", sender)
-	}
-
-	content := ""
-	if t.LatestNote.Content != nil {
-		content = *t.LatestNote.Content
-	}
-
-	if len(content) > maxLen {
-		content = content[:maxLen] + "..."
-	}
-	body += fmt.Sprintf("\n%s", blockQuoteText(content))
-	return body
-}
-
-// blockQuoteText creates a markdown block quote from a string, also respects line breaks
-func blockQuoteText(text string) string {
-	parts := strings.Split(text, "\n")
-	for i, part := range parts {
-		parts[i] = "> " + part
-	}
-
-	return strings.Join(parts, "\n")
-}
-
-// getSenderName determines the name of the sender of a note. It checks for members in Connectwise and external contacts from companies.
-func getSenderName(t *models.FullTicket) string {
-	if t.LatestNote.Member != nil {
-		return fullName(t.LatestNote.Member.FirstName, &t.LatestNote.Member.LastName)
-	} else if t.LatestNote.Contact != nil {
-		return fullName(t.LatestNote.Contact.FirstName, t.LatestNote.Contact.LastName)
-	}
-
-	return ""
-}
-
-func fullName(first string, last *string) string {
-	if last != nil {
-		return fmt.Sprintf("%s %s", first, *last)
-	}
-
-	return first
 }

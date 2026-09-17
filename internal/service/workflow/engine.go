@@ -2,9 +2,11 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/cwquery"
@@ -87,7 +89,7 @@ type Result struct {
 	Notifies   []NotifyIntent
 	Suppressed bool
 	CWWrites   int
-	// LearnedAPIMember is the member identifier ConnectWise attributed to a note the engine posted.
+	// LearnedAPIMember is the member identifier ConnectWise attributed to a write the engine made.
 	LearnedAPIMember string
 }
 
@@ -100,9 +102,9 @@ func NewEngine(cw CWClient) *Engine {
 }
 
 // Run evaluates the workflow's rules in order against the ticket. Notify actions are collected as
-// intents; add_note actions are executed immediately (unless DryRun) and the ticket is re-fetched
-// so later rules see the new state. Errors inside a rule or action are recorded, never returned;
-// only a nil workflow or ticket is an error.
+// intents; ticket-mutating actions are executed immediately (unless DryRun) and the ticket is
+// refreshed so later rules see the new state. Errors inside a rule or action are recorded, never
+// returned; only a nil workflow or ticket is an error.
 func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Result, error) {
 	if wf == nil {
 		return nil, errors.New("nil workflow")
@@ -117,8 +119,8 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 		TriggerNote: in.TriggerNote,
 	}
 
-	changed := ticketdiff.FieldNames(in.Changes)
-	doc := cwquery.NewDocument(res.Ticket, in.TriggerNote, changed)
+	changes := cwquery.Changes{Fields: in.Changes, NewNote: in.NewNote}
+	doc := cwquery.NewDocument(res.Ticket, in.TriggerNote, changes)
 
 	for _, r := range wf.Rules {
 		ref := RuleRef{WorkflowID: wf.ID, RuleID: r.ID, RuleName: r.Name}
@@ -148,10 +150,11 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 		}
 
 		for i, a := range r.Actions {
+			writes := res.CWWrites
 			out := e.runAction(ctx, ref, i, a, in, res)
 			res.Actions = append(res.Actions, out)
-			if out.Kind == models.ActionAddNote && out.Result == ResultOK {
-				doc = cwquery.NewDocument(res.Ticket, in.TriggerNote, changed)
+			if res.CWWrites != writes {
+				doc = cwquery.NewDocument(res.Ticket, in.TriggerNote, changes)
 			}
 		}
 
@@ -179,8 +182,7 @@ func (e *Engine) runAction(ctx context.Context, ref RuleRef, idx int, a models.A
 
 	case models.ActionNotify:
 		if a.Notify == nil {
-			out.Result, out.Err = ResultError, errors.New("notify action has no settings")
-			return out
+			return missingSettings(out, "notify")
 		}
 		if res.Suppressed {
 			out.Result, out.Reason = ResultSkipped, "suppressed"
@@ -192,19 +194,157 @@ func (e *Engine) runAction(ctx context.Context, ref RuleRef, idx int, a models.A
 		if a.Notify.RecipientID != nil {
 			out.Output["recipient_id"] = *a.Notify.RecipientID
 		}
+		if a.Notify.Message != "" {
+			out.Output["custom_message"] = true
+		}
 
 	case models.ActionAddNote:
 		if a.AddNote == nil {
-			out.Result, out.Err = ResultError, errors.New("add_note action has no settings")
-			return out
+			return missingSettings(out, "add_note")
 		}
 		e.addNote(ctx, a.AddNote, in, res, &out)
+
+	case models.ActionSetStatus:
+		if a.SetStatus == nil {
+			return missingSettings(out, "set_status")
+		}
+		s := a.SetStatus
+		out.Output = map[string]any{"status_id": s.StatusID, "status_name": s.StatusName}
+		if res.Ticket.Status.ID == s.StatusID {
+			out.Result, out.Reason = ResultSkipped, "already in this status"
+			return out
+		}
+		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "status/id", Value: s.StatusID}}, in, res, &out)
+
+	case models.ActionSetPriority:
+		if a.SetPriority == nil {
+			return missingSettings(out, "set_priority")
+		}
+		p := a.SetPriority
+		out.Output = map[string]any{"priority_id": p.PriorityID, "priority_name": p.PriorityName}
+		if res.Ticket.Priority.ID == p.PriorityID {
+			out.Result, out.Reason = ResultSkipped, "already at this priority"
+			return out
+		}
+		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "priority/id", Value: p.PriorityID}}, in, res, &out)
+
+	case models.ActionSetOwner:
+		if a.SetOwner == nil {
+			return missingSettings(out, "set_owner")
+		}
+		o := a.SetOwner
+		out.Output = map[string]any{"member_id": o.MemberID, "identifier": o.Identifier}
+		if res.Ticket.Owner.ID == o.MemberID {
+			out.Result, out.Reason = ResultSkipped, "already the owner"
+			return out
+		}
+		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "owner/id", Value: o.MemberID}}, in, res, &out)
+
+	case models.ActionAddResource:
+		if a.AddResource == nil {
+			return missingSettings(out, "add_resource")
+		}
+		r := a.AddResource
+		out.Output = map[string]any{"member_id": r.MemberID, "identifier": r.Identifier}
+		if r.Identifier == "" {
+			out.Result, out.Err = ResultError, errors.New("add_resource has no member identifier")
+			return out
+		}
+		current := ticketdiff.Resources(res.Ticket.Resources)
+		for _, id := range current {
+			if strings.EqualFold(id, r.Identifier) {
+				out.Result, out.Reason = ResultSkipped, "already a resource"
+				return out
+			}
+		}
+		joined := strings.Join(append(current, r.Identifier), ",")
+		out.Output["resources"] = joined
+		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "resources", Value: joined}}, in, res, &out)
+
+	case models.ActionPatch:
+		if a.Patch == nil {
+			return missingSettings(out, "patch")
+		}
+		ops, err := DecodePatchOps(a.Patch.Ops)
+		if err != nil {
+			out.Result, out.Err = ResultError, err
+			return out
+		}
+		out.Output = map[string]any{"ops": ops}
+		e.patch(ctx, ops, in, res, &out)
 
 	default:
 		out.Result, out.Err = ResultError, fmt.Errorf("unknown action kind %q", a.Kind)
 	}
 
 	return out
+}
+
+func missingSettings(out ActionOutcome, kind string) ActionOutcome {
+	out.Result, out.Err = ResultError, fmt.Errorf("%s action has no settings", kind)
+	return out
+}
+
+// DecodePatchOps parses a patch action's JSON into ConnectWise patch operations, rejecting
+// anything that is not a non-empty array of {op, path[, value]} with a known op.
+func DecodePatchOps(raw json.RawMessage) ([]psa.PatchOp, error) {
+	if len(raw) == 0 {
+		return nil, errors.New("patch ops are required")
+	}
+
+	var ops []psa.PatchOp
+	if err := json.Unmarshal(raw, &ops); err != nil {
+		return nil, fmt.Errorf("patch ops must be a JSON array of {op, path, value}: %w", err)
+	}
+	if len(ops) == 0 {
+		return nil, errors.New("patch ops must contain at least one operation")
+	}
+
+	for i, op := range ops {
+		switch op.Op {
+		case "add", "replace", "remove":
+		default:
+			return nil, fmt.Errorf("op %d: op must be add, replace or remove (got %q)", i+1, op.Op)
+		}
+		if strings.TrimSpace(op.Path) == "" {
+			return nil, fmt.Errorf("op %d: path is required", i+1)
+		}
+		if op.Op != "remove" && op.Value == nil {
+			return nil, fmt.Errorf("op %d: value is required for %s", i+1, op.Op)
+		}
+	}
+
+	return ops, nil
+}
+
+// patch applies ops to the ticket and refreshes the local copy from the response.
+func (e *Engine) patch(ctx context.Context, ops []psa.PatchOp, in Input, res *Result, out *ActionOutcome) {
+	if in.DryRun {
+		out.Result = ResultWouldRun
+		return
+	}
+
+	t, err := e.CW.PatchTicket(ctx, res.Ticket.ID, ops)
+	if err != nil {
+		out.Result, out.Err = ResultError, fmt.Errorf("patching ticket: %w", err)
+		return
+	}
+
+	res.CWWrites++
+	out.Result = ResultOK
+
+	if t != nil && t.ID != 0 {
+		res.Ticket = t
+		if t.Info.UpdatedBy != "" {
+			res.LearnedAPIMember = t.Info.UpdatedBy
+		}
+		return
+	}
+
+	if err := e.refetch(ctx, res); err != nil {
+		// the write succeeded; a stale local copy is a warning, not an action failure
+		slog.Warn("workflow: refetching ticket after patch", "ticket_id", res.Ticket.ID, "error", err.Error())
+	}
 }
 
 func (e *Engine) addNote(ctx context.Context, n *models.AddNoteAction, in Input, res *Result, out *ActionOutcome) {

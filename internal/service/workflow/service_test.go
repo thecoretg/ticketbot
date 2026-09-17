@@ -22,11 +22,48 @@ func (f *fakeRecipRepo) Get(_ context.Context, id int) (*models.WebexRecipient, 
 	return r, nil
 }
 
+type fakeStatusRepo struct {
+	repos.TicketStatusRepository
+	statuses map[int]*models.TicketStatus
+}
+
+func (f *fakeStatusRepo) Get(_ context.Context, id int) (*models.TicketStatus, error) {
+	s, ok := f.statuses[id]
+	if !ok {
+		return nil, models.ErrTicketStatusNotFound
+	}
+	return s, nil
+}
+
+type fakeMemberRepo struct {
+	repos.MemberRepository
+	members map[int]*models.Member
+}
+
+func (f *fakeMemberRepo) Get(_ context.Context, id int) (*models.Member, error) {
+	m, ok := f.members[id]
+	if !ok {
+		return nil, models.ErrMemberNotFound
+	}
+	return m, nil
+}
+
 func testService() *Service {
-	return &Service{Recipients: &fakeRecipRepo{recips: map[int]*models.WebexRecipient{
-		1: {ID: 1, Name: "Room", Type: models.RecipientTypeRoom},
-		2: {ID: 2, Name: "Person", Type: models.RecipientTypePerson},
-	}}}
+	return &Service{
+		Recipients: &fakeRecipRepo{recips: map[int]*models.WebexRecipient{
+			1: {ID: 1, Name: "Room", Type: models.RecipientTypeRoom},
+			2: {ID: 2, Name: "Person", Type: models.RecipientTypePerson},
+		}},
+		Statuses: &fakeStatusRepo{statuses: map[int]*models.TicketStatus{
+			10: {ID: 10, BoardID: 1, Name: "Escalated"},
+			20: {ID: 20, BoardID: 2, Name: "Other Board"},
+			30: {ID: 30, BoardID: 1, Name: "Retired", Inactive: true},
+		}},
+		Members: &fakeMemberRepo{members: map[int]*models.Member{
+			5: {ID: 5, Identifier: "jdoe"},
+			6: {ID: 6, Identifier: "gone", Deleted: true},
+		}},
+	}
 }
 
 func fields(errs models.ValidationErrors) []string {
@@ -117,6 +154,60 @@ func TestValidateErrors(t *testing.T) {
 
 	if !strings.Contains(errs.Error(), "rule 1 action 2: notify.recipient_id") {
 		t.Errorf("error text: %s", errs.Error())
+	}
+}
+
+func TestValidateMutatingActions(t *testing.T) {
+	w := &models.Workflow{BoardID: 1, Rules: []models.Rule{
+		{Name: "a", Enabled: true, Trigger: models.TriggerBoth, Actions: []models.Action{
+			{Kind: models.ActionSetStatus, Enabled: true, SetStatus: &models.SetStatusAction{StatusID: 10}},
+			{Kind: models.ActionSetPriority, Enabled: true, SetPriority: &models.SetPriorityAction{PriorityID: 3, PriorityName: "P3"}},
+			{Kind: models.ActionSetOwner, Enabled: true, SetOwner: &models.SetOwnerAction{MemberID: 5}},
+			{Kind: models.ActionAddResource, Enabled: true, AddResource: &models.AddResourceAction{MemberID: 5, Identifier: "stale"}},
+			{Kind: models.ActionPatch, Enabled: true, Patch: &models.PatchAction{Ops: []byte(` [ {"op":"replace", "path":"severity", "value":"High"} ] `)}},
+			{Kind: models.ActionNotify, Enabled: true, Notify: &models.NotifyAction{Target: models.TargetRoom, RecipientID: rid(1), Message: "{{event}} {{ticket.link}} for {{company}}"}},
+		}},
+	}}
+	if errs := testService().Validate(context.Background(), w); len(errs) != 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+
+	acts := w.Rules[0].Actions
+	if acts[0].SetStatus.StatusName != "Escalated" {
+		t.Errorf("status name not filled: %+v", acts[0].SetStatus)
+	}
+	if acts[2].SetOwner.Identifier != "jdoe" || acts[3].AddResource.Identifier != "jdoe" {
+		t.Errorf("member identifiers not filled: %+v %+v", acts[2].SetOwner, acts[3].AddResource)
+	}
+	if string(acts[4].Patch.Ops) != `[{"op":"replace","path":"severity","value":"High"}]` {
+		t.Errorf("patch ops not normalized: %s", acts[4].Patch.Ops)
+	}
+}
+
+func TestValidateMutatingActionErrors(t *testing.T) {
+	w := &models.Workflow{BoardID: 1, Rules: []models.Rule{
+		{Name: "a", Enabled: true, Trigger: models.TriggerBoth, Actions: []models.Action{
+			{Kind: models.ActionSetStatus, Enabled: true, SetStatus: &models.SetStatusAction{StatusID: 20}},                                            // other board
+			{Kind: models.ActionSetStatus, Enabled: true, SetStatus: &models.SetStatusAction{StatusID: 30}},                                            // inactive
+			{Kind: models.ActionSetStatus, Enabled: true, SetStatus: &models.SetStatusAction{StatusID: 99}},                                            // missing
+			{Kind: models.ActionSetStatus, Enabled: true},                                                                                              // no settings
+			{Kind: models.ActionSetPriority, Enabled: true, SetPriority: &models.SetPriorityAction{}},                                                  // no id
+			{Kind: models.ActionSetOwner, Enabled: true, SetOwner: &models.SetOwnerAction{MemberID: 6}},                                                // deleted
+			{Kind: models.ActionAddResource, Enabled: true, AddResource: &models.AddResourceAction{MemberID: 99}},                                      // missing
+			{Kind: models.ActionPatch, Enabled: true, Patch: &models.PatchAction{Ops: []byte(`{"op":"replace"}`)}},                                     // not an array
+			{Kind: models.ActionPatch, Enabled: true, Patch: &models.PatchAction{Ops: []byte(`[]`)}, SetStatus: &models.SetStatusAction{StatusID: 10}}, // mixed
+			{Kind: models.ActionNotify, Enabled: true, Notify: &models.NotifyAction{Target: models.TargetResourcesOwner, Message: "hi {{nope}}"}},
+		}},
+	}}
+	errs := testService().Validate(context.Background(), w)
+	want := []string{
+		"set_status.status_id", "set_status.status_id", "set_status.status_id", "set_status",
+		"set_priority.priority_id", "set_owner.member_id", "add_resource.member_id",
+		"patch.ops", "set_status", "patch.ops", "notify.message",
+	}
+	got := fields(errs)
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("fields = %v\nwant     %v\nerrs: %v", got, want, errs)
 	}
 }
 

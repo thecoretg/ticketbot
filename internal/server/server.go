@@ -130,7 +130,13 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 			Sync:      syncsvc.New(s.Pool, cws, ws, tb),
 			Notifier:  ns,
 			Ticketbot: tb,
-			Workflow:  workflow.New(r.Workflows, r.WebexRecipients, r.CW.Board),
+			Workflow: workflow.New(workflow.Params{
+				Workflows:  r.Workflows,
+				Recipients: r.WebexRecipients,
+				Boards:     r.CW.Board,
+				Statuses:   r.CW.TicketStatus,
+				Members:    r.CW.Member,
+			}),
 		},
 	}, persister, nil
 }

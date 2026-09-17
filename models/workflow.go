@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -45,10 +46,24 @@ func (t Trigger) Matches(isNew bool) bool {
 type ActionKind string
 
 const (
-	ActionNotify     ActionKind = "notify"
-	ActionAddNote    ActionKind = "add_note"
-	ActionSkipNotify ActionKind = "skip_notify"
+	ActionNotify      ActionKind = "notify"
+	ActionAddNote     ActionKind = "add_note"
+	ActionSkipNotify  ActionKind = "skip_notify"
+	ActionSetStatus   ActionKind = "set_status"
+	ActionSetPriority ActionKind = "set_priority"
+	ActionSetOwner    ActionKind = "set_owner"
+	ActionAddResource ActionKind = "add_resource"
+	ActionPatch       ActionKind = "patch"
 )
+
+// Mutates reports whether the action writes to the ConnectWise ticket.
+func (k ActionKind) Mutates() bool {
+	switch k {
+	case ActionAddNote, ActionSetStatus, ActionSetPriority, ActionSetOwner, ActionAddResource, ActionPatch:
+		return true
+	}
+	return false
+}
 
 type NotifyTarget string
 
@@ -85,15 +100,55 @@ type Rule struct {
 
 // Action is a tagged union: exactly the sub-struct matching Kind is set.
 type Action struct {
-	Kind    ActionKind     `json:"kind"`
-	Enabled bool           `json:"enabled"`
-	Notify  *NotifyAction  `json:"notify,omitempty"`
-	AddNote *AddNoteAction `json:"add_note,omitempty"`
+	Kind        ActionKind         `json:"kind"`
+	Enabled     bool               `json:"enabled"`
+	Notify      *NotifyAction      `json:"notify,omitempty"`
+	AddNote     *AddNoteAction     `json:"add_note,omitempty"`
+	SetStatus   *SetStatusAction   `json:"set_status,omitempty"`
+	SetPriority *SetPriorityAction `json:"set_priority,omitempty"`
+	SetOwner    *SetOwnerAction    `json:"set_owner,omitempty"`
+	AddResource *AddResourceAction `json:"add_resource,omitempty"`
+	Patch       *PatchAction       `json:"patch,omitempty"`
 }
 
 type NotifyAction struct {
 	Target      NotifyTarget `json:"target"`
 	RecipientID *int         `json:"recipient_id,omitempty"` // webex_recipient.id for room / person
+	// Message, when set, replaces the default notification body. It may use {{placeholder}}
+	// tokens; see msgtemplate.Placeholders.
+	Message string `json:"message,omitempty"`
+}
+
+// SetStatusAction moves the ticket to a status on its board. StatusName is display-only and is
+// refreshed from the status table on save.
+type SetStatusAction struct {
+	StatusID   int    `json:"status_id"`
+	StatusName string `json:"status_name,omitempty"`
+}
+
+// SetPriorityAction changes the ticket priority. PriorityName is display-only.
+type SetPriorityAction struct {
+	PriorityID   int    `json:"priority_id"`
+	PriorityName string `json:"priority_name,omitempty"`
+}
+
+// SetOwnerAction assigns the ticket owner. Identifier is filled from the member table on save.
+type SetOwnerAction struct {
+	MemberID   int    `json:"member_id"`
+	Identifier string `json:"identifier,omitempty"`
+}
+
+// AddResourceAction appends a member to the ticket's resources. Identifier is filled from the
+// member table on save and is what ConnectWise's resources field stores.
+type AddResourceAction struct {
+	MemberID   int    `json:"member_id"`
+	Identifier string `json:"identifier,omitempty"`
+}
+
+// PatchAction sends admin-supplied JSON Patch operations to the ticket. Ops is a JSON array of
+// {"op", "path", "value"} objects as ConnectWise's PATCH endpoint accepts them.
+type PatchAction struct {
+	Ops json.RawMessage `json:"ops"`
 }
 
 // AddNoteAction posts a plain-text note to the ticket. At least one flag must be set.

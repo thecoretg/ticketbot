@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/cwquery"
+	"github.com/thecoretg/ticketbot/internal/msgtemplate"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/workflow"
@@ -29,6 +30,11 @@ func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service, ns *notifier.S
 // Fields handles GET /workflows/fields.
 func (h *WorkflowHandler) Fields(c *gin.Context) {
 	outputJSON(c, workflow.ConditionFields)
+}
+
+// Placeholders handles GET /workflows/placeholders: the tokens a notify message may use.
+func (h *WorkflowHandler) Placeholders(c *gin.Context) {
+	outputJSON(c, msgtemplate.Placeholders)
 }
 
 type simulateRequest struct {
@@ -140,7 +146,7 @@ func (h *WorkflowHandler) Simulate(c *gin.Context) {
 			LatestNote: detail.LatestNote,
 			Resources:  detail.Resources,
 		}
-		recips, err := h.Notifier.PreviewRecipients(ctx, ft, res.Notifies)
+		recips, err := h.Notifier.PreviewRecipients(ctx, ft, req.AsNew, res.Notifies)
 		if err != nil {
 			internalServerError(c, err)
 			return
@@ -371,7 +377,7 @@ func (h *WorkflowHandler) EvaluateCondition(c *gin.Context) {
 		return
 	}
 
-	doc := cwquery.NewDocument(t, note, nil)
+	doc := cwquery.NewDocument(t, note, cwquery.Changes{NewNote: note != nil})
 	matches, err := q.Eval(doc)
 	if err != nil {
 		internalServerError(c, err)
