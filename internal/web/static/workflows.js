@@ -4,11 +4,20 @@
 let wf           = null   // working copy of the workflow being edited
 let wfOriginal   = ''     // JSON.stringify(wf) at load/save time, for dirty compare
 let wfRecipients = []     // /webex/rooms cache (rooms + people)
+let wfStatuses   = []     // statuses for this workflow's board
+let wfMembers    = []     // /cw/members cache
+let wfPriorities = []     // /cw/priorities cache (live from ConnectWise)
+let wfPlaceholders = []   // /workflows/placeholders cache
 let wfSimTicket  = ''     // last simulated ticket number, kept across re-renders
 
 const WF_TRIGGERS = [['create', 'New tickets'], ['update', 'Updated tickets'], ['both', 'New and updated']]
-const WF_KINDS    = [['notify', 'Notify'], ['add_note', 'Add note'], ['skip_notify', 'Skip notify']]
+const WF_KINDS    = [
+    ['notify', 'Notify'], ['add_note', 'Add note'], ['skip_notify', 'Skip notify'],
+    ['set_status', 'Set status'], ['set_priority', 'Set priority'], ['set_owner', 'Set owner'],
+    ['add_resource', 'Add resource'], ['patch', 'Patch ticket (JSON)'],
+]
 const WF_TARGETS  = [['room', 'Webex room'], ['person', 'Webex person'], ['resources_owner', 'Ticket resources & owner']]
+const WF_PATCH_EXAMPLE = '[\n  { "op": "replace", "path": "severity", "value": "High" }\n]'
 
 async function loadWorkflows(sub) {
     if (sub && /^\d+$/.test(sub)) {
@@ -94,8 +103,19 @@ async function deleteWorkflow(id, name) {
 // ── Editor ───────────────────────────────────────────────
 async function loadWorkflowEditor(id) {
     try {
-        const [w, recips] = await Promise.all([api('GET', `/workflows/${id}`), api('GET', '/webex/rooms')])
-        wfRecipients = recips || []
+        const [w, recips, members, placeholders] = await Promise.all([
+            api('GET', `/workflows/${id}`), api('GET', '/webex/rooms'), api('GET', '/cw/members'), api('GET', '/workflows/placeholders'),
+        ])
+        wfRecipients   = recips || []
+        wfMembers      = (members || []).filter(m => !m.deleted)
+        wfPlaceholders = placeholders || []
+        // statuses are board-scoped; priorities come live from ConnectWise and may be slow or fail
+        const [statuses, priorities] = await Promise.all([
+            api('GET', `/cw/boards/${w.board_id}/statuses`).catch(() => []),
+            api('GET', '/cw/priorities').catch(e => { toast(`Priorities unavailable: ${e.message}`, 'error'); return [] }),
+        ])
+        wfStatuses   = (statuses || []).filter(s => !s.deleted && !s.inactive)
+        wfPriorities = priorities || []
         wf = wfNormalize(w)
         wfOriginal = JSON.stringify(wf)
         tabGuard = wfGuard
@@ -234,13 +254,59 @@ function wfActionRowHTML(a, i, j) {
     switch (a.kind) {
     case 'notify': {
         const n = a.notify || {}
-        fields = `<select onchange="wfChangeTargetKind(${i}, ${j}, this.value)">${opts(WF_TARGETS, n.target)}</select>`
+        let target = `<select onchange="wfChangeTargetKind(${i}, ${j}, this.value)">${opts(WF_TARGETS, n.target)}</select>`
         if (n.target === 'room' || n.target === 'person') {
-            fields += `<select class="fill" onchange="wfSetAction(${i}, ${j}, 'notify.recipient_id', this.value ? parseInt(this.value) : null)">
+            target += `<select class="fill" onchange="wfSetAction(${i}, ${j}, 'notify.recipient_id', this.value ? parseInt(this.value) : null)">
                 <option value="">— choose a ${n.target} —</option>${wfRecipientOptions(n.target, n.recipient_id)}</select>`
         } else {
-            fields += `<span class="muted fill">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
+            target += `<span class="muted fill">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
         }
+        const hasMsg = !!n.message
+        fields = `<div class="fill action-note">
+            <div class="action-inline">${target}</div>
+            <details class="action-msg"${hasMsg ? ' open' : ''}>
+                <summary class="muted">Custom message${hasMsg ? '' : ' (optional — default layout when empty)'}</summary>
+                <textarea rows="3" placeholder="{{event}}: {{ticket.link}} {{ticket.summary}}&#10;**Company:** {{company}}&#10;{{note.quote}}" oninput="wfSetAction(${i}, ${j}, 'notify.message', this.value)">${esc(n.message || '')}</textarea>
+                <div class="placeholder-list">${wfPlaceholders.map(p => `<code title="${esc(p.description)}" onclick="wfInsertPlaceholder(this, '${p.name}')">{{${p.name}}}</code>`).join(' ')}</div>
+            </details>
+        </div>`
+        break
+    }
+    case 'set_status': {
+        const n = a.set_status || {}
+        const known = wfStatuses.some(s => s.id === n.status_id)
+        fields = `<select class="fill" onchange="wfSetStatus(${i}, ${j}, this.value)">
+            <option value="">— choose a status —</option>
+            ${wfStatuses.map(s => `<option value="${s.id}"${s.id === n.status_id ? ' selected' : ''}>${esc(s.name)}${s.closed ? ' (closed)' : ''}</option>`).join('')}
+            ${n.status_id && !known ? `<option value="${n.status_id}" selected>${esc(n.status_name || `Status ${n.status_id}`)} (not on this board)</option>` : ''}
+        </select>`
+        break
+    }
+    case 'set_priority': {
+        const n = a.set_priority || {}
+        const known = wfPriorities.some(p => p.id === n.priority_id)
+        fields = `<select class="fill" onchange="wfSetPriority(${i}, ${j}, this.value)">
+            <option value="">— choose a priority —</option>
+            ${wfPriorities.map(p => `<option value="${p.id}"${p.id === n.priority_id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
+            ${n.priority_id && !known ? `<option value="${n.priority_id}" selected>${esc(n.priority_name || `Priority ${n.priority_id}`)}</option>` : ''}
+        </select>`
+        break
+    }
+    case 'set_owner':
+    case 'add_resource': {
+        const n = a[a.kind] || {}
+        fields = `<select class="fill" onchange="wfSetMember(${i}, ${j}, '${a.kind}', this.value)">
+            <option value="">— choose a member —</option>${wfMemberOptions(n.member_id)}</select>
+        <span class="muted">${a.kind === 'set_owner' ? 'Skipped if already the owner.' : 'Skipped if already assigned.'}</span>`
+        break
+    }
+    case 'patch': {
+        const n = a.patch || {}
+        const ops = typeof n.ops === 'string' ? n.ops : (n.ops ? JSON.stringify(n.ops, null, 2) : '')
+        fields = `<div class="fill action-note">
+            <textarea rows="4" class="mono" spellcheck="false" placeholder='${WF_PATCH_EXAMPLE}' oninput="wfSetPatchOps(${i}, ${j}, this.value)">${esc(ops)}</textarea>
+            <span class="muted">JSON array of ConnectWise patch operations: <code>op</code> (add / replace / remove), <code>path</code>, <code>value</code>. Sent as-is to PATCH /service/tickets/{id}.</span>
+        </div>`
         break
     }
     case 'add_note': {
@@ -267,6 +333,13 @@ function wfActionRowHTML(a, i, j) {
         ${fields}
         <button class="btn-icon" title="Remove action" onclick="wfDeleteAction(${i}, ${j})">✕</button>
     </div>`
+}
+
+function wfMemberOptions(selected) {
+    return wfMembers
+        .slice().sort((a, b) => memberLabel(a).localeCompare(memberLabel(b)))
+        .map(m => `<option value="${m.id}"${m.id === selected ? ' selected' : ''}>${esc(memberLabel(m))}${m.identifier ? ` (${esc(m.identifier)})` : ''}</option>`)
+        .join('')
 }
 
 function wfRecipientOptions(type, selected) {
@@ -301,6 +374,44 @@ function wfSetAction(i, j, path, value) {
     wfMarkDirty()
 }
 
+function wfSetStatus(i, j, value) {
+    const id = value ? parseInt(value) : 0
+    const st = wfStatuses.find(s => s.id === id)
+    wf.rules[i].actions[j].set_status = { status_id: id, status_name: st ? st.name : '' }
+    wfMarkDirty()
+}
+
+function wfSetPriority(i, j, value) {
+    const id = value ? parseInt(value) : 0
+    const p = wfPriorities.find(p => p.id === id)
+    wf.rules[i].actions[j].set_priority = { priority_id: id, priority_name: p ? p.name : '' }
+    wfMarkDirty()
+}
+
+function wfSetMember(i, j, kind, value) {
+    const id = value ? parseInt(value) : 0
+    const m = wfMembers.find(m => m.id === id)
+    wf.rules[i].actions[j][kind] = { member_id: id, identifier: m ? m.identifier : '' }
+    wfMarkDirty()
+}
+
+// patch ops are kept as the raw string while editing; wfPatchOps parses on save/simulate
+function wfSetPatchOps(i, j, value) {
+    wf.rules[i].actions[j].patch = { ops: value }
+    wfMarkDirty()
+}
+
+function wfInsertPlaceholder(el, name) {
+    const ta = el.closest('.action-msg')?.querySelector('textarea')
+    if (!ta) return
+    const start = ta.selectionStart ?? ta.value.length
+    const tok = `{{${name}}}`
+    ta.value = ta.value.slice(0, start) + tok + ta.value.slice(ta.selectionEnd ?? start)
+    ta.focus()
+    ta.setSelectionRange(start + tok.length, start + tok.length)
+    ta.dispatchEvent(new Event('input'))
+}
+
 function wfMarkDirty() {
     const dirty = wfIsDirty()
     document.getElementById('wf-dirty')?.classList.toggle('hidden', !dirty)
@@ -315,8 +426,13 @@ function wfNewRule() {
 
 function wfNewAction(kind) {
     const a = { kind, enabled: true }
-    if (kind === 'notify')   a.notify   = { target: 'room', recipient_id: null }
-    if (kind === 'add_note') a.add_note = { text: '', internal: true, discussion: false, resolution: false }
+    if (kind === 'notify')       a.notify       = { target: 'room', recipient_id: null }
+    if (kind === 'add_note')     a.add_note     = { text: '', internal: true, discussion: false, resolution: false }
+    if (kind === 'set_status')   a.set_status   = { status_id: 0 }
+    if (kind === 'set_priority') a.set_priority = { priority_id: 0 }
+    if (kind === 'set_owner')    a.set_owner    = { member_id: 0 }
+    if (kind === 'add_resource') a.add_resource = { member_id: 0 }
+    if (kind === 'patch')        a.patch        = { ops: '' }
     return a
 }
 
@@ -375,7 +491,7 @@ function wfChangeActionKind(i, j, kind) {
 
 function wfChangeTargetKind(i, j, target) {
     const a = wf.rules[i].actions[j]
-    a.notify = { target }
+    a.notify = { target, message: a.notify?.message || '' }
     if (target !== 'resources_owner') a.notify.recipient_id = null
     wfRerenderAction(i, j)
     wfMarkDirty()
@@ -443,10 +559,7 @@ async function wfSimulate() {
 
     out.innerHTML = '<div class="loading-state">Simulating…</div>'
     try {
-        const draft = JSON.parse(JSON.stringify(wf))
-        for (const r of draft.rules) for (const a of r.actions) {
-            if (a.kind === 'notify' && a.notify.recipient_id === null) delete a.notify.recipient_id
-        }
+        const draft = wfPrepareForServer(JSON.parse(JSON.stringify(wf)))
         const res = await api('POST', `/workflows/${wf.id}/simulate`, {
             ticket_id: id,
             as_new: document.getElementById('sim-mode').value === 'create',
@@ -463,11 +576,14 @@ function wfSimResultHTML(id, res) {
     const rules = (res.workflow?.rules || []).map(tkRuleChip).join('') || '<span class="muted">No rules</span>'
     const actions = (res.actions || []).map(a => `<div class="sim-line">
         ${tkResultBadge(a.result, true)}
-        <span><strong>${esc(a.rule_name)}</strong> · ${tkActionLabel(a.kind)}${a.output?.target ? ` → ${esc(tkTargetLabel(a.output.target))}` : ''}${a.kind === 'add_note' && a.output?.text ? `: <span class="muted">${esc(a.output.text)}</span>` : ''}${a.reason ? ` <span class="muted">(${esc(a.reason)})</span>` : ''}${a.error ? ` <span class="cond-result err">${esc(a.error)}</span>` : ''}</span>
+        <span><strong>${esc(a.rule_name)}</strong> · ${tkActionLabel(a.kind)}${tkActionSummary(a.kind, a.output)}${a.reason ? ` <span class="muted">(${esc(a.reason)})</span>` : ''}${a.error ? ` <span class="cond-result err">${esc(a.error)}</span>` : ''}</span>
     </div>`).join('') || '<div class="muted">No actions would run</div>'
-    const recips = (res.recipients || []).map(r => `<div class="sim-line">
-        ${r.error ? badgeTag('Error', 'off') : badgeTag(r.recipient_type, 'muted')}
-        <span>${r.error ? `<strong>${esc(r.rule_name)}</strong>: ${esc(r.error)}` : `<strong>${esc(r.recipient_name)}</strong> <span class="muted">via ${esc(r.rule_name)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
+    const recips = (res.recipients || []).map(r => `<div class="sim-recipient">
+        <div class="sim-line">
+            ${r.error ? badgeTag('Error', 'off') : badgeTag(r.recipient_type, 'muted')}
+            <span>${r.error ? `<strong>${esc(r.rule_name)}</strong>: ${esc(r.error)}` : `<strong>${esc(r.recipient_name)}</strong> <span class="muted">via ${esc(r.rule_name)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
+        </div>
+        ${r.message ? `<pre class="sim-message">${esc(r.message)}</pre>` : ''}
     </div>`).join('') || '<div class="muted">Nobody would be notified</div>'
 
     return `<div class="sim-panel">
@@ -483,16 +599,66 @@ function wfClientValidate() {
     for (const [i, r] of wf.rules.entries()) {
         if (!r.name.trim()) return { i, msg: 'Rule name is required' }
         for (const [j, a] of r.actions.entries()) {
-            if (a.kind === 'notify' && a.notify.target !== 'resources_owner' && !a.notify.recipient_id)
-                return { i, j, msg: `Action ${j + 1}: choose a ${a.notify.target}` }
-            if (a.kind === 'add_note') {
-                if (!a.add_note.text.trim()) return { i, j, msg: `Action ${j + 1}: note text is required` }
-                if (!a.add_note.internal && !a.add_note.discussion && !a.add_note.resolution)
-                    return { i, j, msg: `Action ${j + 1}: pick at least one note type` }
+            const n = j + 1
+            switch (a.kind) {
+            case 'notify':
+                if (a.notify.target !== 'resources_owner' && !a.notify.recipient_id) return { i, j, msg: `Action ${n}: choose a ${a.notify.target}` }
+                break
+            case 'add_note':
+                if (!a.add_note.text.trim()) return { i, j, msg: `Action ${n}: note text is required` }
+                if (!a.add_note.internal && !a.add_note.discussion && !a.add_note.resolution) return { i, j, msg: `Action ${n}: pick at least one note type` }
+                break
+            case 'set_status':
+                if (!a.set_status?.status_id) return { i, j, msg: `Action ${n}: choose a status` }
+                break
+            case 'set_priority':
+                if (!a.set_priority?.priority_id) return { i, j, msg: `Action ${n}: choose a priority` }
+                break
+            case 'set_owner':
+            case 'add_resource':
+                if (!a[a.kind]?.member_id) return { i, j, msg: `Action ${n}: choose a member` }
+                break
+            case 'patch': {
+                const err = wfPatchOpsError(a.patch?.ops)
+                if (err) return { i, j, msg: `Action ${n}: ${err}` }
+                break
+            }
             }
         }
     }
     return null
+}
+
+// wfPatchOpsError returns a message when ops is not a JSON array of {op, path[, value]}.
+function wfPatchOpsError(ops) {
+    let parsed = ops
+    if (typeof ops === 'string') {
+        if (!ops.trim()) return 'patch operations are required'
+        try { parsed = JSON.parse(ops) } catch (e) { return `patch JSON is invalid: ${e.message}` }
+    }
+    if (!Array.isArray(parsed) || !parsed.length) return 'patch must be a non-empty JSON array'
+    for (const [k, op] of parsed.entries()) {
+        if (!op || typeof op !== 'object') return `op ${k + 1} must be an object`
+        if (!['add', 'replace', 'remove'].includes(op.op)) return `op ${k + 1}: op must be add, replace or remove`
+        if (!op.path || typeof op.path !== 'string') return `op ${k + 1}: path is required`
+        if (op.op !== 'remove' && op.value === undefined) return `op ${k + 1}: value is required`
+    }
+    return null
+}
+
+// wfPrepareForServer normalizes editor-only shapes into what the API expects. It mutates and
+// returns w; pass a copy when the editor state must be preserved.
+function wfPrepareForServer(w) {
+    for (const r of w.rules) for (const a of r.actions) {
+        if (a.kind === 'notify') {
+            if (a.notify.recipient_id === null) delete a.notify.recipient_id   // server rejects null for resources_owner
+            if (!a.notify.message) delete a.notify.message
+        }
+        if (a.kind === 'patch' && typeof a.patch?.ops === 'string') {
+            try { a.patch.ops = JSON.parse(a.patch.ops) } catch { /* server reports the syntax error */ }
+        }
+    }
+    return w
 }
 
 async function saveWorkflow() {
@@ -503,15 +669,10 @@ async function saveWorkflow() {
         return
     }
 
-    // strip nulls the server rejects for resources_owner
-    for (const r of wf.rules) for (const a of r.actions) {
-        if (a.kind === 'notify' && a.notify.recipient_id === null) delete a.notify.recipient_id
-    }
-
     const btn = document.getElementById('wf-save')
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…' }
     try {
-        const saved = await api('PUT', `/workflows/${wf.id}`, wf)
+        const saved = await api('PUT', `/workflows/${wf.id}`, wfPrepareForServer(JSON.parse(JSON.stringify(wf))))
         wf = wfNormalize(saved)
         wfOriginal = JSON.stringify(wf)
         renderWorkflowEditor()

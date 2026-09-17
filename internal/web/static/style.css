@@ -991,6 +991,19 @@ tr.clickable { cursor: pointer; }
 .action-row .fill { flex: 1; min-width: 200px; }
 .action-row .muted { font-size: 12px; }
 .action-note { display: flex; flex-direction: column; gap: 6px; }
+.action-inline { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.action-inline select { min-width: 150px; width: auto; }
+.action-inline .fill { flex: 1; min-width: 200px; }
+.action-msg summary { cursor: pointer; font-size: 12px; user-select: none; }
+.action-msg textarea { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; margin-top: 6px; }
+.placeholder-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.placeholder-list code { cursor: pointer; font-size: 11px; }
+.placeholder-list code:hover { text-decoration: underline; }
+.action-note textarea.mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; min-height: 80px; }
+.sim-recipient { display: flex; flex-direction: column; gap: 4px; }
+.sim-message, .tl-code { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; margin: 2px 0 6px 28px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
+.tl-code { margin-left: 0; }
+.history-toggle { margin-left: auto; padding: 0; }
 .action-note textarea { min-height: 44px; resize: vertical; width: 100%; }
 .action-flags { display: flex; gap: 16px; }
 .action-flags .check-inline { padding: 0; font-size: 12px; }

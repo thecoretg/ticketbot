@@ -5,6 +5,8 @@ let tkFilters     = { board_id: '', status_id: '', closed: '', q: '', page: 1, p
 let tkBoards      = []
 let tkSearchTimer = null
 let tkRequestSeq  = 0      // drops stale responses when filters change quickly
+let tkShowNoops   = false  // history: also show runs where nothing happened (no workflow, no match, loop guard)
+let tkDetail      = null   // last loaded ticket detail, for re-rendering the history toggle
 
 async function loadTickets(sub) {
     if (sub && /^\d+$/.test(sub)) {
@@ -161,12 +163,35 @@ async function loadTicketDetail(id) {
             <div class="empty-state">${esc(e.message)}</div>`)
         return
     }
+    tkDetail = data
     renderTicketDetail(data)
+}
+
+function tkToggleNoops(on) {
+    tkShowNoops = on
+    if (tkDetail) renderTicketDetail(tkDetail)
+}
+
+// tkIsNoop reports events that only say "nothing happened": a board with no workflow, a disabled
+// workflow, a run where no rule matched, or a self-authored update the loop guard skipped.
+// Anything that ran, would run (dry run) or failed stays visible.
+function tkIsNoop(ev) {
+    const p = ev.payload || {}
+    switch (ev.kind) {
+    case 'loop_guard':
+        return true
+    case 'workflow':
+        if (!p.found || !p.enabled) return true
+        return !(p.rules || []).some(r => r.matched || r.error)
+    }
+    return false
 }
 
 function renderTicketDetail(d) {
     const t   = d.ticket
-    const evs = d.events || []
+    const all = d.events || []
+    const evs = tkShowNoops ? all : all.filter(ev => !tkIsNoop(ev))
+    const hidden = all.length - evs.length
     const contact = d.contact ? [d.contact.first_name, d.contact.last_name].filter(Boolean).join(' ') : '—'
     const resources = (d.resources || []).map(m => memberLabel(m)).join(', ') || (t.resources || '—')
 
@@ -195,7 +220,11 @@ function renderTicketDetail(d) {
         ${meta('Updated', fmtDateTime(t.updated_on) + (t.updated_by ? ` <span class="muted">by ${esc(t.updated_by)}</span>` : ''))}
         ${meta('Added', fmtDateTime(t.added_on))}
     </div>
-    <div class="section-head"><h3>History</h3><span class="config-desc">${evs.length} event${evs.length === 1 ? '' : 's'}, oldest first</span></div>
+    <div class="section-head">
+        <h3>History</h3>
+        <span class="config-desc">${evs.length} event${evs.length === 1 ? '' : 's'}, oldest first</span>
+        <label class="check-inline history-toggle"><input type="checkbox" ${tkShowNoops ? 'checked' : ''} onchange="tkToggleNoops(this.checked)"> Show runs where nothing happened${!tkShowNoops && hidden ? ` (${hidden})` : ''}</label>
+    </div>
     <div class="timeline">${evs.map(tkEventHTML).join('') || '<div class="empty-state">No events recorded</div>'}</div>`)
 }
 
@@ -297,7 +326,26 @@ function tkRuleChip(r) {
 }
 
 function tkActionLabel(kind) {
-    return { notify: 'Notify', add_note: 'Add note', skip_notify: 'Skip notify' }[kind] || esc(kind || 'Action')
+    return {
+        notify: 'Notify', add_note: 'Add note', skip_notify: 'Skip notify',
+        set_status: 'Set status', set_priority: 'Set priority', set_owner: 'Set owner',
+        add_resource: 'Add resource', patch: 'Patch ticket',
+    }[kind] || esc(kind || 'Action')
+}
+
+// tkActionSummary is the short " → target" suffix shown after an action label.
+function tkActionSummary(kind, o) {
+    o = o || {}
+    switch (kind) {
+    case 'notify':       return o.target ? ` → ${esc(tkTargetLabel(o.target))}${o.custom_message ? ' <span class="muted">(custom message)</span>' : ''}` : ''
+    case 'add_note':     return o.text ? `: <span class="muted">${esc(o.text)}</span>` : ''
+    case 'set_status':   return ` → ${esc(o.status_name || `status ${o.status_id ?? '?'}`)}`
+    case 'set_priority': return ` → ${esc(o.priority_name || `priority ${o.priority_id ?? '?'}`)}`
+    case 'set_owner':
+    case 'add_resource': return ` → ${esc(o.identifier || `member ${o.member_id ?? '?'}`)}`
+    case 'patch':        return o.ops ? ` <span class="muted">(${o.ops.length} op${o.ops.length === 1 ? '' : 's'})</span>` : ''
+    }
+    return ''
 }
 
 function tkResultBadge(result, dryRun) {
@@ -322,6 +370,12 @@ function tkActionBody(p, dryRun) {
     if (p.kind === 'add_note' && o.text) {
         const flags = ['internal', 'discussion', 'resolution'].filter(f => o[f]).join(', ')
         html += `<div class="note-preview">${flags ? `<div class="note-author">${esc(flags)}</div>` : ''}<div class="note-text">${esc(o.text)}</div>${o.note_id ? `<div class="tl-detail">note #${o.note_id}</div>` : ''}</div>`
+    }
+    if (['set_status', 'set_priority', 'set_owner', 'add_resource'].includes(p.kind)) {
+        html += `<div class="tl-detail">${tkActionSummary(p.kind, o).replace(/^ → /, '')}${p.kind === 'add_resource' && o.resources ? ` <span class="muted">(resources: ${esc(o.resources)})</span>` : ''}</div>`
+    }
+    if (p.kind === 'patch' && o.ops) {
+        html += `<pre class="tl-code">${esc(JSON.stringify(o.ops, null, 2))}</pre>`
     }
     if (p.error) html += `<div class="tl-error-text">${esc(p.error)}</div>`
     return html
