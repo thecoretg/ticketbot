@@ -277,7 +277,7 @@ function wfValueHTML(i, k, row, f) {
         }
 
         const vals = Array.isArray(row.value) ? row.value : []
-        const chips = vals.map(v => `<span class="chip">${esc(labelFor(v))}<button class="chip-x" title="Remove" onclick="wfRemoveRowValue(${i}, ${k}, ${JSON.stringify(String(v))})">✕</button></span>`).join('')
+        const chips = vals.map(v => `<span class="chip">${esc(labelFor(v))}<button class="chip-x" type="button" title="Remove" onclick="wfRemoveRowValue(${i}, ${k}, '${esc(String(v))}')">✕</button></span>`).join('')
         const adder = searchable
             ? wfTypeaheadHTML(i, k, f, '', true)
             : `<select onchange="if (this.value) { wfAddRowValue(${i}, ${k}, this.value); this.value = '' }">
@@ -298,7 +298,7 @@ function wfTypeaheadHTML(i, k, f, current, add = false) {
     const id = `ta-${i}-${k}-${add ? 'add' : 'one'}`
     return `<span class="typeahead">
         <input type="text" id="${id}" list="${id}-list" autocomplete="off" placeholder="${add ? '+ search…' : `search ${f.source}…`}" value="${esc(current)}"
-            oninput="wfTypeahead(${i}, ${k}, '${f.source}', this)" onchange="wfTypeaheadPick(${i}, ${k}, '${f.source}', this, ${add})">
+            oninput="wfTypeahead(${i}, ${k}, '${f.source}', this)">
         <datalist id="${id}-list"></datalist>
     </span>`
 }
@@ -316,8 +316,11 @@ function wfSourceList(f) {
 }
 
 // ── Typeahead (companies / contacts) ─────────────────────
+// Options are rendered as "Name (#id)". Picking one from the datalist fires `input` with that
+// exact text, so we commit immediately instead of waiting for `change` (blur / Enter).
 function wfTypeahead(i, k, source, input) {
     clearTimeout(wfTypeaheadTimer)
+    if (wfTypeaheadPick(i, k, source, input, input.id.endsWith('-add'))) return
     const q = input.value.trim()
     if (q.length < 2) return
     wfTypeaheadTimer = setTimeout(async () => {
@@ -341,10 +344,11 @@ function wfTypeahead(i, k, source, input) {
 
 function wfTypeaheadPick(i, k, source, input, add) {
     const m = input.value.match(/\(#(\d+)\)\s*$/)
-    if (!m) return
+    if (!m) return false
     const id = parseInt(m[1])
-    if (add) { wfAddRowValue(i, k, id); input.value = '' }
+    if (add) { input.value = ''; wfAddRowValue(i, k, id) }
     else wfSetRowValue(i, k, id, true)
+    return true
 }
 
 // wfSiblingCompany finds a "Company is X" row in the same rule, to scope contact searches.
@@ -432,7 +436,8 @@ function wfAddRowValue(i, k, value) {
     const f = wfFieldByPath(row.path)
     const v = (f.type === 'ref' || f.type === 'number') ? Number(value) : value
     row.value = Array.isArray(row.value) ? row.value : []
-    if (!row.value.map(String).includes(String(v))) row.value.push(v)
+    if (row.value.map(String).includes(String(v))) return
+    row.value.push(v)
     wfRerenderCondition(i)
 }
 

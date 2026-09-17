@@ -498,10 +498,15 @@ function wfChangeTargetKind(i, j, target) {
     wfMarkDirty()
 }
 
+// wfRerenderRule replaces one rule card. Replacing the card blurs any focused input inside it,
+// and a blur can fire change handlers that call back in here; the guard makes that a no-op.
+let wfRerendering = false
 function wfRerenderRule(i) {
+    if (wfRerendering) return
     const el = document.getElementById(`rule-${i}`)
     if (!el) { renderWorkflowEditor(); return }
-    el.outerHTML = wfRuleCardHTML(wf.rules[i], i)
+    wfRerendering = true
+    try { el.outerHTML = wfRuleCardHTML(wf.rules[i], i) } finally { wfRerendering = false }
 }
 
 function wfRerenderAction(i, j) {
