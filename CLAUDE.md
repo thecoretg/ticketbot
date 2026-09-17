@@ -11,7 +11,7 @@ Ticketbot ingests ConnectWise PSA ticket webhooks, runs per-board workflows (con
 - `make gensql` (= `sqlc generate`) after editing `queries/*.sql` or adding a migration. Never hand-edit `internal/db/`.
 - Tests: `go test ./...` is unit-only. Run `TEST_POSTGRES_DSN=<dsn> go test ./internal/postgres/` (against a DB already migrated to the current version) when touching repos, queries, or migrations. `internal/server/e2e_test.go` hits the live ConnectWise API and is gated on `TEST_TICKET_IDS`; leave it to the user.
 - Dashboard files (`internal/web/static/`) are embedded at build time: restart `make run` to see changes, and hard-refresh the browser.
-- Dependencies are vendored and the Docker build uses `-mod=vendor`: after any `go.mod` change run `go mod tidy && go mod vendor`.
+- Dependencies are not vendored; they come from the module proxy (tctg-go is public). Run `go mod tidy` after any `go.mod` change.
 
 ## Migrations
 

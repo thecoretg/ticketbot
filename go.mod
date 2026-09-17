@@ -1,6 +1,6 @@
 module github.com/thecoretg/ticketbot
 
-go 1.26.1
+go 1.27
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.0
@@ -12,9 +12,8 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	github.com/thecoretg/tctg-go v0.3.0
+	github.com/thecoretg/tctg-go v0.7.0
 	golang.org/x/crypto v0.44.1-0.20251119192837-e79546e28b85
-	resty.dev/v3 v3.0.0-rc.1
 )
 
 require (
