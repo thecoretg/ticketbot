@@ -1,17 +1,20 @@
+# Local stack. The app reads its env from the repo-root .env (a 1Password-mounted file works).
+# The db service needs no env file: it uses the DB_* defaults below unless you override them.
 services:
   db:
     image: postgres:16
     container_name: ticketbot-postgres
-    env_file: .env
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-testuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-testpass}
+      POSTGRES_DB: ${DB_NAME:-testdb}
+    ports:
+      - "${DB_PORT:-5433}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-testuser} -d ${DB_NAME:-testdb}"]
       interval: 2s
       timeout: 2s
       retries: 10
@@ -27,9 +30,10 @@ services:
     ports:
       - "${PORT:-8080}:8080"
     restart: unless-stopped
-    env_file: .env
+    env_file: ../.env
     environment:
-      POSTGRES_DSN: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable"
+      # inside the compose network the app must reach the db service, not localhost
+      POSTGRES_DSN: "postgres://${DB_USER:-testuser}:${DB_PASSWORD:-testpass}@db:5432/${DB_NAME:-testdb}?sslmode=disable"
 
 volumes:
   db_data:
