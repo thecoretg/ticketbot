@@ -89,9 +89,27 @@ async function api(method, path, body = null) {
         const err = new Error(data.error || `Request failed: ${res.status}`)
         err.status = res.status
         err.data   = data
+        if (res.status === 401 && !path.startsWith('/auth') && path !== '/authtest') sessionExpired()
         throw err
     }
     return data
+}
+
+// sessionExpired drops the user back to the login screen when the session cookie stops working
+// mid-use, instead of every page showing a "Request failed: 401" toast.
+let sessionExpiredShown = false
+function sessionExpired() {
+    if (sessionExpiredShown || !currentUser) return
+    sessionExpiredShown = true
+    stopSyncPoll()
+    stopLogsPoll()
+    tabGuard = null
+    currentUser = null
+    document.getElementById('modal-overlay').classList.add('hidden')
+    document.getElementById('app').classList.add('hidden')
+    document.getElementById('login').classList.remove('hidden')
+    showLoginErr('Your session expired. Sign in again to continue.')
+    setTimeout(() => { sessionExpiredShown = false }, 2000)
 }
 
 // ─────────────────────────────────────────────────────────
@@ -123,11 +141,12 @@ async function login() {
             await showApp()
             if (res?.totp_setup_required) showTOTPSetupModal(true)
         }
-    } catch {
-        showLoginErr('Invalid email or password')
+    } catch (e) {
+        // 401 is a bad password; anything else (server down, 500) deserves its real message
+        showLoginErr(e.status === 401 || e.status === 400 ? 'Invalid email or password' : (e.message || 'Login failed'))
     } finally {
         btn.disabled    = false
-        btn.textContent = 'Login'
+        btn.textContent = 'Continue'
     }
 }
 
@@ -452,13 +471,19 @@ function showRestartBanner() {
     banner.innerHTML = `<div class="restart-banner">Restarting… reconnecting</div>`
     document.getElementById('app').prepend(banner)
 
+    // the old process answers for a moment after the restart call; only a failure followed by a
+    // success means the new process is up (or a 10s ceiling, in case shutdown was too fast to see)
+    let sawDown = false
+    const started = Date.now()
     const poll = setInterval(async () => {
         try {
-            await fetch('/healthcheck')
+            const res = await fetch('/healthcheck', { cache: 'no-store' })
+            if (!res.ok) throw new Error(String(res.status))
+            if (!sawDown && Date.now() - started < 10000) return
             clearInterval(poll)
             banner.remove()
             toast('Server restarted successfully', 'success')
-        } catch { /* still down, keep polling */ }
+        } catch { sawDown = true }
     }, 1500)
 }
 
@@ -807,7 +832,9 @@ function renderUsers(users) {
         <td style="color:var(--muted)">${u.id}</td>
         <td>${esc(u.email_address)}</td>
         <td style="color:var(--muted)">${fmtDateTime(u.created_on)}</td>
-        <td class="actions"><button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button></td>
+        <td class="actions">${u.id === currentUser?.id
+            ? '<span class="muted" title="You cannot delete the account you are signed in as">you</span>'
+            : `<button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button>`}</td>
     </tr>`)
 
     setContent(header + tableWrap(thead, rows))
@@ -1119,17 +1146,27 @@ function renderConfig(cfg) {
 }
 
 async function saveConfig() {
+    // every numeric field must be a whole number within its input's min; say which one is wrong
+    const num = (id, label) => {
+        const el = document.getElementById(id)
+        const n  = Number(el.value)
+        const min = el.min === '' ? -Infinity : Number(el.min)
+        if (el.value.trim() === '' || !Number.isInteger(n) || n < min) {
+            throw new Error(`${label} must be a whole number${min > -Infinity ? ` of at least ${min}` : ''}`)
+        }
+        return n
+    }
     try {
         const res = await api('PUT', '/config', {
             master_dry_run:             document.getElementById('c-master-dry-run').checked,
             cw_api_member_identifier:   document.getElementById('c-api-member').value.trim(),
-            max_message_length:         parseInt(document.getElementById('c-max-len').value)              || 300,
-            max_concurrent_syncs:       parseInt(document.getElementById('c-max-syncs').value)            || 5,
+            max_message_length:         num('c-max-len', 'Max message length'),
+            max_concurrent_syncs:       num('c-max-syncs', 'Max concurrent syncs'),
             require_totp:               document.getElementById('c-require-totp').checked,
             debug_logging:              document.getElementById('c-debug-logging').checked,
-            log_buffer_size:            parseInt(document.getElementById('c-log-buffer-size').value)      || 500,
-            log_retention_days:         parseInt(document.getElementById('c-log-retention').value)        ?? 7,
-            log_cleanup_interval_hours: parseInt(document.getElementById('c-log-cleanup-interval').value) || 24,
+            log_buffer_size:            num('c-log-buffer-size', 'Log buffer size'),
+            log_retention_days:         num('c-log-retention', 'Log retention'),
+            log_cleanup_interval_hours: num('c-log-cleanup-interval', 'Log cleanup interval'),
         })
         if (res) appConfig = res
         toast('Config saved', 'success')
@@ -1153,7 +1190,7 @@ function saveLogsPrefs(patch) {
 const _lp              = logsPrefs()
 let logsLevelFilter    = _lp.levelFilter    ?? 'ALL'
 let logsContextFilter  = _lp.contextFilter  ?? 'ALL'
-let logsHideGin        = _lp.hideGin         ?? false
+let logsHideGin        = _lp.hideGin         ?? true   // request lines swamp the buffer; opt in to see them
 let logsSearch         = ''
 
 async function loadLogs() {
@@ -1174,8 +1211,10 @@ function renderLogs(entries) {
 
     const contextDefs = [
         { value: 'ALL',      label: 'All' },
-        { value: 'TICKET',   label: 'Ticket Processing' },
-        { value: 'NOTIF',    label: 'Notification Processing' },
+        { value: 'TICKET',   label: 'Ticket processing' },
+        { value: 'NOTIF',    label: 'Notifications' },
+        { value: 'SYNC',     label: 'Sync' },
+        { value: 'AUTH',     label: 'Auth & users' },
     ]
     const contextOpts = contextDefs.map(c =>
         `<option value="${c.value}" ${c.value === logsContextFilter ? 'selected' : ''}>${c.label}</option>`
@@ -1185,11 +1224,13 @@ function renderLogs(entries) {
         ? entries
         : entries.filter(e => e.level.toUpperCase() === logsLevelFilter)
 
-    if (logsContextFilter === 'TICKET') {
-        filtered = filtered.filter(e => (e.message || '') === 'ticket processed')
-    } else if (logsContextFilter === 'NOTIF') {
-        filtered = filtered.filter(e => (e.message || '') === 'notification processed')
-    }
+    const contextMatch = {
+        TICKET: e => /^(ticketbot|workflow):/.test(e.message || '') || e.attrs?.ticket_id !== undefined,
+        NOTIF:  e => /^notifier:/.test(e.message || ''),
+        SYNC:   e => /sync/i.test(e.message || ''),
+        AUTH:   e => /^(totp|login|user|auth)/i.test(e.message || ''),
+    }[logsContextFilter]
+    if (contextMatch) filtered = filtered.filter(contextMatch)
 
     if (logsHideGin) {
         filtered = filtered.filter(e => !(e.message || '').startsWith('[GIN]'))

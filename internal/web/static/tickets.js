@@ -165,6 +165,27 @@ async function loadTicketDetail(id) {
     }
     tkDetail = data
     renderTicketDetail(data)
+    tkLoadWorkflowLink(data.ticket)
+}
+
+// tkLoadWorkflowLink adds an "Open workflow" button once we know whether the board has one.
+async function tkLoadWorkflowLink(t) {
+    const slot = document.getElementById('tk-workflow-link')
+    if (!slot || !t?.board_id) return
+    let html = ''
+    try {
+        const w = await api('GET', `/workflows/board/${t.board_id}`)
+        if (w?.id) html = `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})" title="Edit the ${esc(t.board_name)} workflow">Open workflow${w.dry_run ? ' ' + badgeTag('Dry run', 'warn') : ''}${w.enabled ? '' : ' ' + badgeTag('Disabled', 'off')}</button>`
+    } catch (e) {
+        if (e.status === 404) html = `<button class="btn btn-ghost btn-sm" onclick="tkCreateWorkflow(${t.board_id})" title="This board has no workflow yet">Create workflow</button>`
+    }
+    const el = document.getElementById('tk-workflow-link')
+    if (el) el.innerHTML = html
+}
+
+function tkCreateWorkflow(boardID) {
+    switchTab('workflows')
+    showNewWorkflowModal(boardID)
 }
 
 function tkToggleNoops(on) {
@@ -206,7 +227,7 @@ function renderTicketDetail(d) {
                 ${t.deleted ? badgeTag('Deleted', 'off') : ''}
             </h2>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="loadTicketDetail(${t.id})">Refresh</button>
+        <div class="tk-actions"><span id="tk-workflow-link"></span><button class="btn btn-ghost btn-sm" onclick="loadTicketDetail(${t.id})">Refresh</button></div>
     </div>
     <div class="ticket-meta">
         ${meta('Board', esc(t.board_name))}

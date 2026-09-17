@@ -1004,6 +1004,8 @@ tr.clickable { cursor: pointer; }
 .sim-message, .tl-code { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; margin: 2px 0 6px 28px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
 .tl-code { margin-left: 0; }
 .history-toggle { margin-left: auto; padding: 0; }
+.tk-actions { align-items: center; display: flex; gap: 8px; }
+.tk-actions .badge { margin-left: 4px; }
 
 /* condition builder */
 .cond-head { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 6px; }

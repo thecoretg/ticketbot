@@ -37,7 +37,10 @@ async function loadWorkflowList() {
     }
 }
 
+let wfList = []   // last-loaded /workflows, for delete confirmations
+
 function renderWorkflowList(list) {
+    wfList = list
     const banner = appConfig?.master_dry_run
         ? '<div class="info-banner">Master dry run is on: every workflow runs as a dry run (Config → Master Dry Run).</div>' : ''
 
@@ -45,11 +48,11 @@ function renderWorkflowList(list) {
     const rows  = list.map(w => `<tr class="clickable" onclick="openWorkflow(${w.id})">
         <td><strong>${esc(w.board_name || w.name)}</strong>${w.name && w.name !== w.board_name ? `<div class="muted">${esc(w.name)}</div>` : ''}</td>
         <td>${badge(w.enabled)}</td>
-        <td>${w.dry_run ? badgeTag('Dry run', 'warn') : badgeTag('Live', 'on')}</td>
+        <td>${w.dry_run ? badgeTag('Dry run', 'warn') : (appConfig?.master_dry_run ? badgeTag('Dry run (master)', 'warn') : badgeTag('Live', 'on'))}</td>
         <td>${(w.rules || []).length}</td>
         <td class="actions" onclick="event.stopPropagation()">
             <button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})">Open</button>
-            <button class="btn btn-danger" onclick="deleteWorkflow(${w.id}, '${esc(w.board_name || w.name)}')">Delete</button>
+            <button class="btn btn-danger" onclick="deleteWorkflow(${w.id})">Delete</button>
         </td>
     </tr>`)
 
@@ -65,7 +68,9 @@ function openWorkflow(id) {
     switchTab('workflows', String(id))
 }
 
-async function showNewWorkflowModal() {
+// showNewWorkflowModal lets the admin pick a board without a workflow; preselect chooses one up front
+// (used by the "Create workflow" button on a ticket).
+async function showNewWorkflowModal(preselect = null) {
     let boards, existing
     try {
         ;[boards, existing] = await Promise.all([api('GET', '/cw/boards'), api('GET', '/workflows')])
@@ -78,7 +83,7 @@ async function showNewWorkflowModal() {
     openModal('New Workflow', `
         <div class="form-group">
             <label>Board</label>
-            <select id="wf-new-board">${free.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select>
+            <select id="wf-new-board">${free.map(b => `<option value="${b.id}"${b.id === preselect ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
         </div>
         <p class="config-desc">A workflow starts with no rules. Add rules in the editor and save.</p>`,
     async () => {
@@ -91,7 +96,9 @@ async function showNewWorkflowModal() {
     })
 }
 
-async function deleteWorkflow(id, name) {
+async function deleteWorkflow(id) {
+    const w = wfList.find(x => x.id === id)
+    const name = w ? (w.board_name || w.name) : `workflow ${id}`
     if (!confirm(`Delete the workflow for ${name}? Tickets on this board will no longer be processed.`)) return
     try {
         await api('DELETE', `/workflows/${id}`)
