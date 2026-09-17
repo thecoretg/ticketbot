@@ -5,6 +5,10 @@ run:
 
 linters:
   default: standard   # errcheck, govet, ineffassign, staticcheck, unused
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*github.com/gin-gonic/gin.Context).Error   # returns the attached *gin.Error; discarding it is the intended use
   exclusions:
     paths:
       - internal/db   # sqlc-generated
