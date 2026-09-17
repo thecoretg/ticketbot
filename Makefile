@@ -7,6 +7,9 @@ COMPOSE   = docker compose -f ./docker/docker-compose.yml
 gensql:
 	sqlc generate
 
+lint:
+	golangci-lint run ./...
+
 # ── Local development: Postgres in Docker, Go on the host ────────────────────
 db-up:
 	$(COMPOSE) up -d db

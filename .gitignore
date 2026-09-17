@@ -10,3 +10,6 @@ bin/
 
 # Added by goreleaser init:
 dist/
+
+# Claude Code personal settings
+.claude/settings.local.json
