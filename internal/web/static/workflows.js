@@ -103,12 +103,15 @@ async function deleteWorkflow(id, name) {
 // ── Editor ───────────────────────────────────────────────
 async function loadWorkflowEditor(id) {
     try {
-        const [w, recips, members, placeholders] = await Promise.all([
+        const [w, recips, members, placeholders, fields, boards] = await Promise.all([
             api('GET', `/workflows/${id}`), api('GET', '/webex/rooms'), api('GET', '/cw/members'), api('GET', '/workflows/placeholders'),
+            api('GET', '/workflows/fields'), api('GET', '/cw/boards'),
         ])
         wfRecipients   = recips || []
         wfMembers      = (members || []).filter(m => !m.deleted)
         wfPlaceholders = placeholders || []
+        wfFields       = fields || []
+        wfBoards       = boards || []
         // statuses are board-scoped; priorities come live from ConnectWise and may be slow or fail
         const [statuses, priorities] = await Promise.all([
             api('GET', `/cw/boards/${w.board_id}/statuses`).catch(() => []),
@@ -117,7 +120,9 @@ async function loadWorkflowEditor(id) {
         wfStatuses   = (statuses || []).filter(s => !s.deleted && !s.inactive)
         wfPriorities = priorities || []
         wf = wfNormalize(w)
-        wfOriginal = JSON.stringify(wf)
+        await Promise.all(wf.rules.map(wfLoadRuleUI))
+        await wfResolveNames(wf.rules)
+        wfOriginal = JSON.stringify(wfStrip(wf))
         tabGuard = wfGuard
         renderWorkflowEditor()
     } catch (e) {
@@ -137,8 +142,15 @@ function wfNormalize(w) {
     return w
 }
 
+// wfStrip returns a copy without editor-only state (the condition builder's rows).
+function wfStrip(w) {
+    const copy = JSON.parse(JSON.stringify(w))
+    for (const r of copy.rules) delete r._ui
+    return copy
+}
+
 function wfIsDirty() {
-    return wf !== null && JSON.stringify(wf) !== wfOriginal
+    return wf !== null && JSON.stringify(wfStrip(wf)) !== wfOriginal
 }
 
 function wfGuard() {
@@ -226,18 +238,7 @@ function wfRuleCardHTML(r, i) {
                 <label class="check-inline"><input type="checkbox" ${r.stop_processing ? 'checked' : ''} onchange="wfSetRule(${i}, 'stop_processing', this.checked)"> Stop processing further rules</label>
             </div>
         </div>
-        <div class="form-group">
-            <label>Condition <span class="muted">— ConnectWise syntax, e.g. <code>status/name = 'New' and summary contains 'vpn'</code>. Empty always matches.</span></label>
-            <textarea class="cond-textarea" id="cond-${i}" rows="2" spellcheck="false" oninput="wfSetRule(${i}, 'condition', this.value)">${esc(r.condition)}</textarea>
-            <div class="cond-tools">
-                <button class="btn btn-ghost btn-sm" onclick="wfValidate(${i})">Validate</button>
-                <span id="cond-result-${i}" class="cond-result"></span>
-                <span class="cond-spacer"></span>
-                <input type="number" id="test-ticket-${i}" class="config-input cond-ticket" placeholder="Ticket #" min="1">
-                <button class="btn btn-ghost btn-sm" onclick="wfTest(${i})">Test</button>
-                <span id="test-result-${i}" class="cond-result"></span>
-            </div>
-        </div>
+        ${wfConditionHTML(r, i)}
         <div class="form-group">
             <label>Actions</label>
             <div class="action-list" id="actions-${i}">${r.actions.map((a, j) => wfActionRowHTML(a, i, j)).join('') || '<div class="muted action-empty">No actions — this rule only affects the chain if "stop processing" is set.</div>'}</div>
@@ -421,7 +422,7 @@ function wfMarkDirty() {
 
 // ── Structural changes (re-render) ───────────────────────
 function wfNewRule() {
-    return { id: '', name: `Rule ${wf.rules.length + 1}`, enabled: true, trigger: 'both', condition: '', stop_processing: false, actions: [] }
+    return { id: '', name: `Rule ${wf.rules.length + 1}`, enabled: true, trigger: 'both', condition: '', stop_processing: false, actions: [], _ui: wfDefaultUI() }
 }
 
 function wfNewAction(kind) {
@@ -598,6 +599,10 @@ function wfSimResultHTML(id, res) {
 function wfClientValidate() {
     for (const [i, r] of wf.rules.entries()) {
         if (!r.name.trim()) return { i, msg: 'Rule name is required' }
+        if (r._ui?.mode === 'builder') {
+            const c = wfCompile(r._ui)
+            if (c.errors.length) return { i, msg: c.errors[0] }
+        }
         for (const [j, a] of r.actions.entries()) {
             const n = j + 1
             switch (a.kind) {
@@ -649,6 +654,7 @@ function wfPatchOpsError(ops) {
 // wfPrepareForServer normalizes editor-only shapes into what the API expects. It mutates and
 // returns w; pass a copy when the editor state must be preserved.
 function wfPrepareForServer(w) {
+    for (const r of w.rules) delete r._ui
     for (const r of w.rules) for (const a of r.actions) {
         if (a.kind === 'notify') {
             if (a.notify.recipient_id === null) delete a.notify.recipient_id   // server rejects null for resources_owner
@@ -673,8 +679,10 @@ async function saveWorkflow() {
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…' }
     try {
         const saved = await api('PUT', `/workflows/${wf.id}`, wfPrepareForServer(JSON.parse(JSON.stringify(wf))))
+        const uis = wf.rules.map(r => r._ui)
         wf = wfNormalize(saved)
-        wfOriginal = JSON.stringify(wf)
+        wf.rules.forEach((r, i) => { r._ui = uis[i] || wfDefaultUI() })
+        wfOriginal = JSON.stringify(wfStrip(wf))
         renderWorkflowEditor()
         toast('Workflow saved', 'success')
     } catch (e) {

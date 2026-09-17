@@ -1004,6 +1004,32 @@ tr.clickable { cursor: pointer; }
 .sim-message, .tl-code { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; margin: 2px 0 6px 28px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
 .tl-code { margin-left: 0; }
 .history-toggle { margin-left: auto; padding: 0; }
+
+/* condition builder */
+.cond-head { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 6px; }
+.cond-head label { margin: 0; }
+.cond-tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.cond-tab { background: transparent; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; padding: 4px 10px; }
+.cond-tab.active { background: var(--hover-bg); color: var(--text); }
+.cond-note { color: var(--warning); font-size: 12px; margin-bottom: 6px; }
+.cond-builder { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.cond-join { align-items: center; display: flex; font-size: 13px; gap: 6px; }
+.cond-join select { width: auto; }
+.cond-row { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+.cond-row select { width: auto; }
+.cond-row .cond-field { min-width: 180px; }
+.cond-row .cond-op { min-width: 130px; }
+.cond-value { align-items: center; display: flex; flex: 1; gap: 6px; min-width: 200px; }
+.cond-value > input, .cond-value > select { width: 100%; }
+.cond-preview { border-top: 1px solid var(--border); font-size: 12px; padding-top: 8px; }
+.cond-preview code { white-space: pre-wrap; word-break: break-word; }
+.chips { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.chip { align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; display: inline-flex; font-size: 12px; gap: 4px; padding: 2px 4px 2px 10px; }
+.chip-x { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 11px; line-height: 1; padding: 2px 6px; }
+.chip-x:hover { color: var(--danger); }
+.chips select { width: auto; }
+.typeahead { display: inline-flex; flex: 1; min-width: 160px; }
+.typeahead input { width: 100%; }
 .action-note textarea { min-height: 44px; resize: vertical; width: 100%; }
 .action-flags { display: flex; gap: 16px; }
 .action-flags .check-inline { padding: 0; font-size: 12px; }
