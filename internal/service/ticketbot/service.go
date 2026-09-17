@@ -26,8 +26,16 @@ type Service struct {
 	Engine    *workflow.Engine
 	Notifier  *notifier.Service
 
-	ticketLocks sync.Map
-	now         func() time.Time
+	locksMu sync.Mutex
+	locks   map[int]*ticketLock
+	now     func() time.Time
+}
+
+// ticketLock serializes intake for one ticket. refs counts waiters so the entry can be dropped
+// once nobody holds or wants it, keeping the map from growing with every ticket ever seen.
+type ticketLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 // ProcessOpts describes where an intake request came from and how far it should go.
@@ -81,9 +89,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (
 
 	// Prevent a ticket from processing multiple times to prevent duplicate notifications.
 	// Connectwise frequently sends multiple hooks for the same ticket simultaneously.
-	lock := s.getTicketLock(id)
-	lock.Lock()
-	defer lock.Unlock()
+	defer s.lockTicket(id)()
 
 	run := newRun(id, opts.Source, s.now)
 	run.dryRun = s.Cfg.MasterDryRun
@@ -252,9 +258,7 @@ func (s *Service) handleDeleted(ctx context.Context, run *run, stored *models.Ti
 
 // SoftDeleteTicket marks a ticket deleted and records the event.
 func (s *Service) SoftDeleteTicket(ctx context.Context, id int, source models.EventSource) error {
-	lock := s.getTicketLock(id)
-	lock.Lock()
-	defer lock.Unlock()
+	defer s.lockTicket(id)()
 
 	stored, err := s.CW.Tickets.Get(ctx, id)
 	if err != nil {
@@ -270,7 +274,28 @@ func (s *Service) SoftDeleteTicket(ctx context.Context, id int, source models.Ev
 	return s.handleDeleted(ctx, run, stored)
 }
 
-func (s *Service) getTicketLock(id int) *sync.Mutex {
-	li, _ := s.ticketLocks.LoadOrStore(id, &sync.Mutex{})
-	return li.(*sync.Mutex)
+// lockTicket acquires the per-ticket lock and returns the release function.
+func (s *Service) lockTicket(id int) func() {
+	s.locksMu.Lock()
+	if s.locks == nil {
+		s.locks = make(map[int]*ticketLock)
+	}
+	l := s.locks[id]
+	if l == nil {
+		l = &ticketLock{}
+		s.locks[id] = l
+	}
+	l.refs++
+	s.locksMu.Unlock()
+
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		s.locksMu.Lock()
+		l.refs--
+		if l.refs == 0 {
+			delete(s.locks, id)
+		}
+		s.locksMu.Unlock()
+	}
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
@@ -41,9 +42,29 @@ func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
 	resultJSON(c, "ticket payload received")
 }
 
+// webhookRetryDelays paces retries after a failed intake. ConnectWise delivers a webhook once, so
+// a transient ConnectWise or database error would otherwise lose the change until the next sync.
+// Intake is idempotent: a retry diffs against whatever the previous attempt managed to store.
+var webhookRetryDelays = []time.Duration{2 * time.Second, 10 * time.Second, 30 * time.Second}
+
 func (h *TicketbotHandler) processTicket(ctx context.Context, id int, opts ticketbot.ProcessOpts) {
-	if err := h.Service.ProcessTicket(ctx, id, opts); err != nil {
-		slog.Error("processing ticket webhook", "ticket_id", id, "error", err.Error())
+	for attempt := 0; ; attempt++ {
+		err := h.Service.ProcessTicket(ctx, id, opts)
+		if err == nil {
+			return
+		}
+		if attempt >= len(webhookRetryDelays) {
+			slog.Error("processing ticket webhook: giving up", "ticket_id", id, "attempts", attempt+1, "error", err.Error())
+			return
+		}
+
+		delay := webhookRetryDelays[attempt]
+		slog.Warn("processing ticket webhook failed; retrying", "ticket_id", id, "attempt", attempt+1, "retry_in", delay.String(), "error", err.Error())
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
