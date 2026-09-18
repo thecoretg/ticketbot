@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -19,9 +18,9 @@ func NewNotifierHandler(svc *notifier.Service) *NotifierHandler {
 	}
 }
 
-func (h *NotifierHandler) ListForwards(c *gin.Context) {
-	ctx := c.Request.Context()
-	filter := c.Query("filter")
+func (h *NotifierHandler) ListForwards(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	filter := r.URL.Query().Get("filter")
 
 	var n []*models.NotifierForwardFull
 	var err error
@@ -38,90 +37,90 @@ func (h *NotifierHandler) ListForwards(c *gin.Context) {
 	}
 
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, n)
+	outputJSON(w, n)
 }
 
-func (h *NotifierHandler) GetForward(c *gin.Context) {
-	id, err := convertID(c)
+func (h *NotifierHandler) GetForward(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	f, err := h.Svc.GetForward(c.Request.Context(), id)
+	f, err := h.Svc.GetForward(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrUserForwardNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, f)
+	outputJSON(w, f)
 }
 
-func (h *NotifierHandler) AddUserForward(c *gin.Context) {
+func (h *NotifierHandler) AddUserForward(w http.ResponseWriter, r *http.Request) {
 	p := &models.NotifierForward{}
-	if err := c.ShouldBindJSON(p); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, p); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 
-	f, err := h.Svc.AddForward(c.Request.Context(), p)
+	f, err := h.Svc.AddForward(r.Context(), p)
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, f)
+	outputJSON(w, f)
 }
 
-func (h *NotifierHandler) UpdateUserForward(c *gin.Context) {
-	id, err := convertID(c)
+func (h *NotifierHandler) UpdateUserForward(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
 	p := &models.NotifierForward{}
-	if err := c.ShouldBindJSON(p); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, p); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 
-	f, err := h.Svc.UpdateForward(c.Request.Context(), id, p)
+	f, err := h.Svc.UpdateForward(r.Context(), id, p)
 	if err != nil {
 		if errors.Is(err, models.ErrUserForwardNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, f)
+	outputJSON(w, f)
 }
 
-func (h *NotifierHandler) DeleteUserForward(c *gin.Context) {
-	id, err := convertID(c)
+func (h *NotifierHandler) DeleteUserForward(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	if err := h.Svc.DeleteForward(c.Request.Context(), id); err != nil {
+	if err := h.Svc.DeleteForward(r.Context(), id); err != nil {
 		if errors.Is(err, models.ErrUserForwardNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	c.Status(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }

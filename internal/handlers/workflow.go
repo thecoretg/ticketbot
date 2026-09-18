@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/cwquery"
 	"github.com/thecoretg/ticketbot/internal/msgtemplate"
@@ -29,13 +28,13 @@ func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service, ns *notifier.S
 }
 
 // Fields handles GET /workflows/fields.
-func (h *WorkflowHandler) Fields(c *gin.Context) {
-	outputJSON(c, workflow.ConditionFields)
+func (h *WorkflowHandler) Fields(w http.ResponseWriter, r *http.Request) {
+	outputJSON(w, workflow.ConditionFields)
 }
 
 // Placeholders handles GET /workflows/placeholders: the tokens a notify message may use.
-func (h *WorkflowHandler) Placeholders(c *gin.Context) {
-	outputJSON(c, msgtemplate.Placeholders)
+func (h *WorkflowHandler) Placeholders(w http.ResponseWriter, r *http.Request) {
+	outputJSON(w, msgtemplate.Placeholders)
 }
 
 type simulateRequest struct {
@@ -55,36 +54,36 @@ type simulateResponse struct {
 // Simulate handles POST /workflows/:id/simulate. It runs the workflow (or a posted draft) against a
 // ticket snapshot as a dry run, resolves notification recipients, and returns what would happen.
 // Nothing is written to ConnectWise, Webex, or the ticket history.
-func (h *WorkflowHandler) Simulate(c *gin.Context) {
-	id, err := convertID(c)
+func (h *WorkflowHandler) Simulate(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	dec := json.NewDecoder(c.Request.Body)
+	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	var req simulateRequest
 	if err := dec.Decode(&req); err != nil {
-		badPayloadError(c, err)
+		badPayloadError(w, err)
 		return
 	}
 	if req.TicketID == 0 {
-		badPayloadError(c, errors.New("ticket_id is required"))
+		badPayloadError(w, errors.New("ticket_id is required"))
 		return
 	}
 
-	ctx := c.Request.Context()
+	ctx := r.Context()
 	wf, err := h.Service.Get(ctx, id)
 	if err != nil {
-		h.workflowError(c, err)
+		h.workflowError(w, err)
 		return
 	}
 	if req.Workflow != nil {
 		draft := req.Workflow
 		draft.ID, draft.BoardID, draft.BoardName = wf.ID, wf.BoardID, wf.BoardName
 		if errs := h.Service.Validate(ctx, draft); len(errs) > 0 {
-			h.workflowError(c, errs)
+			h.workflowError(w, errs)
 			return
 		}
 		wf = draft
@@ -93,14 +92,14 @@ func (h *WorkflowHandler) Simulate(c *gin.Context) {
 	t, note, live, err := h.CW.TicketSnapshot(ctx, req.TicketID)
 	if err != nil {
 		if errors.Is(err, models.ErrTicketNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 	if t.Board.ID != wf.BoardID {
-		badPayloadError(c, fmt.Errorf("ticket %d is on board %d, not this workflow's board %d", req.TicketID, t.Board.ID, wf.BoardID))
+		badPayloadError(w, fmt.Errorf("ticket %d is on board %d, not this workflow's board %d", req.TicketID, t.Board.ID, wf.BoardID))
 		return
 	}
 
@@ -114,7 +113,7 @@ func (h *WorkflowHandler) Simulate(c *gin.Context) {
 		DryRun:      true,
 	})
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
@@ -135,7 +134,7 @@ func (h *WorkflowHandler) Simulate(c *gin.Context) {
 	if len(res.Notifies) > 0 {
 		detail, err := h.CW.GetTicketDetail(ctx, req.TicketID)
 		if err != nil {
-			internalServerError(c, err)
+			internalServerError(w, err)
 			return
 		}
 		ft := &models.FullTicket{
@@ -150,7 +149,7 @@ func (h *WorkflowHandler) Simulate(c *gin.Context) {
 		}
 		recips, err := h.Notifier.PreviewRecipients(ctx, ft, req.AsNew, res.Notifies)
 		if err != nil {
-			internalServerError(c, err)
+			internalServerError(w, err)
 			return
 		}
 		if recips != nil {
@@ -158,7 +157,7 @@ func (h *WorkflowHandler) Simulate(c *gin.Context) {
 		}
 	}
 
-	outputJSON(c, out)
+	outputJSON(w, out)
 }
 
 func workflowRunPayload(wf *models.Workflow, res *workflow.Result) models.WorkflowPayload {
@@ -190,49 +189,49 @@ func (noopCW) PostServiceTicketNote(context.Context, *psa.ServiceTicketNote, int
 	return nil, errors.New("simulation: connectwise writes are disabled")
 }
 
-func (h *WorkflowHandler) List(c *gin.Context) {
-	ws, err := h.Service.List(c.Request.Context())
+func (h *WorkflowHandler) List(w http.ResponseWriter, r *http.Request) {
+	ws, err := h.Service.List(r.Context())
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 	if ws == nil {
 		ws = []*models.Workflow{}
 	}
 
-	outputJSON(c, ws)
+	outputJSON(w, ws)
 }
 
-func (h *WorkflowHandler) Get(c *gin.Context) {
-	id, err := convertID(c)
+func (h *WorkflowHandler) Get(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	w, err := h.Service.Get(c.Request.Context(), id)
+	wf, err := h.Service.Get(r.Context(), id)
 	if err != nil {
-		h.workflowError(c, err)
+		h.workflowError(w, err)
 		return
 	}
 
-	outputJSON(c, w)
+	outputJSON(w, wf)
 }
 
-func (h *WorkflowHandler) GetByBoard(c *gin.Context) {
-	id, err := convertID(c)
+func (h *WorkflowHandler) GetByBoard(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	w, err := h.Service.GetByBoard(c.Request.Context(), id)
+	wf, err := h.Service.GetByBoard(r.Context(), id)
 	if err != nil {
-		h.workflowError(c, err)
+		h.workflowError(w, err)
 		return
 	}
 
-	outputJSON(c, w)
+	outputJSON(w, wf)
 }
 
 // createWorkflowRequest mirrors models.Workflow but lets an omitted "enabled" default to true.
@@ -244,21 +243,21 @@ type createWorkflowRequest struct {
 	Rules   []models.Rule `json:"rules"`
 }
 
-func (h *WorkflowHandler) Create(c *gin.Context) {
-	dec := json.NewDecoder(c.Request.Body)
+func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
+	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
 	var req createWorkflowRequest
 	if err := dec.Decode(&req); err != nil {
-		badPayloadError(c, err)
+		badPayloadError(w, err)
 		return
 	}
 	if req.BoardID == 0 {
-		badPayloadError(c, errors.New("board_id is required"))
+		badPayloadError(w, errors.New("board_id is required"))
 		return
 	}
 
-	w := &models.Workflow{
+	wf := &models.Workflow{
 		BoardID: req.BoardID,
 		Name:    req.Name,
 		Enabled: req.Enabled == nil || *req.Enabled,
@@ -266,49 +265,49 @@ func (h *WorkflowHandler) Create(c *gin.Context) {
 		Rules:   req.Rules,
 	}
 
-	created, err := h.Service.Create(c.Request.Context(), w)
+	created, err := h.Service.Create(r.Context(), wf)
 	if err != nil {
-		h.workflowError(c, err)
+		h.workflowError(w, err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, created)
+	writeJSON(w, http.StatusCreated, created)
 }
 
-func (h *WorkflowHandler) Replace(c *gin.Context) {
-	id, err := convertID(c)
+func (h *WorkflowHandler) Replace(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	w, ok := bindWorkflow(c)
+	wf, ok := bindWorkflow(w, r)
 	if !ok {
 		return
 	}
 
-	updated, err := h.Service.Replace(c.Request.Context(), id, w)
+	updated, err := h.Service.Replace(r.Context(), id, wf)
 	if err != nil {
-		h.workflowError(c, err)
+		h.workflowError(w, err)
 		return
 	}
 
-	outputJSON(c, updated)
+	outputJSON(w, updated)
 }
 
-func (h *WorkflowHandler) Delete(c *gin.Context) {
-	id, err := convertID(c)
+func (h *WorkflowHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	if err := h.Service.Delete(c.Request.Context(), id); err != nil {
-		h.workflowError(c, err)
+	if err := h.Service.Delete(r.Context(), id); err != nil {
+		h.workflowError(w, err)
 		return
 	}
 
-	resultJSON(c, "workflow deleted")
+	resultJSON(w, "workflow deleted")
 }
 
 type conditionRequest struct {
@@ -323,10 +322,10 @@ type validateConditionResponse struct {
 }
 
 // ValidateCondition handles POST /workflows/validate-condition.
-func (h *WorkflowHandler) ValidateCondition(c *gin.Context) {
+func (h *WorkflowHandler) ValidateCondition(w http.ResponseWriter, r *http.Request) {
 	var req conditionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, &req); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 
@@ -335,25 +334,25 @@ func (h *WorkflowHandler) ValidateCondition(c *gin.Context) {
 		var se *cwquery.SyntaxError
 		if errors.As(err, &se) {
 			pos := se.Pos
-			outputJSON(c, validateConditionResponse{Valid: false, Error: se.Msg, Pos: &pos})
+			outputJSON(w, validateConditionResponse{Valid: false, Error: se.Msg, Pos: &pos})
 			return
 		}
-		outputJSON(c, validateConditionResponse{Valid: false, Error: err.Error()})
+		outputJSON(w, validateConditionResponse{Valid: false, Error: err.Error()})
 		return
 	}
 
-	problems, err := h.Service.ValidateListRefs(c.Request.Context(), expr)
+	problems, err := h.Service.ValidateListRefs(r.Context(), expr)
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 	if len(problems) > 0 {
 		pos := problems[0].Pos
-		outputJSON(c, validateConditionResponse{Valid: false, Error: problems[0].Msg, Pos: &pos})
+		outputJSON(w, validateConditionResponse{Valid: false, Error: problems[0].Msg, Pos: &pos})
 		return
 	}
 
-	outputJSON(c, validateConditionResponse{Valid: true})
+	outputJSON(w, validateConditionResponse{Valid: true})
 }
 
 type parseConditionResponse struct {
@@ -365,10 +364,10 @@ type parseConditionResponse struct {
 
 // ParseCondition handles POST /workflows/parse-condition: returns the condition's syntax tree so
 // the dashboard can rebuild visual builder rows from hand-written text.
-func (h *WorkflowHandler) ParseCondition(c *gin.Context) {
+func (h *WorkflowHandler) ParseCondition(w http.ResponseWriter, r *http.Request) {
 	var req conditionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, &req); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 
@@ -377,14 +376,14 @@ func (h *WorkflowHandler) ParseCondition(c *gin.Context) {
 		var se *cwquery.SyntaxError
 		if errors.As(err, &se) {
 			pos := se.Pos
-			outputJSON(c, parseConditionResponse{Valid: false, Error: se.Msg, Pos: &pos})
+			outputJSON(w, parseConditionResponse{Valid: false, Error: se.Msg, Pos: &pos})
 			return
 		}
-		outputJSON(c, parseConditionResponse{Valid: false, Error: err.Error()})
+		outputJSON(w, parseConditionResponse{Valid: false, Error: err.Error()})
 		return
 	}
 
-	outputJSON(c, parseConditionResponse{Valid: true, Expr: cwquery.ToNode(expr)})
+	outputJSON(w, parseConditionResponse{Valid: true, Expr: cwquery.ToNode(expr)})
 }
 
 type evaluateConditionResponse struct {
@@ -395,14 +394,14 @@ type evaluateConditionResponse struct {
 
 // EvaluateCondition handles POST /workflows/evaluate-condition: runs a condition against a stored
 // ticket so the dashboard can test rules before saving them.
-func (h *WorkflowHandler) EvaluateCondition(c *gin.Context) {
+func (h *WorkflowHandler) EvaluateCondition(w http.ResponseWriter, r *http.Request) {
 	var req conditionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, &req); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 	if req.TicketID == 0 {
-		badPayloadError(c, errors.New("ticket_id is required"))
+		badPayloadError(w, errors.New("ticket_id is required"))
 		return
 	}
 
@@ -410,32 +409,32 @@ func (h *WorkflowHandler) EvaluateCondition(c *gin.Context) {
 	if err != nil {
 		var se *cwquery.SyntaxError
 		if errors.As(err, &se) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": se.Error(), "pos": se.Pos})
+			writeJSON(w, http.StatusBadRequest, M{"error": se.Error(), "pos": se.Pos})
 			return
 		}
-		badPayloadError(c, err)
+		badPayloadError(w, err)
 		return
 	}
 
-	t, note, live, err := h.CW.TicketSnapshot(c.Request.Context(), req.TicketID)
+	t, note, live, err := h.CW.TicketSnapshot(r.Context(), req.TicketID)
 	if err != nil {
 		if errors.Is(err, models.ErrTicketNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	env, err := workflow.LoadEnv(c.Request.Context(), h.Lists, q.Expr)
+	env, err := workflow.LoadEnv(r.Context(), h.Lists, q.Expr)
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 	doc := cwquery.NewDocument(t, note, cwquery.Changes{NewNote: note != nil})
 	matches, err := q.EvalEnv(doc, env)
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
@@ -443,33 +442,33 @@ func (h *WorkflowHandler) EvaluateCondition(c *gin.Context) {
 	if live {
 		source = "live"
 	}
-	outputJSON(c, evaluateConditionResponse{Matches: matches, Source: source, Document: doc})
+	outputJSON(w, evaluateConditionResponse{Matches: matches, Source: source, Document: doc})
 }
 
 // bindWorkflow decodes a workflow body, rejecting unknown fields so the editor cannot store junk.
-func bindWorkflow(c *gin.Context) (*models.Workflow, bool) {
-	dec := json.NewDecoder(c.Request.Body)
+func bindWorkflow(w http.ResponseWriter, r *http.Request) (*models.Workflow, bool) {
+	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
-	w := &models.Workflow{}
-	if err := dec.Decode(w); err != nil {
-		badPayloadError(c, err)
+	wf := &models.Workflow{}
+	if err := dec.Decode(wf); err != nil {
+		badPayloadError(w, err)
 		return nil, false
 	}
 
-	return w, true
+	return wf, true
 }
 
-func (h *WorkflowHandler) workflowError(c *gin.Context, err error) {
+func (h *WorkflowHandler) workflowError(w http.ResponseWriter, err error) {
 	var verrs models.ValidationErrors
 	switch {
 	case errors.Is(err, models.ErrWorkflowNotFound), errors.Is(err, models.ErrBoardNotFound):
-		notFoundError(c, err)
+		notFoundError(w, err)
 	case errors.Is(err, models.ErrWorkflowExistsForBoard):
-		conflictError(c, err)
+		conflictError(w, err)
 	case errors.As(err, &verrs):
-		c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed", "details": verrs})
+		writeJSON(w, http.StatusBadRequest, M{"error": "validation failed", "details": verrs})
 	default:
-		internalServerError(c, fmt.Errorf("workflow: %w", err))
+		internalServerError(w, fmt.Errorf("workflow: %w", err))
 	}
 }

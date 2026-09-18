@@ -4,8 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 type AdminHandler struct {
@@ -16,9 +14,9 @@ func NewAdminHandler(shutdown func()) *AdminHandler {
 	return &AdminHandler{shutdown: shutdown}
 }
 
-func (h *AdminHandler) HandleRestart(c *gin.Context) {
+func (h *AdminHandler) HandleRestart(w http.ResponseWriter, r *http.Request) {
 	slog.Info("restart requested via web panel")
-	c.Status(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 
 	// trigger shutdown after the response is sent
 	go func() {

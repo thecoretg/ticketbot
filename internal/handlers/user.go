@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"errors"
+	"github.com/thecoretg/ticketbot/internal/middleware"
 	"log/slog"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/models"
@@ -19,53 +19,53 @@ func NewUserHandler(svc *user.Service) *UserHandler {
 	return &UserHandler{Service: svc}
 }
 
-func (h *UserHandler) GetCurrentUser(c *gin.Context) {
-	authenticatedUserID := c.GetInt("user_id")
+func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	authenticatedUserID := middleware.UserID(r.Context())
 
 	slog.Info("get current user called", "authenticated_user_id", authenticatedUserID)
 
-	u, err := h.Service.GetUser(c.Request.Context(), authenticatedUserID)
+	u, err := h.Service.GetUser(r.Context(), authenticatedUserID)
 	if err != nil {
 		if errors.Is(err, models.ErrAPIUserNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
 	slog.Info("returning current user", "user_id", u.ID, "email", u.EmailAddress)
-	outputJSON(c, u)
+	outputJSON(w, u)
 }
 
-func (h *UserHandler) ListUsers(c *gin.Context) {
-	u, err := h.Service.ListUsers(c.Request.Context())
+func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	u, err := h.Service.ListUsers(r.Context())
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, u)
+	outputJSON(w, u)
 }
 
-func (h *UserHandler) GetUser(c *gin.Context) {
-	id, err := convertID(c)
+func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	u, err := h.Service.GetUser(c.Request.Context(), id)
+	u, err := h.Service.GetUser(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrAPIUserNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, u)
+	outputJSON(w, u)
 }
 
 type createUserRequest struct {
@@ -73,10 +73,10 @@ type createUserRequest struct {
 	Password     string `json:"password"` // optional; if set, user must reset on first login
 }
 
-func (h *UserHandler) CreateUser(c *gin.Context) {
+func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var p createUserRequest
-	if err := c.ShouldBindJSON(&p); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, &p); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 
@@ -87,49 +87,49 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 	if p.Password != "" {
 		if err := authsvc.ValidatePassword(p.Password); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeJSON(w, http.StatusBadRequest, M{"error": err.Error()})
 			return
 		}
-		u, err = h.Service.InsertUserWithPassword(c.Request.Context(), p.EmailAddress, p.Password)
+		u, err = h.Service.InsertUserWithPassword(r.Context(), p.EmailAddress, p.Password)
 	} else {
-		u, err = h.Service.InsertUser(c.Request.Context(), p.EmailAddress)
+		u, err = h.Service.InsertUser(r.Context(), p.EmailAddress)
 	}
 
 	if err != nil {
 		if errors.Is(err, user.ErrUserAlreadyExists{Email: p.EmailAddress}) {
-			conflictError(c, err)
+			conflictError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, u)
+	outputJSON(w, u)
 }
 
-func (h *UserHandler) DeleteUser(c *gin.Context) {
-	id, err := convertID(c)
+func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	authenticatedUserID := c.GetInt("user_id")
+	authenticatedUserID := middleware.UserID(r.Context())
 
 	slog.Info("user deletion requested",
 		"authenticated_user_id", authenticatedUserID,
 		"target_user_id", id)
 
-	if err := h.Service.DeleteUser(c.Request.Context(), id, authenticatedUserID); err != nil {
+	if err := h.Service.DeleteUser(r.Context(), id, authenticatedUserID); err != nil {
 		if errors.Is(err, models.ErrAPIUserNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
 		if errors.Is(err, user.ErrCannotDeleteSelf{}) {
-			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			writeJSON(w, http.StatusForbidden, M{"error": err.Error()})
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
@@ -137,49 +137,49 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		"authenticated_user_id", authenticatedUserID,
 		"deleted_user_id", id)
 
-	c.Status(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
-func (h *UserHandler) ListAPIKeys(c *gin.Context) {
-	k, err := h.Service.ListAPIKeys(c.Request.Context())
+func (h *UserHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	k, err := h.Service.ListAPIKeys(r.Context())
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, k)
+	outputJSON(w, k)
 }
 
-func (h *UserHandler) GetAPIKey(c *gin.Context) {
-	id, err := convertID(c)
+func (h *UserHandler) GetAPIKey(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	k, err := h.Service.GetAPIKey(c.Request.Context(), id)
+	k, err := h.Service.GetAPIKey(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrAPIKeyNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, k)
+	outputJSON(w, k)
 }
 
-func (h *UserHandler) AddAPIKey(c *gin.Context) {
+func (h *UserHandler) AddAPIKey(w http.ResponseWriter, r *http.Request) {
 	p := &models.CreateAPIKeyPayload{}
-	if err := c.ShouldBindJSON(p); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, p); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 
-	k, err := h.Service.AddAPIKey(c.Request.Context(), p.Email)
+	k, err := h.Service.AddAPIKey(r.Context(), p.Email)
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
@@ -188,24 +188,24 @@ func (h *UserHandler) AddAPIKey(c *gin.Context) {
 		Key:   k,
 	}
 
-	outputJSON(c, o)
+	outputJSON(w, o)
 }
 
-func (h *UserHandler) DeleteAPIKey(c *gin.Context) {
-	id, err := convertID(c)
+func (h *UserHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	if err := h.Service.DeleteAPIKey(c.Request.Context(), id); err != nil {
+	if err := h.Service.DeleteAPIKey(r.Context(), id); err != nil {
 		if errors.Is(err, models.ErrAPIKeyNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	c.Status(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }

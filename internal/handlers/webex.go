@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"errors"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -18,32 +18,32 @@ func NewWebexHandler(wx *webexsvc.Service) *WebexHandler {
 	}
 }
 
-func (h *WebexHandler) ListRecipients(c *gin.Context) {
-	r, err := h.WebexSvc.ListRecipients(c.Request.Context())
+func (h *WebexHandler) ListRecipients(w http.ResponseWriter, r *http.Request) {
+	recips, err := h.WebexSvc.ListRecipients(r.Context())
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, r)
+	outputJSON(w, recips)
 }
 
-func (h *WebexHandler) GetRoom(c *gin.Context) {
-	id, err := convertID(c)
+func (h *WebexHandler) GetRoom(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
 	if err != nil {
-		badIntError(c)
+		badIntError(w, r)
 		return
 	}
 
-	r, err := h.WebexSvc.GetRecipient(c.Request.Context(), id)
+	recip, err := h.WebexSvc.GetRecipient(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, models.ErrWebexRecipientNotFound) {
-			notFoundError(c, err)
+			notFoundError(w, err)
 			return
 		}
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, r)
+	outputJSON(w, recip)
 }

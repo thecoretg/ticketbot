@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/logging"
+	"net/http"
 )
 
 type LogsHandler struct {
@@ -13,6 +13,6 @@ func NewLogsHandler(buf *logging.BufferHandler) *LogsHandler {
 	return &LogsHandler{buf: buf}
 }
 
-func (h *LogsHandler) HandleList(c *gin.Context) {
-	outputJSON(c, h.buf.Entries())
+func (h *LogsHandler) HandleList(w http.ResponseWriter, r *http.Request) {
+	outputJSON(w, h.buf.Entries())
 }

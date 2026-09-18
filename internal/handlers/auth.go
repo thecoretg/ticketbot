@@ -2,14 +2,12 @@ package handlers
 
 import (
 	"errors"
+	"github.com/thecoretg/ticketbot/internal/middleware"
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 )
-
-const cookieName = "tb_session"
 
 type AuthHandler struct {
 	svc *authsvc.Service
@@ -24,30 +22,30 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *AuthHandler) HandleLogin(c *gin.Context) {
+func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, M{"error": "invalid request body"})
 		return
 	}
 
-	result, err := h.svc.Login(c.Request.Context(), req.Email, req.Password)
+	result, err := h.svc.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, authsvc.ErrInvalidCredentials) || errors.Is(err, authsvc.ErrNoPassword) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
+			writeJSON(w, http.StatusUnauthorized, M{"error": "invalid email or password"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
+		writeJSON(w, http.StatusInternalServerError, M{"error": "login failed"})
 		return
 	}
 
 	if result.TOTPRequired {
-		c.JSON(http.StatusOK, gin.H{"ok": true, "totp_required": true, "pending_token": result.PendingToken})
+		writeJSON(w, http.StatusOK, M{"ok": true, "totp_required": true, "pending_token": result.PendingToken})
 		return
 	}
 
-	c.SetCookie(cookieName, result.Token, int(24*time.Hour/time.Second), "/", "", false, true)
-	c.JSON(http.StatusOK, gin.H{"ok": true, "reset_required": result.ResetRequired, "totp_setup_required": result.TOTPSetupRequired})
+	setSessionCookie(w, result.Token, 24*time.Hour)
+	writeJSON(w, http.StatusOK, M{"ok": true, "reset_required": result.ResetRequired, "totp_setup_required": result.TOTPSetupRequired})
 }
 
 type changePasswordRequest struct {
@@ -55,41 +53,40 @@ type changePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
-func (h *AuthHandler) HandleChangePassword(c *gin.Context) {
+func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Request) {
 	var req changePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+	if err := decodeJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, M{"error": "invalid request body"})
 		return
 	}
 
 	if req.NewPassword == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "new password cannot be empty"})
+		writeJSON(w, http.StatusBadRequest, M{"error": "new password cannot be empty"})
 		return
 	}
 
-	userID := c.GetInt("user_id")
-	if err := h.svc.ChangePassword(c.Request.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+	userID := middleware.UserID(r.Context())
+	if err := h.svc.ChangePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
 		if errors.Is(err, authsvc.ErrInvalidCredentials) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
+			writeJSON(w, http.StatusUnauthorized, M{"error": "current password is incorrect"})
 			return
 		}
 		if errors.Is(err, authsvc.ErrWeakPassword) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			writeJSON(w, http.StatusBadRequest, M{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
+		writeJSON(w, http.StatusInternalServerError, M{"error": "failed to change password"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	writeJSON(w, http.StatusOK, M{"ok": true})
 }
 
-func (h *AuthHandler) HandleLogout(c *gin.Context) {
-	token, err := c.Cookie(cookieName)
-	if err == nil && token != "" {
-		_ = h.svc.Logout(c.Request.Context(), token)
+func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	if ck, err := r.Cookie(cookieName); err == nil && ck.Value != "" {
+		_ = h.svc.Logout(r.Context(), ck.Value)
 	}
 
-	c.SetCookie(cookieName, "", -1, "/", "", false, true)
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	setSessionCookie(w, "", -time.Second)
+	writeJSON(w, http.StatusOK, M{"ok": true})
 }

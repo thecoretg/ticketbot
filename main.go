@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/env"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/middleware"
@@ -56,9 +55,6 @@ func Run() error {
 	var level slog.LevelVar
 	if e.Debug {
 		level.Set(slog.LevelDebug)
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
 	}
 
 	baseLogger := logging.NewDefaultLogger(&level)
@@ -92,15 +88,14 @@ func Run() error {
 		}
 	}
 
-	srv := gin.New()
-	slogWriter := middleware.NewSlogWriter(logger)
-	srv.Use(gin.LoggerWithConfig(gin.LoggerConfig{Output: slogWriter}))
-	srv.Use(gin.RecoveryWithWriter(slogWriter))
-	server.AddRoutes(a, srv, cancel)
+	handler := middleware.Chain(server.NewHandler(a, cancel),
+		middleware.RequestLog(logger),
+		middleware.Recover(logger),
+	)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + e.Port,
-		Handler:           srv,
+		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

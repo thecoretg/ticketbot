@@ -4,166 +4,120 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/handlers"
 	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/web"
 )
 
-func AddRoutes(a *App, g *gin.Engine, shutdown func()) {
-	panelFS, _ := fs.Sub(web.StaticFiles, "static")
-	g.StaticFS("/panel", http.FS(panelFS))
+// router registers routes on a ServeMux, wrapping each in the given middleware.
+type router struct {
+	mux *http.ServeMux
+}
 
+func (rt *router) handle(pattern string, h http.HandlerFunc, mws ...middleware.Middleware) {
+	rt.mux.Handle(pattern, middleware.Chain(h, mws...))
+}
+
+// NewHandler builds the application's HTTP routes. shutdown is invoked by the admin restart route.
+func NewHandler(a *App, shutdown func()) http.Handler {
+	rt := &router{mux: http.NewServeMux()}
 	auth := middleware.CombinedAuth(a.Stores.APIKey, a.Svc.Auth)
 
-	g.GET("healthcheck", handlers.HandleHealthCheck) // authless ping for load balancer / container health checks
-	g.GET("authtest", auth, handlers.HandleHealthCheck)
+	panelFS, _ := fs.Sub(web.StaticFiles, "static")
+	rt.mux.Handle("GET /panel/", http.StripPrefix("/panel", http.FileServerFS(panelFS)))
+
+	rt.handle("GET /healthcheck", handlers.HandleHealthCheck) // authless ping for load balancer / container health checks
+	rt.handle("GET /authtest", handlers.HandleHealthCheck, auth)
 
 	ah := handlers.NewAuthHandler(a.Svc.Auth)
-	g.POST("auth/login", ah.HandleLogin)
-	g.POST("auth/logout", ah.HandleLogout)
-	g.PUT("auth/password", auth, ah.HandleChangePassword)
+	rt.handle("POST /auth/login", ah.HandleLogin)
+	rt.handle("POST /auth/logout", ah.HandleLogout)
+	rt.handle("PUT /auth/password", ah.HandleChangePassword, auth)
 
 	th := handlers.NewTOTPHandler(a.Svc.Auth)
-	g.POST("auth/totp/verify", th.HandleVerify)
-	g.GET("auth/totp", auth, th.HandleStatus)
-	g.POST("auth/totp/setup", auth, th.HandleBeginSetup)
-	g.PUT("auth/totp/setup", auth, th.HandleConfirmSetup)
-	g.DELETE("auth/totp", auth, th.HandleDisable)
+	rt.handle("POST /auth/totp/verify", th.HandleVerify)
+	rt.handle("GET /auth/totp", th.HandleStatus, auth)
+	rt.handle("POST /auth/totp/setup", th.HandleBeginSetup, auth)
+	rt.handle("PUT /auth/totp/setup", th.HandleConfirmSetup, auth)
+	rt.handle("DELETE /auth/totp", th.HandleDisable, auth)
 
-	s := g.Group("sync", auth)
 	sh := handlers.NewSyncHandler(a.Svc.Sync, a.Config)
-	registerSyncRoutes(s, sh)
+	rt.handle("POST /sync", sh.HandleSync, auth)
+	rt.handle("GET /sync/status", sh.HandleSyncStatus, auth)
 
-	u := g.Group("users", auth)
 	uh := handlers.NewUserHandler(a.Svc.User)
-	registerUserRoutes(u, uh)
+	rt.handle("GET /users", uh.ListUsers, auth)
+	rt.handle("GET /users/me", uh.GetCurrentUser, auth)
+	rt.handle("GET /users/{id}", uh.GetUser, auth)
+	rt.handle("POST /users", uh.CreateUser, auth)
+	rt.handle("DELETE /users/{id}", uh.DeleteUser, auth)
+	rt.handle("GET /users/keys", uh.ListAPIKeys, auth)
+	rt.handle("GET /users/keys/{id}", uh.GetAPIKey, auth)
+	rt.handle("POST /users/keys", uh.AddAPIKey, auth)
+	rt.handle("DELETE /users/keys/{id}", uh.DeleteAPIKey, auth)
 
-	c := g.Group("config", auth)
 	ch := handlers.NewConfigHandler(a.Svc.Config)
-	registerConfigRoutes(c, ch)
+	rt.handle("GET /config", ch.Get, auth)
+	rt.handle("PUT /config", ch.Update, auth)
 
-	cw := g.Group("cw", auth)
 	cwh := handlers.NewCWHandler(a.Svc.CW)
-	registerCWRoutes(cw, cwh)
+	rt.handle("GET /cw/boards", cwh.ListBoards, auth)
+	rt.handle("GET /cw/boards/{id}", cwh.GetBoard, auth)
+	rt.handle("GET /cw/boards/{id}/statuses", cwh.ListBoardStatuses, auth)
+	rt.handle("GET /cw/members", cwh.ListMembers, auth)
+	rt.handle("GET /cw/priorities", cwh.ListPriorities, auth)
+	rt.handle("GET /cw/companies", cwh.ListCompanies, auth)
+	rt.handle("GET /cw/contacts", cwh.ListContacts, auth)
 
-	wx := g.Group("webex", auth)
 	wh := handlers.NewWebexHandler(a.Svc.Webex)
-	registerWebexRoutes(wx, wh)
+	rt.handle("GET /webex/rooms", wh.ListRecipients, auth)
+	rt.handle("GET /webex/rooms/{id}", wh.GetRoom, auth)
 
-	n := g.Group("notifiers", auth)
 	nh := handlers.NewNotifierHandler(a.Svc.Notifier)
-	registerNotifierRoutes(n, nh)
+	rt.handle("GET /notifiers/forwards", nh.ListForwards, auth)
+	rt.handle("GET /notifiers/forwards/{id}", nh.GetForward, auth)
+	rt.handle("POST /notifiers/forwards", nh.AddUserForward, auth)
+	rt.handle("PUT /notifiers/forwards/{id}", nh.UpdateUserForward, auth)
+	rt.handle("DELETE /notifiers/forwards/{id}", nh.DeleteUserForward, auth)
 
-	wf := g.Group("workflows", auth)
 	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW, a.Svc.Notifier, a.Svc.Lists)
-	registerWorkflowRoutes(wf, wfh)
+	rt.handle("GET /workflows", wfh.List, auth)
+	rt.handle("POST /workflows", wfh.Create, auth)
+	rt.handle("GET /workflows/fields", wfh.Fields, auth)
+	rt.handle("GET /workflows/placeholders", wfh.Placeholders, auth)
+	rt.handle("POST /workflows/validate-condition", wfh.ValidateCondition, auth)
+	rt.handle("POST /workflows/parse-condition", wfh.ParseCondition, auth)
+	rt.handle("POST /workflows/evaluate-condition", wfh.EvaluateCondition, auth)
+	rt.handle("GET /workflows/board/{id}", wfh.GetByBoard, auth)
+	rt.handle("GET /workflows/{id}", wfh.Get, auth)
+	rt.handle("POST /workflows/{id}/simulate", wfh.Simulate, auth)
+	rt.handle("PUT /workflows/{id}", wfh.Replace, auth)
+	rt.handle("DELETE /workflows/{id}", wfh.Delete, auth)
 
-	ls := g.Group("lists", auth)
 	lsh := handlers.NewListsHandler(a.Svc.Lists)
-	registerListRoutes(ls, lsh)
+	rt.handle("GET /lists", lsh.List, auth)
+	rt.handle("POST /lists", lsh.Create, auth)
+	rt.handle("GET /lists/types", lsh.Types, auth)
+	rt.handle("GET /lists/{id}", lsh.Get, auth)
+	rt.handle("PUT /lists/{id}", lsh.Update, auth)
+	rt.handle("DELETE /lists/{id}", lsh.Delete, auth)
+	rt.handle("POST /lists/{id}/items", lsh.AddItem, auth)
+	rt.handle("DELETE /lists/{id}/items/{item_id}", lsh.RemoveItem, auth)
 
-	t := g.Group("tickets", auth)
 	tkh := handlers.NewTicketsHandler(a.Svc.CW)
-	registerTicketRoutes(t, tkh)
+	rt.handle("GET /tickets", tkh.List, auth)
+	rt.handle("GET /tickets/{id}", tkh.Get, auth)
+	rt.handle("GET /tickets/{id}/raw", tkh.Raw, auth)
+	rt.handle("GET /tickets/{id}/events", tkh.Events, auth)
 
 	lh := handlers.NewLogsHandler(a.LogBuffer)
-	g.GET("logs", auth, lh.HandleList)
+	rt.handle("GET /logs", lh.HandleList, auth)
 
 	adminh := handlers.NewAdminHandler(shutdown)
-	g.POST("admin/restart", auth, adminh.HandleRestart)
+	rt.handle("POST /admin/restart", adminh.HandleRestart, auth)
 
 	tb := handlers.NewTicketbotHandler(a.Svc.Ticketbot)
-	hh := g.Group("hooks")
-	registerHookRoutes(hh, tb)
-}
+	rt.handle("POST /hooks/cw/tickets", tb.ProcessTicket, middleware.RequireConnectwiseSignature())
 
-func registerSyncRoutes(r *gin.RouterGroup, h *handlers.SyncHandler) {
-	r.POST("", h.HandleSync)
-	r.GET("status", h.HandleSyncStatus)
-}
-
-func registerUserRoutes(r *gin.RouterGroup, h *handlers.UserHandler) {
-	r.GET("", h.ListUsers)
-	r.GET("me", h.GetCurrentUser)
-	r.GET(":id", h.GetUser)
-	r.POST("", h.CreateUser)
-	r.DELETE(":id", h.DeleteUser)
-
-	k := r.Group("keys")
-	k.GET("", h.ListAPIKeys)
-	k.GET(":id", h.GetAPIKey)
-	k.POST("", h.AddAPIKey)
-	k.DELETE(":id", h.DeleteAPIKey)
-}
-
-func registerConfigRoutes(r *gin.RouterGroup, h *handlers.ConfigHandler) {
-	r.GET("", h.Get)
-	r.PUT("", h.Update)
-}
-
-func registerCWRoutes(r *gin.RouterGroup, h *handlers.CWHandler) {
-	b := r.Group("boards")
-	b.GET("", h.ListBoards)
-	b.GET(":id", h.GetBoard)
-	b.GET(":id/statuses", h.ListBoardStatuses)
-
-	m := r.Group("members")
-	m.GET("", h.ListMembers)
-
-	r.GET("priorities", h.ListPriorities)
-	r.GET("companies", h.ListCompanies)
-	r.GET("contacts", h.ListContacts)
-}
-
-func registerWebexRoutes(r *gin.RouterGroup, h *handlers.WebexHandler) {
-	ro := r.Group("rooms")
-	ro.GET("", h.ListRecipients)
-	ro.GET(":id", h.GetRoom)
-}
-
-func registerNotifierRoutes(r *gin.RouterGroup, h *handlers.NotifierHandler) {
-	fw := r.Group("forwards")
-	fw.GET("", h.ListForwards)
-	fw.GET(":id", h.GetForward)
-	fw.POST("", h.AddUserForward)
-	fw.PUT(":id", h.UpdateUserForward)
-	fw.DELETE(":id", h.DeleteUserForward)
-}
-
-func registerWorkflowRoutes(r *gin.RouterGroup, h *handlers.WorkflowHandler) {
-	r.GET("", h.List)
-	r.POST("", h.Create)
-	r.GET("fields", h.Fields)
-	r.GET("placeholders", h.Placeholders)
-	r.POST("validate-condition", h.ValidateCondition)
-	r.POST("parse-condition", h.ParseCondition)
-	r.POST("evaluate-condition", h.EvaluateCondition)
-	r.GET("board/:id", h.GetByBoard)
-	r.GET(":id", h.Get)
-	r.POST(":id/simulate", h.Simulate)
-	r.PUT(":id", h.Replace)
-	r.DELETE(":id", h.Delete)
-}
-
-func registerListRoutes(r *gin.RouterGroup, h *handlers.ListsHandler) {
-	r.GET("", h.List)
-	r.POST("", h.Create)
-	r.GET("types", h.Types)
-	r.GET(":id", h.Get)
-	r.PUT(":id", h.Update)
-	r.DELETE(":id", h.Delete)
-	r.POST(":id/items", h.AddItem)
-	r.DELETE(":id/items/:item_id", h.RemoveItem)
-}
-
-func registerTicketRoutes(r *gin.RouterGroup, h *handlers.TicketsHandler) {
-	r.GET("", h.List)
-	r.GET(":id", h.Get)
-	r.GET(":id/raw", h.Raw)
-	r.GET(":id/events", h.Events)
-}
-
-func registerHookRoutes(r *gin.RouterGroup, tb *handlers.TicketbotHandler) {
-	r.POST("cw/tickets", middleware.RequireConnectwiseSignature(), tb.ProcessTicket)
+	return rt.mux
 }

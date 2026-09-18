@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"fmt"
+	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -16,28 +16,28 @@ func NewConfigHandler(svc *config.Service) *ConfigHandler {
 	return &ConfigHandler{Service: svc}
 }
 
-func (h *ConfigHandler) Get(c *gin.Context) {
-	cfg, err := h.Service.Get(c.Request.Context())
+func (h *ConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.Service.Get(r.Context())
 	if err != nil {
-		internalServerError(c, err)
+		internalServerError(w, err)
 		return
 	}
 
-	outputJSON(c, cfg)
+	outputJSON(w, cfg)
 }
 
-func (h *ConfigHandler) Update(c *gin.Context) {
+func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 	p := &models.ConfigUpdateParams{}
-	if err := c.ShouldBindJSON(p); err != nil {
-		badPayloadError(c, err)
+	if err := decodeJSON(r, p); err != nil {
+		badPayloadError(w, err)
 		return
 	}
 
-	cfg, err := h.Service.Update(c.Request.Context(), p)
+	cfg, err := h.Service.Update(r.Context(), p)
 	if err != nil {
-		internalServerError(c, fmt.Errorf("updating config: %w", err))
+		internalServerError(w, fmt.Errorf("updating config: %w", err))
 		return
 	}
 
-	outputJSON(c, cfg)
+	outputJSON(w, cfg)
 }

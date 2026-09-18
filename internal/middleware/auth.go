@@ -5,66 +5,43 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func APIKeyAuth(r repos.APIKeyRepository) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		auth := c.GetHeader("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authorization header"})
-			return
-		}
+const sessionCookie = "tb_session"
 
-		key := strings.TrimPrefix(auth, "Bearer ")
-		if key == "" {
-			slog.Warn("auth middleware: got empty key in request header")
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "empty api key"})
-			return
-		}
-		hash, err := hashKey(key)
-		if err == nil {
-			slog.Debug("auth middleware: got key from request", "hash", hash)
-		}
-
-		keys, err := r.List(c.Request.Context())
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "db error"})
-			return
-		}
-
-		if len(keys) > 0 {
-			slog.Debug("auth middleware: got keys from store", "total", len(keys))
-			for _, k := range keys {
-				slog.Debug("auth middleware: key from store", "user_id", k.UserID, "hash", k.KeyHash)
+// CombinedAuth accepts either a valid session cookie or a Bearer API key and stores the user ID in
+// the request context for UserID.
+func CombinedAuth(keys repos.APIKeyRepository, auth *authsvc.Service) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Try session cookie first
+			if ck, err := r.Cookie(sessionCookie); err == nil && ck.Value != "" {
+				if userID, err := auth.ValidateToken(r.Context(), ck.Value); err == nil {
+					next.ServeHTTP(w, r.WithContext(withUserID(r.Context(), userID)))
+					return
+				}
 			}
-		} else {
-			slog.Debug("auth middleware: got no keys from store")
-		}
 
-		var userID int
-		found := false
-		for _, k := range keys {
-			if bcrypt.CompareHashAndPassword(k.KeyHash, []byte(key)) == nil {
-				userID = k.UserID
-				slog.Info("authenticated user", "user_id", userID)
-				found = true
-				break
+			// Fall back to Bearer API key
+			if key, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && key != "" {
+				allKeys, err := keys.List(r.Context())
+				if err != nil {
+					writeError(w, http.StatusInternalServerError, "db error")
+					return
+				}
+				for _, k := range allKeys {
+					if bcrypt.CompareHashAndPassword(k.KeyHash, []byte(key)) == nil {
+						slog.Info("authenticated via api key", "user_id", k.UserID)
+						next.ServeHTTP(w, r.WithContext(withUserID(r.Context(), k.UserID)))
+						return
+					}
+				}
 			}
-		}
 
-		if !found {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid api key"})
-			return
-		}
-
-		c.Set("user_id", userID)
-		c.Next()
+			writeError(w, http.StatusUnauthorized, "authentication required")
+		})
 	}
-}
-
-func hashKey(key string) ([]byte, error) {
-	return bcrypt.GenerateFromPassword([]byte(key), bcrypt.DefaultCost)
 }

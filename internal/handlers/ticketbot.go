@@ -3,9 +3,9 @@ package handlers
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/ticketbot/models"
@@ -19,19 +19,19 @@ func NewTicketbotHandler(svc *ticketbot.Service) *TicketbotHandler {
 	return &TicketbotHandler{Service: svc}
 }
 
-func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
-	w := &psa.WebhookPayload{}
-	if err := c.ShouldBindJSON(w); err != nil {
-		badPayloadError(c, err)
+func (h *TicketbotHandler) ProcessTicket(w http.ResponseWriter, r *http.Request) {
+	p := &psa.WebhookPayload{}
+	if err := decodeJSON(r, p); err != nil {
+		badPayloadError(w, err)
 		return
 	}
-	id := w.ID
-	action := w.Action
+	id := p.ID
+	action := p.Action
 
-	ctx := context.WithoutCancel(c.Request.Context())
+	ctx := context.WithoutCancel(r.Context())
 	switch action {
 	case "added", "updated":
-		opts := ticketbot.ProcessOpts{Source: models.SourceWebhook, WebhookMemberID: w.MemberID, RunRules: true}
+		opts := ticketbot.ProcessOpts{Source: models.SourceWebhook, WebhookMemberID: p.MemberID, RunRules: true}
 		go h.processTicket(ctx, id, opts)
 	case "deleted":
 		go h.deleteTicket(ctx, id)
@@ -39,7 +39,7 @@ func (h *TicketbotHandler) ProcessTicket(c *gin.Context) {
 		slog.Warn("unknown ticket webhook action", "action", action, "ticket_id", id)
 	}
 
-	resultJSON(c, "ticket payload received")
+	resultJSON(w, "ticket payload received")
 }
 
 // webhookRetryDelays paces retries after a failed intake. ConnectWise delivers a webhook once, so

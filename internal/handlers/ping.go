@@ -1,13 +1,13 @@
 package handlers
 
 import (
-	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
-func HandleHealthCheck(c *gin.Context) {
+func HandleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	res := struct {
 		Result string `json:"result"`
 	}{Result: "success"}
 
-	outputJSON(c, res)
+	outputJSON(w, res)
 }
