@@ -7,6 +7,7 @@ let tkSearchTimer = null
 let tkRequestSeq  = 0      // drops stale responses when filters change quickly
 let tkShowNoops   = false  // history: also show runs where nothing happened (no workflow, no match, loop guard)
 let tkDetail      = null   // last loaded ticket detail, for re-rendering the history toggle
+let tkWfLinkHTML  = ''     // the "Open workflow" control for tkDetail, kept across re-renders
 
 async function loadTickets(sub) {
     if (sub && /^\d+$/.test(sub)) {
@@ -129,7 +130,7 @@ async function refreshTicketTable() {
     const rows  = items.map(t => `<tr class="clickable" onclick="openTicket(${t.id})">
         <td class="r"><a class="link num" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" data-tip="Open in ConnectWise">#${t.id}</a></td>
         <td class="cell-ellipsis cell-primary" title="${esc(t.summary)}">${esc(t.summary)}${t.deleted ? ' ' + badgeTag('Deleted', 'bad') : ''}</td>
-        <td>${esc(t.board_name)}</td>
+        <td class="nowrap">${esc(t.board_name)}</td>
         <td class="nowrap">${esc(t.status_name)}${t.closed_flag ? ' ' + badgeTag('Closed', '') : ''}</td>
         <td>${esc(t.company_name)}</td>
         <td>${esc(t.owner_name || '—')}</td>
@@ -184,8 +185,10 @@ async function loadTicketDetail(id) {
         setContent(backRow('tickets', 'Tickets', `#${id}`) + pageHead(`Ticket #${id}`) + errorState(e.message))
         return
     }
-    tkDetail = data
+    tkDetail     = data
+    tkWfLinkHTML = ''
     renderTicketDetail(data)
+    setCrumbHere(`#${data.ticket.id}`)
     tkLoadWorkflowLink(data.ticket)
 }
 
@@ -200,6 +203,7 @@ async function tkLoadWorkflowLink(t) {
     } catch (e) {
         if (e.status === 404) html = `<button class="btn btn-default" onclick="tkCreateWorkflow(${t.board_id})" data-tip="This board has no workflow yet">${icon('plus')}Create workflow</button>`
     }
+    tkWfLinkHTML = html
     const el = document.getElementById('tk-workflow-link')
     if (el) el.innerHTML = html
 }
@@ -249,7 +253,7 @@ function renderTicketDetail(d) {
             </p>
         </div>
         <div class="row gap2 wrap">
-            <span id="tk-workflow-link"></span>
+            <span id="tk-workflow-link">${tkWfLinkHTML}</span>
             <button class="btn btn-default" onclick="loadTicketDetail(${t.id})">Refresh</button>
         </div>
     </header>

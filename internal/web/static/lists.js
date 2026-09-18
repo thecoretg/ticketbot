@@ -155,6 +155,7 @@ async function loadListDetail(id) {
     }
     lsDetail = d
     renderListDetail(d)
+    setCrumbHere(d.name)
 }
 
 function renderListDetail(d) {

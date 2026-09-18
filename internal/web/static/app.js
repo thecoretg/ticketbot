@@ -32,7 +32,7 @@ function applyPalette(id) {
 function openPaletteMenu(e) {
     e.stopPropagation()
     const current = document.documentElement.dataset.palette
-    openMenu(e.currentTarget, PALETTES.map(p => ({
+    toggleMenu(e.currentTarget, PALETTES.map(p => ({
         label: p.name,
         swatch: p.seed,
         current: p.id === current,
@@ -77,15 +77,24 @@ function toggleNav(e) {
 
 // openMenu renders a navi popover anchored under a control. Items are
 // { label, icon | swatch, danger, current, run }.
-let menuEl = null
+let menuEl     = null
+let menuAnchor = null   // the control the open menu hangs off; a click on it closes the menu
 
 function closeMenu() {
     menuEl?.remove()
-    menuEl = null
+    menuEl     = null
+    menuAnchor = null
+}
+
+// toggleMenu closes the menu when its own anchor is clicked again, otherwise opens it.
+function toggleMenu(anchor, items) {
+    if (menuEl && menuAnchor === anchor) { closeMenu(); return }
+    openMenu(anchor, items)
 }
 
 function openMenu(anchor, items) {
     closeMenu()
+    menuAnchor = anchor
     menuEl = document.createElement('div')
     menuEl.className = 'menu'
     menuEl.setAttribute('role', 'menu')
@@ -231,8 +240,10 @@ async function login() {
         } else if (res?.reset_required) {
             showPasswordReset()
         } else {
-            await showApp()
-            if (res?.totp_setup_required) showTOTPSetupModal(true)
+            // showApp prompts for 2FA setup itself when config requires it; only fall back to the
+            // login response's flag if it could not (config fetch failed), or the modal opens twice
+            const prompted = await showApp()
+            if (res?.totp_setup_required && !prompted) showTOTPSetupModal(true)
         }
     } catch (e) {
         // 401 is a bad password; anything else (server down, 500) deserves its real message
@@ -255,6 +266,7 @@ async function logout() {
     pendingToken = null
     totpEnabled  = false
     stopSyncPoll()
+    stopLogsPoll()
     document.getElementById('login-email').value    = ''
     document.getElementById('login-password').value = ''
     document.getElementById('login-err').classList.add('hidden')
@@ -361,6 +373,8 @@ async function submitPasswordReset() {
     }
 }
 
+// showApp loads the signed-in shell. Returns true when it opened the required 2FA setup
+// modal instead of routing, so callers do not open a second one.
 async function showApp() {
     document.getElementById('login').classList.add('hidden')
     document.getElementById('totp-verify').classList.add('hidden')
@@ -379,11 +393,12 @@ async function showApp() {
         document.getElementById('header-email').textContent    = currentUser.email_address
         document.getElementById('header-initials').textContent = emailInitials(currentUser.email_address)
         if (requireTOTP && !totpEnabled) {
-            showTOTPSetupModal(true)
-            return
+            await showTOTPSetupModal(true)
+            return true
         }
     } catch {}
     routeFromHash()
+    return false
 }
 
 // ─────────────────────────────────────────────────────────
@@ -402,8 +417,7 @@ function totpMenuLabel() {
 
 function toggleAccountMenu(e) {
     e.stopPropagation()
-    if (menuEl) { closeMenu(); return }
-    openMenu(e.currentTarget, [
+    toggleMenu(e.currentTarget, [
         { label: 'Change password', icon: 'key',    run: showChangePasswordModal },
         { label: totpMenuLabel(),   icon: 'shield', run: handleTOTPMenuClick },
         '-',
@@ -532,7 +546,7 @@ function finishTOTPSetup() {
 
 function copyRecoveryCodes() {
     const codes = (window._recoveryCodes || []).join('\n')
-    navigator.clipboard.writeText(codes).then(() => toast('Recovery codes copied', 'success'))
+    copyText(codes, 'Recovery codes copied')
 }
 
 function showTOTPDisableModal() {
@@ -682,6 +696,15 @@ function setCrumbs(tab, sub) {
     document.title = sub ? `${name} · ${sub} · Ticketbot` : `${name} · Ticketbot`
 }
 
+// setCrumbHere replaces the trailing crumb (the raw id from the hash) with the
+// record's name once a detail page has loaded it.
+function setCrumbHere(text) {
+    if (!text) return
+    document.getElementById('crumb-here').textContent = text
+    const item = NAV_ITEMS.find(i => i.tab === currentTab)
+    document.title = `${item ? item.name : currentTab} · ${text} · Ticketbot`
+}
+
 // skeletonPage is the loading state between routes: shaped like a page, so the
 // layout does not jump when the real content lands.
 function skeletonPage() {
@@ -769,6 +792,14 @@ function confirmModal({ title, body, confirmLabel = 'Delete', tone = 'bad', onCo
 // ─────────────────────────────────────────────────────────
 // Utilities
 // ─────────────────────────────────────────────────────────
+// copyText writes to the clipboard and says so either way: the clipboard API rejects in
+// some embedded web views, and a copy button that does nothing is worse than a message.
+function copyText(text, okMsg) {
+    navigator.clipboard.writeText(text)
+        .then(() => toast(okMsg, 'success'))
+        .catch(() => toast('Could not copy — select the text and copy it by hand', 'error'))
+}
+
 function esc(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
@@ -1232,7 +1263,7 @@ async function showNewKeyModal() {
 
 function copyCreatedKey() {
     const key = document.getElementById('created-key')?.textContent
-    if (key) navigator.clipboard.writeText(key).then(() => toast('Copied!', 'success'))
+    if (key) copyText(key, 'Copied!')
 }
 
 function deleteKey(id) {
@@ -1456,7 +1487,7 @@ async function loadLogs() {
     }
 }
 
-function renderLogs(entries) {
+function renderLogs(entries, full = false) {
     const levelOpts = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR'].map(l =>
         `<option value="${l}" ${l === logsLevelFilter ? 'selected' : ''}>${l}</option>`
     ).join('')
@@ -1511,12 +1542,30 @@ function renderLogs(entries) {
         </div>`
     })
 
-    const isEmpty        = rows.length === 0
-    const searchFocused  = document.activeElement?.id === 'logs-search'
-    const searchPos      = searchFocused ? document.getElementById('logs-search')?.selectionStart : null
+    const isEmpty = rows.length === 0
+    const body    = isEmpty
+        ? emptyState('No matching log entries',
+            'Nothing in the buffer matches these filters. Widen the level or clear the search.',
+            `<button class="btn btn-default btn-sm" onclick="resetLogsFilters()">Clear filters</button>`, 'book')
+        : `<div class="log-list">${rows.join('')}</div>
+           <div class="card-foot"><span>${rows.length} of ${entries.length} entries</span></div>`
+    const status  = logsFrozen
+        ? `<span class="badge outline"><i class="dot"></i>Frozen</span>
+           <button class="btn btn-default btn-sm" onclick="toggleLogFreeze()">Resume</button>`
+        : `<span class="badge ok"><i class="dot pulse"></i>Streaming</span>
+           <button class="btn btn-default btn-sm" onclick="toggleLogFreeze()">Freeze</button>`
+
+    // The poll re-renders every few seconds. Redrawing the filter bar with it would close an
+    // open dropdown or popover under the user's cursor, so once the frame exists only the
+    // list and the streaming status are replaced; `full` forces a redraw after a filter reset.
+    if (!full && document.getElementById('logs-frame')) {
+        document.getElementById('logs-status').innerHTML = status
+        document.getElementById('logs-body').innerHTML   = body
+        return
+    }
 
     setContent(pageHead('Logs', 'Everything the server has logged since it started, newest first.') +
-    `<div class="card">
+    `<div class="card" id="logs-frame">
         <div class="filter-bar">
             <select class="select" id="logs-level-filter" onchange="setLogsFilter(this.value)" aria-label="Filter by level">${levelOpts}</select>
             <select class="select" id="logs-context-filter" onchange="setLogsContextFilter(this.value)" aria-label="Filter by area">${contextOpts}</select>
@@ -1526,24 +1575,11 @@ function renderLogs(entries) {
             </div>
             <button class="btn btn-default btn-sm" onclick="openLogsOptions(event)">${icon('filter')}Options</button>
             <div class="grow"></div>
-            ${logsFrozen
-                ? '<span class="badge outline"><i class="dot"></i>Frozen</span>'
-                : '<span class="badge ok"><i class="dot pulse"></i>Streaming</span>'}
-            <button class="btn btn-default btn-sm" onclick="toggleLogFreeze()">${logsFrozen ? 'Resume' : 'Freeze'}</button>
+            <span id="logs-status" class="row gap2">${status}</span>
             <button class="btn btn-default btn-sm" onclick="loadLogs()">Refresh</button>
         </div>
-        ${isEmpty
-            ? emptyState('No matching log entries',
-                'Nothing in the buffer matches these filters. Widen the level or clear the search.',
-                `<button class="btn btn-default btn-sm" onclick="resetLogsFilters()">Clear filters</button>`, 'book')
-            : `<div class="log-list">${rows.join('')}</div>`}
-        ${isEmpty ? '' : `<div class="card-foot"><span>${rows.length} of ${entries.length} entries</span></div>`}
+        <div id="logs-body">${body}</div>
     </div>`)
-
-    if (searchFocused) {
-        const input = document.getElementById('logs-search')
-        if (input) { input.focus(); if (searchPos != null) input.setSelectionRange(searchPos, searchPos) }
-    }
 }
 
 function setLogsFilter(level) {
@@ -1571,8 +1607,7 @@ function setLogsSearch(val) {
 
 function openLogsOptions(e) {
     e.stopPropagation()
-    if (menuEl) { closeMenu(); return }
-    openMenu(e.currentTarget, [
+    toggleMenu(e.currentTarget, [
         {
             label: logsHideGin ? 'Show request logs' : 'Hide request logs',
             icon: logsHideGin ? 'globe' : 'filter',
@@ -1586,7 +1621,7 @@ function resetLogsFilters() {
     logsLevelFilter = 'ALL'
     logsContextFilter = 'ALL'
     saveLogsPrefs({ levelFilter: 'ALL', contextFilter: 'ALL' })
-    renderLogs(logsLastEntries)
+    renderLogs(logsLastEntries, true)   // the selects and search box must show the reset values
 }
 
 function toggleLogFreeze() {
@@ -1645,7 +1680,7 @@ document.addEventListener('DOMContentLoaded', () => {
     })
     // a click anywhere else dismisses an open popover or the mobile nav drawer
     document.addEventListener('click', e => {
-        if (menuEl && !menuEl.contains(e.target)) closeMenu()
+        if (menuEl && !menuEl.contains(e.target) && !menuAnchor?.contains(e.target)) closeMenu()
         const app = document.getElementById('app')
         if (app.classList.contains('nav-open') && !e.target.closest('.sidebar')) app.classList.remove('nav-open')
     }, true)

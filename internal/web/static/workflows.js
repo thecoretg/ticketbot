@@ -149,6 +149,7 @@ async function loadWorkflowEditor(id) {
         wfOriginal = JSON.stringify(wfStrip(wf))
         tabGuard = wfGuard
         renderWorkflowEditor()
+        setCrumbHere(wf.board_name || wf.name)
     } catch (e) {
         setContent(backRow('workflows', 'Workflows') + pageHead('Workflow') + errorState(e.message))
     }
