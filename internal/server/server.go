@@ -139,7 +139,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		LogBuffer:     logBuf,
 		SSOAuth:       ssoAuth,
 		Svc: &Services{
-			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg, e.InitialAdminEmail),
+			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg, e.InitialAdminEmail, e.Entra.Configured()),
 			Config:    cfgSvc,
 			User:      user.New(r.APIUser, r.APIKey),
 			Hooks:     webhooks.New(cw, e.RootURL),

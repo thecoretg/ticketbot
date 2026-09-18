@@ -88,9 +88,11 @@ func (s *Service) Configured() bool { return s.auth != nil }
 // Enabled reports whether sign-in with Microsoft is currently offered.
 func (s *Service) Enabled() bool { return s.Configured() && s.cfg.SSOEnabled }
 
-// Methods tells the login page which sign-in options to show.
+// Methods tells the login page which sign-in options to show. Password sign-in is always offered
+// when SSO is not, whatever the toggle says, so removing the ENTRA_* variables is a way back in.
 func (s *Service) Methods() models.AuthMethods {
-	return models.AuthMethods{SSO: s.Enabled(), Password: s.cfg.PasswordLoginEnabled}
+	sso := s.Enabled()
+	return models.AuthMethods{SSO: sso, Password: s.cfg.PasswordLoginEnabled || !sso}
 }
 
 // Reload refreshes the cached role mappings from the store.

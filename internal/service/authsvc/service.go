@@ -75,16 +75,20 @@ type Service struct {
 	// breakGlassEmail is INITIAL_ADMIN_EMAIL, which may always sign in with a password so a
 	// broken app registration cannot lock everyone out.
 	breakGlassEmail string
+	// ssoConfigured is whether the ENTRA_* variables are present. Password sign-in can only be
+	// withheld while SSO is genuinely on offer; otherwise there would be no way in at all.
+	ssoConfigured bool
 }
 
-func New(users repos.APIUserRepository, sessions repos.SessionRepository, totpPending repos.TOTPPendingRepository, totpRecovery repos.TOTPRecoveryRepository, cfg *models.Config, breakGlassEmail string) *Service {
-	return &Service{users: users, sessions: sessions, totpPending: totpPending, totpRecovery: totpRecovery, cfg: cfg, breakGlassEmail: breakGlassEmail}
+func New(users repos.APIUserRepository, sessions repos.SessionRepository, totpPending repos.TOTPPendingRepository, totpRecovery repos.TOTPRecoveryRepository, cfg *models.Config, breakGlassEmail string, ssoConfigured bool) *Service {
+	return &Service{users: users, sessions: sessions, totpPending: totpPending, totpRecovery: totpRecovery, cfg: cfg, breakGlassEmail: breakGlassEmail, ssoConfigured: ssoConfigured}
 }
 
-// passwordLoginAllowed reports whether email may sign in with a password under the current
-// config.
+// passwordLoginAllowed reports whether email may sign in with a password: always when the toggle
+// is on or SSO is not being offered, and always for the break-glass admin.
 func (s *Service) passwordLoginAllowed(email string) bool {
-	return s.cfg.PasswordLoginEnabled || strings.EqualFold(email, s.breakGlassEmail)
+	ssoOffered := s.ssoConfigured && s.cfg.SSOEnabled
+	return s.cfg.PasswordLoginEnabled || !ssoOffered || strings.EqualFold(email, s.breakGlassEmail)
 }
 
 // Login validates credentials. If the user has TOTP enabled it returns a

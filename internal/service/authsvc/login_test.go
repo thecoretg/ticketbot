@@ -39,7 +39,7 @@ func TestLoginHonoursPasswordLoginToggle(t *testing.T) {
 		"bob@example.com":   {ID: 2, EmailAddress: "bob@example.com", PasswordHash: hash},
 	}}
 	cfg := &models.Config{PasswordLoginEnabled: false, SSOEnabled: true}
-	s := New(users, &fakeSessions{}, nil, nil, cfg, "Admin@Example.com")
+	s := New(users, &fakeSessions{}, nil, nil, cfg, "Admin@Example.com", true)
 
 	if _, err := s.Login(context.Background(), "bob@example.com", "Passw0rd!"); !errors.Is(err, ErrPasswordLoginDisabled) {
 		t.Fatalf("bob: got %v, want ErrPasswordLoginDisabled", err)
@@ -51,5 +51,12 @@ func TestLoginHonoursPasswordLoginToggle(t *testing.T) {
 	cfg.PasswordLoginEnabled = true
 	if _, err := s.Login(context.Background(), "bob@example.com", "Passw0rd!"); err != nil {
 		t.Fatalf("bob with password login enabled: %v", err)
+	}
+
+	// With the toggle off but SSO no longer offered (ENTRA_* removed), everyone may use a password.
+	cfg.PasswordLoginEnabled = false
+	unconfigured := New(users, &fakeSessions{}, nil, nil, cfg, "admin@example.com", false)
+	if _, err := unconfigured.Login(context.Background(), "bob@example.com", "Passw0rd!"); err != nil {
+		t.Fatalf("bob with sso unconfigured: %v", err)
 	}
 }

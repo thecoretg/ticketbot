@@ -277,9 +277,21 @@ async function loadAuthMethods() {
     document.getElementById('sso-btn').classList.toggle('hidden', !sso)
     document.getElementById('login-or').classList.toggle('hidden', !(sso && password))
     document.getElementById('login-password-form').classList.toggle('hidden', !password)
+    // Only Microsoft on offer: keep a quiet way to the password form for the break-glass admin.
+    // The server refuses everyone else, so revealing the form grants nothing.
+    document.getElementById('login-alt').classList.toggle('hidden', !(sso && !password))
     document.getElementById('login-sub').textContent = sso && !password
         ? 'Use your Microsoft account to continue'
         : 'Enter your credentials to continue'
+}
+
+// showPasswordForm reveals the password form under the Microsoft button.
+function showPasswordForm(e) {
+    e.preventDefault()
+    document.getElementById('login-alt').classList.add('hidden')
+    document.getElementById('login-or').classList.remove('hidden')
+    document.getElementById('login-password-form').classList.remove('hidden')
+    document.getElementById('login-email').focus()
 }
 
 // showLogin reveals the login card with the right sign-in options.
@@ -1590,7 +1602,7 @@ function renderSSO(st) {
                 'Show “Sign in with Microsoft” on the login card. Requires credentials.',
                 toggle(`id="sso-enabled" onchange="ssoSaveToggles()" ${st.configured ? '' : 'disabled'}`, st.enabled, { tip: 'SSO enabled' }))}
             ${row('Password sign-in',
-                'Allow email and password sign-in alongside Microsoft. Can only be turned off while SSO is on. The INITIAL_ADMIN_EMAIL account can always use a password as a fallback.',
+                'Allow email and password sign-in alongside Microsoft. Can only be turned off while SSO is on. The INITIAL_ADMIN_EMAIL account can always use a password through the “Sign in with a password instead” link on the login card.',
                 toggle(`id="sso-password-login" onchange="ssoSaveToggles()"`, st.password_login_enabled, { tip: 'Password sign-in' }))}
         </div>
 
