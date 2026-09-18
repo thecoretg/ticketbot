@@ -667,7 +667,7 @@ function wfSimResultHTML(id, res) {
                 ? `<b>${esc(r.rule_name)}</b>: ${esc(r.error)}`
                 : `<b>${esc(r.recipient_name)}</b> <span class="muted">via ${esc(r.rule_name)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
         </div>
-        ${r.message ? `<pre class="code" style="white-space:pre-wrap">${esc(r.message)}</pre>` : ''}
+        ${r.message ? `<pre class="code prewrap">${esc(r.message)}</pre>` : ''}
     </div>`).join('') || '<span class="cell-sub">Nobody would be notified</span>'
 
     const section = (label, body) => `<div class="stack gap2">

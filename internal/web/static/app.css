@@ -42,3 +42,12 @@
    scrollport, and the header is pushed 58px down over the first row. Inside the
    wrap the header belongs at the wrap's own top edge. */
 .table-wrap .tbl thead th { top: 0; }
+
+/* Free text from ConnectWise (note previews, diff values, rendered messages) carries long
+   unbroken tokens such as inline-image URLs. pre-wrap alone leaves those on one line, and
+   on a phone that line runs past the viewport and gives the whole page a horizontal scroll. */
+.note-text, .event-detail, .diff-table td { overflow-wrap: anywhere; }
+
+/* A code block that wraps instead of scrolling: compiled conditions and simulated messages
+   are read in full, not scanned horizontally. */
+.code.prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -274,7 +274,7 @@ function wfCondFootHTML(i, compiled) {
 function wfPreviewHTML(compiled) {
     if (!compiled) return '<span class="cell-sub">Condition is edited as text.</span>'
     const code = compiled.text
-        ? `<pre class="code" style="white-space:pre-wrap">${esc(compiled.text)}</pre>`
+        ? `<pre class="code prewrap">${esc(compiled.text)}</pre>`
         : '<span class="cell-sub">Matches every ticket its trigger allows.</span>'
     return compiled.errors.length
         ? `${code}<div class="cond-result err" style="margin-top:var(--s2)">${esc(compiled.errors[0])}</div>`
@@ -354,13 +354,11 @@ function wfListSelectHTML(i, k, row, f) {
 }
 
 function wfTypeaheadHTML(i, k, f, current, add = false) {
-    const id = `ta-${i}-${k}-${add ? 'add' : 'one'}`
     return `<span class="typeahead grow">
-        <input class="input" type="text" id="${id}" list="${id}-list" autocomplete="off"
+        <input class="input" type="text" autocomplete="off"
             aria-label="${add ? `Add a ${esc(f.source)}` : `Search ${esc(f.source)}`}"
             placeholder="${add ? '+ search…' : `search ${esc(f.source)}…`}" value="${esc(current)}"
-            oninput="wfTypeahead(${i}, ${k}, '${f.source}', this)">
-        <datalist id="${id}-list"></datalist>
+            oninput="wfTypeahead(${i}, ${k}, '${f.source}', this, ${add})">
     </span>`
 }
 
@@ -377,11 +375,11 @@ function wfSourceList(f) {
 }
 
 // ── Typeahead (companies / contacts) ─────────────────────
-// Options are rendered as "Name (#id)". Picking one from the datalist fires `input` with that
-// exact text, so we commit immediately instead of waiting for `change` (blur / Enter).
-function wfTypeahead(i, k, source, input) {
+// Matches are offered in the shared popup (app.js); a pick commits the id straight into the
+// row. `add` is the chip adder on a multi-value row, which clears itself after each pick.
+function wfTypeahead(i, k, source, input, add) {
     clearTimeout(wfTypeaheadTimer)
-    if (wfTypeaheadPick(i, k, source, input, input.id.endsWith('-add'))) return
+    typeaheadHide()
     const q = input.value.trim()
     if (q.length < 2) return
     wfTypeaheadTimer = setTimeout(async () => {
@@ -392,24 +390,13 @@ function wfTypeahead(i, k, source, input) {
         }
         try {
             const list = (await api('GET', `/cw/${source}?${params}`)) || []
-            const dl = document.getElementById(`${input.id}-list`)
-            if (!dl) return
-            dl.innerHTML = list.map(it => {
-                const label = wfLookupLabel(source, it)
-                wfNames[source][it.id] = label
-                return `<option value="${esc(`${label} (#${it.id})`)}"></option>`
-            }).join('')
+            for (const it of list) wfNames[source][it.id] = wfLookupLabel(source, it)
+            typeaheadShow(input, list.map(it => ({ label: wfNames[source][it.id], sub: `#${it.id}`, id: it.id })), it => {
+                if (add) { input.value = ''; wfAddRowValue(i, k, it.id) }
+                else wfSetRowValue(i, k, it.id, true)
+            })
         } catch (e) { toast(e.message, 'error') }
     }, 250)
-}
-
-function wfTypeaheadPick(i, k, source, input, add) {
-    const m = input.value.match(/\(#(\d+)\)\s*$/)
-    if (!m) return false
-    const id = parseInt(m[1])
-    if (add) { input.value = ''; wfAddRowValue(i, k, id) }
-    else wfSetRowValue(i, k, id, true)
-    return true
 }
 
 // wfSiblingCompany finds a "Company is X" row in the same rule, to scope contact searches.

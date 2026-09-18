@@ -178,11 +178,10 @@ function renderListDetail(d) {
     </tr>`)
 
     const picker = `<span class="typeahead" style="max-width:360px;flex:1">
-        <input class="input" type="text" id="ls-pick" list="ls-pick-list" autocomplete="off"
+        <input class="input" type="text" id="ls-pick" autocomplete="off"
             aria-label="Search ${esc(info.plural.toLowerCase())} to add"
             placeholder="+ search ${esc(info.plural.toLowerCase())} to add…"
             oninput="lsPickerInput('${esc(info.source)}', this)">
-        <datalist id="ls-pick-list"></datalist>
     </span>`
 
     setContent(`${backRow('lists', 'Lists', d.name)}
@@ -209,26 +208,19 @@ function renderListDetail(d) {
     })}`)
 }
 
-// The picker mirrors the condition builder's typeahead: options render as "Name (#id)" and a
-// pick is detected by that suffix, so it commits on `input` without waiting for blur.
+// The picker uses the shared typeahead popup (app.js); a pick adds the member straight away.
 function lsPickerInput(source, input) {
     clearTimeout(lsPickerTimer)
-    const m = input.value.match(/\(#(\d+)\)\s*$/)
-    if (m) {
-        input.value = ''
-        lsAddItem(parseInt(m[1]))
-        return
-    }
+    typeaheadHide()
     const q = input.value.trim()
     if (q.length < 2) return
     lsPickerTimer = setTimeout(async () => {
         try {
             const found = (await api('GET', `/cw/${source}?${new URLSearchParams({ q, limit: 15 })}`)) || []
-            const dl = document.getElementById('ls-pick-list')
-            if (!dl) return
-            const have = new Set((lsDetail?.items || []).map(it => it.item_id))
-            dl.innerHTML = found.filter(it => !have.has(it.id))
-                .map(it => `<option value="${esc(`${wfLookupLabel(source, it)} (#${it.id})`)}"></option>`).join('')
+            const have  = new Set((lsDetail?.items || []).map(it => it.item_id))
+            typeaheadShow(input,
+                found.filter(it => !have.has(it.id)).map(it => ({ label: wfLookupLabel(source, it), sub: `#${it.id}`, id: it.id })),
+                it => { input.value = ''; lsAddItem(it.id) })
         } catch (e) { toast(e.message, 'error') }
     }, 250)
 }

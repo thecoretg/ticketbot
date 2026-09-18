@@ -790,6 +790,78 @@ function confirmModal({ title, body, confirmLabel = 'Delete', tone = 'bad', onCo
 }
 
 // ─────────────────────────────────────────────────────────
+// Typeahead popup
+//
+// Search inputs offer their matches in a navi .typeahead-pop. The native <datalist>
+// popup is drawn by the browser rather than the page, and embedded web views put it
+// nowhere near the input. The popup hangs off <body> at the input's page coordinates,
+// so an ancestor that clips (the condition box has overflow: hidden) cannot cut it off.
+// ─────────────────────────────────────────────────────────
+let taOpen = null   // { input, items, onPick, pop, cursor }
+
+// typeaheadShow lists items ({ label, sub?, ...data }) under input; onPick gets the chosen item.
+function typeaheadShow(input, items, onPick) {
+    typeaheadHide()
+    if (!items.length || document.activeElement !== input) return   // the user has moved on
+    typeaheadBind(input)
+
+    const pop = document.createElement('div')
+    pop.className = 'typeahead-pop'
+    pop.setAttribute('role', 'listbox')
+    pop.innerHTML = items.map((it, k) =>
+        `<button type="button" role="option" data-k="${k}">${esc(it.label)}${it.sub ? `<span class="cell-sub">${esc(it.sub)}</span>` : ''}</button>`).join('')
+    // mousedown rather than click: a click would blur the input first, and blur closes the popup
+    pop.addEventListener('mousedown', e => {
+        const b = e.target.closest('[data-k]')
+        if (!b) return
+        e.preventDefault()
+        typeaheadPick(Number(b.dataset.k))
+    })
+    document.body.appendChild(pop)
+
+    const r = input.getBoundingClientRect()
+    pop.style.minWidth = `${r.width}px`
+    pop.style.top      = `${window.scrollY + r.bottom + 4}px`
+    pop.style.left     = `${window.scrollX + Math.max(12, Math.min(r.left, window.innerWidth - pop.offsetWidth - 12))}px`
+    taOpen = { input, items, onPick, pop, cursor: -1 }
+}
+
+function typeaheadHide() {
+    taOpen?.pop.remove()
+    taOpen = null
+}
+
+function typeaheadPick(k) {
+    const { items, onPick } = taOpen
+    typeaheadHide()
+    onPick(items[k])
+}
+
+function typeaheadMove(dir) {
+    const n = taOpen.items.length
+    taOpen.cursor = (taOpen.cursor + dir + n) % n
+    taOpen.pop.querySelectorAll('button').forEach((b, k) => b.classList.toggle('cursor', k === taOpen.cursor))
+}
+
+// typeaheadBind wires keyboard navigation and dismissal to an input, once.
+function typeaheadBind(input) {
+    if (input.dataset.ta) return
+    input.dataset.ta = '1'
+    input.addEventListener('keydown', e => {
+        if (!taOpen || taOpen.input !== input) return
+        switch (e.key) {
+        case 'ArrowDown': e.preventDefault(); typeaheadMove(1); break
+        case 'ArrowUp':   e.preventDefault(); typeaheadMove(-1); break
+        case 'Enter':     if (taOpen.cursor >= 0) { e.preventDefault(); typeaheadPick(taOpen.cursor) } break
+        case 'Escape':    e.stopPropagation(); typeaheadHide(); break   // closes the list, not the modal
+        }
+    })
+    input.addEventListener('blur', typeaheadHide)
+}
+// the popup is pinned to page coordinates, so any scroll would leave it behind
+window.addEventListener('scroll', typeaheadHide, true)
+
+// ─────────────────────────────────────────────────────────
 // Utilities
 // ─────────────────────────────────────────────────────────
 // copyText writes to the clipboard and says so either way: the clipboard API rejects in
@@ -817,15 +889,12 @@ function fmtDateRange(start, end) {
     return `${s} – ${e}`
 }
 
-// splits a UTC ISO string into local ['YYYY-MM-DD', 'HH:MM'] for date/time inputs
-function splitLocalDT(iso) {
-    if (!iso) return ['', '']
+// localDT turns a UTC ISO string into the local 'YYYY-MM-DDTHH:MM' a datetime-local input takes.
+function localDT(iso) {
+    if (!iso) return ''
     const d = new Date(iso)
     const p = n => String(n).padStart(2, '0')
-    return [
-        `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
-        `${p(d.getHours())}:${p(d.getMinutes())}`,
-    ]
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 // ─────────────────────────────────────────────────────────
@@ -997,8 +1066,11 @@ async function showForwardModal(existing = null) {
             `<option value="${o}"${o === val ? ' selected' : ''}>${o ? 'Yes' : 'No'}</option>`).join('')
     }
 
-    const [startDate, startTime] = splitLocalDT(existing?.start_date)
-    const [endDate, endTime]     = splitLocalDT(existing?.end_date)
+    // One datetime-local per bound. A separate date + time pair does not fit the modal's
+    // two-column grid: native date and time inputs have a fixed minimum width, so the time
+    // box was pushed past the edge of the dialog.
+    const startLocal = localDT(existing?.start_date)
+    const endLocal   = localDT(existing?.end_date)
 
     openModal(existing ? 'Edit forward' : 'New forward', `
         <div class="stack gap4">
@@ -1013,18 +1085,12 @@ async function showForwardModal(existing = null) {
             </div>
             <div class="grid g2" style="gap:var(--s3)">
                 <div class="field">
-                    <label for="f-start-date">Start <span class="muted">(optional)</span></label>
-                    <div class="row gap2">
-                        <input class="input" type="date" id="f-start-date" style="flex:2" value="${startDate}" aria-label="Start date">
-                        <input class="input" type="time" id="f-start-time" style="flex:1" value="${startTime}" aria-label="Start time">
-                    </div>
+                    <label for="f-start">Start <span class="muted">(optional)</span></label>
+                    <input class="input" type="datetime-local" id="f-start" value="${startLocal}">
                 </div>
                 <div class="field">
-                    <label for="f-end-date">End <span class="muted">(optional)</span></label>
-                    <div class="row gap2">
-                        <input class="input" type="date" id="f-end-date" style="flex:2" value="${endDate}" aria-label="End date">
-                        <input class="input" type="time" id="f-end-time" style="flex:1" value="${endTime}" aria-label="End time">
-                    </div>
+                    <label for="f-end">End <span class="muted">(optional)</span></label>
+                    <input class="input" type="datetime-local" id="f-end" value="${endLocal}">
                 </div>
             </div>
             <div class="grid g2" style="gap:var(--s3)">
@@ -1048,17 +1114,12 @@ async function showForwardModal(existing = null) {
         </div>`, async () => {
         const sourceId  = parseInt(document.getElementById('f-source').value)
         const destId    = parseInt(document.getElementById('f-dest').value)
-        const startDate = document.getElementById('f-start-date').value
-        const startTime = document.getElementById('f-start-time').value
-        const endDate   = document.getElementById('f-end-date').value
-        const endTime   = document.getElementById('f-end-time').value
+        const startDT   = document.getElementById('f-start').value   // 'YYYY-MM-DDTHH:MM' or ''
+        const endDT     = document.getElementById('f-end').value
         const enabled   = document.getElementById('f-enabled').value === 'true'
         const keepCopy  = document.getElementById('f-keep').value === 'true'
         const soleResource = document.getElementById('f-sole').value === 'true'
         const publicOnly   = document.getElementById('f-public').value === 'true'
-
-        const startDT = startDate ? `${startDate}T${startTime || '00:00'}` : null
-        const endDT   = endDate   ? `${endDate}T${endTime   || '23:59'}` : null
 
         if (sourceId === destId) { toast('Source and destination must be different', 'error'); return }
         if (startDT && endDT && endDT <= startDT) { toast('End must be after start', 'error'); return }
