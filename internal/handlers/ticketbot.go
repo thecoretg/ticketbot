@@ -31,7 +31,7 @@ func (h *TicketbotHandler) ProcessTicket(w http.ResponseWriter, r *http.Request)
 	ctx := context.WithoutCancel(r.Context())
 	switch action {
 	case "added", "updated":
-		opts := ticketbot.ProcessOpts{Source: models.SourceWebhook, WebhookMemberID: p.MemberID, RunRules: true}
+		opts := ticketbot.ProcessOpts{Source: models.SourceWebhook, RunRules: true}
 		go h.processTicket(ctx, id, opts)
 	case "deleted":
 		go h.deleteTicket(ctx, id)

@@ -41,8 +41,6 @@ type ticketLock struct {
 // ProcessOpts describes where an intake request came from and how far it should go.
 type ProcessOpts struct {
 	Source models.EventSource
-	// WebhookMemberID is the ConnectWise member identifier that made the change, when known.
-	WebhookMemberID string
 	// RunRules is false for bulk syncs, which only refresh storage and record events.
 	RunRules bool
 }
@@ -125,7 +123,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (
 	}
 	run.add(kind, changePayload(d, f, s.Cfg.NotePreviewLength))
 
-	if guard := s.loopGuard(opts, f, d); guard != nil {
+	if guard := s.loopGuard(f, d); guard != nil {
 		run.add(models.EventLoopGuard, guard)
 		logger.Debug("ticketbot: loop guard tripped", "reason", guard.Reason)
 		_, err := s.CW.SaveTicket(ctx, f, string(opts.Source))
@@ -153,16 +151,16 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (
 	return nil
 }
 
-// loopGuard reports why rules must not run for a change ticketbot made itself, or nil.
-func (s *Service) loopGuard(opts ProcessOpts, f *cwsvc.Fetched, d decision) *models.LoopGuardPayload {
+// loopGuard reports why rules must not run for a change ticketbot made itself, or nil. It reads
+// the record, never the webhook payload: a ConnectWise callback's MemberID names the API member
+// that owns the callback, not whoever changed the ticket, so it is the same for every delivery.
+func (s *Service) loopGuard(f *cwsvc.Fetched, d decision) *models.LoopGuardPayload {
 	apiID := strings.TrimSpace(s.Cfg.CWAPIMemberIdentifier)
 	if apiID == "" {
 		return nil
 	}
 
 	switch {
-	case strings.EqualFold(opts.WebhookMemberID, apiID):
-		return &models.LoopGuardPayload{Reason: "webhook_member", Identifier: apiID}
 	case d.NewNote && f.Note != nil && strings.EqualFold(f.Note.Member.Identifier, apiID):
 		return &models.LoopGuardPayload{Reason: "note_author", Identifier: apiID}
 	case len(d.Changes) > 0 && !d.NewNote && strings.EqualFold(f.Ticket.Info.UpdatedBy, apiID):

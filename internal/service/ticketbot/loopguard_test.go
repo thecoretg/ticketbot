@@ -22,22 +22,20 @@ func TestLoopGuard(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		opts   ProcessOpts
 		f      *cwsvc.Fetched
 		d      decision
 		reason string
 	}{
-		{"webhook member", ProcessOpts{WebhookMemberID: "ticketbot"}, &cwsvc.Fetched{Ticket: humanTicket}, decision{}, "webhook_member"},
-		{"bot note", ProcessOpts{}, &cwsvc.Fetched{Ticket: humanTicket, Note: botNote}, decision{NewNote: true}, "note_author"},
-		{"human note", ProcessOpts{}, &cwsvc.Fetched{Ticket: botTicket, Note: humanNote}, decision{NewNote: true}, ""},
-		{"bot field change", ProcessOpts{}, &cwsvc.Fetched{Ticket: botTicket}, decision{Changes: []models.FieldChange{{Field: "status"}}}, "updated_by"},
-		{"human field change", ProcessOpts{}, &cwsvc.Fetched{Ticket: humanTicket}, decision{Changes: []models.FieldChange{{Field: "status"}}}, ""},
-		{"new ticket by bot", ProcessOpts{}, &cwsvc.Fetched{Ticket: botTicket}, decision{IsNew: true}, ""},
+		{"bot note", &cwsvc.Fetched{Ticket: humanTicket, Note: botNote}, decision{NewNote: true}, "note_author"},
+		{"human note", &cwsvc.Fetched{Ticket: botTicket, Note: humanNote}, decision{NewNote: true}, ""},
+		{"bot field change", &cwsvc.Fetched{Ticket: botTicket}, decision{Changes: []models.FieldChange{{Field: "status"}}}, "updated_by"},
+		{"human field change", &cwsvc.Fetched{Ticket: humanTicket}, decision{Changes: []models.FieldChange{{Field: "status"}}}, ""},
+		{"new ticket by bot", &cwsvc.Fetched{Ticket: botTicket}, decision{IsNew: true}, ""},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			g := svc.loopGuard(c.opts, c.f, c.d)
+			g := svc.loopGuard(c.f, c.d)
 			got := ""
 			if g != nil {
 				got = g.Reason
@@ -49,7 +47,7 @@ func TestLoopGuard(t *testing.T) {
 	}
 
 	unset := &Service{Cfg: &models.Config{}}
-	if g := unset.loopGuard(ProcessOpts{WebhookMemberID: "x"}, &cwsvc.Fetched{Ticket: botTicket}, decision{}); g != nil {
+	if g := unset.loopGuard(&cwsvc.Fetched{Ticket: botTicket}, decision{Changes: []models.FieldChange{{Field: "status"}}}); g != nil {
 		t.Error("guard must be inert when no api member is configured")
 	}
 }

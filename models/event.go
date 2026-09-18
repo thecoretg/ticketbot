@@ -65,7 +65,7 @@ type NotePayload struct {
 
 // LoopGuardPayload explains why rules were skipped for a self-authored update.
 type LoopGuardPayload struct {
-	Reason     string `json:"reason"` // note_author | updated_by | webhook_member
+	Reason     string `json:"reason"` // note_author | updated_by (webhook_member in events recorded before 2026-09-18)
 	Identifier string `json:"identifier"`
 }
 
