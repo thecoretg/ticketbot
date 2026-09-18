@@ -2,7 +2,7 @@ VERSION  ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 # App env file. A 1Password-mounted .env at the repo root is the expected setup; override with
 # `make run ENV_FILE=path/to/.env`.
 ENV_FILE ?= .env
-COMPOSE   = docker compose -f ./docker/docker-compose.yml
+COMPOSE   = docker compose
 
 gensql:
 	sqlc generate
@@ -35,7 +35,7 @@ docker-down:
 	$(COMPOSE) --env-file $(ENV_FILE) down
 
 docker-build:
-	docker buildx build --platform=linux/amd64 --build-arg VERSION=$(VERSION) -t ticketbot:$(VERSION) --load -f ./docker/DockerfileMain .
+	docker buildx build --platform=linux/amd64 --build-arg VERSION=$(VERSION) -t ticketbot:$(VERSION) --load .
 
 deploy-container: docker-build
 	aws lightsail push-container-image \

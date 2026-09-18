@@ -21,8 +21,8 @@ services:
 
   app:
     build:
-      context: ..
-      dockerfile: docker/DockerfileMain
+      context: .
+      dockerfile: Dockerfile
       args:
         VERSION: ${VERSION:-dev}
     container_name: ticketbot
@@ -32,7 +32,7 @@ services:
     ports:
       - "${PORT:-8080}:8080"
     restart: unless-stopped
-    env_file: ../.env
+    env_file: .env
     environment:
       # inside the compose network the app must reach the db service, not localhost
       POSTGRES_DSN: "postgres://${DB_USER:-testuser}:${DB_PASSWORD:-testpass}@db:5432/${DB_NAME:-testdb}?sslmode=disable"

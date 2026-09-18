@@ -1,0 +1,18 @@
+# Keep secrets, VCS history and local build output out of the image build context. The builder
+# stage runs `COPY . .`, so anything not listed here lands in a cached layer on the build host.
+.git
+.github
+.claude
+*.env
+.env.example
+/ticketbot
+bin/
+dist/
+*.log
+*.db
+.idea
+.DS_Store
+compose.yaml
+Dockerfile
+README.md
+*.md
