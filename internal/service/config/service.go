@@ -66,6 +66,12 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.LogBufferSize != nil {
 		merged.LogBufferSize = *p.LogBufferSize
 	}
+	if p.SSOEnabled != nil {
+		merged.SSOEnabled = *p.SSOEnabled
+	}
+	if p.PasswordLoginEnabled != nil {
+		merged.PasswordLoginEnabled = *p.PasswordLoginEnabled
+	}
 
 	updated, err := s.Config.Upsert(ctx, &merged)
 	if err != nil {
@@ -87,6 +93,8 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.LogRetentionDays = src.LogRetentionDays
 	cfg.LogCleanupIntervalHours = src.LogCleanupIntervalHours
 	cfg.LogBufferSize = src.LogBufferSize
+	cfg.SSOEnabled = src.SSOEnabled
+	cfg.PasswordLoginEnabled = src.PasswordLoginEnabled
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)

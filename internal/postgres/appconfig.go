@@ -68,6 +68,8 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		LogRetentionDays:        c.LogRetentionDays,
 		LogCleanupIntervalHours: c.LogCleanupIntervalHours,
 		LogBufferSize:           c.LogBufferSize,
+		SsoEnabled:              c.SSOEnabled,
+		PasswordLoginEnabled:    c.PasswordLoginEnabled,
 	}
 }
 
@@ -83,5 +85,7 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		LogRetentionDays:        pg.LogRetentionDays,
 		LogCleanupIntervalHours: pg.LogCleanupIntervalHours,
 		LogBufferSize:           pg.LogBufferSize,
+		SSOEnabled:              pg.SsoEnabled,
+		PasswordLoginEnabled:    pg.PasswordLoginEnabled,
 	}
 }

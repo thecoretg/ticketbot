@@ -7,71 +7,52 @@ package db
 
 import (
 	"context"
-	"time"
 )
 
 const getUserForAuth = `-- name: GetUserForAuth :one
-SELECT id, email_address, password_hash, password_reset_required, totp_secret, totp_enabled, created_on, updated_on
+SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid
 FROM api_user
 WHERE email_address = $1 LIMIT 1
 `
 
-type GetUserForAuthRow struct {
-	ID                    int       `json:"id"`
-	EmailAddress          string    `json:"email_address"`
-	PasswordHash          []byte    `json:"password_hash"`
-	PasswordResetRequired bool      `json:"password_reset_required"`
-	TotpSecret            *string   `json:"totp_secret"`
-	TotpEnabled           bool      `json:"totp_enabled"`
-	CreatedOn             time.Time `json:"created_on"`
-	UpdatedOn             time.Time `json:"updated_on"`
-}
-
-func (q *Queries) GetUserForAuth(ctx context.Context, emailAddress string) (*GetUserForAuthRow, error) {
+func (q *Queries) GetUserForAuth(ctx context.Context, emailAddress string) (*ApiUser, error) {
 	row := q.db.QueryRow(ctx, getUserForAuth, emailAddress)
-	var i GetUserForAuthRow
+	var i ApiUser
 	err := row.Scan(
 		&i.ID,
 		&i.EmailAddress,
+		&i.CreatedOn,
+		&i.UpdatedOn,
 		&i.PasswordHash,
 		&i.PasswordResetRequired,
 		&i.TotpSecret,
 		&i.TotpEnabled,
-		&i.CreatedOn,
-		&i.UpdatedOn,
+		&i.Role,
+		&i.EntraOid,
 	)
 	return &i, err
 }
 
 const getUserForAuthByID = `-- name: GetUserForAuthByID :one
-SELECT id, email_address, password_hash, password_reset_required, totp_secret, totp_enabled, created_on, updated_on
+SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid
 FROM api_user
 WHERE id = $1 LIMIT 1
 `
 
-type GetUserForAuthByIDRow struct {
-	ID                    int       `json:"id"`
-	EmailAddress          string    `json:"email_address"`
-	PasswordHash          []byte    `json:"password_hash"`
-	PasswordResetRequired bool      `json:"password_reset_required"`
-	TotpSecret            *string   `json:"totp_secret"`
-	TotpEnabled           bool      `json:"totp_enabled"`
-	CreatedOn             time.Time `json:"created_on"`
-	UpdatedOn             time.Time `json:"updated_on"`
-}
-
-func (q *Queries) GetUserForAuthByID(ctx context.Context, id int) (*GetUserForAuthByIDRow, error) {
+func (q *Queries) GetUserForAuthByID(ctx context.Context, id int) (*ApiUser, error) {
 	row := q.db.QueryRow(ctx, getUserForAuthByID, id)
-	var i GetUserForAuthByIDRow
+	var i ApiUser
 	err := row.Scan(
 		&i.ID,
 		&i.EmailAddress,
+		&i.CreatedOn,
+		&i.UpdatedOn,
 		&i.PasswordHash,
 		&i.PasswordResetRequired,
 		&i.TotpSecret,
 		&i.TotpEnabled,
-		&i.CreatedOn,
-		&i.UpdatedOn,
+		&i.Role,
+		&i.EntraOid,
 	)
 	return &i, err
 }

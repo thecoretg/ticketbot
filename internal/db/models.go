@@ -26,6 +26,8 @@ type ApiUser struct {
 	PasswordResetRequired bool      `json:"password_reset_required"`
 	TotpSecret            *string   `json:"totp_secret"`
 	TotpEnabled           bool      `json:"totp_enabled"`
+	Role                  string    `json:"role"`
+	EntraOid              *string   `json:"entra_oid"`
 }
 
 type AppConfig struct {
@@ -39,6 +41,8 @@ type AppConfig struct {
 	LogBufferSize           int    `json:"log_buffer_size"`
 	MasterDryRun            bool   `json:"master_dry_run"`
 	CwApiMemberIdentifier   string `json:"cw_api_member_identifier"`
+	SsoEnabled              bool   `json:"sso_enabled"`
+	PasswordLoginEnabled    bool   `json:"password_login_enabled"`
 }
 
 type AppLog struct {
@@ -173,6 +177,30 @@ type Session struct {
 	TokenHash []byte    `json:"token_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedOn time.Time `json:"created_on"`
+}
+
+type SsoFlowState struct {
+	Key       string    `json:"key"`
+	State     string    `json:"state"`
+	Nonce     string    `json:"nonce"`
+	Verifier  string    `json:"verifier"`
+	Next      string    `json:"next"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type SsoRoleMapping struct {
+	ID        int       `json:"id"`
+	EntraRole string    `json:"entra_role"`
+	Role      string    `json:"role"`
+	CreatedOn time.Time `json:"created_on"`
+}
+
+type SsoSession struct {
+	Key        string    `json:"key"`
+	UserID     int       `json:"user_id"`
+	CreatedOn  time.Time `json:"created_on"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
 }
 
 type TicketEvent struct {

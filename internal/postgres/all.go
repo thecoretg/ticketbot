@@ -20,6 +20,8 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		TicketEvents:        NewTicketEventRepo(pool),
 		Workflows:           NewWorkflowRepo(pool),
 		Lists:               NewListRepo(pool),
+		SSO:                 NewSSOStore(pool),
+		SSORoleMappings:     NewSSORoleMappingRepo(pool),
 		CW: repos.CWRepos{
 			Board:        NewBoardRepo(pool),
 			TicketStatus: NewTicketStatusRepo(pool),

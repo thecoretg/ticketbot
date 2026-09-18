@@ -28,10 +28,14 @@ type APIKey struct {
 var ErrAPIUserNotFound = errors.New("api user not found")
 
 type APIUser struct {
-	ID           int       `json:"id"`
-	EmailAddress string    `json:"email_address"`
-	CreatedOn    time.Time `json:"created_on"`
-	UpdatedOn    time.Time `json:"updated_on"`
+	ID           int    `json:"id"`
+	EmailAddress string `json:"email_address"`
+	Role         Role   `json:"role"`
+	// SSO is true when the account is linked to a Microsoft Entra identity. Such accounts take
+	// their role from Entra on every sign-in and have no local password.
+	SSO       bool      `json:"sso"`
+	CreatedOn time.Time `json:"created_on"`
+	UpdatedOn time.Time `json:"updated_on"`
 }
 
 // UserAuth is a restricted view of APIUser used only during login.
@@ -43,4 +47,6 @@ type UserAuth struct {
 	ResetRequired bool
 	TOTPSecret    *string
 	TOTPEnabled   bool
+	Role          Role
+	EntraOID      *string
 }

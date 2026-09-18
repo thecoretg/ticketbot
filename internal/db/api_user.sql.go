@@ -35,7 +35,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled FROM api_user
+SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid FROM api_user
 WHERE id = $1 LIMIT 1
 `
 
@@ -51,12 +51,14 @@ func (q *Queries) GetUser(ctx context.Context, id int) (*ApiUser, error) {
 		&i.PasswordResetRequired,
 		&i.TotpSecret,
 		&i.TotpEnabled,
+		&i.Role,
+		&i.EntraOid,
 	)
 	return &i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled FROM api_user
+SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid FROM api_user
 WHERE email_address = $1 LIMIT 1
 `
 
@@ -72,19 +74,19 @@ func (q *Queries) GetUserByEmail(ctx context.Context, emailAddress string) (*Api
 		&i.PasswordResetRequired,
 		&i.TotpSecret,
 		&i.TotpEnabled,
+		&i.Role,
+		&i.EntraOid,
 	)
 	return &i, err
 }
 
-const insertUser = `-- name: InsertUser :one
-INSERT INTO api_user
-(email_address)
-VALUES ($1)
-RETURNING id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled
+const getUserByEmailFold = `-- name: GetUserByEmailFold :one
+SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid FROM api_user
+WHERE LOWER(email_address) = LOWER($1) LIMIT 1
 `
 
-func (q *Queries) InsertUser(ctx context.Context, emailAddress string) (*ApiUser, error) {
-	row := q.db.QueryRow(ctx, insertUser, emailAddress)
+func (q *Queries) GetUserByEmailFold(ctx context.Context, lower string) (*ApiUser, error) {
+	row := q.db.QueryRow(ctx, getUserByEmailFold, lower)
 	var i ApiUser
 	err := row.Scan(
 		&i.ID,
@@ -95,12 +97,84 @@ func (q *Queries) InsertUser(ctx context.Context, emailAddress string) (*ApiUser
 		&i.PasswordResetRequired,
 		&i.TotpSecret,
 		&i.TotpEnabled,
+		&i.Role,
+		&i.EntraOid,
 	)
 	return &i, err
 }
 
+const getUserByEntraOID = `-- name: GetUserByEntraOID :one
+SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid FROM api_user
+WHERE entra_oid = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserByEntraOID(ctx context.Context, entraOid *string) (*ApiUser, error) {
+	row := q.db.QueryRow(ctx, getUserByEntraOID, entraOid)
+	var i ApiUser
+	err := row.Scan(
+		&i.ID,
+		&i.EmailAddress,
+		&i.CreatedOn,
+		&i.UpdatedOn,
+		&i.PasswordHash,
+		&i.PasswordResetRequired,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.Role,
+		&i.EntraOid,
+	)
+	return &i, err
+}
+
+const insertUser = `-- name: InsertUser :one
+INSERT INTO api_user
+(email_address, role)
+VALUES ($1, $2)
+RETURNING id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid
+`
+
+type InsertUserParams struct {
+	EmailAddress string `json:"email_address"`
+	Role         string `json:"role"`
+}
+
+func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (*ApiUser, error) {
+	row := q.db.QueryRow(ctx, insertUser, arg.EmailAddress, arg.Role)
+	var i ApiUser
+	err := row.Scan(
+		&i.ID,
+		&i.EmailAddress,
+		&i.CreatedOn,
+		&i.UpdatedOn,
+		&i.PasswordHash,
+		&i.PasswordResetRequired,
+		&i.TotpSecret,
+		&i.TotpEnabled,
+		&i.Role,
+		&i.EntraOid,
+	)
+	return &i, err
+}
+
+const linkUserEntra = `-- name: LinkUserEntra :exec
+UPDATE api_user
+SET entra_oid = $2, email_address = $3, updated_on = NOW()
+WHERE id = $1
+`
+
+type LinkUserEntraParams struct {
+	ID           int     `json:"id"`
+	EntraOid     *string `json:"entra_oid"`
+	EmailAddress string  `json:"email_address"`
+}
+
+func (q *Queries) LinkUserEntra(ctx context.Context, arg LinkUserEntraParams) error {
+	_, err := q.db.Exec(ctx, linkUserEntra, arg.ID, arg.EntraOid, arg.EmailAddress)
+	return err
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled FROM api_user
+SELECT id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid FROM api_user
 ORDER BY email_address
 `
 
@@ -122,6 +196,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]*ApiUser, error) {
 			&i.PasswordResetRequired,
 			&i.TotpSecret,
 			&i.TotpEnabled,
+			&i.Role,
+			&i.EntraOid,
 		); err != nil {
 			return nil, err
 		}
@@ -133,13 +209,29 @@ func (q *Queries) ListUsers(ctx context.Context) ([]*ApiUser, error) {
 	return items, nil
 }
 
+const setUserRole = `-- name: SetUserRole :exec
+UPDATE api_user
+SET role = $2, updated_on = NOW()
+WHERE id = $1
+`
+
+type SetUserRoleParams struct {
+	ID   int    `json:"id"`
+	Role string `json:"role"`
+}
+
+func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) error {
+	_, err := q.db.Exec(ctx, setUserRole, arg.ID, arg.Role)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE api_user
 SET
     email_address = $2,
     updated_on = NOW()
 WHERE id = $1
-RETURNING id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled
+RETURNING id, email_address, created_on, updated_on, password_hash, password_reset_required, totp_secret, totp_enabled, role, entra_oid
 `
 
 type UpdateUserParams struct {
@@ -159,6 +251,8 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (*ApiUse
 		&i.PasswordResetRequired,
 		&i.TotpSecret,
 		&i.TotpEnabled,
+		&i.Role,
+		&i.EntraOid,
 	)
 	return &i, err
 }

@@ -33,7 +33,7 @@ func (s *Service) BootstrapAdmin(ctx context.Context, email string, initialPassw
 	}
 
 	slog.Info("initial admin not found; creating now", "email", email)
-	u, err := s.Users.Insert(ctx, email)
+	u, err := s.Users.Insert(ctx, email, models.RoleAdmin)
 	if err != nil {
 		return fmt.Errorf("creating user: %w", err)
 	}

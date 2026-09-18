@@ -22,7 +22,13 @@ type APIUserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*models.APIUser, error)
 	GetForAuth(ctx context.Context, email string) (*models.UserAuth, error)
 	Exists(ctx context.Context, email string) (bool, error)
-	Insert(ctx context.Context, email string) (*models.APIUser, error)
+	Insert(ctx context.Context, email string, role models.Role) (*models.APIUser, error)
+	GetByEntraOID(ctx context.Context, oid string) (*models.APIUser, error)
+	// GetByEmailFold matches email_address case-insensitively.
+	GetByEmailFold(ctx context.Context, email string) (*models.APIUser, error)
+	SetRole(ctx context.Context, id int, role models.Role) error
+	// LinkEntra records the Entra object ID on a local account and refreshes its email.
+	LinkEntra(ctx context.Context, id int, oid, email string) error
 	GetForAuthByID(ctx context.Context, id int) (*models.UserAuth, error)
 	SetPassword(ctx context.Context, id int, hash []byte) error
 	SetPasswordResetRequired(ctx context.Context, id int, required bool) error

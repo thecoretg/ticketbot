@@ -14,6 +14,8 @@ type AllRepos struct {
 	TicketEvents        TicketEventRepository
 	Workflows           WorkflowRepository
 	Lists               ListRepository
+	SSO                 SSOStore
+	SSORoleMappings     SSORoleMappingRepository
 	CW                  CWRepos
 }
 

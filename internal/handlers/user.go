@@ -69,8 +69,9 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 }
 
 type createUserRequest struct {
-	EmailAddress string `json:"email_address"`
-	Password     string `json:"password"` // optional; if set, user must reset on first login
+	EmailAddress string      `json:"email_address"`
+	Password     string      `json:"password"` // optional; if set, user must reset on first login
+	Role         models.Role `json:"role"`     // optional; defaults to viewer
 }
 
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
@@ -78,6 +79,10 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if err := decodeJSON(r, &p); err != nil {
 		badPayloadError(w, err)
 		return
+	}
+
+	if p.Role == "" {
+		p.Role = models.RoleViewer
 	}
 
 	var (
@@ -90,9 +95,9 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, M{"error": err.Error()})
 			return
 		}
-		u, err = h.Service.InsertUserWithPassword(r.Context(), p.EmailAddress, p.Password)
+		u, err = h.Service.InsertUserWithPassword(r.Context(), p.EmailAddress, p.Password, p.Role)
 	} else {
-		u, err = h.Service.InsertUser(r.Context(), p.EmailAddress)
+		u, err = h.Service.InsertUser(r.Context(), p.EmailAddress, p.Role)
 	}
 
 	if err != nil {
@@ -100,7 +105,45 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			conflictError(w, err)
 			return
 		}
+		if errors.Is(err, models.ErrInvalidRole) {
+			writeJSON(w, http.StatusBadRequest, M{"error": err.Error()})
+			return
+		}
 		internalServerError(w, err)
+		return
+	}
+
+	outputJSON(w, u)
+}
+
+type setRoleRequest struct {
+	Role models.Role `json:"role"`
+}
+
+func (h *UserHandler) SetRole(w http.ResponseWriter, r *http.Request) {
+	id, err := convertID(r)
+	if err != nil {
+		badIntError(w, r)
+		return
+	}
+	var p setRoleRequest
+	if err := decodeJSON(r, &p); err != nil {
+		badPayloadError(w, err)
+		return
+	}
+
+	u, err := h.Service.SetRole(r.Context(), id, p.Role, middleware.UserID(r.Context()))
+	if err != nil {
+		switch {
+		case errors.Is(err, models.ErrAPIUserNotFound):
+			notFoundError(w, err)
+		case errors.Is(err, models.ErrInvalidRole):
+			writeJSON(w, http.StatusBadRequest, M{"error": err.Error()})
+		case errors.Is(err, user.ErrCannotChangeOwnRole{}), errors.Is(err, user.ErrRoleManagedByEntra{}):
+			writeJSON(w, http.StatusForbidden, M{"error": err.Error()})
+		default:
+			internalServerError(w, err)
+		}
 		return
 	}
 

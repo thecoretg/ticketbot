@@ -66,13 +66,45 @@ func (p *APIUserRepo) Exists(ctx context.Context, email string) (bool, error) {
 	return p.queries.CheckUserExists(ctx, email)
 }
 
-func (p *APIUserRepo) Insert(ctx context.Context, email string) (*models.APIUser, error) {
-	d, err := p.queries.InsertUser(ctx, email)
+func (p *APIUserRepo) Insert(ctx context.Context, email string, role models.Role) (*models.APIUser, error) {
+	d, err := p.queries.InsertUser(ctx, db.InsertUserParams{EmailAddress: email, Role: string(role)})
 	if err != nil {
 		return nil, err
 	}
 
 	return userFromPG(d), nil
+}
+
+func (p *APIUserRepo) GetByEntraOID(ctx context.Context, oid string) (*models.APIUser, error) {
+	d, err := p.queries.GetUserByEntraOID(ctx, &oid)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, models.ErrAPIUserNotFound
+		}
+		return nil, err
+	}
+
+	return userFromPG(d), nil
+}
+
+func (p *APIUserRepo) GetByEmailFold(ctx context.Context, email string) (*models.APIUser, error) {
+	d, err := p.queries.GetUserByEmailFold(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, models.ErrAPIUserNotFound
+		}
+		return nil, err
+	}
+
+	return userFromPG(d), nil
+}
+
+func (p *APIUserRepo) SetRole(ctx context.Context, id int, role models.Role) error {
+	return p.queries.SetUserRole(ctx, db.SetUserRoleParams{ID: id, Role: string(role)})
+}
+
+func (p *APIUserRepo) LinkEntra(ctx context.Context, id int, oid, email string) error {
+	return p.queries.LinkUserEntra(ctx, db.LinkUserEntraParams{ID: id, EntraOid: &oid, EmailAddress: email})
 }
 
 func (p *APIUserRepo) Update(ctx context.Context, u *models.APIUser) (*models.APIUser, error) {
@@ -96,7 +128,7 @@ func (p *APIUserRepo) GetForAuth(ctx context.Context, email string) (*models.Use
 		return nil, err
 	}
 
-	return userAuthFromPG(d.ID, d.EmailAddress, d.PasswordHash, d.PasswordResetRequired, d.TotpSecret, d.TotpEnabled), nil
+	return userAuthFromPG(d), nil
 }
 
 func (p *APIUserRepo) GetForAuthByID(ctx context.Context, id int) (*models.UserAuth, error) {
@@ -108,7 +140,7 @@ func (p *APIUserRepo) GetForAuthByID(ctx context.Context, id int) (*models.UserA
 		return nil, err
 	}
 
-	return userAuthFromPG(d.ID, d.EmailAddress, d.PasswordHash, d.PasswordResetRequired, d.TotpSecret, d.TotpEnabled), nil
+	return userAuthFromPG(d), nil
 }
 
 func (p *APIUserRepo) SetPassword(ctx context.Context, id int, hash []byte) error {
@@ -155,18 +187,22 @@ func userFromPG(pg *db.ApiUser) *models.APIUser {
 	return &models.APIUser{
 		ID:           pg.ID,
 		EmailAddress: pg.EmailAddress,
+		Role:         models.Role(pg.Role),
+		SSO:          pg.EntraOid != nil,
 		CreatedOn:    pg.CreatedOn,
 		UpdatedOn:    pg.UpdatedOn,
 	}
 }
 
-func userAuthFromPG(id int, email string, passwordHash []byte, resetRequired bool, totpSecret *string, totpEnabled bool) *models.UserAuth {
+func userAuthFromPG(pg *db.ApiUser) *models.UserAuth {
 	return &models.UserAuth{
-		ID:            id,
-		EmailAddress:  email,
-		PasswordHash:  passwordHash,
-		ResetRequired: resetRequired,
-		TOTPSecret:    totpSecret,
-		TOTPEnabled:   totpEnabled,
+		ID:            pg.ID,
+		EmailAddress:  pg.EmailAddress,
+		PasswordHash:  pg.PasswordHash,
+		ResetRequired: pg.PasswordResetRequired,
+		TOTPSecret:    pg.TotpSecret,
+		TOTPEnabled:   pg.TotpEnabled,
+		Role:          models.Role(pg.Role),
+		EntraOID:      pg.EntraOid,
 	}
 }
