@@ -23,7 +23,7 @@ const (
 	// CallbackPath is where Microsoft redirects after sign-in; RedirectURI is ROOT_URL + this.
 	CallbackPath = "/auth/sso/callback"
 	// PanelPath is the dashboard, which doubles as the login page and the post-login landing.
-	PanelPath = "/panel/"
+	PanelPath = "/"
 	// SessionCookie is the name entra gives its session cookie (its default).
 	SessionCookie = "entra_session"
 )

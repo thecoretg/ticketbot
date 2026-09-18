@@ -41,8 +41,11 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	editor := middleware.RequireRole(models.RoleEditor)
 	admin := middleware.RequireRole(models.RoleAdmin)
 
+	// The dashboard lives at the root. ServeMux prefers the more specific API patterns, so this
+	// catch-all only sees paths no route claims. /panel/ stays as a redirect for old bookmarks.
 	panelFS, _ := fs.Sub(web.StaticFiles, "static")
-	rt.mux.Handle("GET /panel/", http.StripPrefix("/panel", http.FileServerFS(panelFS)))
+	rt.mux.Handle("GET /", http.FileServerFS(panelFS))
+	rt.mux.Handle("GET /panel/", http.RedirectHandler("/", http.StatusMovedPermanently))
 
 	rt.handle("GET /healthcheck", handlers.HandleHealthCheck) // authless ping for load balancer / container health checks
 	rt.handle("GET /authtest", handlers.HandleHealthCheck, auth)

@@ -288,7 +288,7 @@ async function showLogin() {
     document.getElementById('login').classList.remove('hidden')
 }
 
-// A failed Microsoft sign-in lands on /panel/?err=<message>. Show it once, then drop it from
+// A failed Microsoft sign-in lands on /?err=<message>. Show it once, then drop it from
 // the address bar so a refresh does not repeat it.
 function consumeSSOError() {
     const params = new URLSearchParams(window.location.search)

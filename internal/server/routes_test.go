@@ -32,7 +32,8 @@ func TestNewHandlerRoutes(t *testing.T) {
 		{http.MethodDelete, "/sso/mappings/1", http.StatusUnauthorized},
 		{http.MethodGet, "/auth/sso/start", http.StatusNotFound},
 		{http.MethodGet, "/nope", http.StatusNotFound},
-		{http.MethodGet, "/panel/", http.StatusOK},
+		{http.MethodGet, "/", http.StatusOK},
+		{http.MethodGet, "/app.js", http.StatusOK},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -42,10 +43,10 @@ func TestNewHandlerRoutes(t *testing.T) {
 		}
 	}
 
-	// the bare /panel path redirects to the directory, as it did under gin
+	// the old /panel/ address redirects to the root so bookmarks keep working
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/panel", nil))
-	if rec.Code/100 != 3 || rec.Header().Get("Location") != "/panel/" {
-		t.Errorf("GET /panel: got %d -> %q, want redirect to /panel/", rec.Code, rec.Header().Get("Location"))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/panel/", nil))
+	if rec.Code/100 != 3 || rec.Header().Get("Location") != "/" {
+		t.Errorf("GET /panel/: got %d -> %q, want redirect to /", rec.Code, rec.Header().Get("Location"))
 	}
 }
