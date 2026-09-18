@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/models"
@@ -37,24 +38,52 @@ func (e ErrRoleManagedByEntra) Error() string {
 	return "this account signs in with Microsoft; change its role in Entra"
 }
 
+// ErrBreakGlassProtected is returned when a change would weaken the INITIAL_ADMIN_EMAIL account,
+// the one guaranteed password sign-in when SSO is on.
+type ErrBreakGlassProtected struct{}
+
+func (e ErrBreakGlassProtected) Error() string {
+	return "this is the break-glass admin account set by INITIAL_ADMIN_EMAIL; it cannot be deleted or demoted"
+}
+
 type Service struct {
 	Users repos.APIUserRepository
 	Keys  repos.APIKeyRepository
+	// breakGlassEmail is INITIAL_ADMIN_EMAIL.
+	breakGlassEmail string
 }
 
-func New(u repos.APIUserRepository, k repos.APIKeyRepository) *Service {
+func New(u repos.APIUserRepository, k repos.APIKeyRepository, breakGlassEmail string) *Service {
 	return &Service{
-		Users: u,
-		Keys:  k,
+		Users:           u,
+		Keys:            k,
+		breakGlassEmail: breakGlassEmail,
 	}
 }
 
+// IsBreakGlass reports whether email is the INITIAL_ADMIN_EMAIL account.
+func (s *Service) IsBreakGlass(email string) bool {
+	return s.breakGlassEmail != "" && strings.EqualFold(email, s.breakGlassEmail)
+}
+
+func (s *Service) mark(u *models.APIUser) *models.APIUser {
+	if u != nil {
+		u.BreakGlass = s.IsBreakGlass(u.EmailAddress)
+	}
+	return u
+}
+
 func (s *Service) ListUsers(ctx context.Context) ([]*models.APIUser, error) {
-	return s.Users.List(ctx)
+	users, err := s.Users.List(ctx)
+	for _, u := range users {
+		s.mark(u)
+	}
+	return users, err
 }
 
 func (s *Service) GetUser(ctx context.Context, id int) (*models.APIUser, error) {
-	return s.Users.Get(ctx, id)
+	u, err := s.Users.Get(ctx, id)
+	return s.mark(u), err
 }
 
 func (s *Service) GetUserByEmail(ctx context.Context, email string) (*models.APIUser, error) {
@@ -104,6 +133,13 @@ func (s *Service) DeleteUser(ctx context.Context, id int, authenticatedUserID in
 	if id == authenticatedUserID {
 		return ErrCannotDeleteSelf{}
 	}
+	u, err := s.Users.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if s.IsBreakGlass(u.EmailAddress) {
+		return ErrBreakGlassProtected{}
+	}
 	return s.Users.Delete(ctx, id)
 }
 
@@ -121,6 +157,9 @@ func (s *Service) SetRole(ctx context.Context, id int, role models.Role, authent
 	}
 	if u.SSO {
 		return nil, ErrRoleManagedByEntra{}
+	}
+	if s.IsBreakGlass(u.EmailAddress) {
+		return nil, ErrBreakGlassProtected{}
 	}
 	if err := s.Users.SetRole(ctx, id, role); err != nil {
 		return nil, fmt.Errorf("setting role: %w", err)

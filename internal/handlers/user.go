@@ -139,7 +139,7 @@ func (h *UserHandler) SetRole(w http.ResponseWriter, r *http.Request) {
 			notFoundError(w, err)
 		case errors.Is(err, models.ErrInvalidRole):
 			writeJSON(w, http.StatusBadRequest, M{"error": err.Error()})
-		case errors.Is(err, user.ErrCannotChangeOwnRole{}), errors.Is(err, user.ErrRoleManagedByEntra{}):
+		case errors.Is(err, user.ErrCannotChangeOwnRole{}), errors.Is(err, user.ErrRoleManagedByEntra{}), errors.Is(err, user.ErrBreakGlassProtected{}):
 			writeJSON(w, http.StatusForbidden, M{"error": err.Error()})
 		default:
 			internalServerError(w, err)
@@ -168,7 +168,7 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 			notFoundError(w, err)
 			return
 		}
-		if errors.Is(err, user.ErrCannotDeleteSelf{}) {
+		if errors.Is(err, user.ErrCannotDeleteSelf{}) || errors.Is(err, user.ErrBreakGlassProtected{}) {
 			writeJSON(w, http.StatusForbidden, M{"error": err.Error()})
 			return
 		}

@@ -141,7 +141,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		Svc: &Services{
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg, e.InitialAdminEmail, e.Entra.Configured()),
 			Config:    cfgSvc,
-			User:      user.New(r.APIUser, r.APIKey),
+			User:      user.New(r.APIUser, r.APIKey, e.InitialAdminEmail),
 			Hooks:     webhooks.New(cw, e.RootURL),
 			CW:        cws,
 			Webex:     ws,
@@ -165,7 +165,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 // makeSSO builds the sso service and, when the ENTRA_* variables are present, the entra.Auth
 // around it. Discovery is lazy, so a Microsoft outage cannot stop the app from starting.
 func makeSSO(ctx context.Context, e *env.Env, r *repos.AllRepos, cfg *models.Config) (*sso.Service, *entra.Auth[*models.APIUser], error) {
-	svc, err := sso.New(ctx, sso.Params{Users: r.APIUser, Mappings: r.SSORoleMappings, Cfg: cfg, Entra: e.Entra, RootURL: e.RootURL})
+	svc, err := sso.New(ctx, sso.Params{Users: r.APIUser, Mappings: r.SSORoleMappings, Cfg: cfg, Entra: e.Entra, RootURL: e.RootURL, BreakGlassEmail: e.InitialAdminEmail})
 	if err != nil {
 		return nil, nil, err
 	}

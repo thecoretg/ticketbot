@@ -1272,7 +1272,9 @@ function renderUsers(users) {
         <td class="muted nowrap">${fmtDateTime(u.created_on)}</td>
         <td class="r nowrap">${u.id === currentUser?.id
             ? '<span class="badge outline">You</span>'
-            : deleteButton(`deleteUser(${u.id})`)}</td>
+            : u.break_glass
+                ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted.">Break-glass</span>`
+                : deleteButton(`deleteUser(${u.id})`)}</td>
     </tr>`)
 
     setContent(head + tableCard(thead, rows, {
@@ -1297,7 +1299,7 @@ function roleOptions(selected) {
 function roleCell(u) {
     const name = ROLES.find(r => r.value === u.role)?.label || esc(u.role || '—')
     if (u.sso) return `<div class="row gap2 wrap"><span class="badge">${name}</span><span class="badge info" data-tip="Role comes from an Entra app role on every sign-in"><i class="dot"></i>Entra</span></div>`
-    if (u.id === currentUser?.id) return `<span class="badge">${name}</span>`
+    if (u.id === currentUser?.id || u.break_glass) return `<span class="badge">${name}</span>`
     return `<select class="select" aria-label="Role for ${esc(u.email_address)}" onchange="setUserRole(${u.id}, this.value, this)">${roleOptions(u.role)}</select>`
 }
 

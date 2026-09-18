@@ -199,3 +199,28 @@ func TestRedirectURIWithoutAuth(t *testing.T) {
 		t.Fatalf("TestConnection without auth: %v", err)
 	}
 }
+
+func TestBreakGlassAccountStaysPasswordOnly(t *testing.T) {
+	users := newFakeUsers()
+	users.Insert(context.Background(), "root@example.com", models.RoleAdmin)
+	s, err := New(context.Background(), Params{
+		Users:           users,
+		Mappings:        &fakeMappings{list: []*models.SSORoleMapping{mapping("TB.Viewer", models.RoleViewer)}},
+		Cfg:             &models.Config{},
+		RootURL:         "https://tb.example.com",
+		BreakGlassEmail: "Root@Example.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := entra.Claims{OID: "oid-root", PreferredUsername: "root@example.com", Roles: []string{"TB.Viewer"}}
+	if err := s.Authorize(claims); !errors.Is(err, entra.ErrNotAuthorized) {
+		t.Fatalf("Authorize allowed the break-glass account: %v", err)
+	}
+	if _, err := s.Provision(context.Background(), claims); !errors.Is(err, entra.ErrNotAuthorized) {
+		t.Fatalf("Provision linked the break-glass account: %v", err)
+	}
+	if users.byID[1].SSO || users.byID[1].Role != models.RoleAdmin {
+		t.Fatalf("break-glass account was changed: %+v", users.byID[1])
+	}
+}

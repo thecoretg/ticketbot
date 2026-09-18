@@ -39,22 +39,29 @@ var (
 // noMappedRole is what a person sees when none of their app roles maps to a ticketbot role.
 const noMappedRole = "Your account has no app role that grants access to ticketbot."
 
+// breakGlassMessage is shown when the INITIAL_ADMIN_EMAIL account tries to sign in with Microsoft.
+const breakGlassMessage = "This is the break-glass admin account. Sign in with its password instead."
+
 type Params struct {
 	Users    repos.APIUserRepository
 	Mappings repos.SSORoleMappingRepository
 	Cfg      *models.Config
 	Entra    env.Entra
 	RootURL  string
+	// BreakGlassEmail is INITIAL_ADMIN_EMAIL. That account stays password-only so Entra can
+	// never demote or take over the one guaranteed way in.
+	BreakGlassEmail string
 }
 
 // Service is both the entra.Authorizer and the entra.Provisioner for ticketbot. Role mappings
 // are cached because entra.Authorizer receives no context; Reload runs after every change.
 type Service struct {
-	users    repos.APIUserRepository
-	mappings repos.SSORoleMappingRepository
-	cfg      *models.Config
-	entra    env.Entra
-	rootURL  string
+	users           repos.APIUserRepository
+	mappings        repos.SSORoleMappingRepository
+	cfg             *models.Config
+	entra           env.Entra
+	rootURL         string
+	breakGlassEmail string
 
 	// auth is nil until SetAuth, and stays nil when SSO is not configured.
 	auth *entra.Auth[*models.APIUser]
@@ -66,12 +73,13 @@ type Service struct {
 // New builds the service and loads the role mappings.
 func New(ctx context.Context, p Params) (*Service, error) {
 	s := &Service{
-		users:       p.Users,
-		mappings:    p.Mappings,
-		cfg:         p.Cfg,
-		entra:       p.Entra,
-		rootURL:     p.RootURL,
-		byEntraRole: map[string]models.Role{},
+		users:           p.Users,
+		mappings:        p.Mappings,
+		cfg:             p.Cfg,
+		entra:           p.Entra,
+		rootURL:         p.RootURL,
+		breakGlassEmail: p.BreakGlassEmail,
+		byEntraRole:     map[string]models.Role{},
 	}
 	if err := s.Reload(ctx); err != nil {
 		return nil, err
@@ -124,8 +132,14 @@ func (s *Service) resolveRole(entraRoles []string) (models.Role, bool) {
 	return models.HighestRole(granted)
 }
 
-// Authorize is the entra.Authorizer: sign-in is refused unless at least one app role maps.
+// Authorize is the entra.Authorizer: sign-in is refused unless at least one app role maps, and
+// the break-glass admin is always sent back to the password form.
 func (s *Service) Authorize(c entra.Claims) error {
+	for _, email := range []string{c.PreferredUsername, c.Email} {
+		if email != "" && s.breakGlassEmail != "" && strings.EqualFold(email, s.breakGlassEmail) {
+			return &entra.DeniedError{Message: breakGlassMessage}
+		}
+	}
 	if _, ok := s.resolveRole(c.Roles); !ok {
 		return &entra.DeniedError{Message: noMappedRole}
 	}
@@ -146,6 +160,9 @@ func (s *Service) Provision(ctx context.Context, c entra.Claims) (string, error)
 	}
 	if email == "" {
 		return "", errors.New("id token carries neither preferred_username nor email")
+	}
+	if s.breakGlassEmail != "" && strings.EqualFold(email, s.breakGlassEmail) {
+		return "", &entra.DeniedError{Message: breakGlassMessage}
 	}
 
 	u, err := s.users.GetByEntraOID(ctx, c.OID)

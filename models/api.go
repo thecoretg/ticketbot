@@ -33,9 +33,12 @@ type APIUser struct {
 	Role         Role   `json:"role"`
 	// SSO is true when the account is linked to a Microsoft Entra identity. Such accounts take
 	// their role from Entra on every sign-in and have no local password.
-	SSO       bool      `json:"sso"`
-	CreatedOn time.Time `json:"created_on"`
-	UpdatedOn time.Time `json:"updated_on"`
+	SSO bool `json:"sso"`
+	// BreakGlass marks the INITIAL_ADMIN_EMAIL account: it can always sign in with a password,
+	// so it cannot be deleted, demoted or handed to Entra.
+	BreakGlass bool      `json:"break_glass"`
+	CreatedOn  time.Time `json:"created_on"`
+	UpdatedOn  time.Time `json:"updated_on"`
 }
 
 // UserAuth is a restricted view of APIUser used only during login.
