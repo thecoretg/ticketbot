@@ -118,21 +118,30 @@ async function showListModal(existing = null) {
     }, existing ? 'Save' : 'Create')
 }
 
-async function deleteList(id, fromDetail = false) {
-    if (!confirm('Delete this list? Rules that reference it will stop matching.')) return
-    try {
-        await api('DELETE', `/lists/${id}`)
-        toast('List deleted', 'success')
-        if (fromDetail) lsBack()
-        else loadListIndex()
-    } catch (e) {
-        if (e.status === 409 && e.data?.references?.length) {
-            const used = e.data.references.map(r => `${r.workflow_name} / ${r.rule_name}`).join(', ')
-            toast(`This list is used by: ${used}. Remove those conditions first.`, 'error')
-            return
-        }
-        toast(e.message, 'error')
-    }
+function deleteList(id, fromDetail = false) {
+    const l = lsCache.find(x => x.id === id) || (lsDetail?.id === id ? lsDetail : null)
+    const count = l?.item_count ?? l?.items?.length
+    confirmModal({
+        title: 'Delete this list?',
+        body: `<b>${esc(l?.name || `List ${id}`)}</b>${
+            count ? `Its ${count} member${count === 1 ? '' : 's'} go with it. ` : ''}Any rule condition that tests this list stops matching.`,
+        confirmLabel: 'Delete list',
+        onConfirm: async () => {
+            try {
+                await api('DELETE', `/lists/${id}`)
+                toast('List deleted', 'success')
+                if (fromDetail) lsBack()
+                else loadListIndex()
+            } catch (e) {
+                if (e.status === 409 && e.data?.references?.length) {
+                    const used = e.data.references.map(r => `${r.workflow_name} / ${r.rule_name}`).join(', ')
+                    toast(`This list is used by: ${used}. Remove those conditions first.`, 'error')
+                    return
+                }
+                toast(e.message, 'error')
+            }
+        },
+    })
 }
 
 // ── Detail ───────────────────────────────────────────────

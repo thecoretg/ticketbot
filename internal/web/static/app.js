@@ -622,7 +622,9 @@ function parseHash() {
 }
 
 function switchTab(tab, sub = null) {
-    if (tabGuard && !tabGuard()) {
+    // A guard that needs to ask the user vetoes the move and re-runs it itself
+    // once they answer, because the question is a modal and cannot block here.
+    if (tabGuard && !tabGuard(() => switchTab(tab, sub))) {
         window.location.hash = currentHash
         return
     }
@@ -749,6 +751,19 @@ function closeModal() {
     document.getElementById('modal').classList.remove('on')
     document.getElementById('scrim').classList.remove('on')
     modalSubmitFn = null
+}
+
+// confirmModal asks before something destructive or lossy.
+//
+// It replaces window.confirm(), which cannot be trusted here: embedded web views
+// — the desktop app's browser pane among them — return false immediately without
+// showing anything, so every guarded action silently did nothing.
+function confirmModal({ title, body, confirmLabel = 'Delete', tone = 'bad', onConfirm }) {
+    openModal(title,
+        `<div class="callout ${tone}">${icon('alert')}<div class="body">${body}</div></div>`,
+        async () => { closeModal(); await onConfirm() },
+        confirmLabel,
+        tone === 'bad' ? 'danger' : 'primary')
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1041,13 +1056,22 @@ async function showForwardModal(existing = null) {
     }, existing ? 'Save' : 'Create')
 }
 
-async function deleteForward(id) {
-    if (!confirm('Delete this forward?')) return
-    try {
-        await api('DELETE', `/notifiers/forwards/${id}`)
-        toast('Forward deleted', 'success')
-        loadForwards()
-    } catch (e) { toast(e.message, 'error') }
+function deleteForward(id) {
+    const f = forwardsCache.find(x => x.id === id)
+    confirmModal({
+        title: 'Delete this forward?',
+        body: f
+            ? `<b>${esc(f.source_name)} → ${esc(f.destination_name)}</b>Notifications stop being forwarded as soon as this is deleted.`
+            : 'Notifications stop being forwarded as soon as this is deleted.',
+        confirmLabel: 'Delete forward',
+        onConfirm: async () => {
+            try {
+                await api('DELETE', `/notifiers/forwards/${id}`)
+                toast('Forward deleted', 'success')
+                loadForwards()
+            } catch (e) { toast(e.message, 'error') }
+        },
+    })
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1117,13 +1141,19 @@ function showNewUserModal() {
     })
 }
 
-async function deleteUser(id) {
-    if (!confirm('Delete this user? Their API keys will also be removed.')) return
-    try {
-        await api('DELETE', `/users/${id}`)
-        toast('User deleted', 'success')
-        loadUsers()
-    } catch (e) { toast(e.message, 'error') }
+function deleteUser(id) {
+    confirmModal({
+        title: 'Delete this user?',
+        body: '<b>They lose access immediately</b>Their API keys are deleted with them, so anything using one stops working.',
+        confirmLabel: 'Delete user',
+        onConfirm: async () => {
+            try {
+                await api('DELETE', `/users/${id}`)
+                toast('User deleted', 'success')
+                loadUsers()
+            } catch (e) { toast(e.message, 'error') }
+        },
+    })
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1205,13 +1235,19 @@ function copyCreatedKey() {
     if (key) navigator.clipboard.writeText(key).then(() => toast('Copied!', 'success'))
 }
 
-async function deleteKey(id) {
-    if (!confirm('Delete this API key?')) return
-    try {
-        await api('DELETE', `/users/keys/${id}`)
-        toast('Key deleted', 'success')
-        loadKeys()
-    } catch (e) { toast(e.message, 'error') }
+function deleteKey(id) {
+    confirmModal({
+        title: 'Revoke this API key?',
+        body: '<b>This cannot be undone</b>Any script or integration still sending this key starts getting 401s.',
+        confirmLabel: 'Revoke key',
+        onConfirm: async () => {
+            try {
+                await api('DELETE', `/users/keys/${id}`)
+                toast('Key revoked', 'success')
+                loadKeys()
+            } catch (e) { toast(e.message, 'error') }
+        },
+    })
 }
 
 // ─────────────────────────────────────────────────────────

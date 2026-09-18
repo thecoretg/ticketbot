@@ -104,15 +104,23 @@ async function showNewWorkflowModal(preselect = null) {
     })
 }
 
-async function deleteWorkflow(id) {
+function deleteWorkflow(id) {
     const w = wfList.find(x => x.id === id)
     const name = w ? (w.board_name || w.name) : `workflow ${id}`
-    if (!confirm(`Delete the workflow for ${name}? Tickets on this board will no longer be processed.`)) return
-    try {
-        await api('DELETE', `/workflows/${id}`)
-        toast('Workflow deleted', 'success')
-        loadWorkflowList()
-    } catch (e) { toast(e.message, 'error') }
+    const rules = w?.rules?.length || 0
+    confirmModal({
+        title: 'Delete this workflow?',
+        body: `<b>${esc(name)}</b>Tickets on this board stop being processed: no notifications, notes or ticket updates.${
+            rules ? ` Its ${rules} rule${rules === 1 ? '' : 's'} ${rules === 1 ? 'is' : 'are'} deleted too.` : ''}`,
+        confirmLabel: 'Delete workflow',
+        onConfirm: async () => {
+            try {
+                await api('DELETE', `/workflows/${id}`)
+                toast('Workflow deleted', 'success')
+                loadWorkflowList()
+            } catch (e) { toast(e.message, 'error') }
+        },
+    })
 }
 
 // ── Editor ───────────────────────────────────────────────
@@ -166,8 +174,18 @@ function wfIsDirty() {
     return wf !== null && JSON.stringify(wfStrip(wf)) !== wfOriginal
 }
 
-function wfGuard() {
-    return !wfIsDirty() || confirm('You have unsaved workflow changes. Discard them?')
+// wfGuard vetoes navigation while the editor has unsaved edits, then asks. The
+// question is a modal, so it cannot answer in time: it re-runs `retry` itself
+// once the user chooses to discard.
+function wfGuard(retry) {
+    if (!wfIsDirty()) return true
+    confirmModal({
+        title: 'Discard unsaved changes?',
+        body: '<b>This workflow has edits that were never saved</b>Leaving now loses them.',
+        confirmLabel: 'Discard changes',
+        onConfirm: () => { tabGuard = null; retry?.() },
+    })
+    return false
 }
 wfGuard.isDirty = wfIsDirty
 
@@ -483,10 +501,21 @@ function wfAddRule() {
 
 function wfDeleteRule(i) {
     const r = wf.rules[i]
-    if ((r.actions.length || r.condition) && !confirm(`Delete rule "${r.name}"?`)) return
-    wf.rules.splice(i, 1)
-    renderWorkflowEditor()
-    wfMarkDirty()
+    const remove = () => {
+        wf.rules.splice(i, 1)
+        renderWorkflowEditor()
+        wfMarkDirty()
+    }
+    // an empty rule is nothing to lose; anything else gets asked about
+    if (!r.actions.length && !r.condition) { remove(); return }
+    const acts = r.actions.length
+    confirmModal({
+        title: 'Delete this rule?',
+        body: `<b>${esc(r.name || `Rule ${i + 1}`)}</b>${
+            acts ? `${acts} action${acts === 1 ? '' : 's'}` : 'Its condition'} goes with it. The workflow is only changed once you save.`,
+        confirmLabel: 'Delete rule',
+        onConfirm: remove,
+    })
 }
 
 function wfMoveRule(i, dir) {
