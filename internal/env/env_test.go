@@ -92,3 +92,22 @@ func TestLoadWithoutEntra(t *testing.T) {
 		t.Fatal("expected Entra to be unconfigured")
 	}
 }
+
+func TestLoadNormalizesRootURL(t *testing.T) {
+	setRequired(t)
+	cases := map[string]string{
+		"ticketbot.example.com":          "https://ticketbot.example.com",
+		"https://ticketbot.example.com/": "https://ticketbot.example.com",
+		"http://localhost:8080":          "http://localhost:8080",
+	}
+	for in, want := range cases {
+		t.Setenv("ROOT_URL", in)
+		e, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if e.RootURL != want {
+			t.Errorf("ROOT_URL=%q -> %q, want %q", in, e.RootURL, want)
+		}
+	}
+}

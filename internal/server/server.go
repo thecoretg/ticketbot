@@ -178,7 +178,7 @@ func makeSSO(ctx context.Context, e *env.Env, r *repos.AllRepos, cfg *models.Con
 		TenantID:     e.Entra.TenantID,
 		ClientID:     e.Entra.ClientID,
 		ClientSecret: e.Entra.ClientSecret,
-		BaseURL:      sso.BaseURL(e.RootURL),
+		BaseURL:      e.RootURL,
 		CallbackPath: sso.CallbackPath,
 		LoginPath:    sso.PanelPath,
 		SuccessPath:  sso.PanelPath,

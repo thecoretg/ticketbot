@@ -52,7 +52,7 @@ func (s *Service) ProcessCWHooks(ctx context.Context) error {
 
 func (s *Service) processCWHook(ctx context.Context, url, entity, level string, objectID int, currentHooks []psa.Callback) error {
 	expected := psa.Callback{
-		URL:      fmt.Sprintf("https://%s", url),
+		URL:      url,
 		Type:     entity,
 		Level:    level,
 		ObjectID: objectID,

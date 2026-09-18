@@ -81,7 +81,7 @@ func newService(t *testing.T, users *fakeUsers, mappings ...*models.SSORoleMappi
 		Users:    users,
 		Mappings: &fakeMappings{list: mappings},
 		Cfg:      &models.Config{},
-		RootURL:  "https://tb.example.com/",
+		RootURL:  "https://tb.example.com",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -197,19 +197,5 @@ func TestRedirectURIWithoutAuth(t *testing.T) {
 	}
 	if err := s.TestConnection(context.Background()); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("TestConnection without auth: %v", err)
-	}
-}
-
-func TestBaseURL(t *testing.T) {
-	cases := map[string]string{
-		"https://tb.example.com/": "https://tb.example.com",
-		"tb.example.com":          "https://tb.example.com",
-		" http://localhost:8080 ": "http://localhost:8080",
-		"":                        "",
-	}
-	for in, want := range cases {
-		if got := BaseURL(in); got != want {
-			t.Errorf("BaseURL(%q) = %q, want %q", in, got, want)
-		}
 	}
 }

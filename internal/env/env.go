@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
@@ -65,7 +66,7 @@ func Load() (*Env, error) {
 		Port:                 stringOr("PORT", defaultPort),
 		Debug:                boolVar("DEBUG"),
 		PostgresDSN:          os.Getenv("POSTGRES_DSN"),
-		RootURL:              os.Getenv("ROOT_URL"),
+		RootURL:              normalizeRootURL(os.Getenv("ROOT_URL")),
 		InitialAdminEmail:    os.Getenv("INITIAL_ADMIN_EMAIL"),
 		InitialAdminPassword: os.Getenv("INITIAL_ADMIN_PASSWORD"),
 		WebexSecret:          os.Getenv("WEBEX_SECRET"),
@@ -136,6 +137,16 @@ func Load() (*Env, error) {
 		return nil, errors.Join(errs...)
 	}
 	return e, nil
+}
+
+// normalizeRootURL turns ROOT_URL into an origin with a scheme and no trailing slash. A bare
+// host gets https, so both "ticketbot.example.com" and "https://ticketbot.example.com/" work.
+func normalizeRootURL(v string) string {
+	v = strings.TrimRight(strings.TrimSpace(v), "/")
+	if v != "" && !strings.Contains(v, "://") {
+		v = "https://" + v
+	}
+	return v
 }
 
 func stringOr(key, def string) string {
