@@ -138,6 +138,21 @@ type CwTicketStatus struct {
 	Deleted        bool      `json:"deleted"`
 }
 
+type List struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	ItemType    string    `json:"item_type"`
+	Description string    `json:"description"`
+	CreatedOn   time.Time `json:"created_on"`
+	UpdatedOn   time.Time `json:"updated_on"`
+}
+
+type ListItem struct {
+	ListID  int       `json:"list_id"`
+	ItemID  int       `json:"item_id"`
+	AddedOn time.Time `json:"added_on"`
+}
+
 type NotifierForward struct {
 	ID                 int        `json:"id"`
 	SourceID           int        `json:"source_id"`

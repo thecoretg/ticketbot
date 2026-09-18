@@ -110,15 +110,16 @@ async function deleteWorkflow(id) {
 // ── Editor ───────────────────────────────────────────────
 async function loadWorkflowEditor(id) {
     try {
-        const [w, recips, members, placeholders, fields, boards] = await Promise.all([
+        const [w, recips, members, placeholders, fields, boards, lists] = await Promise.all([
             api('GET', `/workflows/${id}`), api('GET', '/webex/rooms'), api('GET', '/cw/members'), api('GET', '/workflows/placeholders'),
-            api('GET', '/workflows/fields'), api('GET', '/cw/boards'),
+            api('GET', '/workflows/fields'), api('GET', '/cw/boards'), api('GET', '/lists').catch(() => []),
         ])
         wfRecipients   = recips || []
         wfMembers      = (members || []).filter(m => !m.deleted)
         wfPlaceholders = placeholders || []
         wfFields       = fields || []
         wfBoards       = boards || []
+        wfLists        = lists || []
         // statuses are board-scoped; priorities come live from ConnectWise and may be slow or fail
         const [statuses, priorities] = await Promise.all([
             api('GET', `/cw/boards/${w.board_id}/statuses`).catch(() => []),

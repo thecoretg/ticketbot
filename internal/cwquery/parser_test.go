@@ -2,6 +2,7 @@ package cwquery
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -125,6 +126,37 @@ func TestParseNotForms(t *testing.T) {
 	}
 }
 
+func TestParseInList(t *testing.T) {
+	cases := map[string]InList{
+		"contact/id in list 3":            {Path: []string{"contact", "id"}, ListID: 3, Pos: 19},
+		"company/id not in list 12":       {Path: []string{"company", "id"}, ListID: 12, Negate: true, Pos: 23},
+		"Contact/Id IN LIST 3":            {Path: []string{"Contact", "Id"}, ListID: 3, Pos: 19},
+		"latestNote/contact/id in list 1": {Path: []string{"latestNote", "contact", "id"}, ListID: 1, Pos: 30},
+	}
+	for src, want := range cases {
+		e, err := Parse(src)
+		if err != nil {
+			t.Errorf("%q: %v", src, err)
+			continue
+		}
+		got, ok := e.(InList)
+		if !ok {
+			t.Errorf("%q: got %T, want InList", src, e)
+			continue
+		}
+		if strings.Join(got.Path, "/") != strings.Join(want.Path, "/") || got.ListID != want.ListID || got.Negate != want.Negate || got.Pos != want.Pos {
+			t.Errorf("%q: got %+v, want %+v", src, got, want)
+		}
+	}
+
+	// "list" is only a keyword after "in"; as a path it still parses.
+	for _, src := range []string{"list = 1", "list/id = 1", "list in (1, 2)"} {
+		if _, err := Parse(src); err != nil {
+			t.Errorf("%q: %v", src, err)
+		}
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	cases := []struct {
 		src string
@@ -142,6 +174,11 @@ func TestParseErrors(t *testing.T) {
 		{"and = 1", 0},           // keyword as path
 		{"a = 1 $", 6},           // bad character
 		{"company/ = 1", 9},      // dangling slash
+		{"a in list", 9},         // missing list id
+		{"a in list 'x'", 10},    // list id must be a number
+		{"a in list 1.5", 10},    // list id must be an integer
+		{"a in list -1", 10},     // list id must be positive
+		{"a in list 0", 10},      // list id must be positive
 	}
 
 	for _, c := range cases {

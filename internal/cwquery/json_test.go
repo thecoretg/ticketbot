@@ -23,6 +23,10 @@ func TestToNode(t *testing.T) {
 	if b, _ := json.Marshal(ToNode(e)); string(b) != `{"kind":"always"}` {
 		t.Errorf("empty = %s", b)
 	}
+	e, _ = Parse("contact/id not in list 3")
+	if b, _ := json.Marshal(ToNode(e)); string(b) != `{"kind":"in_list","path":"contact/id","negate":true,"list_id":3}` {
+		t.Errorf("in_list = %s", b)
+	}
 	e, _ = Parse("summary like 'vpn*'")
 	if b, _ := json.Marshal(ToNode(e)); string(b) != `{"kind":"compare","path":"summary","op":"like","value":{"type":"string","value":"vpn*"}}` {
 		t.Errorf("like = %s", b)

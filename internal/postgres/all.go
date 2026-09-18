@@ -19,6 +19,7 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		WebexRecipients:     NewWebexRecipientRepo(pool),
 		TicketEvents:        NewTicketEventRepo(pool),
 		Workflows:           NewWorkflowRepo(pool),
+		Lists:               NewListRepo(pool),
 		CW: repos.CWRepos{
 			Board:        NewBoardRepo(pool),
 			TicketStatus: NewTicketStatusRepo(pool),

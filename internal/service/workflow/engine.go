@@ -24,6 +24,30 @@ type CWClient interface {
 
 var _ CWClient = (*psa.Client)(nil)
 
+// ListLoader supplies admin-list memberships for `in list` conditions. A nil loader means no
+// lists: every `in list` is false and every `not in list` is true.
+type ListLoader interface {
+	Memberships(ctx context.Context) (cwquery.Lists, error)
+}
+
+// LoadEnv builds the evaluation environment for exprs. It only hits the loader when at least one
+// expression references a list.
+func LoadEnv(ctx context.Context, loader ListLoader, exprs ...cwquery.Expr) (cwquery.Env, error) {
+	if loader == nil {
+		return cwquery.Env{}, nil
+	}
+	for _, e := range exprs {
+		if len(cwquery.ListRefs(e)) > 0 {
+			lists, err := loader.Memberships(ctx)
+			if err != nil {
+				return cwquery.Env{}, err
+			}
+			return cwquery.Env{Lists: lists}, nil
+		}
+	}
+	return cwquery.Env{}, nil
+}
+
 // Input is everything the engine needs to run one workflow against one intake.
 type Input struct {
 	Ticket      *psa.Ticket
@@ -95,6 +119,8 @@ type Result struct {
 
 type Engine struct {
 	CW CWClient
+	// Lists is optional; set it to make `in list` conditions see admin lists.
+	Lists ListLoader
 }
 
 func NewEngine(cw CWClient) *Engine {
@@ -122,6 +148,10 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 	changes := cwquery.Changes{Fields: in.Changes, NewNote: in.NewNote}
 	doc := cwquery.NewDocument(res.Ticket, in.TriggerNote, changes)
 
+	// list memberships are loaded at most once per run, and only if a rule needs them
+	var env cwquery.Env
+	envLoaded := false
+
 	for _, r := range wf.Rules {
 		ref := RuleRef{WorkflowID: wf.ID, RuleID: r.ID, RuleName: r.Name}
 
@@ -139,7 +169,15 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 			res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Err: fmt.Errorf("compiling condition: %w", err)})
 			continue
 		}
-		matched, err := q.Eval(doc)
+		if !envLoaded && len(cwquery.ListRefs(q.Expr)) > 0 {
+			env, err = LoadEnv(ctx, e.Lists, q.Expr)
+			if err != nil {
+				res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Err: fmt.Errorf("loading lists: %w", err)})
+				continue
+			}
+			envLoaded = true
+		}
+		matched, err := q.EvalEnv(doc, env)
 		if err != nil {
 			res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Err: fmt.Errorf("evaluating condition: %w", err)})
 			continue

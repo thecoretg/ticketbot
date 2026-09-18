@@ -30,7 +30,7 @@ func TestE2EProcessTicket(t *testing.T) {
 	ctx := context.Background()
 	level := new(slog.LevelVar)
 	logBuf := logging.NewBufferHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}), 100)
-	app, _, err := NewApp(ctx, 10, level, logBuf)
+	app, _, err := NewApp(ctx, 11, level, logBuf)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -238,3 +238,90 @@ func TestNewDocumentNilTicket(t *testing.T) {
 		t.Fatalf("got %v, %v; want true", got, err)
 	}
 }
+
+func TestEvalInList(t *testing.T) {
+	env := Env{Lists: Lists{
+		3: NewListSet(250, 999),
+		5: NewListSet("acme"),
+		6: NewListSet("42"),
+	}}
+	cases := []struct {
+		src  string
+		want bool
+	}{
+		{"company/id in list 3", true},
+		{"company/id not in list 3", false},
+		{"company/id in list 4", false}, // unknown list is empty
+		{"company/id not in list 4", true},
+		{"company/identifier in list 5", true}, // strings compare case-insensitively
+		{"company/identifier in list 6", false},
+		{"stringNumber in list 6", true}, // numeric strings canonicalize to numbers
+		{"id in list 3", false},
+		{"contact/id in list 3", false}, // missing field never matches
+		{"contact/id not in list 3", true},
+		{"company/id in list 3 and status/name = 'New'", true},
+		{"not company/id in list 3", false},
+	}
+
+	doc := testDoc()
+	for _, c := range cases {
+		q, err := Compile(c.src)
+		if err != nil {
+			t.Errorf("%q: compile: %v", c.src, err)
+			continue
+		}
+		got, err := q.EvalEnv(doc, env)
+		if err != nil {
+			t.Errorf("%q: %v", c.src, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("%q = %v, want %v", c.src, got, c.want)
+		}
+	}
+
+	// Plain Eval has no lists: membership is always false.
+	for src, want := range map[string]bool{"company/id in list 3": false, "company/id not in list 3": true} {
+		q, _ := Compile(src)
+		if got, _ := q.Eval(doc); got != want {
+			t.Errorf("Eval %q = %v, want %v", src, got, want)
+		}
+	}
+}
+
+func TestListSetKeys(t *testing.T) {
+	s := NewListSet(123, "ACME", true)
+	for _, v := range []any{float64(123), "123", " 123 ", int64(123), "acme", "Acme", true, "true"} {
+		if !s.Has(v) {
+			t.Errorf("Has(%#v) = false", v)
+		}
+	}
+	for _, v := range []any{float64(124), "acme corp", nil, map[string]any{}, []any{}} {
+		if s.Has(v) {
+			t.Errorf("Has(%#v) = true", v)
+		}
+	}
+	var none Lists
+	if none.Has(1, 1) {
+		t.Error("nil Lists.Has = true")
+	}
+}
+
+func TestListRefs(t *testing.T) {
+	e, err := Parse("(a in list 1 or b = 2) and not c not in list 7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := ListRefs(e)
+	if len(refs) != 2 || refs[0].ListID != 1 || refs[0].Path[0] != "a" || refs[1].ListID != 7 || refs[1].Path[0] != "c" {
+		t.Errorf("refs = %+v", refs)
+	}
+	if refs[0].Pos != 11 || refs[1].Pos != 45 {
+		t.Errorf("positions = %d, %d", refs[0].Pos, refs[1].Pos)
+	}
+
+	e, _ = Parse("a = 1")
+	if refs := ListRefs(e); len(refs) != 0 {
+		t.Errorf("refs = %+v, want none", refs)
+	}
+}

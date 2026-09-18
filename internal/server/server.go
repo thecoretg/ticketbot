@@ -12,6 +12,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
+	"github.com/thecoretg/ticketbot/internal/service/lists"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
@@ -46,6 +47,7 @@ type Services struct {
 	Notifier  *notifier.Service
 	Ticketbot *ticketbot.Service
 	Workflow  *workflow.Service
+	Lists     *lists.Service
 }
 
 const defaultStoreTTL = int64(900)
@@ -99,13 +101,16 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 
 	ns := notifier.New(nr)
 	cfgSvc := config.New(r.Config, cfg, level, logBuf)
+	listSvc := lists.New(lists.Params{Lists: r.Lists, Companies: r.CW.Company, Contacts: r.CW.Contact, Workflows: r.Workflows})
+	engine := workflow.NewEngine(cw)
+	engine.Lists = listSvc
 	tb := ticketbot.New(ticketbot.Params{
 		Cfg:       cfg,
 		ConfigSvc: cfgSvc,
 		CW:        cws,
 		Workflows: r.Workflows,
 		Events:    r.TicketEvents,
-		Engine:    workflow.NewEngine(cw),
+		Engine:    engine,
 		Notifier:  ns,
 	})
 
@@ -136,7 +141,9 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 				Boards:     r.CW.Board,
 				Statuses:   r.CW.TicketStatus,
 				Members:    r.CW.Member,
+				Lists:      r.Lists,
 			}),
+			Lists: listSvc,
 		},
 	}, persister, nil
 }

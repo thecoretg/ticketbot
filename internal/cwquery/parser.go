@@ -167,6 +167,16 @@ func (p *parser) parseComparison() (Expr, error) {
 
 	case p.isKeyword("in"):
 		p.advance()
+		if p.isKeyword("list") {
+			p.advance()
+			idTok := p.peek()
+			id, ok := listIDToken(idTok)
+			if !ok {
+				return nil, syntaxErrorf(idTok.Pos, "expected a list id (positive integer), got %s %q", idTok.Kind, idTok.Text)
+			}
+			p.advance()
+			return InList{Path: path, ListID: id, Negate: negate, Pos: idTok.Pos}, nil
+		}
 		vals, err := p.parseList()
 		if err != nil {
 			return nil, err
@@ -284,6 +294,23 @@ func (p *parser) parseValue() (Value, error) {
 	}
 
 	return Value{}, syntaxErrorf(t.Pos, "expected value, got %s %q", t.Kind, t.Text)
+}
+
+// listIDToken accepts a plain positive integer token as a list id.
+func listIDToken(t Token) (int, bool) {
+	if t.Kind != Number {
+		return 0, false
+	}
+	for i := 0; i < len(t.Text); i++ {
+		if t.Text[i] < '0' || t.Text[i] > '9' {
+			return 0, false
+		}
+	}
+	id, err := strconv.Atoi(t.Text)
+	if err != nil || id <= 0 {
+		return 0, false
+	}
+	return id, true
 }
 
 func cmpOpFor(text string) CmpOp {

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -188,5 +189,88 @@ func TestCompanyAndContactSearch(t *testing.T) {
 	full, err := NewContactRepo(pool).Search(ctx, models.ContactSearch{Query: "quinn zzyzx"})
 	if err != nil || len(full) != 1 {
 		t.Errorf("full-name contact search = %+v, %v", full, err)
+	}
+}
+
+func TestListRepo(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM list WHERE LOWER(name) LIKE 'it-test %'`) })
+	_, _ = pool.Exec(ctx, `DELETE FROM list WHERE LOWER(name) LIKE 'it-test %'`)
+
+	repo := NewListRepo(pool)
+	l, err := repo.Insert(ctx, &models.List{Name: "IT-Test Drop Notifications", ItemType: models.ListItemContact, Description: "d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Insert(ctx, &models.List{Name: "it-test drop notifications", ItemType: models.ListItemContact}); !errors.Is(err, models.ErrListNameTaken) {
+		t.Errorf("duplicate insert err = %v, want ErrListNameTaken", err)
+	}
+
+	added, err := repo.AddItem(ctx, l.ID, 900300)
+	if err != nil || !added {
+		t.Fatalf("AddItem = %v, %v", added, err)
+	}
+	added, err = repo.AddItem(ctx, l.ID, 900300)
+	if err != nil || added {
+		t.Errorf("second AddItem = %v, %v; want false, nil", added, err)
+	}
+	if _, err := repo.AddItem(ctx, 0, 1); !errors.Is(err, models.ErrListNotFound) {
+		t.Errorf("AddItem to unknown list err = %v", err)
+	}
+
+	items, err := repo.Items(ctx, l.ID)
+	if err != nil || len(items) != 1 || items[0].ItemID != 900300 {
+		t.Errorf("Items = %+v, %v", items, err)
+	}
+	got, err := repo.Get(ctx, l.ID)
+	if err != nil || got.ItemCount != 1 || got.ItemType != models.ListItemContact {
+		t.Errorf("Get = %+v, %v", got, err)
+	}
+
+	all, err := repo.AllMemberships(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range all {
+		if m.ListID == l.ID && m.ItemID == 900300 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("AllMemberships missing %d/900300: %+v", l.ID, all)
+	}
+
+	upd, err := repo.Update(ctx, &models.List{ID: l.ID, Name: "IT-Test Renamed", Description: "e"})
+	if err != nil || upd.Name != "IT-Test Renamed" || upd.Description != "e" {
+		t.Errorf("Update = %+v, %v", upd, err)
+	}
+	if _, err := repo.Update(ctx, &models.List{ID: 0, Name: "IT-Test none"}); !errors.Is(err, models.ErrListNotFound) {
+		t.Errorf("Update unknown err = %v", err)
+	}
+
+	if err := repo.RemoveItem(ctx, l.ID, 900300); err != nil {
+		t.Errorf("RemoveItem = %v", err)
+	}
+	if err := repo.RemoveItem(ctx, l.ID, 900300); !errors.Is(err, models.ErrListItemNotFound) {
+		t.Errorf("second RemoveItem err = %v", err)
+	}
+
+	if _, err := repo.AddItem(ctx, l.ID, 900301); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Delete(ctx, l.ID); err != nil {
+		t.Errorf("Delete = %v", err)
+	}
+	if err := repo.Delete(ctx, l.ID); !errors.Is(err, models.ErrListNotFound) {
+		t.Errorf("second Delete err = %v", err)
+	}
+	if _, err := repo.Get(ctx, l.ID); !errors.Is(err, models.ErrListNotFound) {
+		t.Errorf("Get after delete err = %v", err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM list_item WHERE list_id = $1`, l.ID).Scan(&n); err != nil || n != 0 {
+		t.Errorf("items after cascade = %d, %v", n, err)
 	}
 }

@@ -2,6 +2,7 @@ package cwquery
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,19 +20,91 @@ import (
 //     null = false, null = 0 and null = (empty string) are all true. Ordering operators against
 //     null are false.
 //   - Type mismatches evaluate to false rather than erroring.
+//
+// Eval evaluates with an empty Env: every `in list` is false and every `not in list` is true.
 func (q *Query) Eval(doc map[string]any) (bool, error) {
-	return eval(q.Expr, doc)
+	return q.EvalEnv(doc, Env{})
 }
 
-func eval(e Expr, doc map[string]any) (bool, error) {
+// EvalEnv is Eval with evaluation-time data that is not part of the ticket document.
+func (q *Query) EvalEnv(doc map[string]any, env Env) (bool, error) {
+	return eval(q.Expr, doc, env)
+}
+
+// Env carries data a condition may consult besides the document itself.
+type Env struct {
+	Lists Lists
+}
+
+// Lists maps a list id to its members. A missing id is an empty list.
+type Lists map[int]ListSet
+
+// Has reports whether list id contains v. Nil-safe.
+func (l Lists) Has(id int, v any) bool {
+	return l[id].Has(v)
+}
+
+// ListSet holds list members keyed by their canonical form (see listKey), so a document value of
+// float64(123) matches a member stored as int 123 or string "123".
+type ListSet map[string]bool
+
+// NewListSet builds a set from vals.
+func NewListSet(vals ...any) ListSet {
+	s := make(ListSet, len(vals))
+	for _, v := range vals {
+		s.Add(v)
+	}
+	return s
+}
+
+// Add inserts v. Values with no canonical form (objects, arrays, nil) are ignored.
+func (s ListSet) Add(v any) {
+	if k, ok := listKey(v); ok {
+		s[k] = true
+	}
+}
+
+// Has reports whether v is a member. Nil-safe.
+func (s ListSet) Has(v any) bool {
+	k, ok := listKey(v)
+	return ok && s[k]
+}
+
+var numericKey = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
+
+// listKey canonicalizes a member or document value: numbers by their shortest decimal form,
+// numeric strings as numbers, other strings lowercased.
+func listKey(v any) (string, bool) {
+	switch x := v.(type) {
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64), true
+	case int:
+		return strconv.Itoa(x), true
+	case int64:
+		return strconv.FormatInt(x, 10), true
+	case bool:
+		return strconv.FormatBool(x), true
+	case string:
+		s := strings.TrimSpace(x)
+		if numericKey.MatchString(s) {
+			if n, err := strconv.ParseFloat(s, 64); err == nil {
+				return strconv.FormatFloat(n, 'f', -1, 64), true
+			}
+		}
+		return strings.ToLower(s), true
+	}
+	return "", false
+}
+
+func eval(e Expr, doc map[string]any, env Env) (bool, error) {
 	switch n := e.(type) {
 	case Always:
 		return true, nil
 	case Not:
-		v, err := eval(n.X, doc)
+		v, err := eval(n.X, doc, env)
 		return !v, err
 	case Binary:
-		l, err := eval(n.L, doc)
+		l, err := eval(n.L, doc, env)
 		if err != nil {
 			return false, err
 		}
@@ -41,7 +114,7 @@ func eval(e Expr, doc map[string]any) (bool, error) {
 		if n.Op == Or && l {
 			return true, nil
 		}
-		return eval(n.R, doc)
+		return eval(n.R, doc, env)
 	case Compare:
 		return compare(n, resolve(doc, n.Path)), nil
 	case In:
@@ -52,6 +125,12 @@ func eval(e Expr, doc map[string]any) (bool, error) {
 			}
 		}
 		return n.Negate, nil
+	case InList:
+		field := resolve(doc, n.Path)
+		if field == nil {
+			return n.Negate, nil
+		}
+		return env.Lists.Has(n.ListID, field) != n.Negate, nil
 	default:
 		return false, fmt.Errorf("cwquery: unknown expression %T", e)
 	}

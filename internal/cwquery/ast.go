@@ -83,6 +83,15 @@ type In struct {
 	Negate bool
 }
 
+// InList is `path [not] in list N`: membership in an admin-defined list, supplied at evaluation
+// time through Env.Lists. Pos is the byte offset of the list id token, for validation messages.
+type InList struct {
+	Path   []string
+	ListID int
+	Negate bool
+	Pos    int
+}
+
 // ValKind is the literal type of a Value.
 type ValKind int
 
@@ -108,3 +117,4 @@ func (Not) isExpr()     {}
 func (Binary) isExpr()  {}
 func (Compare) isExpr() {}
 func (In) isExpr()      {}
+func (InList) isExpr()  {}

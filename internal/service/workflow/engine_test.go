@@ -3,7 +3,10 @@ package workflow
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+
+	"github.com/thecoretg/ticketbot/internal/cwquery"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/ticketdiff"
@@ -470,5 +473,71 @@ func TestPatchError(t *testing.T) {
 	res := run(t, cw, w, Input{})
 	if res.Actions[0].Result != ResultError || res.CWWrites != 0 || len(res.Notifies) != 1 {
 		t.Errorf("failed patch should record error and not stop later actions: %+v", res.Actions)
+	}
+}
+
+type fakeLists struct {
+	lists cwquery.Lists
+	err   error
+	calls int
+}
+
+func (f *fakeLists) Memberships(context.Context) (cwquery.Lists, error) {
+	f.calls++
+	return f.lists, f.err
+}
+
+func TestInListConditions(t *testing.T) {
+	cw := &fakeCW{ticket: ticket()}
+	cw.ticket.Contact.ID = 123
+	lists := &fakeLists{lists: cwquery.Lists{3: cwquery.NewListSet(123), 4: cwquery.NewListSet(100)}}
+	w := wf(
+		rule("contact in", models.TriggerBoth, "contact/id in list 3", false, notify(models.TargetRoom, rid(1))),
+		rule("contact not in", models.TriggerBoth, "contact/id not in list 3", false, notify(models.TargetRoom, rid(2))),
+		rule("company in", models.TriggerBoth, "company/id in list 4", false, notify(models.TargetRoom, rid(3))),
+		rule("missing list", models.TriggerBoth, "company/id in list 99", false, notify(models.TargetRoom, rid(4))),
+		rule("missing negated", models.TriggerBoth, "company/id not in list 99", false, notify(models.TargetRoom, rid(5))),
+	)
+
+	eng := NewEngine(cw)
+	eng.Lists = lists
+	res, err := eng.Run(context.Background(), w, Input{Ticket: cw.ticket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []int
+	for _, n := range res.Notifies {
+		got = append(got, *n.Target.RecipientID)
+	}
+	if len(got) != 3 || got[0] != 1 || got[1] != 3 || got[2] != 5 {
+		t.Errorf("notifies = %v, want [1 3 5]", got)
+	}
+	if lists.calls != 1 {
+		t.Errorf("loader calls = %d, want 1", lists.calls)
+	}
+
+	// no list refs: loader never consulted
+	lists.calls = 0
+	if _, err := eng.Run(context.Background(), wf(rule("plain", models.TriggerBoth, "id = 42", false)), Input{Ticket: cw.ticket}); err != nil {
+		t.Fatal(err)
+	}
+	if lists.calls != 0 {
+		t.Errorf("loader called %d times for a workflow without lists", lists.calls)
+	}
+
+	// loader failure is recorded on the rule and later rules still run
+	lists.err = errors.New("db down")
+	res, _ = eng.Run(context.Background(), w, Input{Ticket: cw.ticket})
+	if res.Rules[0].Err == nil || !strings.Contains(res.Rules[0].Err.Error(), "loading lists") {
+		t.Errorf("rule err = %v", res.Rules[0].Err)
+	}
+	if len(res.Rules) != 5 {
+		t.Errorf("rules evaluated = %d, want 5", len(res.Rules))
+	}
+
+	// nil loader: in list is false, not in list is true
+	res = run(t, cw, w, Input{})
+	if len(res.Notifies) != 2 || *res.Notifies[0].Target.RecipientID != 2 || *res.Notifies[1].Target.RecipientID != 5 {
+		t.Errorf("nil loader notifies = %+v", res.Notifies)
 	}
 }

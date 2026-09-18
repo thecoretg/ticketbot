@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────
 let wfFields = []                    // /workflows/fields
 let wfBoards = []                    // /cw/boards
+let wfLists  = []                    // /lists — admin lists for "is in list"
 const wfNames = { companies: {}, contacts: {} }   // id → display name, for pickers that search
 let wfTypeaheadTimer = null
 
@@ -25,6 +26,14 @@ const WF_OPS = {
 }
 const WF_NO_VALUE_OPS = new Set(['empty', 'not_empty', 'true', 'false'])
 const WF_MULTI_OPS    = new Set(['in', 'not_in'])
+const WF_LIST_OPS     = new Set(['in_list', 'not_in_list'])
+
+// wfOpsFor returns the operators for a field: its type's table, plus list membership when the
+// field's Source has admin lists (list_type is set by the server).
+function wfOpsFor(f) {
+    const ops = WF_OPS[f.type] || []
+    return f.list_type ? ops.concat([['in_list', 'is in list'], ['not_in_list', 'is not in list']]) : ops
+}
 
 function wfFieldByPath(path) {
     const p = (path || '').toLowerCase()
@@ -78,6 +87,10 @@ function wfCompileRow(row) {
         if (vals.some(badNum)) return { error: `${f.label}: values must be numbers` }
         return { text: `${f.path} ${row.op === 'in' ? 'in' : 'not in'} (${vals.map(lit).join(', ')})` }
     }
+    case 'in_list': case 'not_in_list': {
+        if (row.value === null || row.value === undefined || row.value === '' || Number.isNaN(Number(row.value))) return { error: `${f.label}: pick a list` }
+        return { text: `${f.path} ${row.op === 'in_list' ? 'in list' : 'not in list'} ${Number(row.value)}` }
+    }
     }
     return { error: `unknown operator ${row.op}` }
 }
@@ -113,7 +126,7 @@ function wfRowsFromNode(node) {
 function wfRowFromLeaf(n) {
     const f = wfFieldByPath(n.path)
     if (!f) throw new Error(`field "${n.path}" is not in the builder`)
-    const ops = WF_OPS[f.type].map(([v]) => v)
+    const ops = wfOpsFor(f).map(([v]) => v)
     const use = (op, value) => {
         if (!ops.includes(op)) throw new Error(`"${n.op}" is not available for ${f.label}`)
         return { path: f.path, op, value }
@@ -128,6 +141,7 @@ function wfRowFromLeaf(n) {
     }
 
     if (n.kind === 'in') return use(n.negate ? 'not_in' : 'in', n.values.map(scalar))
+    if (n.kind === 'in_list') return use(n.negate ? 'not_in_list' : 'in_list', n.list_id)
 
     const v = n.value
     if (v.type === 'null') {
@@ -176,7 +190,7 @@ async function wfResolveNames(rules) {
     const want = { companies: new Set(), contacts: new Set() }
     for (const r of rules) for (const row of r._ui?.rows || []) {
         const f = wfFieldByPath(row.path)
-        if (!f || !want[f.source]) continue
+        if (!f || !want[f.source] || WF_LIST_OPS.has(row.op)) continue  // list ops hold a list id, not an entity id
         for (const v of [].concat(row.value ?? [])) if (v !== null && v !== '' && !wfNames[f.source][v]) want[f.source].add(v)
     }
     await Promise.all(Object.entries(want).map(async ([source, ids]) => {
@@ -251,7 +265,7 @@ function wfRowHTML(i, k, row) {
     const fieldSel = `<select class="cond-field" onchange="wfSetRowField(${i}, ${k}, this.value)">${
         Object.entries(groups).map(([g, fs]) => `<optgroup label="${esc(g)}">${fs.map(fd => `<option value="${esc(fd.path)}"${fd.path === f.path ? ' selected' : ''}>${esc(fd.label)}</option>`).join('')}</optgroup>`).join('')
     }</select>`
-    const opSel = `<select class="cond-op" onchange="wfSetRowOp(${i}, ${k}, this.value)">${WF_OPS[f.type].map(([v, l]) => `<option value="${v}"${v === row.op ? ' selected' : ''}>${l}</option>`).join('')}</select>`
+    const opSel = `<select class="cond-op" onchange="wfSetRowOp(${i}, ${k}, this.value)">${wfOpsFor(f).map(([v, l]) => `<option value="${v}"${v === row.op ? ' selected' : ''}>${l}</option>`).join('')}</select>`
 
     return `<div class="cond-row" id="cond-row-${i}-${k}">
         ${fieldSel}${opSel}
@@ -262,6 +276,7 @@ function wfRowHTML(i, k, row) {
 
 function wfValueHTML(i, k, row, f) {
     if (WF_NO_VALUE_OPS.has(row.op)) return ''
+    if (WF_LIST_OPS.has(row.op)) return wfListSelectHTML(i, k, row, f)
     const multi = WF_MULTI_OPS.has(row.op)
 
     if (f.source) {
@@ -292,6 +307,19 @@ function wfValueHTML(i, k, row, f) {
         return `<input type="text" placeholder="value, value, …" value="${esc(text)}" oninput="wfSetRowValue(${i}, ${k}, this.value.split(',').map(s => s.trim()).filter(Boolean))">`
     }
     return `<input type="${type}" placeholder="value" value="${esc(row.value ?? '')}" oninput="wfSetRowValue(${i}, ${k}, this.value)">`
+}
+
+// wfListSelectHTML offers the admin lists whose item type matches the field.
+function wfListSelectHTML(i, k, row, f) {
+    const lists = wfLists.filter(l => l.item_type === f.list_type)
+    const current = row.value === null || row.value === undefined ? '' : String(row.value)
+    const known = lists.some(l => String(l.id) === current)
+    const opts = lists.map(l => `<option value="${l.id}"${String(l.id) === current ? ' selected' : ''}>${esc(l.name)} (${l.item_count})</option>`).join('')
+    const missing = current && !known ? `<option value="${esc(current)}" selected disabled>(missing list #${esc(current)})</option>` : ''
+    const empty = lists.length ? '' : `<option value="" disabled>No ${esc(f.list_type)} lists yet — create one under Lists</option>`
+    return `<select onchange="wfSetRowValue(${i}, ${k}, this.value === '' ? null : Number(this.value))">
+        <option value="">— choose list —</option>${missing}${opts}${empty}
+    </select>`
 }
 
 function wfTypeaheadHTML(i, k, f, current, add = false) {
@@ -410,7 +438,7 @@ function wfSetRowField(i, k, path) {
     const row = wf.rules[i]._ui.rows[k]
     const f = wfFieldByPath(path)
     row.path = f.path
-    row.op = WF_OPS[f.type][0][0]
+    row.op = wfOpsFor(f)[0][0]
     row.value = null
     wfRerenderCondition(i)
 }
@@ -418,8 +446,9 @@ function wfSetRowField(i, k, path) {
 function wfSetRowOp(i, k, op) {
     const row = wf.rules[i]._ui.rows[k]
     const wasMulti = WF_MULTI_OPS.has(row.op), isMulti = WF_MULTI_OPS.has(op)
+    const listChanged = WF_LIST_OPS.has(row.op) !== WF_LIST_OPS.has(op)  // a list id is not an entity id
     row.op = op
-    if (WF_NO_VALUE_OPS.has(op)) row.value = null
+    if (WF_NO_VALUE_OPS.has(op) || listChanged) row.value = null
     else if (isMulti && !wasMulti) row.value = row.value === null || row.value === '' ? [] : [row.value]
     else if (!isMulti && wasMulti) row.value = Array.isArray(row.value) ? (row.value[0] ?? null) : row.value
     wfRerenderCondition(i)

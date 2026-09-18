@@ -22,6 +22,8 @@ type Service struct {
 	Boards     repos.BoardRepository
 	Statuses   repos.TicketStatusRepository
 	Members    repos.MemberRepository
+	// Lists is optional; when set, conditions referencing lists are checked on save.
+	Lists repos.ListRepository
 }
 
 type Params struct {
@@ -30,10 +32,11 @@ type Params struct {
 	Boards     repos.BoardRepository
 	Statuses   repos.TicketStatusRepository
 	Members    repos.MemberRepository
+	Lists      repos.ListRepository
 }
 
 func New(p Params) *Service {
-	return &Service{Workflows: p.Workflows, Recipients: p.Recipients, Boards: p.Boards, Statuses: p.Statuses, Members: p.Members}
+	return &Service{Workflows: p.Workflows, Recipients: p.Recipients, Boards: p.Boards, Statuses: p.Statuses, Members: p.Members, Lists: p.Lists}
 }
 
 func (s *Service) List(ctx context.Context) ([]*models.Workflow, error) {
@@ -105,16 +108,62 @@ func (s *Service) Delete(ctx context.Context, id int) error {
 
 // ValidateCondition compiles a condition string and returns its syntax error, if any.
 func ValidateCondition(condition string) *cwquery.SyntaxError {
-	_, err := cwquery.Compile(condition)
+	_, se := parseCondition(condition)
+	return se
+}
+
+func parseCondition(condition string) (cwquery.Expr, *cwquery.SyntaxError) {
+	expr, err := cwquery.Parse(condition)
 	if err == nil {
-		return nil
+		return expr, nil
 	}
 
 	var se *cwquery.SyntaxError
 	if errors.As(err, &se) {
-		return se
+		return nil, se
 	}
-	return &cwquery.SyntaxError{Pos: 0, Msg: err.Error()}
+	return nil, &cwquery.SyntaxError{Pos: 0, Msg: err.Error()}
+}
+
+// ListRefProblem is one bad `in list` reference: the list does not exist, or holds a different
+// kind of item than the field being checked.
+type ListRefProblem struct {
+	Pos int
+	Msg string
+}
+
+// ValidateListRefs checks every list reference in expr against stored lists. Fields the builder
+// knows are also checked for type agreement (a contact field needs a contact list); unknown
+// paths only need the list to exist.
+func (s *Service) ValidateListRefs(ctx context.Context, expr cwquery.Expr) ([]ListRefProblem, error) {
+	if s.Lists == nil {
+		return nil, nil
+	}
+
+	var problems []ListRefProblem
+	for _, ref := range cwquery.ListRefs(expr) {
+		l, err := s.Lists.Get(ctx, ref.ListID)
+		if err != nil {
+			if errors.Is(err, models.ErrListNotFound) {
+				problems = append(problems, ListRefProblem{Pos: ref.Pos, Msg: fmt.Sprintf("list %d not found", ref.ListID)})
+				continue
+			}
+			return nil, fmt.Errorf("checking list %d: %w", ref.ListID, err)
+		}
+
+		f, ok := FieldByPath(strings.Join(ref.Path, "/"))
+		if !ok || f.Source == "" {
+			continue
+		}
+		want, ok := models.ListItemTypeForSource(f.Source)
+		if !ok || want == l.ItemType {
+			continue
+		}
+		have, _ := l.ItemType.Info()
+		problems = append(problems, ListRefProblem{Pos: ref.Pos, Msg: fmt.Sprintf("list %q holds %s, but %s is a %s field", l.Name, strings.ToLower(have.Plural), f.Label, want)})
+	}
+
+	return problems, nil
 }
 
 // Validate checks every rule and action, assigns IDs to new rules, and normalizes nil slices.
@@ -152,9 +201,16 @@ func (s *Service) Validate(ctx context.Context, w *models.Workflow) models.Valid
 		if !r.Trigger.Valid() {
 			add(i, -1, r.ID, "trigger", fmt.Sprintf("trigger must be one of create, update, both (got %q)", r.Trigger), nil)
 		}
-		if se := ValidateCondition(r.Condition); se != nil {
+		if expr, se := parseCondition(r.Condition); se != nil {
 			pos := se.Pos
 			add(i, -1, r.ID, "condition", se.Msg, &pos)
+		} else if problems, err := s.ValidateListRefs(ctx, expr); err != nil {
+			add(i, -1, r.ID, "condition", err.Error(), nil)
+		} else {
+			for _, p := range problems {
+				pos := p.Pos
+				add(i, -1, r.ID, "condition", p.Msg, &pos)
+			}
 		}
 
 		if r.Actions == nil {

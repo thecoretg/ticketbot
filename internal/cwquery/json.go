@@ -6,17 +6,18 @@ import (
 )
 
 // Node is the JSON form of a parsed condition, for editors that render conditions visually.
-// Kind is one of: always, not, and, or, compare, in.
+// Kind is one of: always, not, and, or, compare, in, in_list.
 type Node struct {
 	Kind   string    `json:"kind"`
-	Expr   *Node     `json:"expr,omitempty"`   // not
-	Left   *Node     `json:"left,omitempty"`   // and / or
-	Right  *Node     `json:"right,omitempty"`  // and / or
-	Path   string    `json:"path,omitempty"`   // compare / in, segments joined with "/"
-	Op     string    `json:"op,omitempty"`     // compare: = != < > <= >= like contains
-	Value  *Literal  `json:"value,omitempty"`  // compare
-	Values []Literal `json:"values,omitempty"` // in
-	Negate bool      `json:"negate,omitempty"` // in: `not in`
+	Expr   *Node     `json:"expr,omitempty"`    // not
+	Left   *Node     `json:"left,omitempty"`    // and / or
+	Right  *Node     `json:"right,omitempty"`   // and / or
+	Path   string    `json:"path,omitempty"`    // compare / in, segments joined with "/"
+	Op     string    `json:"op,omitempty"`      // compare: = != < > <= >= like contains
+	Value  *Literal  `json:"value,omitempty"`   // compare
+	Values []Literal `json:"values,omitempty"`  // in
+	Negate bool      `json:"negate,omitempty"`  // in / in_list: `not in`
+	ListID int       `json:"list_id,omitempty"` // in_list
 }
 
 // Literal is a right-hand-side value. Type is string, number, bool, null or time.
@@ -47,6 +48,8 @@ func ToNode(e Expr) *Node {
 			vals = append(vals, literal(v))
 		}
 		return &Node{Kind: "in", Path: strings.Join(n.Path, "/"), Values: vals, Negate: n.Negate}
+	case InList:
+		return &Node{Kind: "in_list", Path: strings.Join(n.Path, "/"), ListID: n.ListID, Negate: n.Negate}
 	}
 	return nil
 }

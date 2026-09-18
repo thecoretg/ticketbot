@@ -21,10 +21,11 @@ type WorkflowHandler struct {
 	Service  *workflow.Service
 	CW       *cwsvc.Service
 	Notifier *notifier.Service
+	Lists    workflow.ListLoader // admin lists for `in list` conditions; may be nil
 }
 
-func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service, ns *notifier.Service) *WorkflowHandler {
-	return &WorkflowHandler{Service: svc, CW: cw, Notifier: ns}
+func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service, ns *notifier.Service, lists workflow.ListLoader) *WorkflowHandler {
+	return &WorkflowHandler{Service: svc, CW: cw, Notifier: ns, Lists: lists}
 }
 
 // Fields handles GET /workflows/fields.
@@ -104,6 +105,7 @@ func (h *WorkflowHandler) Simulate(c *gin.Context) {
 	}
 
 	engine := workflow.NewEngine(noopCW{})
+	engine.Lists = h.Lists
 	res, err := engine.Run(ctx, wf, workflow.Input{
 		Ticket:      t,
 		TriggerNote: note,
@@ -328,9 +330,26 @@ func (h *WorkflowHandler) ValidateCondition(c *gin.Context) {
 		return
 	}
 
-	if se := workflow.ValidateCondition(req.Condition); se != nil {
-		pos := se.Pos
-		outputJSON(c, validateConditionResponse{Valid: false, Error: se.Msg, Pos: &pos})
+	expr, err := cwquery.Parse(req.Condition)
+	if err != nil {
+		var se *cwquery.SyntaxError
+		if errors.As(err, &se) {
+			pos := se.Pos
+			outputJSON(c, validateConditionResponse{Valid: false, Error: se.Msg, Pos: &pos})
+			return
+		}
+		outputJSON(c, validateConditionResponse{Valid: false, Error: err.Error()})
+		return
+	}
+
+	problems, err := h.Service.ValidateListRefs(c.Request.Context(), expr)
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
+	if len(problems) > 0 {
+		pos := problems[0].Pos
+		outputJSON(c, validateConditionResponse{Valid: false, Error: problems[0].Msg, Pos: &pos})
 		return
 	}
 
@@ -408,8 +427,13 @@ func (h *WorkflowHandler) EvaluateCondition(c *gin.Context) {
 		return
 	}
 
+	env, err := workflow.LoadEnv(c.Request.Context(), h.Lists, q.Expr)
+	if err != nil {
+		internalServerError(c, err)
+		return
+	}
 	doc := cwquery.NewDocument(t, note, cwquery.Changes{NewNote: note != nil})
-	matches, err := q.Eval(doc)
+	matches, err := q.EvalEnv(doc, env)
 	if err != nil {
 		internalServerError(c, err)
 		return

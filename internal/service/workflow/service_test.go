@@ -48,8 +48,25 @@ func (f *fakeMemberRepo) Get(_ context.Context, id int) (*models.Member, error) 
 	return m, nil
 }
 
+type fakeListRepo struct {
+	repos.ListRepository
+	lists map[int]*models.List
+}
+
+func (f *fakeListRepo) Get(_ context.Context, id int) (*models.List, error) {
+	l, ok := f.lists[id]
+	if !ok {
+		return nil, models.ErrListNotFound
+	}
+	return l, nil
+}
+
 func testService() *Service {
 	return &Service{
+		Lists: &fakeListRepo{lists: map[int]*models.List{
+			7: {ID: 7, Name: "Drop", ItemType: models.ListItemContact},
+			8: {ID: 8, Name: "VIPs", ItemType: models.ListItemCompany},
+		}},
 		Recipients: &fakeRecipRepo{recips: map[int]*models.WebexRecipient{
 			1: {ID: 1, Name: "Room", Type: models.RecipientTypeRoom},
 			2: {ID: 2, Name: "Person", Type: models.RecipientTypePerson},
@@ -218,5 +235,45 @@ func TestValidateCondition(t *testing.T) {
 	se := ValidateCondition("a = ")
 	if se == nil || se.Pos != 4 {
 		t.Errorf("got %+v", se)
+	}
+}
+
+func TestValidateListRefs(t *testing.T) {
+	cases := []struct {
+		cond string
+		want string // substring of the message; empty means valid
+	}{
+		{"contact/id in list 7", ""},
+		{"latestNote/contact/id not in list 7", ""},
+		{"company/id in list 8", ""},
+		{"summary in list 7", ""}, // unknown type: existence only
+		{"contact/id in list 99", "list 99 not found"},
+		{"company/id in list 7", `list "Drop" holds contacts, but Company is a company field`},
+		{"contact/id in list 8", `list "VIPs" holds companies, but Contact is a contact field`},
+	}
+	for _, c := range cases {
+		w := &models.Workflow{Rules: []models.Rule{{Name: "r", Enabled: true, Trigger: models.TriggerBoth, Condition: c.cond}}}
+		errs := testService().Validate(context.Background(), w)
+		if c.want == "" {
+			if len(errs) != 0 {
+				t.Errorf("%q: unexpected errors %v", c.cond, errs)
+			}
+			continue
+		}
+		if len(errs) != 1 || errs[0].Field != "condition" || !strings.Contains(errs[0].Message, c.want) || errs[0].Pos == nil {
+			t.Errorf("%q: errs = %v, want message containing %q with pos", c.cond, errs, c.want)
+			continue
+		}
+		if *errs[0].Pos != strings.LastIndex(c.cond, " ")+1 {
+			t.Errorf("%q: pos = %d", c.cond, *errs[0].Pos)
+		}
+	}
+
+	// without a list repo the check is skipped
+	svc := testService()
+	svc.Lists = nil
+	w := &models.Workflow{Rules: []models.Rule{{Name: "r", Enabled: true, Trigger: models.TriggerBoth, Condition: "contact/id in list 99"}}}
+	if errs := svc.Validate(context.Background(), w); len(errs) != 0 {
+		t.Errorf("nil Lists: unexpected errors %v", errs)
 	}
 }
