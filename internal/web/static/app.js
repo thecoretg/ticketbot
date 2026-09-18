@@ -1721,8 +1721,11 @@ function renderConfig(cfg) {
             'ConnectWise member the API key belongs to; its own updates never trigger workflows. Auto-filled after the first note ticketbot posts.',
             `<input class="input" style="max-width:260px" type="text" id="c-api-member" value="${esc(cfg.cw_api_member_identifier || '')}" placeholder="e.g. ticketbot" aria-label="CW API member identifier">`)}
         ${row('Max message length',
-            'Truncation limit for ticket note content, in characters.',
+            'Truncation limit for note content in Webex notifications, in characters.',
             numberInput('c-max-len', cfg.max_message_length, 1))}
+        ${row('Note preview length',
+            'How many characters of a new note the ticket history keeps. Applies to events recorded from now on.',
+            numberInput('c-note-preview', cfg.note_preview_length, 1))}
         ${row('Max concurrent syncs',
             'Limits parallel requests to ConnectWise.',
             numberInput('c-max-syncs', cfg.max_concurrent_syncs, 1))}
@@ -1760,6 +1763,7 @@ async function saveConfig() {
             master_dry_run:             document.getElementById('c-master-dry-run').checked,
             cw_api_member_identifier:   document.getElementById('c-api-member').value.trim(),
             max_message_length:         num('c-max-len', 'Max message length'),
+            note_preview_length:        num('c-note-preview', 'Note preview length'),
             max_concurrent_syncs:       num('c-max-syncs', 'Max concurrent syncs'),
             require_totp:               document.getElementById('c-require-totp').checked,
             debug_logging:              document.getElementById('c-debug-logging').checked,

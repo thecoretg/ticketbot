@@ -70,6 +70,7 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		LogBufferSize:           c.LogBufferSize,
 		SsoEnabled:              c.SSOEnabled,
 		PasswordLoginEnabled:    c.PasswordLoginEnabled,
+		NotePreviewLength:       c.NotePreviewLength,
 	}
 }
 
@@ -87,5 +88,6 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		LogBufferSize:           pg.LogBufferSize,
 		SSOEnabled:              pg.SsoEnabled,
 		PasswordLoginEnabled:    pg.PasswordLoginEnabled,
+		NotePreviewLength:       pg.NotePreviewLength,
 	}
 }

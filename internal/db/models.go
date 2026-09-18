@@ -43,6 +43,7 @@ type AppConfig struct {
 	CwApiMemberIdentifier   string `json:"cw_api_member_identifier"`
 	SsoEnabled              bool   `json:"sso_enabled"`
 	PasswordLoginEnabled    bool   `json:"password_login_enabled"`
+	NotePreviewLength       int    `json:"note_preview_length"`
 }
 
 type AppLog struct {

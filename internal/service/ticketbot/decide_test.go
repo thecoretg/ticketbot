@@ -87,7 +87,7 @@ func TestChangePayload(t *testing.T) {
 	f.Note.Member.Identifier = "asmith"
 	f.Note.Text = "   a long note body"
 
-	p := changePayload(decision{NewNote: true}, f)
+	p := changePayload(decision{NewNote: true}, f, 200)
 	if p.UpdatedBy != "jdoe" || p.NewNote == nil || p.NewNote.AuthorIdentifier != "asmith" || p.NewNote.Preview != "a long note body" {
 		t.Errorf("unexpected payload %+v %+v", p, p.NewNote)
 	}

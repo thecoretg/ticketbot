@@ -123,7 +123,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (
 	if d.IsNew {
 		kind = models.EventCreated
 	}
-	run.add(kind, changePayload(d, f))
+	run.add(kind, changePayload(d, f, s.Cfg.NotePreviewLength))
 
 	if guard := s.loopGuard(opts, f, d); guard != nil {
 		run.add(models.EventLoopGuard, guard)

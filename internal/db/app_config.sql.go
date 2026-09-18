@@ -10,7 +10,7 @@ import (
 )
 
 const getAppConfig = `-- name: GetAppConfig :one
-SELECT id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled FROM app_config
+SELECT id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length FROM app_config
 WHERE id = 1
 `
 
@@ -30,6 +30,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 		&i.CwApiMemberIdentifier,
 		&i.SsoEnabled,
 		&i.PasswordLoginEnabled,
+		&i.NotePreviewLength,
 	)
 	return &i, err
 }
@@ -37,7 +38,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 const insertDefaultAppConfig = `-- name: InsertDefaultAppConfig :one
 INSERT INTO app_config (id) VALUES (1)
 ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled
+RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length
 `
 
 func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error) {
@@ -56,13 +57,14 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error
 		&i.CwApiMemberIdentifier,
 		&i.SsoEnabled,
 		&i.PasswordLoginEnabled,
+		&i.NotePreviewLength,
 	)
 	return &i, err
 }
 
 const upsertAppConfig = `-- name: UpsertAppConfig :one
-INSERT INTO app_config(id, master_dry_run, cw_api_member_identifier, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, sso_enabled, password_login_enabled)
-VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO app_config(id, master_dry_run, cw_api_member_identifier, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, sso_enabled, password_login_enabled, note_preview_length)
+VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (id) DO UPDATE SET
     master_dry_run = EXCLUDED.master_dry_run,
     cw_api_member_identifier = EXCLUDED.cw_api_member_identifier,
@@ -74,8 +76,9 @@ ON CONFLICT (id) DO UPDATE SET
     log_cleanup_interval_hours = EXCLUDED.log_cleanup_interval_hours,
     log_buffer_size = EXCLUDED.log_buffer_size,
     sso_enabled = EXCLUDED.sso_enabled,
-    password_login_enabled = EXCLUDED.password_login_enabled
-RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled
+    password_login_enabled = EXCLUDED.password_login_enabled,
+    note_preview_length = EXCLUDED.note_preview_length
+RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length
 `
 
 type UpsertAppConfigParams struct {
@@ -90,6 +93,7 @@ type UpsertAppConfigParams struct {
 	LogBufferSize           int    `json:"log_buffer_size"`
 	SsoEnabled              bool   `json:"sso_enabled"`
 	PasswordLoginEnabled    bool   `json:"password_login_enabled"`
+	NotePreviewLength       int    `json:"note_preview_length"`
 }
 
 func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams) (*AppConfig, error) {
@@ -105,6 +109,7 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		arg.LogBufferSize,
 		arg.SsoEnabled,
 		arg.PasswordLoginEnabled,
+		arg.NotePreviewLength,
 	)
 	var i AppConfig
 	err := row.Scan(
@@ -120,6 +125,7 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		&i.CwApiMemberIdentifier,
 		&i.SsoEnabled,
 		&i.PasswordLoginEnabled,
+		&i.NotePreviewLength,
 	)
 	return &i, err
 }

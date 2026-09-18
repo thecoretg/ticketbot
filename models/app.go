@@ -47,6 +47,10 @@ type Config struct {
 	// PasswordLoginEnabled allows email and password sign-in. It can only be disabled while
 	// SSOEnabled is true; the INITIAL_ADMIN_EMAIL account can always sign in with a password.
 	PasswordLoginEnabled bool `json:"password_login_enabled"`
+
+	// NotePreviewLength is how many characters of a new note are kept in the ticket history
+	// preview. It is applied when the event is recorded, so it only affects new events.
+	NotePreviewLength int `json:"note_preview_length"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
@@ -63,6 +67,7 @@ type ConfigUpdateParams struct {
 	LogBufferSize           *int    `json:"log_buffer_size"`
 	SSOEnabled              *bool   `json:"sso_enabled"`
 	PasswordLoginEnabled    *bool   `json:"password_login_enabled"`
+	NotePreviewLength       *int    `json:"note_preview_length"`
 }
 
 var DefaultConfig = Config{
@@ -77,4 +82,5 @@ var DefaultConfig = Config{
 	LogBufferSize:           500,
 	SSOEnabled:              false,
 	PasswordLoginEnabled:    true,
+	NotePreviewLength:       200,
 }

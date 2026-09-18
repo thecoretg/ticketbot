@@ -10,8 +10,6 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
-const notePreviewLen = 200
-
 // decision is what an intake pass concluded by comparing the stored ticket with ConnectWise.
 type decision struct {
 	IsNew   bool
@@ -55,7 +53,7 @@ func decide(stored *models.Ticket, f *cwsvc.Fetched) decision {
 }
 
 // changePayload builds the created/updated event payload.
-func changePayload(d decision, f *cwsvc.Fetched) models.ChangePayload {
+func changePayload(d decision, f *cwsvc.Fetched, previewLen int) models.ChangePayload {
 	p := models.ChangePayload{
 		Changes:   d.Changes,
 		UpdatedBy: f.Ticket.Info.UpdatedBy,
@@ -64,13 +62,13 @@ func changePayload(d decision, f *cwsvc.Fetched) models.ChangePayload {
 		p.Changes = []models.FieldChange{}
 	}
 	if d.NewNote && f.Note != nil {
-		p.NewNote = notePayload(f.Note)
+		p.NewNote = notePayload(f.Note, previewLen)
 	}
 
 	return p
 }
 
-func notePayload(n *psa.ServiceTicketNote) *models.NotePayload {
+func notePayload(n *psa.ServiceTicketNote, previewLen int) *models.NotePayload {
 	if n == nil {
 		return nil
 	}
@@ -85,7 +83,7 @@ func notePayload(n *psa.ServiceTicketNote) *models.NotePayload {
 		AuthorIdentifier: author,
 		AuthorName:       authorName,
 		Internal:         n.InternalAnalysisFlag,
-		Preview:          preview(n.Text, notePreviewLen),
+		Preview:          preview(n.Text, previewLen),
 	}
 }
 

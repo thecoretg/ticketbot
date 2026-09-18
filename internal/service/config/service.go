@@ -14,6 +14,7 @@ import (
 var (
 	ErrSSONotConfigured      = errors.New("sso cannot be enabled until ENTRA_TENANT_ID, ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET are set")
 	ErrPasswordLoginNeedsSSO = errors.New("password sign-in can only be disabled while sso is enabled")
+	ErrNotePreviewLength     = errors.New("note preview length must be at least 1 character")
 )
 
 // ValidationError marks a rejected update the caller should report as a bad request.
@@ -45,6 +46,9 @@ func New(c repos.ConfigRepository, cfg *models.Config, level *slog.LevelVar, log
 
 // validate rejects toggle combinations that would lock everyone out.
 func (s *Service) validate(c *models.Config) error {
+	if c.NotePreviewLength < 1 {
+		return ValidationError{ErrNotePreviewLength}
+	}
 	if c.SSOEnabled && !s.ssoConfigured {
 		return ValidationError{ErrSSONotConfigured}
 	}
@@ -98,6 +102,9 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.PasswordLoginEnabled != nil {
 		merged.PasswordLoginEnabled = *p.PasswordLoginEnabled
 	}
+	if p.NotePreviewLength != nil {
+		merged.NotePreviewLength = *p.NotePreviewLength
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -125,6 +132,7 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.LogBufferSize = src.LogBufferSize
 	cfg.SSOEnabled = src.SSOEnabled
 	cfg.PasswordLoginEnabled = src.PasswordLoginEnabled
+	cfg.NotePreviewLength = src.NotePreviewLength
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)
