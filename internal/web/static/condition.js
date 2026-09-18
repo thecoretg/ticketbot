@@ -211,66 +211,97 @@ function wfLookupLabel(source, it) {
 function wfConditionHTML(r, i) {
     const ui = r._ui || (r._ui = wfDefaultUI())
     const advanced = ui.mode === 'advanced'
+    const compiled = advanced ? null : wfCompile(ui)
+    const count    = advanced ? '' : `${ui.rows.length} condition${ui.rows.length === 1 ? '' : 's'}`
+
+    // the join is one choice for the whole rule, so it lives in the header rather
+    // than repeating as a cramped select on every row
+    const join = !advanced && ui.rows.length > 1
+        ? `<span class="cell-sub">Match</span>
+           <div class="seg" role="group" aria-label="Match all or any condition">
+               <button class="${ui.join === 'and' ? 'on' : ''}" onclick="wfSetJoin(${i}, 'and')">all</button>
+               <button class="${ui.join === 'or' ? 'on' : ''}" onclick="wfSetJoin(${i}, 'or')">any</button>
+           </div>`
+        : ''
+
     const tabs = `<div class="cond-tabs">
-        <button class="cond-tab${advanced ? '' : ' active'}" onclick="wfSetCondMode(${i}, 'builder')">Builder</button>
-        <button class="cond-tab${advanced ? ' active' : ''}" onclick="wfSetCondMode(${i}, 'advanced')">Advanced</button>
+        <button class="${advanced ? '' : 'on'}" onclick="wfSetCondMode(${i}, 'builder')">Builder</button>
+        <button class="${advanced ? 'on' : ''}" onclick="wfSetCondMode(${i}, 'advanced')">Advanced</button>
+        <span class="grow"></span>
+        ${join}
+        <span class="cell-sub">${count}</span>
     </div>`
 
-    if (advanced) {
-        return `<div class="form-group">
-            <div class="cond-head"><label>Condition</label>${tabs}</div>
-            ${ui.reason ? `<div class="cond-note">Builder can't show this condition: ${esc(ui.reason)}.</div>` : ''}
-            <textarea class="cond-textarea" id="cond-${i}" rows="2" spellcheck="false" placeholder="status/name = 'New' and summary contains 'vpn'  — empty always matches" oninput="wfSetRule(${i}, 'condition', this.value)">${esc(r.condition)}</textarea>
-            ${wfCondToolsHTML(i)}
+    const body = advanced
+        ? `<div class="cond-rows">
+            ${ui.reason ? `<div class="callout warn">${icon('info')}<div class="body">
+                <b>The builder cannot show this condition</b>${esc(ui.reason)}. Edit it as text here.
+            </div></div>` : ''}
+            <textarea class="textarea mono" id="cond-${i}" rows="2" spellcheck="false" aria-label="Condition"
+                placeholder="status/name = 'New' and summary contains 'vpn'  — empty always matches"
+                oninput="wfSetRule(${i}, 'condition', this.value)">${esc(r.condition)}</textarea>
         </div>`
-    }
+        : `<div class="cond-rows" id="cond-builder-${i}">
+            ${ui.rows.map((row, k) => wfRowHTML(i, k, row, ui)).join('')}
+            <div><button class="btn btn-default btn-sm" onclick="wfAddRow(${i})">${icon('plus')}Add condition</button></div>
+            ${ui.rows.length ? '' : '<p class="cell-sub">No conditions: this rule matches every ticket its trigger allows.</p>'}
+        </div>`
 
-    const compiled = wfCompile(ui)
-    const rows = ui.rows.map((row, k) => wfRowHTML(i, k, row)).join('')
-    return `<div class="form-group">
-        <div class="cond-head"><label>Condition</label>${tabs}</div>
-        <div class="cond-builder" id="cond-builder-${i}">
-            <div class="cond-join">
-                ${ui.rows.length > 1 ? `Match <select onchange="wfSetJoin(${i}, this.value)"><option value="and"${ui.join === 'and' ? ' selected' : ''}>all</option><option value="or"${ui.join === 'or' ? ' selected' : ''}>any</option></select> of the following` : (ui.rows.length ? 'Match the following' : '<span class="muted">No conditions: this rule matches every ticket its trigger allows.</span>')}
-            </div>
-            ${rows}
-            <div><button class="btn btn-ghost btn-sm" onclick="wfAddRow(${i})">+ Add condition</button></div>
-            <div class="cond-preview" id="cond-preview-${i}">${wfPreviewHTML(compiled)}</div>
+    return `<div class="field">
+        <label>Condition</label>
+        <div class="cond">
+            ${tabs}
+            ${body}
+            ${wfCondFootHTML(i, compiled)}
         </div>
-        ${wfCondToolsHTML(i)}
     </div>`
 }
 
+// wfCondFootHTML is the compiled preview plus the validate / test controls.
+function wfCondFootHTML(i, compiled) {
+    return `<div class="cond-foot">
+        <div class="grow" style="min-width:220px" id="cond-preview-${i}">${wfPreviewHTML(compiled)}</div>
+        <button class="btn btn-default btn-sm" onclick="wfValidate(${i})">Validate</button>
+        <span id="cond-result-${i}" class="cond-result" role="status"></span>
+        <input type="number" id="test-ticket-${i}" class="input" style="width:110px" placeholder="Ticket #" min="1" aria-label="Ticket number to test this condition against">
+        <button class="btn btn-default btn-sm" onclick="wfTest(${i})">Test</button>
+        <span id="test-result-${i}" class="cond-result" role="status"></span>
+    </div>`
+}
+
+// wfPreviewHTML shows the condition text the builder rows compile to. compiled is
+// null in advanced mode, where the textarea already is the source of truth.
 function wfPreviewHTML(compiled) {
-    let html = compiled.text ? `<code>${esc(compiled.text)}</code>` : '<span class="muted">(matches everything)</span>'
-    if (compiled.errors.length) html += `<div class="cond-result err">${esc(compiled.errors[0])}</div>`
-    return html
+    if (!compiled) return '<span class="cell-sub">Condition is edited as text.</span>'
+    const code = compiled.text
+        ? `<pre class="code" style="white-space:pre-wrap">${esc(compiled.text)}</pre>`
+        : '<span class="cell-sub">Matches every ticket its trigger allows.</span>'
+    return compiled.errors.length
+        ? `${code}<div class="cond-result err" style="margin-top:var(--s2)">${esc(compiled.errors[0])}</div>`
+        : code
 }
 
-function wfCondToolsHTML(i) {
-    return `<div class="cond-tools">
-        <button class="btn btn-ghost btn-sm" onclick="wfValidate(${i})">Validate</button>
-        <span id="cond-result-${i}" class="cond-result"></span>
-        <span class="cond-spacer"></span>
-        <input type="number" id="test-ticket-${i}" class="config-input cond-ticket" placeholder="Ticket #" min="1">
-        <button class="btn btn-ghost btn-sm" onclick="wfTest(${i})">Test</button>
-        <span id="test-result-${i}" class="cond-result"></span>
-    </div>`
-}
-
-function wfRowHTML(i, k, row) {
+function wfRowHTML(i, k, row, ui) {
     const f = wfFieldByPath(row.path) || wfFields[0]
     const groups = {}
     for (const fd of wfFields) (groups[fd.group] = groups[fd.group] || []).push(fd)
-    const fieldSel = `<select class="cond-field" onchange="wfSetRowField(${i}, ${k}, this.value)">${
+
+    // rows after the first are prefixed with the rule's join, set in the header
+    const join = k === 0
+        ? '<span class="cond-join-spacer"></span>'
+        : `<span class="cond-join">${esc(ui.join)}</span>`
+
+    const fieldSel = `<select class="select" style="min-width:180px" aria-label="Field" onchange="wfSetRowField(${i}, ${k}, this.value)">${
         Object.entries(groups).map(([g, fs]) => `<optgroup label="${esc(g)}">${fs.map(fd => `<option value="${esc(fd.path)}"${fd.path === f.path ? ' selected' : ''}>${esc(fd.label)}</option>`).join('')}</optgroup>`).join('')
     }</select>`
-    const opSel = `<select class="cond-op" onchange="wfSetRowOp(${i}, ${k}, this.value)">${wfOpsFor(f).map(([v, l]) => `<option value="${v}"${v === row.op ? ' selected' : ''}>${l}</option>`).join('')}</select>`
+    const opSel = `<select class="select" style="min-width:130px" aria-label="Operator" onchange="wfSetRowOp(${i}, ${k}, this.value)">${
+        wfOpsFor(f).map(([v, l]) => `<option value="${v}"${v === row.op ? ' selected' : ''}>${l}</option>`).join('')
+    }</select>`
 
     return `<div class="cond-row" id="cond-row-${i}-${k}">
-        ${fieldSel}${opSel}
-        <div class="cond-value">${wfValueHTML(i, k, row, f)}</div>
-        <button class="btn-icon" title="Remove condition" onclick="wfRemoveRow(${i}, ${k})">✕</button>
+        ${join}${fieldSel}${opSel}
+        <div class="row gap2 grow" style="min-width:200px">${wfValueHTML(i, k, row, f)}</div>
+        <button class="icon-btn hit-expand" style="width:26px;height:26px" aria-label="Remove condition ${k + 1}" onclick="wfRemoveRow(${i}, ${k})">${icon('trash')}</button>
     </div>`
 }
 
@@ -286,27 +317,27 @@ function wfValueHTML(i, k, row, f) {
 
         if (!multi) {
             if (searchable) return wfTypeaheadHTML(i, k, f, row.value === null || row.value === '' ? '' : `${labelFor(row.value)}`)
-            return `<select onchange="wfSetRowValue(${i}, ${k}, this.value)">
+            return `<select class="select grow" aria-label="Value" onchange="wfSetRowValue(${i}, ${k}, this.value)">
                 <option value="">— choose —</option>${list.map(o => `<option value="${esc(String(o.value))}"${String(o.value) === String(row.value ?? '') ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}
             </select>`
         }
 
         const vals = Array.isArray(row.value) ? row.value : []
-        const chips = vals.map(v => `<span class="chip">${esc(labelFor(v))}<button class="chip-x" type="button" title="Remove" onclick="wfRemoveRowValue(${i}, ${k}, '${esc(String(v))}')">✕</button></span>`).join('')
+        const chips = vals.map(v => `<span class="chip">${esc(labelFor(v))}<button class="chip-x hit-expand" type="button" aria-label="Remove ${esc(labelFor(v))}" onclick="wfRemoveRowValue(${i}, ${k}, '${esc(String(v))}')">${icon('x')}</button></span>`).join('')
         const adder = searchable
             ? wfTypeaheadHTML(i, k, f, '', true)
-            : `<select onchange="if (this.value) { wfAddRowValue(${i}, ${k}, this.value); this.value = '' }">
+            : `<select class="select" style="width:auto" aria-label="Add a value" onchange="if (this.value) { wfAddRowValue(${i}, ${k}, this.value); this.value = '' }">
                 <option value="">+ add…</option>${list.filter(o => !vals.map(String).includes(String(o.value))).map(o => `<option value="${esc(String(o.value))}">${esc(o.label)}</option>`).join('')}
             </select>`
-        return `<div class="chips">${chips}${adder}</div>`
+        return `<div class="chips grow">${chips}${adder}</div>`
     }
 
     const type = f.type === 'number' ? 'number' : 'text'
     if (multi) {
         const text = Array.isArray(row.value) ? row.value.join(', ') : ''
-        return `<input type="text" placeholder="value, value, …" value="${esc(text)}" oninput="wfSetRowValue(${i}, ${k}, this.value.split(',').map(s => s.trim()).filter(Boolean))">`
+        return `<input class="input grow" type="text" aria-label="Values, comma separated" placeholder="value, value, …" value="${esc(text)}" oninput="wfSetRowValue(${i}, ${k}, this.value.split(',').map(s => s.trim()).filter(Boolean))">`
     }
-    return `<input type="${type}" placeholder="value" value="${esc(row.value ?? '')}" oninput="wfSetRowValue(${i}, ${k}, this.value)">`
+    return `<input class="input grow" type="${type}" aria-label="Value" placeholder="value" value="${esc(row.value ?? '')}" oninput="wfSetRowValue(${i}, ${k}, this.value)">`
 }
 
 // wfListSelectHTML offers the admin lists whose item type matches the field.
@@ -317,15 +348,17 @@ function wfListSelectHTML(i, k, row, f) {
     const opts = lists.map(l => `<option value="${l.id}"${String(l.id) === current ? ' selected' : ''}>${esc(l.name)} (${l.item_count})</option>`).join('')
     const missing = current && !known ? `<option value="${esc(current)}" selected disabled>(missing list #${esc(current)})</option>` : ''
     const empty = lists.length ? '' : `<option value="" disabled>No ${esc(f.list_type)} lists yet — create one under Lists</option>`
-    return `<select onchange="wfSetRowValue(${i}, ${k}, this.value === '' ? null : Number(this.value))">
+    return `<select class="select grow" aria-label="List" onchange="wfSetRowValue(${i}, ${k}, this.value === '' ? null : Number(this.value))">
         <option value="">— choose list —</option>${missing}${opts}${empty}
     </select>`
 }
 
 function wfTypeaheadHTML(i, k, f, current, add = false) {
     const id = `ta-${i}-${k}-${add ? 'add' : 'one'}`
-    return `<span class="typeahead">
-        <input type="text" id="${id}" list="${id}-list" autocomplete="off" placeholder="${add ? '+ search…' : `search ${f.source}…`}" value="${esc(current)}"
+    return `<span class="typeahead grow">
+        <input class="input" type="text" id="${id}" list="${id}-list" autocomplete="off"
+            aria-label="${add ? `Add a ${esc(f.source)}` : `Search ${esc(f.source)}`}"
+            placeholder="${add ? '+ search…' : `search ${esc(f.source)}…`}" value="${esc(current)}"
             oninput="wfTypeahead(${i}, ${k}, '${f.source}', this)">
         <datalist id="${id}-list"></datalist>
     </span>`
@@ -421,7 +454,7 @@ async function wfSetCondMode(i, mode) {
 
 function wfSetJoin(i, join) {
     wf.rules[i]._ui.join = join
-    wfSyncCondition(i)
+    wfRerenderCondition(i)
 }
 
 function wfAddRow(i) {

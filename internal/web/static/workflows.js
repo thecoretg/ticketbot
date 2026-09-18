@@ -33,7 +33,7 @@ async function loadWorkflowList() {
         const list = await api('GET', '/workflows')
         renderWorkflowList(list || [])
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
@@ -42,26 +42,34 @@ let wfList = []   // last-loaded /workflows, for delete confirmations
 function renderWorkflowList(list) {
     wfList = list
     const banner = appConfig?.master_dry_run
-        ? '<div class="info-banner">Master dry run is on: every workflow runs as a dry run (Config → Master Dry Run).</div>' : ''
+        ? `<div class="banner warn">${icon('alert')}<div><b>Master dry run is on.</b> Every workflow runs as a dry run — nothing is written or sent. Turn it off under Config.</div></div>`
+        : ''
 
-    const thead = `<th>Board</th><th>Enabled</th><th>Mode</th><th>Rules</th><th></th>`
+    const thead = `<th>Board</th><th class="c">Enabled</th><th>Mode</th><th class="r">Rules</th><th class="r">Actions</th>`
     const rows  = list.map(w => `<tr class="clickable" onclick="openWorkflow(${w.id})">
-        <td><strong>${esc(w.board_name || w.name)}</strong>${w.name && w.name !== w.board_name ? `<div class="muted">${esc(w.name)}</div>` : ''}</td>
-        <td>${badge(w.enabled)}</td>
-        <td>${w.dry_run ? badgeTag('Dry run', 'warn') : (appConfig?.master_dry_run ? badgeTag('Dry run (master)', 'warn') : badgeTag('Live', 'on'))}</td>
-        <td>${(w.rules || []).length}</td>
-        <td class="actions" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})">Open</button>
-            <button class="btn btn-danger" onclick="deleteWorkflow(${w.id})">Delete</button>
+        <td>
+            <div class="cell-primary">${esc(w.board_name || w.name)}</div>
+            ${w.name && w.name !== w.board_name ? `<div class="cell-sub">${esc(w.name)}</div>` : ''}
+        </td>
+        <td class="c">${w.enabled ? badgeTag('Enabled', 'ok') : badgeTag('Disabled', '')}</td>
+        <td>${w.dry_run ? badgeTag('Dry run', 'warn') : (appConfig?.master_dry_run ? badgeTag('Dry run (master)', 'warn') : badgeTag('Live', 'ok'))}</td>
+        <td class="r num">${(w.rules || []).length}</td>
+        <td class="r nowrap" onclick="event.stopPropagation()">
+            <button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})">${icon('edit')}Open</button>
+            ${deleteButton(`deleteWorkflow(${w.id})`)}
         </td>
     </tr>`)
 
-    setContent(`<div class="tab-header">
-        <h2>Workflows</h2>
-        <button class="btn btn-primary btn-sm" onclick="showNewWorkflowModal()">+ New Workflow</button>
-    </div>
-    ${banner}
-    ${rows.length ? tableWrap(thead, rows) : '<div class="empty-state">No workflows yet. Create one for a board to start notifying.</div>'}`)
+    setContent(pageHead('Workflows',
+        'One workflow per board. Its rules run top to bottom for every new or updated ticket.',
+        `<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`) +
+    banner +
+    tableCard(thead, rows, {
+        empty: emptyState('No workflows yet',
+            'Create a workflow for a board and ticketbot will start acting on its tickets.',
+            `<button class="btn btn-primary btn-sm" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`, 'bolt'),
+        foot: `<span>${list.length} workflow${list.length === 1 ? '' : 's'}</span>`,
+    }))
 }
 
 function openWorkflow(id) {
@@ -80,12 +88,12 @@ async function showNewWorkflowModal(preselect = null) {
     const free  = (boards || []).filter(b => !b.deleted && !taken.has(b.id))
     if (!free.length) { toast('Every board already has a workflow', 'error'); return }
 
-    openModal('New Workflow', `
-        <div class="form-group">
-            <label>Board</label>
-            <select id="wf-new-board">${free.map(b => `<option value="${b.id}"${b.id === preselect ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
-        </div>
-        <p class="config-desc">A workflow starts with no rules. Add rules in the editor and save.</p>`,
+    openModal('New workflow', `
+        <div class="field">
+            <label for="wf-new-board">Board</label>
+            <select class="select" id="wf-new-board">${free.map(b => `<option value="${b.id}"${b.id === preselect ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
+            <span class="hint">A workflow starts with no rules. Add them in the editor and save.</span>
+        </div>`,
     async () => {
         const boardID = parseInt(document.getElementById('wf-new-board').value)
         try {
@@ -134,10 +142,7 @@ async function loadWorkflowEditor(id) {
         tabGuard = wfGuard
         renderWorkflowEditor()
     } catch (e) {
-        setContent(`<div class="tab-header"><div class="back-row">
-                <button class="btn btn-ghost btn-sm" onclick="wfBack()">← Workflows</button><h2>Workflow</h2>
-            </div></div>
-            <div class="empty-state">${esc(e.message)}</div>`)
+        setContent(backRow('workflows', 'Workflows') + pageHead('Workflow') + errorState(e.message))
     }
 }
 
@@ -172,87 +177,107 @@ function wfBack() {
 
 function renderWorkflowEditor() {
     const rules = wf.rules.map((r, i) => wfRuleCardHTML(r, i)).join('')
+    const dirty = wfIsDirty()
 
-    setContent(`<div class="tab-header">
-        <div class="back-row">
-            <button class="btn btn-ghost btn-sm" onclick="wfBack()">← Workflows</button>
-            <h2>${esc(wf.board_name || wf.name)}</h2>
-            <span id="wf-dirty" class="dirty-dot${wfIsDirty() ? '' : ' hidden'}" title="Unsaved changes"></span>
+    setContent(`${backRow('workflows', 'Workflows', wf.board_name || wf.name)}
+    <header class="page-head row spread wrap gap4">
+        <div>
+            <h1 class="page-title">${esc(wf.board_name || wf.name)}</h1>
+            <p class="page-sub">Rules run top to bottom for every new or updated ticket on this board.</p>
         </div>
-        <button id="wf-save" class="btn btn-primary btn-sm" onclick="saveWorkflow()" ${wfIsDirty() ? '' : 'disabled'}>Save</button>
+        <div class="row gap3 wrap">
+            <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
+                <span class="dirty-dot"></span><span class="cell-sub">Unsaved changes</span>
+            </span>
+            <button id="wf-save" class="btn ${dirty ? 'btn-primary' : 'btn-default'}" onclick="saveWorkflow()" ${dirty ? '' : 'disabled'}>Save</button>
+        </div>
+    </header>
+    ${appConfig?.master_dry_run
+        ? `<div class="banner warn">${icon('alert')}<div><b>Master dry run is on.</b> This workflow will not write to ConnectWise or send Webex messages, whatever its own dry-run setting says.</div></div>`
+        : ''}
+
+    <div class="card card-pad">
+        <div class="form-row">
+            <div><h4>Workflow name</h4><p class="desc">Shown in the ticket history.</p></div>
+            <div><input class="input" style="max-width:320px" type="text" value="${esc(wf.name)}" oninput="wfSet('name', this.value)" aria-label="Workflow name"></div>
+        </div>
+        <div class="form-row">
+            <div><h4>Enabled</h4><p class="desc">Process tickets on this board.</p></div>
+            <div>${toggle(`onchange="wfSet('enabled', this.checked)"`, wf.enabled, { tip: 'Workflow enabled' })}</div>
+        </div>
+        <div class="form-row">
+            <div><h4>Dry run</h4><p class="desc">Record what would happen: no ConnectWise writes, no Webex messages.</p></div>
+            <div>${toggle(`onchange="wfSet('dry_run', this.checked)"`, wf.dry_run, { tip: 'Dry run' })}</div>
+        </div>
     </div>
-    ${appConfig?.master_dry_run ? '<div class="info-banner">Master dry run is on: this workflow will not write to ConnectWise or send Webex messages regardless of its own dry-run setting.</div>' : ''}
-    <div class="config-form wf-head">
-        <div class="config-row">
-            <div>
-                <div class="config-label">Workflow name</div>
-                <div class="config-desc">Shown in the ticket history</div>
-            </div>
-            <input class="config-input config-input--wide" type="text" value="${esc(wf.name)}" oninput="wfSet('name', this.value)">
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Enabled</div>
-                <div class="config-desc">Process tickets on this board</div>
-            </div>
-            <label class="toggle"><input type="checkbox" ${wf.enabled ? 'checked' : ''} onchange="wfSet('enabled', this.checked)"><span class="toggle-track"></span></label>
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Dry run</div>
-                <div class="config-desc">Record what would happen; no ConnectWise writes, no Webex messages</div>
-            </div>
-            <label class="toggle"><input type="checkbox" ${wf.dry_run ? 'checked' : ''} onchange="wfSet('dry_run', this.checked)"><span class="toggle-track"></span></label>
-        </div>
+
+    <div class="section-head">
+        <h3>Simulate</h3>
+        <p>Runs the rules as shown — saved or not — against a stored ticket. Nothing is sent or written.</p>
     </div>
-    <div class="sim-bar">
-        <span class="config-label">Simulate</span>
-        <input type="number" id="sim-ticket" class="config-input cond-ticket" placeholder="Ticket #" min="1" value="${esc(wfSimTicket)}">
-        <select id="sim-mode" class="filter-select">
-            <option value="update">as an update</option>
-            <option value="create">as a new ticket</option>
-        </select>
-        <button class="btn btn-ghost btn-sm" onclick="wfSimulate()">Run</button>
-        <span class="config-desc">Runs the rules as shown (saved or not) against a stored ticket. Nothing is sent or written.</span>
+    <div class="card card-pad">
+        <div class="row gap3 wrap">
+            <input type="number" id="sim-ticket" class="input" style="max-width:120px" placeholder="Ticket #" min="1" value="${esc(wfSimTicket)}" aria-label="Ticket number to simulate">
+            <select id="sim-mode" class="select" style="max-width:190px" aria-label="Simulate as">
+                <option value="update">as an update</option>
+                <option value="create">as a new ticket</option>
+            </select>
+            <button class="btn btn-default" onclick="wfSimulate()">${icon('play')}Run simulation</button>
+        </div>
+        <div id="sim-result"></div>
     </div>
-    <div id="sim-result"></div>
-    <div class="section-head"><h3>Rules</h3><span class="config-desc">Evaluated top to bottom for every new or updated ticket</span></div>
-    <div class="rule-list" id="rule-list">${rules || '<div class="empty-state">No rules yet</div>'}</div>
-    <button class="btn btn-ghost btn-sm" onclick="wfAddRule()">+ Add rule</button>`)
+
+    <div class="section-head">
+        <h3>Rules</h3>
+        <p>${wf.rules.length} rule${wf.rules.length === 1 ? '' : 's'}, evaluated in order</p>
+    </div>
+    <div id="rule-list">${rules || emptyState('No rules yet',
+        'A rule is a condition plus the actions to take when a ticket matches it.',
+        `<button class="btn btn-default btn-sm" onclick="wfAddRule()">${icon('plus')}Add the first rule</button>`, 'bolt')}</div>
+    <div style="margin-top:var(--s4)">
+        <button class="btn btn-default btn-sm" onclick="wfAddRule()">${icon('plus')}Add rule</button>
+    </div>`)
 }
 
 function wfRuleCardHTML(r, i) {
     const last = wf.rules.length - 1
     const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('')
 
-    return `<div class="rule-card${r.enabled ? '' : ' is-disabled'}" id="rule-${i}">
-        <div class="rule-card-head">
+    return `<article class="rule-card${r.enabled ? '' : ' is-disabled'}" id="rule-${i}">
+        <div class="rule-head">
             <div class="order-btns">
-                <button class="btn-icon" title="Move up" onclick="wfMoveRule(${i}, -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-                <button class="btn-icon" title="Move down" onclick="wfMoveRule(${i}, 1)" ${i === last ? 'disabled' : ''}>▼</button>
+                <button onclick="wfMoveRule(${i}, -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move rule ${i + 1} up">${icon('chevUp')}</button>
+                <button onclick="wfMoveRule(${i}, 1)" ${i === last ? 'disabled' : ''} aria-label="Move rule ${i + 1} down">${icon('chevDn')}</button>
             </div>
-            <span class="rule-index">${i + 1}</span>
-            <input type="text" class="rule-name" value="${esc(r.name)}" placeholder="Rule name" oninput="wfSetRule(${i}, 'name', this.value)">
-            <label class="toggle" title="Rule enabled"><input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="wfSetRule(${i}, 'enabled', this.checked); document.getElementById('rule-${i}').classList.toggle('is-disabled', !this.checked)"><span class="toggle-track"></span></label>
-            <button class="btn btn-danger" onclick="wfDeleteRule(${i})">Delete</button>
+            <span class="rule-index num">${i + 1}</span>
+            <input type="text" class="rule-name" value="${esc(r.name)}" placeholder="Rule name" aria-label="Rule ${i + 1} name" oninput="wfSetRule(${i}, 'name', this.value)">
+            ${r.stop_processing ? badgeTag('stops chain', 'outline') : ''}
+            ${toggle(`onchange="wfSetRule(${i}, 'enabled', this.checked); document.getElementById('rule-${i}').classList.toggle('is-disabled', !this.checked)"`, r.enabled, { tip: 'Rule enabled' })}
+            ${deleteButton(`wfDeleteRule(${i})`)}
         </div>
-        <div class="rule-grid">
-            <div class="form-group">
-                <label>Run for</label>
-                <select onchange="wfSetRule(${i}, 'trigger', this.value)">${opts(WF_TRIGGERS, r.trigger)}</select>
+        <div class="rule-body">
+            <div class="grid g2" style="gap:var(--s4)">
+                <div class="field">
+                    <label for="rule-trigger-${i}">Run for</label>
+                    <select class="select" id="rule-trigger-${i}" onchange="wfSetRule(${i}, 'trigger', this.value)">${opts(WF_TRIGGERS, r.trigger)}</select>
+                </div>
+                <div class="field">
+                    <label>After this rule matches</label>
+                    <div style="padding-top:6px">${checkbox('Stop processing further rules',
+                        `onchange="wfSetRule(${i}, 'stop_processing', this.checked); wfRerenderRule(${i})"`, r.stop_processing)}</div>
+                </div>
             </div>
-            <div class="form-group">
-                <label>After this rule matches</label>
-                <label class="check-inline"><input type="checkbox" ${r.stop_processing ? 'checked' : ''} onchange="wfSetRule(${i}, 'stop_processing', this.checked)"> Stop processing further rules</label>
+            ${wfConditionHTML(r, i)}
+            <div class="field">
+                <label>Actions</label>
+                <div id="actions-${i}">${r.actions.map((a, j) => wfActionRowHTML(a, i, j)).join('')
+                    || '<p class="cell-sub">No actions — this rule only affects the chain if “stop processing” is set.</p>'}</div>
+                <div style="margin-top:var(--s2)">
+                    <button class="btn btn-default btn-sm" onclick="wfAddAction(${i})">${icon('plus')}Add action</button>
+                </div>
             </div>
         </div>
-        ${wfConditionHTML(r, i)}
-        <div class="form-group">
-            <label>Actions</label>
-            <div class="action-list" id="actions-${i}">${r.actions.map((a, j) => wfActionRowHTML(a, i, j)).join('') || '<div class="muted action-empty">No actions — this rule only affects the chain if "stop processing" is set.</div>'}</div>
-            <div><button class="btn btn-ghost btn-sm" onclick="wfAddAction(${i})">+ Add action</button></div>
-        </div>
-    </div>`
+    </article>`
 }
 
 function wfActionRowHTML(a, i, j) {
@@ -263,20 +288,20 @@ function wfActionRowHTML(a, i, j) {
     switch (a.kind) {
     case 'notify': {
         const n = a.notify || {}
-        let target = `<select onchange="wfChangeTargetKind(${i}, ${j}, this.value)">${opts(WF_TARGETS, n.target)}</select>`
+        let target = `<select class="select" style="max-width:190px" aria-label="Notify target" onchange="wfChangeTargetKind(${i}, ${j}, this.value)">${opts(WF_TARGETS, n.target)}</select>`
         if (n.target === 'room' || n.target === 'person') {
-            target += `<select class="fill" onchange="wfSetAction(${i}, ${j}, 'notify.recipient_id', this.value ? parseInt(this.value) : null)">
+            target += `<select class="select grow" aria-label="Recipient" onchange="wfSetAction(${i}, ${j}, 'notify.recipient_id', this.value ? parseInt(this.value) : null)">
                 <option value="">— choose a ${n.target} —</option>${wfRecipientOptions(n.target, n.recipient_id)}</select>`
         } else {
-            target += `<span class="muted fill">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
+            target += `<span class="cell-sub grow">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
         }
         const hasMsg = !!n.message
-        fields = `<div class="fill action-note">
-            <div class="action-inline">${target}</div>
+        fields = `<div class="grow stack gap2" style="min-width:260px">
+            <div class="row gap2 wrap">${target}</div>
             <details class="action-msg"${hasMsg ? ' open' : ''}>
-                <summary class="muted">Custom message${hasMsg ? '' : ' (optional — default layout when empty)'}</summary>
-                <textarea rows="3" placeholder="{{event}}: {{ticket.link}} {{ticket.summary}}&#10;**Company:** {{company}}&#10;{{note.quote}}" oninput="wfSetAction(${i}, ${j}, 'notify.message', this.value)">${esc(n.message || '')}</textarea>
-                <div class="placeholder-list">${wfPlaceholders.map(p => `<code title="${esc(p.description)}" onclick="wfInsertPlaceholder(this, '${p.name}')">{{${p.name}}}</code>`).join(' ')}</div>
+                <summary class="cell-sub">Custom message${hasMsg ? '' : ' (optional — default layout when empty)'}</summary>
+                <textarea class="textarea mono" rows="3" style="margin-top:var(--s2)" aria-label="Custom message" placeholder="{{event}}: {{ticket.link}} {{ticket.summary}}&#10;**Company:** {{company}}&#10;{{note.quote}}" oninput="wfSetAction(${i}, ${j}, 'notify.message', this.value)">${esc(n.message || '')}</textarea>
+                <div class="placeholder-list" style="margin-top:var(--s2)">${wfPlaceholders.map(p => `<code class="code inline" data-tip="${esc(p.description)}" onclick="wfInsertPlaceholder(this, '${p.name}')">{{${p.name}}}</code>`).join('')}</div>
             </details>
         </div>`
         break
@@ -284,7 +309,7 @@ function wfActionRowHTML(a, i, j) {
     case 'set_status': {
         const n = a.set_status || {}
         const known = wfStatuses.some(s => s.id === n.status_id)
-        fields = `<select class="fill" onchange="wfSetStatus(${i}, ${j}, this.value)">
+        fields = `<select class="select grow" aria-label="Status" onchange="wfSetStatus(${i}, ${j}, this.value)">
             <option value="">— choose a status —</option>
             ${wfStatuses.map(s => `<option value="${s.id}"${s.id === n.status_id ? ' selected' : ''}>${esc(s.name)}${s.closed ? ' (closed)' : ''}</option>`).join('')}
             ${n.status_id && !known ? `<option value="${n.status_id}" selected>${esc(n.status_name || `Status ${n.status_id}`)} (not on this board)</option>` : ''}
@@ -294,7 +319,7 @@ function wfActionRowHTML(a, i, j) {
     case 'set_priority': {
         const n = a.set_priority || {}
         const known = wfPriorities.some(p => p.id === n.priority_id)
-        fields = `<select class="fill" onchange="wfSetPriority(${i}, ${j}, this.value)">
+        fields = `<select class="select grow" aria-label="Priority" onchange="wfSetPriority(${i}, ${j}, this.value)">
             <option value="">— choose a priority —</option>
             ${wfPriorities.map(p => `<option value="${p.id}"${p.id === n.priority_id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
             ${n.priority_id && !known ? `<option value="${n.priority_id}" selected>${esc(n.priority_name || `Priority ${n.priority_id}`)}</option>` : ''}
@@ -304,43 +329,43 @@ function wfActionRowHTML(a, i, j) {
     case 'set_owner':
     case 'add_resource': {
         const n = a[a.kind] || {}
-        fields = `<select class="fill" onchange="wfSetMember(${i}, ${j}, '${a.kind}', this.value)">
+        fields = `<select class="select grow" aria-label="Member" onchange="wfSetMember(${i}, ${j}, '${a.kind}', this.value)">
             <option value="">— choose a member —</option>${wfMemberOptions(n.member_id)}</select>
-        <span class="muted">${a.kind === 'set_owner' ? 'Skipped if already the owner.' : 'Skipped if already assigned.'}</span>`
+        <span class="cell-sub">${a.kind === 'set_owner' ? 'Skipped if already the owner.' : 'Skipped if already assigned.'}</span>`
         break
     }
     case 'patch': {
         const n = a.patch || {}
         const ops = typeof n.ops === 'string' ? n.ops : (n.ops ? JSON.stringify(n.ops, null, 2) : '')
-        fields = `<div class="fill action-note">
-            <textarea rows="4" class="mono" spellcheck="false" placeholder='${WF_PATCH_EXAMPLE}' oninput="wfSetPatchOps(${i}, ${j}, this.value)">${esc(ops)}</textarea>
-            <span class="muted">JSON array of ConnectWise patch operations: <code>op</code> (add / replace / remove), <code>path</code>, <code>value</code>. Sent as-is to PATCH /service/tickets/{id}.</span>
+        fields = `<div class="grow stack gap2" style="min-width:260px">
+            <textarea rows="4" class="textarea mono" spellcheck="false" aria-label="Patch operations" placeholder='${WF_PATCH_EXAMPLE}' oninput="wfSetPatchOps(${i}, ${j}, this.value)">${esc(ops)}</textarea>
+            <span class="cell-sub">JSON array of ConnectWise patch operations: <code class="code inline">op</code> (add / replace / remove), <code class="code inline">path</code>, <code class="code inline">value</code>. Sent as-is to PATCH /service/tickets/{id}.</span>
         </div>`
         break
     }
     case 'add_note': {
         const n = a.add_note || {}
-        const flag = (key, label) => `<label class="check-inline"><input type="checkbox" ${n[key] ? 'checked' : ''} onchange="wfSetAction(${i}, ${j}, 'add_note.${key}', this.checked)"> ${label}</label>`
-        fields = `<div class="fill action-note">
-            <textarea rows="2" placeholder="Note text" oninput="wfSetAction(${i}, ${j}, 'add_note.text', this.value)">${esc(n.text || '')}</textarea>
+        const flag = (key, label) => checkbox(label, `onchange="wfSetAction(${i}, ${j}, 'add_note.${key}', this.checked)"`, !!n[key])
+        fields = `<div class="grow stack gap2" style="min-width:260px">
+            <textarea class="textarea" rows="2" aria-label="Note text" placeholder="Note text" oninput="wfSetAction(${i}, ${j}, 'add_note.text', this.value)">${esc(n.text || '')}</textarea>
             <div class="action-flags">${flag('discussion', 'Discussion')}${flag('internal', 'Internal')}${flag('resolution', 'Resolution')}</div>
         </div>`
         break
     }
     case 'skip_notify':
-        fields = `<span class="muted fill">Suppresses every notify action later in this run.</span>`
+        fields = `<span class="cell-sub grow">Suppresses every notify action later in this run.</span>`
         break
     }
 
     return `<div class="action-row${a.enabled ? '' : ' is-disabled'}" id="act-${i}-${j}">
         <div class="order-btns">
-            <button class="btn-icon" title="Move up" onclick="wfMoveAction(${i}, ${j}, -1)" ${j === 0 ? 'disabled' : ''}>▲</button>
-            <button class="btn-icon" title="Move down" onclick="wfMoveAction(${i}, ${j}, 1)" ${j === last ? 'disabled' : ''}>▼</button>
+            <button onclick="wfMoveAction(${i}, ${j}, -1)" ${j === 0 ? 'disabled' : ''} aria-label="Move action ${j + 1} up">${icon('chevUp')}</button>
+            <button onclick="wfMoveAction(${i}, ${j}, 1)" ${j === last ? 'disabled' : ''} aria-label="Move action ${j + 1} down">${icon('chevDn')}</button>
         </div>
-        <label class="toggle toggle-sm" title="Action enabled"><input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="wfSetAction(${i}, ${j}, 'enabled', this.checked); document.getElementById('act-${i}-${j}').classList.toggle('is-disabled', !this.checked)"><span class="toggle-track"></span></label>
-        <select class="action-kind" onchange="wfChangeActionKind(${i}, ${j}, this.value)">${opts(WF_KINDS, a.kind)}</select>
+        ${toggle(`onchange="wfSetAction(${i}, ${j}, 'enabled', this.checked); document.getElementById('act-${i}-${j}').classList.toggle('is-disabled', !this.checked)"`, a.enabled, { small: true, tip: 'Action enabled' })}
+        <select class="select" style="max-width:170px" aria-label="Action type" onchange="wfChangeActionKind(${i}, ${j}, this.value)">${opts(WF_KINDS, a.kind)}</select>
         ${fields}
-        <button class="btn-icon" title="Remove action" onclick="wfDeleteAction(${i}, ${j})">✕</button>
+        <button class="icon-btn hit-expand" style="width:26px;height:26px;margin-left:auto" aria-label="Remove action ${j + 1}" onclick="wfDeleteAction(${i}, ${j})">${icon('trash')}</button>
     </div>`
 }
 
@@ -425,7 +450,11 @@ function wfMarkDirty() {
     const dirty = wfIsDirty()
     document.getElementById('wf-dirty')?.classList.toggle('hidden', !dirty)
     const save = document.getElementById('wf-save')
-    if (save) save.disabled = !dirty
+    if (!save) return
+    // the accent is the invitation to save: it appears only when there is something to save
+    save.disabled = !dirty
+    save.classList.toggle('btn-primary', dirty)
+    save.classList.toggle('btn-default', !dirty)
 }
 
 // ── Structural changes (re-render) ───────────────────────
@@ -566,12 +595,12 @@ async function wfSimulate() {
     const out = document.getElementById('sim-result')
     const id  = parseInt(document.getElementById('sim-ticket').value)
     wfSimTicket = id ? String(id) : ''
-    if (!id) { out.innerHTML = '<div class="cond-result err">Enter a ticket number</div>'; return }
+    if (!id) { out.innerHTML = wfSimError('Enter a ticket number to simulate against.'); return }
 
     const bad = wfClientValidate()
-    if (bad) { out.innerHTML = `<div class="cond-result err">Rule ${bad.i + 1}: ${esc(bad.msg)}</div>`; return }
+    if (bad) { out.innerHTML = wfSimError(`Rule ${bad.i + 1}: ${bad.msg}`); return }
 
-    out.innerHTML = '<div class="loading-state">Simulating…</div>'
+    out.innerHTML = `<div class="skeleton" style="height:13px;width:60%;margin-top:var(--s4)"></div>`
     try {
         const draft = wfPrepareForServer(JSON.parse(JSON.stringify(wf)))
         const res = await api('POST', `/workflows/${wf.id}/simulate`, {
@@ -582,29 +611,51 @@ async function wfSimulate() {
         out.innerHTML = wfSimResultHTML(id, res)
     } catch (e) {
         const d = e.data?.details?.[0]
-        out.innerHTML = `<div class="cond-result err">${esc(d ? `Rule ${d.rule_index + 1}: ${d.field}: ${d.message}` : e.message)}</div>`
+        out.innerHTML = wfSimError(d ? `Rule ${d.rule_index + 1}: ${d.field}: ${d.message}` : e.message)
     }
 }
 
-function wfSimResultHTML(id, res) {
-    const rules = (res.workflow?.rules || []).map(tkRuleChip).join('') || '<span class="muted">No rules</span>'
-    const actions = (res.actions || []).map(a => `<div class="sim-line">
-        ${tkResultBadge(a.result, true)}
-        <span><strong>${esc(a.rule_name)}</strong> · ${tkActionLabel(a.kind)}${tkActionSummary(a.kind, a.output)}${a.reason ? ` <span class="muted">(${esc(a.reason)})</span>` : ''}${a.error ? ` <span class="cond-result err">${esc(a.error)}</span>` : ''}</span>
-    </div>`).join('') || '<div class="muted">No actions would run</div>'
-    const recips = (res.recipients || []).map(r => `<div class="sim-recipient">
-        <div class="sim-line">
-            ${r.error ? badgeTag('Error', 'off') : badgeTag(r.recipient_type, 'muted')}
-            <span>${r.error ? `<strong>${esc(r.rule_name)}</strong>: ${esc(r.error)}` : `<strong>${esc(r.recipient_name)}</strong> <span class="muted">via ${esc(r.rule_name)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
-        </div>
-        ${r.message ? `<pre class="sim-message">${esc(r.message)}</pre>` : ''}
-    </div>`).join('') || '<div class="muted">Nobody would be notified</div>'
+// wfSimError explains why a simulation could not run, inside the simulate card.
+function wfSimError(msg) {
+    return `<div class="callout bad" style="margin-top:var(--s4)">${icon('alert')}<div class="body">
+        <b>Simulation did not run</b>${esc(msg)}
+    </div></div>`
+}
 
-    return `<div class="sim-panel">
-        <div class="sim-head">Simulation for <a class="tk-id" href="#tickets/${id}">#${id}</a> <span class="muted">(${esc(res.source)} snapshot)</span></div>
-        <div class="sim-section"><div class="meta-label">Rules</div><div class="rule-chips">${rules}</div></div>
-        <div class="sim-section"><div class="meta-label">Actions</div>${actions}</div>
-        <div class="sim-section"><div class="meta-label">Would notify</div>${recips}</div>
+function wfSimResultHTML(id, res) {
+    const rules = (res.workflow?.rules || []).map(tkRuleChip).join('') || '<span class="cell-sub">No rules</span>'
+
+    const actions = (res.actions || []).map(a => `<div class="row gap2 wrap">
+        ${tkResultBadge(a.result, true)}
+        <span><b>${esc(a.rule_name)}</b> · ${tkActionLabel(a.kind)}${tkActionSummary(a.kind, a.output)}${a.reason ? ` <span class="muted">(${esc(a.reason)})</span>` : ''}${a.error ? ` <span class="cond-result err">${esc(a.error)}</span>` : ''}</span>
+    </div>`).join('') || '<span class="cell-sub">No actions would run</span>'
+
+    const recips = (res.recipients || []).map(r => `<div class="stack gap1">
+        <div class="row gap2 wrap">
+            ${r.error ? badgeTag('Error', 'bad') : badgeTag(r.recipient_type, '')}
+            <span>${r.error
+                ? `<b>${esc(r.rule_name)}</b>: ${esc(r.error)}`
+                : `<b>${esc(r.recipient_name)}</b> <span class="muted">via ${esc(r.rule_name)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
+        </div>
+        ${r.message ? `<pre class="code" style="white-space:pre-wrap">${esc(r.message)}</pre>` : ''}
+    </div>`).join('') || '<span class="cell-sub">Nobody would be notified</span>'
+
+    const section = (label, body) => `<div class="stack gap2">
+        <div class="eyebrow">${label}</div>${body}
+    </div>`
+
+    return `<div class="card" style="margin-top:var(--s4);background:var(--surface-2)">
+        <div class="card-head">
+            <div>
+                <h3>Simulation for <a class="link" href="#tickets/${id}">#${id}</a></h3>
+                <p>${esc(res.source)} snapshot · nothing was sent or written</p>
+            </div>
+        </div>
+        <div class="card-body stack gap5">
+            ${section('Rules', `<div class="row wrap gap3">${rules}</div>`)}
+            ${section('Actions', `<div class="stack gap2">${actions}</div>`)}
+            ${section('Would notify', `<div class="stack gap3">${recips}</div>`)}
+        </div>
     </div>`
 }
 

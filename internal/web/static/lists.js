@@ -41,31 +41,34 @@ async function loadListIndex() {
         const [lists] = await Promise.all([api('GET', '/lists'), lsLoadTypes()])
         renderListIndex(lists || [])
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
 function renderListIndex(lists) {
     lsCache = lists
 
-    const header = `<div class="tab-header">
-        <h2>Lists</h2>
-        <button class="btn btn-primary btn-sm" onclick="showListModal()">+ New List</button>
-    </div>`
-
-    const thead = '<th>Name</th><th>Type</th><th>Items</th><th>Description</th><th></th>'
+    const thead = '<th>Name</th><th>Type</th><th class="r">Items</th><th>Description</th><th class="r">Actions</th>'
     const rows  = lists.map(l => `<tr class="clickable" onclick="openList(${l.id})">
-        <td><span class="tk-id">${esc(l.name)}</span></td>
-        <td>${badgeTag(lsTypeInfo(l.item_type).plural, 'muted')}</td>
-        <td>${l.item_count}</td>
+        <td class="cell-primary">${esc(l.name)}</td>
+        <td>${badgeTag(lsTypeInfo(l.item_type).plural, 'outline')}</td>
+        <td class="r num">${l.item_count}</td>
         <td class="cell-ellipsis muted">${esc(l.description || '')}</td>
-        <td class="actions" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm" onclick="editList(${l.id})">Edit</button>
-            <button class="btn btn-danger" onclick="deleteList(${l.id})">Delete</button>
+        <td class="r nowrap" onclick="event.stopPropagation()">
+            <button class="btn btn-ghost btn-sm" onclick="editList(${l.id})">${icon('edit')}Edit</button>
+            ${deleteButton(`deleteList(${l.id})`)}
         </td>
     </tr>`)
 
-    setContent(header + tableWrap(thead, rows))
+    setContent(pageHead('Lists',
+        'Named sets of ConnectWise contacts or companies. A rule condition can ask whether a ticket’s contact or company is in one.',
+        `<button class="btn btn-primary" onclick="showListModal()">${icon('plus')}New list</button>`) +
+    tableCard(thead, rows, {
+        empty: emptyState('No lists yet',
+            'Create a list of contacts or companies, then reference it from a rule condition.',
+            `<button class="btn btn-primary btn-sm" onclick="showListModal()">${icon('plus')}New list</button>`, 'blocks'),
+        foot: `<span>${lists.length} list${lists.length === 1 ? '' : 's'}</span>`,
+    }))
 }
 
 function editList(id) {
@@ -81,18 +84,20 @@ async function showListModal(existing = null) {
     const typeOpts = lsTypes.map(t =>
         `<option value="${esc(t.type)}"${t.type === (existing?.item_type ?? lsTypes[0].type) ? ' selected' : ''}>${esc(t.plural)}</option>`).join('')
 
-    openModal(existing ? 'Edit List' : 'New List', `
-        <div class="form-group">
-            <label>Name</label>
-            <input type="text" id="ls-name" value="${esc(existing?.name ?? '')}" placeholder="Drop Notifications">
-        </div>
-        <div class="form-group">
-            <label>Type${existing ? ' <span class="muted">(cannot be changed)</span>' : ''}</label>
-            <select id="ls-type"${existing ? ' disabled' : ''}>${typeOpts}</select>
-        </div>
-        <div class="form-group">
-            <label>Description <span class="muted">(optional)</span></label>
-            <input type="text" id="ls-desc" value="${esc(existing?.description ?? '')}" placeholder="What this list is for">
+    openModal(existing ? 'Edit list' : 'New list', `
+        <div class="stack gap4">
+            <div class="field">
+                <label for="ls-name">Name</label>
+                <input class="input" type="text" id="ls-name" value="${esc(existing?.name ?? '')}" placeholder="Drop notifications">
+            </div>
+            <div class="field">
+                <label for="ls-type">Type${existing ? ' <span class="muted">(cannot be changed)</span>' : ''}</label>
+                <select class="select" id="ls-type"${existing ? ' disabled' : ''}>${typeOpts}</select>
+            </div>
+            <div class="field">
+                <label for="ls-desc">Description <span class="muted">(optional)</span></label>
+                <input class="input" type="text" id="ls-desc" value="${esc(existing?.description ?? '')}" placeholder="What this list is for">
+            </div>
         </div>`, async () => {
         const name = document.getElementById('ls-name').value.trim()
         const description = document.getElementById('ls-desc').value.trim()
@@ -136,10 +141,7 @@ async function loadListDetail(id) {
     try {
         ;[d] = await Promise.all([api('GET', `/lists/${id}`), lsLoadTypes()])
     } catch (e) {
-        setContent(`<div class="tab-header"><div class="back-row">
-                <button class="btn btn-ghost btn-sm" onclick="lsBack()">← Lists</button><h2>List</h2>
-            </div></div>
-            <div class="empty-state">${esc(e.message)}</div>`)
+        setContent(backRow('lists', 'Lists') + pageHead('List') + errorState(e.message))
         return
     }
     lsDetail = d
@@ -147,43 +149,54 @@ async function loadListDetail(id) {
 }
 
 function renderListDetail(d) {
-    const info = lsTypeInfo(d.item_type)
+    const info   = lsTypeInfo(d.item_type)
+    const count  = d.items?.length || 0
+    const noun   = count === 1 ? info.label.toLowerCase() : info.plural.toLowerCase()
     const usedBy = d.used_by?.length
-        ? `<div class="info-banner">Used by ${d.used_by.map(r =>
-            `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${r.workflow_id})" title="${esc(r.board_name || '')}">${esc(r.workflow_name)} / ${esc(r.rule_name)}</button>`).join(' ')}</div>`
+        ? `<div class="banner">${icon('info')}<div>Used by ${d.used_by.map(r =>
+            `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${r.workflow_id})" data-tip="${esc(r.board_name || '')}">${esc(r.workflow_name)} / ${esc(r.rule_name)}</button>`).join(' ')}</div></div>`
         : ''
 
     const detail = !!info.detail_label  // e.g. a contact's company
-    const thead = `<th>${esc(info.label)}</th>${detail ? `<th>${esc(info.detail_label)}</th>` : ''}<th>ID</th><th>Added</th><th></th>`
+    const thead = `<th>${esc(info.label)}</th>${detail ? `<th>${esc(info.detail_label)}</th>` : ''}<th class="r">ID</th><th>Added</th><th class="r">Actions</th>`
     const rows = (d.items || []).map(it => `<tr>
-        <td>${esc(it.label)}${it.missing ? ' ' + badgeTag('Not synced', 'warn') : ''}</td>
+        <td class="cell-primary">${esc(it.label)}${it.missing ? ' ' + badgeTag('Not synced', 'warn') : ''}</td>
         ${detail ? `<td class="muted">${esc(it.detail || '—')}</td>` : ''}
-        <td class="muted">#${it.item_id}</td>
+        <td class="r num muted">#${it.item_id}</td>
         <td class="muted nowrap">${fmtDateTime(it.added_on)}</td>
-        <td class="actions"><button class="btn btn-danger" onclick="lsRemoveItem(${it.item_id})">Remove</button></td>
+        <td class="r nowrap">${deleteButton(`lsRemoveItem(${it.item_id})`, 'Remove')}</td>
     </tr>`)
 
-    setContent(`<div class="tab-header">
-        <div class="back-row">
-            <button class="btn btn-ghost btn-sm" onclick="lsBack()">← Lists</button>
-            <h2 class="tk-title">${esc(d.name)} ${badgeTag(info.plural, 'muted')}</h2>
+    const picker = `<span class="typeahead" style="max-width:360px;flex:1">
+        <input class="input" type="text" id="ls-pick" list="ls-pick-list" autocomplete="off"
+            aria-label="Search ${esc(info.plural.toLowerCase())} to add"
+            placeholder="+ search ${esc(info.plural.toLowerCase())} to add…"
+            oninput="lsPickerInput('${esc(info.source)}', this)">
+        <datalist id="ls-pick-list"></datalist>
+    </span>`
+
+    setContent(`${backRow('lists', 'Lists', d.name)}
+    <header class="page-head row spread wrap gap4">
+        <div>
+            <h1 class="page-title">${esc(d.name)}</h1>
+            <p class="page-sub row gap2 wrap">
+                ${badgeTag(info.plural, 'outline')}
+                <span>${esc(d.description || `A set of ${info.plural.toLowerCase()} rule conditions can test against.`)}</span>
+            </p>
         </div>
-        <div class="filter-bar">
-            <button class="btn btn-ghost btn-sm" onclick="editList(${d.id})">Edit</button>
-            <button class="btn btn-danger" onclick="deleteList(${d.id}, true)">Delete</button>
+        <div class="row gap2 wrap">
+            <button class="btn btn-default" onclick="editList(${d.id})">${icon('edit')}Edit</button>
+            ${deleteButton(`deleteList(${d.id}, true)`)}
         </div>
-    </div>
-    ${d.description ? `<p class="muted" style="margin-bottom:16px">${esc(d.description)}</p>` : ''}
+    </header>
     ${usedBy}
-    <div class="section-head">
-        <h3>${d.items?.length || 0} ${esc(d.items?.length === 1 ? info.label.toLowerCase() : info.plural.toLowerCase())}</h3>
-        <span class="typeahead" style="max-width:360px">
-            <input type="text" id="ls-pick" list="ls-pick-list" autocomplete="off" placeholder="+ search ${esc(info.plural.toLowerCase())} to add…"
-                oninput="lsPickerInput('${esc(info.source)}', this)">
-            <datalist id="ls-pick-list"></datalist>
-        </span>
-    </div>
-    ${tableWrap(thead, rows)}`)
+    ${tableCard(thead, rows, {
+        toolbar: `<span class="cell-sub"><span class="num">${count}</span> ${esc(noun)}</span><div class="grow"></div>${picker}`,
+        empty: emptyState(`No ${esc(info.plural.toLowerCase())} in this list`,
+            'Search above to add the first one. An empty list never matches a condition.',
+            '', 'blocks'),
+        foot: `<span><span class="num">${count}</span> ${esc(noun)}</span>`,
+    })}`)
 }
 
 // The picker mirrors the condition builder's typeahead: options render as "Name (#id)" and a

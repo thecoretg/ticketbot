@@ -1,150 +1,153 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light" data-palette="harbor">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ticketbot</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="navi.css">
+    <link rel="stylesheet" href="app.css">
     <script>
-        const t = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-        document.documentElement.setAttribute('data-theme', t)
+        // restore the reader's theme and palette before first paint
+        const t = localStorage.getItem('theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        document.documentElement.dataset.theme   = t
+        document.documentElement.dataset.palette = localStorage.getItem('palette') || 'harbor'
     </script>
 </head>
 <body>
 
 <!-- Login -->
-<div id="login" class="screen hidden">
-    <div class="login-card">
-        <div class="login-brand">
+<div id="login" class="auth hidden">
+    <div class="auth-card">
+        <div class="auth-brand">
             <div class="brand-mark">T</div>
-            <span class="brand-name">Ticketbot</span>
+            <div class="brand-name">Ticketbot</div>
         </div>
         <div>
             <h1>Sign in</h1>
             <p>Enter your credentials to continue</p>
         </div>
-        <div class="form-group">
-            <label>Email</label>
-            <input id="login-email" type="email" placeholder="you@example.com" autocomplete="email">
+        <div class="field">
+            <label for="login-email">Email</label>
+            <input id="login-email" class="input" type="email" placeholder="you@example.com" autocomplete="email">
         </div>
-        <div class="form-group">
-            <label>Password</label>
-            <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password">
+        <div class="field">
+            <label for="login-password">Password</label>
+            <input id="login-password" class="input" type="password" placeholder="••••••••" autocomplete="current-password">
         </div>
-        <button id="login-btn" class="btn btn-primary" onclick="login()">Continue</button>
-        <p id="login-err" class="error-text hidden"></p>
+        <button id="login-btn" class="btn btn-primary btn-lg" onclick="login()">Continue</button>
+        <div id="login-err" class="callout bad hidden" role="alert"></div>
     </div>
 </div>
 
 <!-- TOTP Verify -->
-<div id="totp-verify" class="screen hidden">
-    <div class="login-card">
-        <div class="login-brand">
+<div id="totp-verify" class="auth hidden">
+    <div class="auth-card">
+        <div class="auth-brand">
             <div class="brand-mark">T</div>
-            <span class="brand-name">Ticketbot</span>
+            <div class="brand-name">Ticketbot</div>
         </div>
         <div>
             <h1>Two-factor auth</h1>
             <p>Enter the 6-digit code from your authenticator app, or use a recovery code.</p>
         </div>
-        <div class="form-group">
-            <input id="totp-code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="20">
+        <div class="field">
+            <label for="totp-code">Authentication code</label>
+            <input id="totp-code" class="input otp-input" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="20">
         </div>
-        <button id="totp-btn" class="btn btn-primary" onclick="submitTOTPVerify()">Verify</button>
-        <p id="totp-err" class="error-text hidden"></p>
+        <button id="totp-btn" class="btn btn-primary btn-lg" onclick="submitTOTPVerify()">Verify</button>
+        <div id="totp-err" class="callout bad hidden" role="alert"></div>
     </div>
 </div>
 
 <!-- Password Reset -->
-<div id="password-reset" class="screen hidden">
-    <div class="login-card">
-        <div class="login-brand">
+<div id="password-reset" class="auth hidden">
+    <div class="auth-card">
+        <div class="auth-brand">
             <div class="brand-mark">T</div>
-            <span class="brand-name">Ticketbot</span>
+            <div class="brand-name">Ticketbot</div>
         </div>
         <div>
             <h1>Change password</h1>
             <p>Your password must be changed before continuing.</p>
         </div>
-        <div class="form-group">
-            <label>Current password</label>
-            <input id="reset-current" type="password" placeholder="••••••••" autocomplete="current-password">
+        <div class="field">
+            <label for="reset-current">Current password</label>
+            <input id="reset-current" class="input" type="password" placeholder="••••••••" autocomplete="current-password">
         </div>
-        <div class="form-group">
-            <label>New password</label>
-            <input id="reset-new" type="password" placeholder="••••••••" autocomplete="new-password">
+        <div class="field">
+            <label for="reset-new">New password</label>
+            <input id="reset-new" class="input" type="password" placeholder="••••••••" autocomplete="new-password">
             <div id="reset-reqs" class="pwd-reqs"></div>
         </div>
-        <div class="form-group">
-            <label>Confirm new password</label>
-            <input id="reset-confirm" type="password" placeholder="••••••••" autocomplete="new-password">
+        <div class="field">
+            <label for="reset-confirm">Confirm new password</label>
+            <input id="reset-confirm" class="input" type="password" placeholder="••••••••" autocomplete="new-password">
         </div>
-        <button id="reset-btn" class="btn btn-primary" onclick="submitPasswordReset()">Change Password</button>
-        <p id="reset-err" class="error-text hidden"></p>
+        <button id="reset-btn" class="btn btn-primary btn-lg" onclick="submitPasswordReset()">Change password</button>
+        <div id="reset-err" class="callout bad hidden" role="alert"></div>
     </div>
 </div>
 
 <!-- App -->
-<div id="app" class="screen hidden">
+<div id="app" class="app hidden">
     <aside class="sidebar">
-        <div class="sidebar-brand">
+        <div class="brand">
             <div class="brand-mark">T</div>
-            <span class="brand-name">Ticketbot</span>
+            <div class="brand-name">Ticketbot</div>
         </div>
-        <nav class="sidebar-nav">
-            <button class="nav-item active" data-tab="workflows" onclick="switchTab('workflows')">Workflows</button>
-            <button class="nav-item"        data-tab="tickets"   onclick="switchTab('tickets')">Tickets</button>
-            <button class="nav-item"        data-tab="forwards"  onclick="switchTab('forwards')">Forwards</button>
-            <button class="nav-item"        data-tab="lists"    onclick="switchTab('lists')">Lists</button>
-            <button class="nav-item"        data-tab="users"    onclick="switchTab('users')">Users</button>
-            <button class="nav-item"        data-tab="keys"     onclick="switchTab('keys')">Keys</button>
-            <button class="nav-item"        data-tab="sync"     onclick="switchTab('sync')">Sync</button>
-            <button class="nav-item"        data-tab="config"   onclick="switchTab('config')">Config</button>
-            <button class="nav-item"        data-tab="logs"     onclick="switchTab('logs')">Logs</button>
-        </nav>
-        <div class="sidebar-footer">
-            <button id="theme-toggle" class="sidebar-icon-btn" onclick="toggleTheme()" title="Toggle theme"></button>
-            <div class="sidebar-account">
-                <button class="sidebar-account-btn" onclick="toggleAccountMenu(event)">
-                    <span id="header-email" class="sidebar-email">Account</span>
-                    <span class="sidebar-caret">▾</span>
-                </button>
-                <div id="account-dropdown" class="account-dropdown hidden">
-                    <div class="account-dropdown-email" id="dropdown-email">—</div>
-                    <button class="account-dropdown-item" onclick="showChangePasswordModal()">Change Password</button>
-                    <button id="totp-menu-btn" class="account-dropdown-item" onclick="handleTOTPMenuClick()"></button>
-                    <button class="account-dropdown-item account-dropdown-item--danger" onclick="confirmRestart()">Restart Server</button>
-                    <button class="account-dropdown-item account-dropdown-item--danger" onclick="logout()">Logout</button>
-                </div>
-            </div>
+        <nav class="nav" id="nav" aria-label="Sections"></nav>
+        <div class="sidebar-foot">
+            <button class="user-chip" onclick="toggleAccountMenu(event)" aria-haspopup="menu" aria-label="Account menu">
+                <span class="avatar sm" id="header-initials">—</span>
+                <span class="user-meta"><b>Account</b><span id="header-email">—</span></span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                     style="width:14px;height:14px;margin-left:auto;color:var(--faint)" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
         </div>
     </aside>
-    <div class="main-wrap">
-        <main id="content" class="content"></main>
+    <div class="main">
+        <header class="topbar">
+            <button class="icon-btn mobile-only" onclick="toggleNav(event)" aria-label="Open navigation">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <nav class="crumbs desktop-only" aria-label="Breadcrumb">
+                <span class="muted">Ticketbot</span>
+                <span class="sep">/</span>
+                <span id="crumb-parent"></span>
+                <span class="here" id="crumb-here">Workflows</span>
+            </nav>
+            <div class="grow"></div>
+            <button class="icon-btn" id="palette-btn" onclick="openPaletteMenu(event)" data-tip="Colour palette" aria-label="Colour palette">
+                <span class="swatch"></span>
+            </button>
+            <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" data-tip="Theme" aria-label="Toggle light or dark theme"></button>
+        </header>
+        <main id="content" class="view"></main>
     </div>
 </div>
 
-<!-- Modal -->
-<div id="modal-overlay" class="modal-overlay hidden" onclick="handleOverlayClick(event)">
-    <div id="modal" class="modal">
-        <div class="modal-header">
-            <h2 id="modal-title"></h2>
-            <button class="btn-icon" onclick="closeModal()">✕</button>
-        </div>
-        <div id="modal-body" class="modal-body"></div>
-        <div id="modal-footer" class="modal-footer">
-            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-            <button id="modal-submit" class="btn btn-primary">Create</button>
-        </div>
+<!-- Overlays -->
+<div id="scrim" class="scrim" onclick="closeModal()"></div>
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-head row spread gap4">
+        <h3 id="modal-title"></h3>
+        <button class="icon-btn" onclick="closeModal()" aria-label="Close dialog">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
     </div>
+    <div id="modal-body" class="modal-body"></div>
+    <div id="modal-foot" class="modal-foot"></div>
 </div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
 
-<!-- Toast -->
-<div id="toast" class="toast hidden"></div>
-
+<script type="module">
+    import { icon } from './icons.js'
+    window.icon = icon
+</script>
 <script src="app.js"></script>
 <script src="workflows.js"></script>
 <script src="condition.js"></script>

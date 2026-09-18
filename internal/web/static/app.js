@@ -1,25 +1,117 @@
 // ─────────────────────────────────────────────────────────
-// Theme
+// Theme & palette
+//
+// index.html sets data-theme / data-palette before first paint; these keep
+// them in sync with the controls in the topbar.
 // ─────────────────────────────────────────────────────────
-function initTheme() {
-    const stored    = localStorage.getItem('theme')
-    const preferred = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
-    applyTheme(stored || preferred)
-}
+const PALETTES = [
+    { id: 'harbor',   name: 'Harbor',   desc: 'Cool grey, deep teal accent',   seed: '#0E6F80' },
+    { id: 'ember',    name: 'Ember',    desc: 'Warm paper, persimmon accent',  seed: '#C64A26' },
+    { id: 'indigo',   name: 'Indigo',   desc: 'Slate neutrals, indigo accent', seed: '#3D45A8' },
+    { id: 'moss',     name: 'Moss',     desc: 'Sage neutrals, forest accent',  seed: '#3E6B43' },
+    { id: 'plum',     name: 'Plum',     desc: 'Mauve neutrals, plum accent',   seed: '#8E3A63' },
+    { id: 'graphite', name: 'Graphite', desc: 'Monochrome, ink accent',        seed: '#26251F' },
+]
 
 function applyTheme(theme) {
-    document.documentElement.setAttribute('data-theme', theme)
+    document.documentElement.dataset.theme = theme
     localStorage.setItem('theme', theme)
     const btn = document.getElementById('theme-toggle')
-    if (btn) btn.textContent = theme === 'light' ? '☽' : '☀'
+    if (btn) btn.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon')
 }
 
 function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme')
-    applyTheme(current === 'light' ? 'dark' : 'light')
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
 }
 
-initTheme()
+function applyPalette(id) {
+    document.documentElement.dataset.palette = id
+    localStorage.setItem('palette', id)
+}
+
+function openPaletteMenu(e) {
+    e.stopPropagation()
+    const current = document.documentElement.dataset.palette
+    openMenu(e.currentTarget, PALETTES.map(p => ({
+        label: p.name,
+        swatch: p.seed,
+        current: p.id === current,
+        run: () => { applyPalette(p.id); toast(`${p.name} palette — ${p.desc}`) },
+    })))
+}
+
+// ─────────────────────────────────────────────────────────
+// Shell: sidebar nav, popover menus, mobile drawer
+// ─────────────────────────────────────────────────────────
+const NAV = [
+    { label: 'Automation', items: [
+        { tab: 'workflows', name: 'Workflows', icon: 'bolt' },
+        { tab: 'tickets',   name: 'Tickets',   icon: 'inbox' },
+        { tab: 'forwards',  name: 'Forwards',  icon: 'mail' },
+        { tab: 'lists',     name: 'Lists',     icon: 'blocks' },
+    ]},
+    { label: 'Administration', items: [
+        { tab: 'users',  name: 'Users',  icon: 'users' },
+        { tab: 'keys',   name: 'Keys',   icon: 'key' },
+        { tab: 'sync',   name: 'Sync',   icon: 'globe' },
+        { tab: 'config', name: 'Config', icon: 'cog' },
+        { tab: 'logs',   name: 'Logs',   icon: 'book' },
+    ]},
+]
+const NAV_ITEMS = NAV.flatMap(g => g.items)
+
+function buildNav() {
+    document.getElementById('nav').innerHTML = NAV.map(g => `
+        <div class="nav-group">
+            <div class="nav-label eyebrow">${g.label}</div>
+            ${g.items.map(i => `<button class="nav-item" data-tab="${i.tab}" onclick="switchTab('${i.tab}')">
+                ${icon(i.icon)}<span class="label">${i.name}</span>
+            </button>`).join('')}
+        </div>`).join('')
+}
+
+function toggleNav(e) {
+    e.stopPropagation()
+    document.getElementById('app').classList.toggle('nav-open')
+}
+
+// openMenu renders a navi popover anchored under a control. Items are
+// { label, icon | swatch, danger, current, run }.
+let menuEl = null
+
+function closeMenu() {
+    menuEl?.remove()
+    menuEl = null
+}
+
+function openMenu(anchor, items) {
+    closeMenu()
+    menuEl = document.createElement('div')
+    menuEl.className = 'menu'
+    menuEl.setAttribute('role', 'menu')
+    menuEl.innerHTML = items.map((it, k) => it === '-' ? '<hr>' : `
+        <button role="menuitem" data-mi="${k}" class="${it.danger ? 'danger' : ''}">
+            ${it.swatch ? `<span class="swatch" style="background:${it.swatch}"></span>` : (it.icon ? icon(it.icon) : '')}
+            <span>${esc(it.label)}</span>
+            ${it.current ? '<span class="check-mark">●</span>' : ''}
+        </button>`).join('')
+    document.body.appendChild(menuEl)
+
+    const r = anchor.getBoundingClientRect()
+    const below = window.scrollY + r.bottom + 6
+    const above = window.scrollY + r.top - menuEl.offsetHeight - 6
+    // anchored controls near the bottom of the frame (the sidebar foot) flip upwards
+    menuEl.style.top  = `${r.bottom + menuEl.offsetHeight + 12 > window.innerHeight ? above : below}px`
+    menuEl.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - menuEl.offsetWidth - 12))}px`
+
+    menuEl.addEventListener('click', e => {
+        const btn = e.target.closest('[data-mi]')
+        if (!btn) return
+        const item = items[Number(btn.dataset.mi)]
+        closeMenu()
+        item.run?.()
+    })
+}
 
 // ─────────────────────────────────────────────────────────
 // State
@@ -58,7 +150,7 @@ function attachPwdReqs(inputId, containerId) {
         const p = input.value
         container.innerHTML = PWD_REQS.map(r => {
             const ok = r.test(p)
-            return `<span class="pwd-req${ok ? ' ok' : ''}">${ok ? '✓' : '○'} ${r.label}</span>`
+            return `<span class="pwd-req${ok ? ' ok' : ''}">${icon(ok ? 'check' : 'dots')}${r.label}</span>`
         }).join('')
     }
     input.addEventListener('input', update)
@@ -105,7 +197,8 @@ function sessionExpired() {
     stopLogsPoll()
     tabGuard = null
     currentUser = null
-    document.getElementById('modal-overlay').classList.add('hidden')
+    totpSetupRequired = false
+    closeModal()
     document.getElementById('app').classList.add('hidden')
     document.getElementById('login').classList.remove('hidden')
     showLoginErr('Your session expired. Sign in again to continue.')
@@ -165,7 +258,7 @@ async function logout() {
     document.getElementById('login-email').value    = ''
     document.getElementById('login-password').value = ''
     document.getElementById('login-err').classList.add('hidden')
-    document.getElementById('account-dropdown').classList.add('hidden')
+    closeMenu()
     document.getElementById('login').classList.remove('hidden')
     document.getElementById('app').classList.add('hidden')
     document.getElementById('password-reset').classList.add('hidden')
@@ -283,9 +376,8 @@ async function showApp() {
         totpEnabled = totp.enabled
         appConfig   = cfg
         requireTOTP = cfg.require_totp
-        document.getElementById('header-email').textContent   = currentUser.email_address
-        document.getElementById('dropdown-email').textContent = currentUser.email_address
-        updateTOTPMenuItem()
+        document.getElementById('header-email').textContent    = currentUser.email_address
+        document.getElementById('header-initials').textContent = emailInitials(currentUser.email_address)
         if (requireTOTP && !totpEnabled) {
             showTOTPSetupModal(true)
             return
@@ -297,26 +389,45 @@ async function showApp() {
 // ─────────────────────────────────────────────────────────
 // Account menu
 // ─────────────────────────────────────────────────────────
+function emailInitials(email) {
+    const name = String(email || '').split('@')[0]
+    const parts = name.split(/[._-]+/).filter(Boolean)
+    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '—'
+}
+
+function totpMenuLabel() {
+    if (!totpEnabled) return 'Set up 2FA'
+    return requireTOTP ? 'Reset 2FA' : 'Disable 2FA'
+}
+
 function toggleAccountMenu(e) {
     e.stopPropagation()
-    document.getElementById('account-dropdown').classList.toggle('hidden')
+    if (menuEl) { closeMenu(); return }
+    openMenu(e.currentTarget, [
+        { label: 'Change password', icon: 'key',    run: showChangePasswordModal },
+        { label: totpMenuLabel(),   icon: 'shield', run: handleTOTPMenuClick },
+        '-',
+        { label: 'Restart server', icon: 'bolt',   danger: true, run: confirmRestart },
+        { label: 'Log out',        icon: 'logout', danger: true, run: logout },
+    ])
 }
 
 function showChangePasswordModal() {
-    document.getElementById('account-dropdown').classList.add('hidden')
-    openModal('Change Password', `
-        <div class="form-group">
-            <label>Current Password</label>
-            <input type="password" id="f-cur-pwd" autocomplete="current-password">
-        </div>
-        <div class="form-group">
-            <label>New Password</label>
-            <input type="password" id="f-new-pwd" autocomplete="new-password">
-            <div id="f-pwd-reqs" class="pwd-reqs"></div>
-        </div>
-        <div class="form-group">
-            <label>Confirm New Password</label>
-            <input type="password" id="f-confirm-pwd" autocomplete="new-password">
+    openModal('Change password', `
+        <div class="stack gap4">
+            <div class="field">
+                <label for="f-cur-pwd">Current password</label>
+                <input class="input" type="password" id="f-cur-pwd" autocomplete="current-password">
+            </div>
+            <div class="field">
+                <label for="f-new-pwd">New password</label>
+                <input class="input" type="password" id="f-new-pwd" autocomplete="new-password">
+                <div id="f-pwd-reqs" class="pwd-reqs"></div>
+            </div>
+            <div class="field">
+                <label for="f-confirm-pwd">Confirm new password</label>
+                <input class="input" type="password" id="f-confirm-pwd" autocomplete="new-password">
+            </div>
         </div>`, async () => {
         const cur     = document.getElementById('f-cur-pwd').value
         const newPwd  = document.getElementById('f-new-pwd').value
@@ -328,24 +439,11 @@ function showChangePasswordModal() {
             closeModal()
             toast('Password changed', 'success')
         } catch (e) { toast(e.message, 'error') }
-    }, 'Change Password')
+    }, 'Change password')
     setTimeout(() => attachPwdReqs('f-new-pwd', 'f-pwd-reqs'), 50)
 }
 
-function updateTOTPMenuItem() {
-    const btn = document.getElementById('totp-menu-btn')
-    if (!btn) return
-    if (!totpEnabled) {
-        btn.textContent = 'Set Up 2FA'
-    } else if (requireTOTP) {
-        btn.textContent = 'Reset 2FA'
-    } else {
-        btn.textContent = 'Disable 2FA'
-    }
-}
-
 function handleTOTPMenuClick() {
-    document.getElementById('account-dropdown').classList.add('hidden')
     if (!totpEnabled) {
         showTOTPSetupModal()
     } else if (requireTOTP) {
@@ -365,23 +463,28 @@ async function showTOTPSetupModal(required = false) {
     if (required) totpSetupRequired = true
 
     const desc = required
-        ? '<p style="color:var(--warning);font-size:13px">Two-factor authentication is required for this account. Set it up to continue.</p>'
-        : '<p style="color:var(--muted);font-size:13px">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.).</p>'
+        ? `<div class="callout warn">${icon('shield')}<div class="body"><b>Two-factor authentication is required</b>Set it up to continue.</div></div>`
+        : `<div class="callout info">${icon('info')}<div class="body">Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password).</div></div>`
 
-    openModal('Set Up Two-Factor Auth', `
-        ${desc}
-        <img class="qr-code" src="data:image/png;base64,${setupData.qr_png}" alt="TOTP QR Code">
-        <div class="form-group">
-            <label>Or enter this secret manually</label>
-            <div class="secret-display">${esc(setupData.secret)}</div>
-        </div>
-        <div class="form-group">
-            <label>Current Password</label>
-            <input type="password" id="f-totp-pwd" autocomplete="current-password">
-        </div>
-        <div class="form-group">
-            <label>Confirmation Code <span style="color:var(--muted)">(from your authenticator app)</span></label>
-            <input type="text" id="f-totp-code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="6">
+    openModal('Set up two-factor auth', `
+        <div class="stack gap4">
+            ${desc}
+            <div class="row gap4 wrap">
+                <img class="qr" src="data:image/png;base64,${setupData.qr_png}" alt="QR code for the two-factor secret">
+                <div class="field grow" style="min-width:200px">
+                    <label for="f-totp-secret">Or enter this secret manually</label>
+                    <div class="secret" id="f-totp-secret">${esc(setupData.secret)}</div>
+                </div>
+            </div>
+            <div class="field">
+                <label for="f-totp-pwd">Current password</label>
+                <input class="input" type="password" id="f-totp-pwd" autocomplete="current-password">
+            </div>
+            <div class="field">
+                <label for="f-totp-code">Confirmation code</label>
+                <input class="input" type="text" id="f-totp-code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="6">
+                <span class="hint">The 6-digit code your authenticator app shows right now.</span>
+            </div>
         </div>`, async () => {
         const pwd  = document.getElementById('f-totp-pwd').value
         const code = document.getElementById('f-totp-code').value.trim()
@@ -395,18 +498,19 @@ async function showTOTPSetupModal(required = false) {
             })
             totpEnabled = true
             totpSetupRequired = false
-            updateTOTPMenuItem()
             // Replace modal body with recovery codes (shown once)
-            document.getElementById('modal-title').textContent = '2FA Enabled'
+            document.getElementById('modal-title').textContent = 'Two-factor auth enabled'
             document.getElementById('modal-body').innerHTML = `
-                <p style="color:var(--warning);font-size:13px">
-                    ⚠ Save these recovery codes somewhere safe. Each can only be used once and they will not be shown again.
-                </p>
-                <div class="recovery-codes">
-                    ${res.recovery_codes.map(c => `<div class="recovery-code">${esc(c)}</div>`).join('')}
+                <div class="stack gap4">
+                    <div class="callout warn">${icon('alert')}<div class="body">
+                        <b>Save these recovery codes somewhere safe</b>Each one works once, and they are not shown again.
+                    </div></div>
+                    <div class="recovery-codes">
+                        ${res.recovery_codes.map(c => `<span>${esc(c)}</span>`).join('')}
+                    </div>
                 </div>`
-            document.getElementById('modal-footer').innerHTML = `
-                <button class="btn btn-ghost" onclick="copyRecoveryCodes()">Copy All</button>
+            document.getElementById('modal-foot').innerHTML = `
+                <button class="btn btn-ghost" onclick="copyRecoveryCodes()">${icon('copy')}Copy all</button>
                 <button class="btn btn-primary" onclick="finishTOTPSetup()">Done</button>`
             modalSubmitFn = null
             window._recoveryCodes = res.recovery_codes
@@ -415,14 +519,14 @@ async function showTOTPSetupModal(required = false) {
 
     if (required) {
         // Remove the cancel button — setup cannot be skipped when required
-        const cancel = document.querySelector('#modal-footer .btn-ghost')
+        const cancel = document.querySelector('#modal-foot .btn-ghost')
         if (cancel) cancel.remove()
     }
 }
 
 function finishTOTPSetup() {
-    document.getElementById('modal-overlay').classList.add('hidden')
-    modalSubmitFn = null
+    totpSetupRequired = false
+    closeModal()
     routeFromHash()
 }
 
@@ -432,44 +536,48 @@ function copyRecoveryCodes() {
 }
 
 function showTOTPDisableModal() {
-    openModal('Disable Two-Factor Auth', `
-        <p style="color:var(--muted);font-size:13px">Enter your current password to disable 2FA. Your recovery codes will also be removed.</p>
-        <div class="form-group">
-            <label>Current Password</label>
-            <input type="password" id="f-disable-pwd" autocomplete="current-password">
+    openModal('Disable two-factor auth', `
+        <div class="stack gap4">
+            <div class="callout warn">${icon('alert')}<div class="body">
+                <b>This account loses its second factor</b>Your recovery codes are deleted too.
+            </div></div>
+            <div class="field">
+                <label for="f-disable-pwd">Current password</label>
+                <input class="input" type="password" id="f-disable-pwd" autocomplete="current-password">
+            </div>
         </div>`, async () => {
         const pwd = document.getElementById('f-disable-pwd').value
         if (!pwd) { toast('Password is required', 'error'); return }
         try {
             await api('DELETE', '/auth/totp', { password: pwd })
             totpEnabled = false
-            updateTOTPMenuItem()
             closeModal()
             toast('Two-factor authentication disabled', 'success')
         } catch (e) { toast(e.message || 'Failed to disable 2FA', 'error') }
-    }, 'Disable 2FA')
+    }, 'Disable 2FA', 'danger')
 }
 
 function confirmRestart() {
-    document.getElementById('account-dropdown').classList.add('hidden')
-    openModal('Restart Server', `
-        <p style="color:var(--muted);font-size:13px">
-            The server will restart and reconnect automatically. This usually takes a few seconds.
-        </p>`, async () => {
+    openModal('Restart server', `
+        <div class="callout warn">${icon('alert')}<div class="body">
+            <b>Ticketbot goes offline for a few seconds</b>
+            The server restarts and this page reconnects on its own. Webhooks that arrive during the restart are retried by ConnectWise.
+        </div></div>`, async () => {
         try {
             await api('POST', '/admin/restart')
         } catch { /* server closes the connection during shutdown, that's fine */ }
         closeModal()
         showRestartBanner()
-    }, 'Restart')
+    }, 'Restart', 'danger')
 }
 
 function showRestartBanner() {
-    const content = document.getElementById('content')
     const banner = document.createElement('div')
     banner.id = 'restart-banner'
-    banner.innerHTML = `<div class="restart-banner">Restarting… reconnecting</div>`
-    document.getElementById('app').prepend(banner)
+    banner.className = 'banner banner-sticky'
+    banner.setAttribute('role', 'status')
+    banner.innerHTML = `${icon('clock')}<div><b>Restarting</b> — reconnecting to the server…</div>`
+    document.getElementById('content').prepend(banner)
 
     // the old process answers for a moment after the restart call; only a failure followed by a
     // success means the new process is up (or a 10s ceiling, in case shutdown was too fast to see)
@@ -525,9 +633,13 @@ function switchTab(tab, sub = null) {
     currentHash = sub ? `${tab}/${sub}` : tab
     window.location.hash = currentHash
     document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.tab === tab)
+        const on = el.dataset.tab === tab
+        el.classList.toggle('active', on)
+        if (on) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current')
     })
-    setContent('<div class="loading-state">Loading…</div>')
+    document.getElementById('app').classList.remove('nav-open')
+    setCrumbs(tab, sub)
+    setContent(skeletonPage())
     tabLoaders[tab](sub)
 }
 
@@ -552,32 +664,71 @@ function setContent(html) {
     document.getElementById('content').innerHTML = html
 }
 
+// setCrumbs keeps the topbar trail and the document title in step with the route.
+function setCrumbs(tab, sub) {
+    const item   = NAV_ITEMS.find(i => i.tab === tab)
+    const name   = item ? item.name : tab
+    const here   = document.getElementById('crumb-here')
+    const parent = document.getElementById('crumb-parent')
+    if (sub) {
+        parent.innerHTML = `<a href="#${tab}">${esc(name)}</a><span class="sep">/</span>`
+        here.textContent = sub
+    } else {
+        parent.innerHTML = ''
+        here.textContent = name
+    }
+    document.title = sub ? `${name} · ${sub} · Ticketbot` : `${name} · Ticketbot`
+}
+
+// skeletonPage is the loading state between routes: shaped like a page, so the
+// layout does not jump when the real content lands.
+function skeletonPage() {
+    const bar = (w, h = 13) => `<div class="skeleton" style="height:${h}px;width:${w}"></div>`
+    return `<div class="stack gap6" aria-busy="true" aria-label="Loading">
+        <div class="stack gap3">${bar('220px', 30)}${bar('320px')}</div>
+        <div class="card"><div class="stack gap4" style="padding:var(--s5)">
+            ${bar('100%')}${bar('92%')}${bar('84%')}${bar('88%')}${bar('70%')}
+        </div></div>
+    </div>`
+}
+
 // ─────────────────────────────────────────────────────────
 // Toast
 // ─────────────────────────────────────────────────────────
-let toastTimer = null
+// type is the app's own vocabulary ('success' | 'error' | 'info'); navi's
+// variants are ok / bad / (default).
+const TOAST_VARIANT = { success: 'ok', error: 'bad', info: '' }
+const TOAST_TITLE   = { success: 'Done', error: 'Something went wrong', info: 'Heads up' }
+
 function toast(msg, type = 'info') {
-    const el = document.getElementById('toast')
-    el.textContent = msg
-    el.className   = `toast ${type}`
-    clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => el.classList.add('hidden'), 3500)
+    const variant = TOAST_VARIANT[type] ?? ''
+    const el = document.createElement('div')
+    el.className = `toast ${variant}`.trim()
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status')
+    el.innerHTML = `${icon(variant === 'bad' ? 'alert' : variant === 'ok' ? 'check' : 'info')}
+        <div><b>${esc(TOAST_TITLE[type] ?? TOAST_TITLE.info)}</b><p>${esc(msg)}</p></div>`
+    document.getElementById('toasts').appendChild(el)
+    setTimeout(() => {
+        el.classList.add('out')
+        setTimeout(() => el.remove(), 220)
+    }, 4000)
 }
 
 // ─────────────────────────────────────────────────────────
 // Modal
 // ─────────────────────────────────────────────────────────
-function openModal(title, bodyHTML, submitFn, submitLabel = 'Create') {
-    document.getElementById('modal-title').textContent  = title
-    document.getElementById('modal-body').innerHTML     = bodyHTML
-    document.getElementById('modal-footer').innerHTML   = `
+function openModal(title, bodyHTML, submitFn, submitLabel = 'Create', variant = 'primary') {
+    document.getElementById('modal-title').textContent = title
+    document.getElementById('modal-body').innerHTML    = bodyHTML
+    document.getElementById('modal-foot').innerHTML    = `
         <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-        <button id="modal-submit" class="btn btn-primary">${submitLabel}</button>`
+        <button id="modal-submit" class="btn btn-${variant}">${esc(submitLabel)}</button>`
     document.getElementById('modal-submit').addEventListener('click', handleModalSubmit)
     modalSubmitFn = submitFn
-    document.getElementById('modal-overlay').classList.remove('hidden')
+    document.getElementById('modal').classList.add('on')
+    document.getElementById('scrim').classList.add('on')
     setTimeout(() => {
-        const first = document.querySelector('#modal-body input, #modal-body select')
+        const first = document.querySelector('#modal-body input, #modal-body select, #modal-body textarea')
         if (first) first.focus()
     }, 50)
 }
@@ -595,12 +746,9 @@ async function handleModalSubmit() {
 
 function closeModal() {
     if (totpSetupRequired) return
-    document.getElementById('modal-overlay').classList.add('hidden')
+    document.getElementById('modal').classList.remove('on')
+    document.getElementById('scrim').classList.remove('on')
     modalSubmitFn = null
-}
-
-function handleOverlayClick(e) {
-    if (e.target === document.getElementById('modal-overlay')) closeModal()
 }
 
 // ─────────────────────────────────────────────────────────
@@ -634,23 +782,103 @@ function splitLocalDT(iso) {
     ]
 }
 
-// badgeTag renders a labelled badge; variant is on | off | warn | muted
-function badgeTag(label, variant = 'muted') {
-    return `<span class="badge badge-${variant}">${esc(label)}</span>`
+// ─────────────────────────────────────────────────────────
+// Render helpers (navi components)
+// ─────────────────────────────────────────────────────────
+// badgeTag renders a labelled badge. variant is a navi tone —
+// ok | bad | warn | info | accent | outline | '' (neutral).
+function badgeTag(label, variant = '') {
+    const dot = ['ok', 'bad', 'warn', 'info'].includes(variant) ? '<i class="dot"></i>' : ''
+    return `<span class="badge ${variant}">${dot}${esc(label)}</span>`
 }
 
 function badge(val) {
-    return val
-        ? '<span class="badge badge-on">Yes</span>'
-        : '<span class="badge badge-off">No</span>'
+    return badgeTag(val ? 'Yes' : 'No', val ? 'ok' : 'bad')
 }
 
-function tableWrap(thead, rows) {
-    if (!rows.length) return '<div class="empty-state">No items found</div>'
-    return `<div class="table-wrap"><table>
-        <thead><tr>${thead}</tr></thead>
-        <tbody>${rows.join('')}</tbody>
-    </table></div>`
+// pageHead is the title block every view starts with. actions is button markup.
+function pageHead(title, sub = '', actions = '') {
+    return `<header class="page-head row spread wrap gap4">
+        <div>
+            <h1 class="page-title">${esc(title)}</h1>
+            ${sub ? `<p class="page-sub">${sub}</p>` : ''}
+        </div>
+        ${actions ? `<div class="row gap2 wrap">${actions}</div>` : ''}
+    </header>`
+}
+
+// backRow is the detail-page return path: "← Parent / this record".
+function backRow(href, parent, here = '') {
+    return `<div class="back-row">
+        <a class="back-link" href="#${href}">${icon('arrowL')}${esc(parent)}</a>
+        ${here ? `<span class="muted">/</span><span class="cell-sub num">${esc(here)}</span>` : ''}
+    </div>`
+}
+
+// emptyState says what would be here and offers the action that creates it.
+function emptyState(title, body = '', action = '', art = 'inbox') {
+    return `<div class="empty">
+        <div class="empty-art">${icon(art)}</div>
+        <div class="stack gap2">
+            <h3>${esc(title)}</h3>
+            ${body ? `<p>${esc(body)}</p>` : ''}
+        </div>
+        ${action}
+    </div>`
+}
+
+// errorState is what a view shows when its data could not be loaded. The default
+// action re-runs the current route.
+function errorState(msg, retry = `<button class="btn btn-default btn-sm" onclick="routeFromHash()">Try again</button>`) {
+    return `<div class="card"><div class="empty">
+        <div class="empty-art">${icon('alert')}</div>
+        <div class="stack gap2">
+            <h3>Could not load this page</h3>
+            <p>${esc(msg)}</p>
+        </div>
+        ${retry}
+    </div></div>`
+}
+
+// tableCard wraps a table in a card, with an empty state when there are no rows
+// and an optional footer (row count, pagination).
+function tableCard(thead, rows, opts = {}) {
+    const { empty = emptyState('Nothing here yet', 'Items you create will show up in this table.'), foot = '', toolbar = '' } = opts
+    if (!rows.length) return `<div class="card">${toolbar ? `<div class="toolbar">${toolbar}</div>` : ''}${empty}</div>`
+    return `<div class="card">
+        ${toolbar ? `<div class="toolbar">${toolbar}</div>` : ''}
+        <div class="table-wrap"><table class="tbl">
+            <thead><tr>${thead}</tr></thead>
+            <tbody>${rows.join('')}</tbody>
+        </table></div>
+        ${foot ? `<div class="card-foot">${foot}</div>` : ''}
+    </div>`
+}
+
+// deleteButton is the destructive action in a table row: a word, not a colour.
+function deleteButton(onclick, label = 'Delete') {
+    return `<button class="btn btn-ghost btn-sm" onclick="${onclick}">${icon('trash')}${esc(label)}</button>`
+}
+
+// checkbox is navi's styled checkbox; the box element carries the tick.
+function checkbox(label, attrs = '', checked = false) {
+    return `<label class="check">
+        <input type="checkbox" ${checked ? 'checked' : ''} ${attrs}>
+        <span class="box">${icon('check')}</span>
+        <span>${label}</span>
+    </label>`
+}
+
+// toggle is navi's switch; .track must stay a flex box or the thumb collapses.
+// A switch with no visible label takes its name from `tip`; it gets no tooltip,
+// because the setting it belongs to is already named beside it.
+function toggle(attrs = '', checked = false, opts = {}) {
+    const { label = '', small = false, tip = '' } = opts
+    return `<label class="switch${small ? ' sm' : ''}">
+        <input type="checkbox" ${checked ? 'checked' : ''} ${attrs}${label ? '' : ` aria-label="${esc(tip || 'Enabled')}"`}>
+        <span class="track"><span class="thumb"></span></span>
+        ${label ? `<span>${label}</span>` : ''}
+    </label>`
 }
 
 // ─────────────────────────────────────────────────────────
@@ -663,34 +891,40 @@ async function loadForwards() {
         const fwds = await api('GET', '/notifiers/forwards?filter=not-expired')
         renderForwards(fwds || [])
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
 function renderForwards(fwds) {
     forwardsCache = fwds
 
-    const header = `<div class="tab-header">
-        <h2>Notification Forwards</h2>
-        <button class="btn btn-primary btn-sm" onclick="showForwardModal()">+ New Forward</button>
-    </div>`
+    const head = pageHead(
+        'Notification forwards',
+        'Send another person\u2019s ticket notifications to a room or teammate for a period of time.',
+        `<button class="btn btn-primary" onclick="showForwardModal()">${icon('plus')}New forward</button>`)
 
-    const thead = '<th>Enabled</th><th>Keep Copy</th><th>Sole Only</th><th>Public Only</th><th>Dates</th><th>Source</th><th>Destination</th><th></th>'
+    const thead = `<th>Source</th><th>Destination</th><th>Dates</th><th class="c">Enabled</th>
+        <th class="c">Keeps copy</th><th class="c">Sole only</th><th class="c">Public only</th><th class="r">Actions</th>`
     const rows  = fwds.map(f => `<tr>
-        <td>${badge(f.enabled)}</td>
-        <td>${badge(f.user_keeps_copy)}</td>
-        <td>${badge(f.only_if_sole_resource)}</td>
-        <td>${badge(f.public_only)}</td>
-        <td style="white-space:nowrap;color:var(--muted)">${fmtDateRange(f.start_date, f.end_date)}</td>
-        <td>${esc(f.source_name)} <span style="color:var(--muted);font-size:11px">${esc(f.source_type)}</span></td>
-        <td>${esc(f.destination_name)} <span style="color:var(--muted);font-size:11px">${esc(f.destination_type)}</span></td>
-        <td class="actions">
-            <button class="btn btn-ghost btn-sm" onclick="editForward(${f.id})">Edit</button>
-            <button class="btn btn-danger" onclick="deleteForward(${f.id})">Delete</button>
+        <td><div class="cell-primary">${esc(f.source_name)}</div><div class="cell-sub">${esc(f.source_type)}</div></td>
+        <td><div class="cell-primary">${esc(f.destination_name)}</div><div class="cell-sub">${esc(f.destination_type)}</div></td>
+        <td class="nowrap muted">${fmtDateRange(f.start_date, f.end_date)}</td>
+        <td class="c">${badge(f.enabled)}</td>
+        <td class="c">${badge(f.user_keeps_copy)}</td>
+        <td class="c">${badge(f.only_if_sole_resource)}</td>
+        <td class="c">${badge(f.public_only)}</td>
+        <td class="r nowrap">
+            <button class="btn btn-ghost btn-sm" onclick="editForward(${f.id})">${icon('edit')}Edit</button>
+            ${deleteButton(`deleteForward(${f.id})`)}
         </td>
     </tr>`)
 
-    setContent(header + tableWrap(thead, rows))
+    setContent(head + tableCard(thead, rows, {
+        empty: emptyState('No forwards yet',
+            'A forward re-routes one person\u2019s ticket notifications to someone else while they are away.',
+            `<button class="btn btn-primary btn-sm" onclick="showForwardModal()">${icon('plus')}New forward</button>`, 'mail'),
+        foot: `<span>${fwds.length} forward${fwds.length === 1 ? '' : 's'}</span>`,
+    }))
 }
 
 function editForward(id) {
@@ -720,44 +954,51 @@ async function showForwardModal(existing = null) {
     const [startDate, startTime] = splitLocalDT(existing?.start_date)
     const [endDate, endTime]     = splitLocalDT(existing?.end_date)
 
-    openModal(existing ? 'Edit Forward' : 'New Forward', `
-        <div class="form-group">
-            <label>Source</label>
-            <select id="f-source">${recipOpts(existing?.source_id)}</select>
-        </div>
-        <div class="form-group">
-            <label>Destination</label>
-            <select id="f-dest">${recipOpts(existing?.destination_id)}</select>
-        </div>
-        <div class="form-group">
-            <label>Start Date &amp; Time <span style="color:var(--muted)">(optional)</span></label>
-            <div style="display:flex;gap:8px">
-                <input type="date" id="f-start-date" style="flex:2" value="${startDate}">
-                <input type="time" id="f-start-time" style="flex:1" value="${startTime}">
+    openModal(existing ? 'Edit forward' : 'New forward', `
+        <div class="stack gap4">
+            <div class="field">
+                <label for="f-source">Source</label>
+                <select class="select" id="f-source">${recipOpts(existing?.source_id)}</select>
+                <span class="hint">Whose notifications are forwarded.</span>
             </div>
-        </div>
-        <div class="form-group">
-            <label>End Date &amp; Time <span style="color:var(--muted)">(optional)</span></label>
-            <div style="display:flex;gap:8px">
-                <input type="date" id="f-end-date" style="flex:2" value="${endDate}">
-                <input type="time" id="f-end-time" style="flex:1" value="${endTime}">
+            <div class="field">
+                <label for="f-dest">Destination</label>
+                <select class="select" id="f-dest">${recipOpts(existing?.destination_id)}</select>
             </div>
-        </div>
-        <div class="form-group">
-            <label>Enabled?</label>
-            <select id="f-enabled">${yesNo(existing ? existing.enabled : true, true)}</select>
-        </div>
-        <div class="form-group">
-            <label>Source Keeps Copy?</label>
-            <select id="f-keep">${yesNo(existing ? existing.user_keeps_copy : true, true)}</select>
-        </div>
-        <div class="form-group">
-            <label>Only Forward If Sole Resource?</label>
-            <select id="f-sole">${yesNo(existing ? existing.only_if_sole_resource : false, false)}</select>
-        </div>
-        <div class="form-group">
-            <label>Public Notes Only?</label>
-            <select id="f-public">${yesNo(existing ? existing.public_only : false, false)}</select>
+            <div class="grid g2" style="gap:var(--s3)">
+                <div class="field">
+                    <label for="f-start-date">Start <span class="muted">(optional)</span></label>
+                    <div class="row gap2">
+                        <input class="input" type="date" id="f-start-date" style="flex:2" value="${startDate}" aria-label="Start date">
+                        <input class="input" type="time" id="f-start-time" style="flex:1" value="${startTime}" aria-label="Start time">
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="f-end-date">End <span class="muted">(optional)</span></label>
+                    <div class="row gap2">
+                        <input class="input" type="date" id="f-end-date" style="flex:2" value="${endDate}" aria-label="End date">
+                        <input class="input" type="time" id="f-end-time" style="flex:1" value="${endTime}" aria-label="End time">
+                    </div>
+                </div>
+            </div>
+            <div class="grid g2" style="gap:var(--s3)">
+                <div class="field">
+                    <label for="f-enabled">Enabled</label>
+                    <select class="select" id="f-enabled">${yesNo(existing ? existing.enabled : true, true)}</select>
+                </div>
+                <div class="field">
+                    <label for="f-keep">Source keeps a copy</label>
+                    <select class="select" id="f-keep">${yesNo(existing ? existing.user_keeps_copy : true, true)}</select>
+                </div>
+                <div class="field">
+                    <label for="f-sole">Only if sole resource</label>
+                    <select class="select" id="f-sole">${yesNo(existing ? existing.only_if_sole_resource : false, false)}</select>
+                </div>
+                <div class="field">
+                    <label for="f-public">Public notes only</label>
+                    <select class="select" id="f-public">${yesNo(existing ? existing.public_only : false, false)}</select>
+                </div>
+            </div>
         </div>`, async () => {
         const sourceId  = parseInt(document.getElementById('f-source').value)
         const destId    = parseInt(document.getElementById('f-dest').value)
@@ -817,38 +1058,51 @@ async function loadUsers() {
         const users = await api('GET', '/users')
         renderUsers(users || [])
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
 function renderUsers(users) {
-    const header = `<div class="tab-header">
-        <h2>Users</h2>
-        <button class="btn btn-primary btn-sm" onclick="showNewUserModal()">+ New User</button>
-    </div>`
+    const head = pageHead('Users', 'People who can sign in to this console.',
+        `<button class="btn btn-primary" onclick="showNewUserModal()">${icon('plus')}New user</button>`)
 
-    const thead = '<th>ID</th><th>Email</th><th>Created</th><th></th>'
+    const thead = '<th class="r">ID</th><th>Email</th><th>Created</th><th class="r">Actions</th>'
     const rows  = users.map(u => `<tr>
-        <td style="color:var(--muted)">${u.id}</td>
-        <td>${esc(u.email_address)}</td>
-        <td style="color:var(--muted)">${fmtDateTime(u.created_on)}</td>
-        <td class="actions">${u.id === currentUser?.id
-            ? '<span class="muted" title="You cannot delete the account you are signed in as">you</span>'
-            : `<button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button>`}</td>
+        <td class="r num muted">${u.id}</td>
+        <td>
+            <div class="row gap3">
+                <span class="avatar sm">${esc(emailInitials(u.email_address))}</span>
+                <div>
+                    <div class="cell-primary">${esc(u.email_address)}</div>
+                    ${u.id === currentUser?.id ? '<div class="cell-sub">Signed in as this account</div>' : ''}
+                </div>
+            </div>
+        </td>
+        <td class="muted nowrap">${fmtDateTime(u.created_on)}</td>
+        <td class="r nowrap">${u.id === currentUser?.id
+            ? '<span class="badge outline">You</span>'
+            : deleteButton(`deleteUser(${u.id})`)}</td>
     </tr>`)
 
-    setContent(header + tableWrap(thead, rows))
+    setContent(head + tableCard(thead, rows, {
+        empty: emptyState('No users yet', 'Create a user so someone can sign in.',
+            `<button class="btn btn-primary btn-sm" onclick="showNewUserModal()">${icon('plus')}New user</button>`, 'users'),
+        foot: `<span>${users.length} user${users.length === 1 ? '' : 's'}</span>`,
+    }))
 }
 
 function showNewUserModal() {
-    openModal('New User', `
-        <div class="form-group">
-            <label>Email Address</label>
-            <input type="email" id="f-email" placeholder="user@example.com">
-        </div>
-        <div class="form-group">
-            <label>Temporary Password</label>
-            <input type="password" id="f-temp-password" placeholder="User must change on first login">
+    openModal('New user', `
+        <div class="stack gap4">
+            <div class="field">
+                <label for="f-email">Email address</label>
+                <input class="input" type="email" id="f-email" placeholder="user@example.com">
+            </div>
+            <div class="field">
+                <label for="f-temp-password">Temporary password</label>
+                <input class="input" type="password" id="f-temp-password" placeholder="••••••••">
+                <span class="hint">The user must change this on first sign-in.</span>
+            </div>
         </div>`, async () => {
         const email    = document.getElementById('f-email').value.trim()
         const password = document.getElementById('f-temp-password').value
@@ -883,7 +1137,7 @@ async function loadKeys() {
         ])
         renderKeys(keys || [], users || [])
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
@@ -891,21 +1145,23 @@ function renderKeys(keys, users) {
     const userMap = {}
     users.forEach(u => { userMap[u.id] = u.email_address })
 
-    const header = `<div class="tab-header">
-        <h2>API Keys</h2>
-        <button class="btn btn-primary btn-sm" onclick="showNewKeyModal()">+ New Key</button>
-    </div>`
+    const head = pageHead('API keys', 'Keys authenticate machine callers against the ticketbot API.',
+        `<button class="btn btn-primary" onclick="showNewKeyModal()">${icon('plus')}New key</button>`)
 
-    const thead = '<th>ID</th><th>User</th><th>Hint</th><th>Created</th><th></th>'
+    const thead = '<th class="r">ID</th><th>User</th><th>Key</th><th>Created</th><th class="r">Actions</th>'
     const rows  = keys.map(k => `<tr>
-        <td style="color:var(--muted)">${k.id}</td>
-        <td>${esc(userMap[k.user_id] || `User #${k.user_id}`)}</td>
-        <td style="font-family:monospace;color:var(--muted)">${k.key_hint ? `****${esc(k.key_hint)}` : '—'}</td>
-        <td style="color:var(--muted)">${fmtDateTime(k.created_on)}</td>
-        <td class="actions"><button class="btn btn-danger" onclick="deleteKey(${k.id})">Delete</button></td>
+        <td class="r num muted">${k.id}</td>
+        <td class="cell-primary">${esc(userMap[k.user_id] || `User #${k.user_id}`)}</td>
+        <td class="num muted">${k.key_hint ? `••••${esc(k.key_hint)}` : '—'}</td>
+        <td class="muted nowrap">${fmtDateTime(k.created_on)}</td>
+        <td class="r nowrap">${deleteButton(`deleteKey(${k.id})`, 'Revoke')}</td>
     </tr>`)
 
-    setContent(header + tableWrap(thead, rows))
+    setContent(head + tableCard(thead, rows, {
+        empty: emptyState('No API keys', 'Create a key to let a script or integration call the ticketbot API.',
+            `<button class="btn btn-primary btn-sm" onclick="showNewKeyModal()">${icon('plus')}New key</button>`, 'key'),
+        foot: `<span>${keys.length} key${keys.length === 1 ? '' : 's'}</span>`,
+    }))
 }
 
 async function showNewKeyModal() {
@@ -919,22 +1175,25 @@ async function showNewKeyModal() {
     const userOpts = users.map(u =>
         `<option value="${esc(u.email_address)}">${esc(u.email_address)}</option>`).join('')
 
-    openModal('New API Key', `
-        <div class="form-group">
-            <label>User</label>
-            <select id="f-user-email">${userOpts}</select>
+    openModal('New API key', `
+        <div class="field">
+            <label for="f-user-email">User</label>
+            <select class="select" id="f-user-email">${userOpts}</select>
+            <span class="hint">The key acts as this user.</span>
         </div>`, async () => {
         const email = document.getElementById('f-user-email').value
         try {
             const res = await api('POST', '/users/keys', { email })
             // Replace modal with key display — key is only shown once
             document.getElementById('modal-body').innerHTML = `
-                <p style="color:var(--warning);font-size:13px">
-                    ⚠ Copy this key now — it will not be shown again.
-                </p>
-                <div class="key-display" id="created-key">${esc(res.key)}</div>`
-            document.getElementById('modal-footer').innerHTML = `
-                <button class="btn btn-ghost" onclick="copyCreatedKey()">Copy to Clipboard</button>
+                <div class="stack gap4">
+                    <div class="callout warn">${icon('alert')}<div class="body">
+                        <b>Copy this key now</b>It is not stored in full and will not be shown again.
+                    </div></div>
+                    <div class="secret reveal" id="created-key">${esc(res.key)}</div>
+                </div>`
+            document.getElementById('modal-foot').innerHTML = `
+                <button class="btn btn-ghost" onclick="copyCreatedKey()">${icon('copy')}Copy key</button>
                 <button class="btn btn-primary" onclick="closeModal(); loadKeys()">Done</button>`
             modalSubmitFn = null
         } catch (e) { toast(e.message, 'error') }
@@ -964,29 +1223,28 @@ async function loadSync() {
         renderSync(status)
         if (status?.status) startSyncPoll()
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
 function renderSync(status) {
-    const running   = status?.status === true
-    const dotClass  = running ? 'running' : 'idle'
-    const statusTxt = running ? 'Sync running…' : 'Idle'
+    const running = status?.status === true
 
-    setContent(`<div class="tab-header">
-        <h2>Sync</h2>
-        <button class="btn btn-primary btn-sm" onclick="showNewSyncModal()" ${running ? 'disabled' : ''}>
-            Run Sync
-        </button>
-    </div>
-    <div class="sync-status">
-        <div class="status-dot ${dotClass}"></div>
-        <span style="color:var(--muted)">${statusTxt}</span>
-    </div>
-    <p style="color:var(--muted);font-size:13px;max-width:480px">
-        Sync pulls the latest boards and Webex recipients from Connectwise and Webex.
-        Run this after adding new boards or updating room memberships.
-    </p>`)
+    setContent(pageHead('Sync',
+        'Pulls the latest boards, Webex recipients and tickets from ConnectWise and Webex. Run it after adding a board or changing room membership.',
+        // while a sync runs the button is disabled, so it drops the accent: a dimmed
+        // accent fill does not hold its contrast
+        `<button class="btn ${running ? 'btn-default' : 'btn-primary'}" onclick="showNewSyncModal()" ${running ? 'disabled' : ''}>${icon('globe')}Run sync</button>`) +
+    `<div class="card card-pad">
+        <div class="row gap3 wrap">
+            ${running
+                ? '<span class="badge ok"><i class="dot pulse"></i>Running</span>'
+                : '<span class="badge outline"><i class="dot"></i>Idle</span>'}
+            <span class="muted">${running
+                ? 'A sync is in progress. This page updates every few seconds.'
+                : 'No sync is running right now.'}</span>
+        </div>
+    </div>`)
 }
 
 async function showNewSyncModal() {
@@ -994,26 +1252,24 @@ async function showNewSyncModal() {
     try { boards = await api('GET', '/cw/boards') ?? [] } catch { /* show modal without boards */ }
 
     const boardCheckboxes = boards.map(b =>
-        `<label><input type="checkbox" name="board" value="${b.id}"> ${esc(b.name)}</label>`
+        checkbox(esc(b.name), `name="board" value="${b.id}"`)
     ).join('')
 
-    openModal('Run Sync', `
-        <div class="form-group">
-            <label>What to sync</label>
-        </div>
-        <label style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="f-sync-boards" checked> Sync Boards
-        </label>
-        <label style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="f-sync-webex" checked> Sync Webex Recipients
-        </label>
-        <label style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="f-sync-tickets"> Sync Tickets
-        </label>
-        ${boards.length ? `<div class="form-group" style="margin-top:4px">
-            <label>Board filter <span style="color:var(--muted)">(empty = all boards)</span></label>
-            <div class="check-list">${boardCheckboxes}</div>
-        </div>` : ''}`, async () => {
+    openModal('Run sync', `
+        <div class="stack gap4">
+            <div class="field">
+                <label>What to sync</label>
+                <div class="stack gap2" style="margin-top:2px">
+                    ${checkbox('Boards', 'id="f-sync-boards"', true)}
+                    ${checkbox('Webex recipients', 'id="f-sync-webex"', true)}
+                    ${checkbox('Tickets', 'id="f-sync-tickets"')}
+                </div>
+            </div>
+            ${boards.length ? `<div class="field">
+                <label>Board filter <span class="muted">(none selected = all boards)</span></label>
+                <div class="stack gap2" style="max-height:220px;overflow-y:auto;margin-top:2px">${boardCheckboxes}</div>
+            </div>` : ''}
+        </div>`, async () => {
         const boardIds = Array.from(
             document.querySelectorAll('input[name="board"]:checked')
         ).map(el => parseInt(el.value))
@@ -1058,90 +1314,50 @@ async function loadConfig() {
         const cfg = await api('GET', '/config')
         renderConfig(cfg)
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
 function renderConfig(cfg) {
-    setContent(`<div class="tab-header">
-        <h2>Configuration</h2>
-    </div>
-    <div class="config-form">
-        <div class="config-row">
-            <div>
-                <div class="config-label">Master Dry Run</div>
-                <div class="config-desc">Run every workflow as a dry run: no ConnectWise writes, Webex messages are mocked</div>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="c-master-dry-run" ${cfg.master_dry_run ? 'checked' : ''}>
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">CW API Member Identifier</div>
-                <div class="config-desc">ConnectWise member the API key belongs to; its own updates never trigger workflows. Auto-filled after the first note ticketbot posts</div>
-            </div>
-            <input class="config-input config-input--wide" type="text" id="c-api-member" value="${esc(cfg.cw_api_member_identifier || '')}" placeholder="e.g. ticketbot">
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Max Message Length</div>
-                <div class="config-desc">Truncation limit for ticket note content</div>
-            </div>
-            <input class="config-input" type="number" id="c-max-len" value="${cfg.max_message_length}" min="1">
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Max Concurrent Syncs</div>
-                <div class="config-desc">Limits parallel requests to Connectwise</div>
-            </div>
-            <input class="config-input" type="number" id="c-max-syncs" value="${cfg.max_concurrent_syncs}" min="1">
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Require 2FA</div>
-                <div class="config-desc">All users must set up two-factor authentication to access the app</div>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="c-require-totp" ${cfg.require_totp ? 'checked' : ''}>
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Debug Logging</div>
-                <div class="config-desc">Enable debug-level log output without a server restart</div>
-            </div>
-            <label class="toggle">
-                <input type="checkbox" id="c-debug-logging" ${cfg.debug_logging ? 'checked' : ''}>
-                <span class="toggle-track"></span>
-            </label>
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Log Buffer Size</div>
-                <div class="config-desc">Max log entries held in memory for the web panel</div>
-            </div>
-            <input class="config-input" type="number" id="c-log-buffer-size" value="${cfg.log_buffer_size}" min="100">
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Log Retention</div>
-                <div class="config-desc">How many days of logs to keep in the database (0 = keep forever)</div>
-            </div>
-            <input class="config-input" type="number" id="c-log-retention" value="${cfg.log_retention_days}" min="0">
-        </div>
-        <div class="config-row">
-            <div>
-                <div class="config-label">Log Cleanup Interval</div>
-                <div class="config-desc">How often old logs are deleted, in hours</div>
-            </div>
-            <input class="config-input" type="number" id="c-log-cleanup-interval" value="${cfg.log_cleanup_interval_hours}" min="1">
-        </div>
-        <div class="config-row">
-            <button class="btn btn-primary btn-sm" onclick="saveConfig()">Save Changes</button>
-        </div>
+    // one settings row: description on the left, control on the right
+    const row = (title, desc, control) => `<div class="form-row">
+        <div><h4>${title}</h4><p class="desc">${desc}</p></div>
+        <div class="row gap3 wrap">${control}</div>
+    </div>`
+
+    const numberInput = (id, value, min) =>
+        `<input class="input" style="max-width:160px" type="number" id="${id}" value="${esc(value)}" min="${min}" aria-label="${esc(id)}">`
+
+    setContent(pageHead('Configuration', 'Runtime settings. Changes take effect without a restart.',
+        `<button class="btn btn-primary" onclick="saveConfig()">Save changes</button>`) +
+    `<div class="card card-pad">
+        ${row('Master dry run',
+            'Run every workflow as a dry run: no ConnectWise writes, Webex messages are mocked.',
+            toggle(`id="c-master-dry-run"`, cfg.master_dry_run, { tip: 'Master dry run' }))}
+        ${row('CW API member identifier',
+            'ConnectWise member the API key belongs to; its own updates never trigger workflows. Auto-filled after the first note ticketbot posts.',
+            `<input class="input" style="max-width:260px" type="text" id="c-api-member" value="${esc(cfg.cw_api_member_identifier || '')}" placeholder="e.g. ticketbot" aria-label="CW API member identifier">`)}
+        ${row('Max message length',
+            'Truncation limit for ticket note content, in characters.',
+            numberInput('c-max-len', cfg.max_message_length, 1))}
+        ${row('Max concurrent syncs',
+            'Limits parallel requests to ConnectWise.',
+            numberInput('c-max-syncs', cfg.max_concurrent_syncs, 1))}
+        ${row('Require 2FA',
+            'All users must set up two-factor authentication to access the app.',
+            toggle(`id="c-require-totp"`, cfg.require_totp, { tip: 'Require 2FA' }))}
+        ${row('Debug logging',
+            'Enable debug-level log output without a server restart.',
+            toggle(`id="c-debug-logging"`, cfg.debug_logging, { tip: 'Debug logging' }))}
+        ${row('Log buffer size',
+            'Maximum log entries held in memory for the web panel.',
+            numberInput('c-log-buffer-size', cfg.log_buffer_size, 100))}
+        ${row('Log retention',
+            'How many days of logs to keep in the database. 0 keeps them forever.',
+            numberInput('c-log-retention', cfg.log_retention_days, 0))}
+        ${row('Log cleanup interval',
+            'How often old logs are deleted, in hours.',
+            numberInput('c-log-cleanup-interval', cfg.log_cleanup_interval_hours, 1))}
     </div>`)
 }
 
@@ -1200,7 +1416,7 @@ async function loadLogs() {
         renderLogs(logsLastEntries)
         startLogsPoll()
     } catch (e) {
-        setContent(`<div class="empty-state">${esc(e.message)}</div>`)
+        setContent(errorState(e.message))
     }
 }
 
@@ -1246,15 +1462,15 @@ function renderLogs(entries) {
 
     const rows = filtered.slice().reverse().map(e => {
         const lvl   = (e.level || '').toUpperCase()
-        const cls   = lvl === 'ERROR' ? 'log-error' : lvl === 'WARN' ? 'log-warn' : lvl === 'DEBUG' ? 'log-debug' : ''
+        const cls   = lvl === 'ERROR' ? 'error' : lvl === 'WARN' ? 'warn' : lvl === 'DEBUG' ? 'debug' : ''
         const time  = e.time ? new Date(e.time).toLocaleTimeString() : '—'
-        const attrs = e.attrs ? ' ' + Object.entries(e.attrs).map(([k,v]) => {
+        const attrs = e.attrs ? Object.entries(e.attrs).map(([k, v]) => {
             const val = (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v)
-            return `<span class="log-attr">${esc(k)}=<span class="log-attr-val">${esc(val)}</span></span>`
-        }).join(' ') : ''
+            return `<span class="log-attr"><b>${esc(k)}</b>=${esc(val)}</span>`
+        }).join('') : ''
         return `<div class="log-row ${cls}">
             <span class="log-time">${time}</span>
-            <span class="log-level">${esc(e.level)}</span>
+            <span class="log-level">${esc(lvl)}</span>
             <span class="log-msg">${esc(e.message)}${attrs}</span>
         </div>`
     })
@@ -1263,24 +1479,29 @@ function renderLogs(entries) {
     const searchFocused  = document.activeElement?.id === 'logs-search'
     const searchPos      = searchFocused ? document.getElementById('logs-search')?.selectionStart : null
 
-    setContent(`<div class="tab-header">
-        <h2>Logs</h2>
-        <div style="display:flex;gap:8px;align-items:center">
-            <select id="logs-level-filter" onchange="setLogsFilter(this.value)" class="btn btn-ghost btn-sm" style="cursor:pointer">${levelOpts}</select>
-            <select id="logs-context-filter" onchange="setLogsContextFilter(this.value)" class="btn btn-ghost btn-sm" style="cursor:pointer;width:180px">${contextOpts}</select>
-            <input id="logs-search" type="text" placeholder="Search…" value="${esc(logsSearch)}" oninput="setLogsSearch(this.value)" class="logs-search-input">
-            <div class="logs-options-wrap">
-                <button class="btn btn-ghost btn-sm" onclick="toggleLogsOptions(event)">Options</button>
-                <div id="logs-options-popup" class="logs-options-popup hidden">
-                    <label><input type="checkbox" ${logsHideGin ? 'checked' : ''} onchange="setLogsHideGin(this.checked)"> Hide request logs</label>
-                </div>
+    setContent(pageHead('Logs', 'Everything the server has logged since it started, newest first.') +
+    `<div class="card">
+        <div class="filter-bar">
+            <select class="select" id="logs-level-filter" onchange="setLogsFilter(this.value)" aria-label="Filter by level">${levelOpts}</select>
+            <select class="select" id="logs-context-filter" onchange="setLogsContextFilter(this.value)" aria-label="Filter by area">${contextOpts}</select>
+            <div class="input-group">
+                ${icon('search')}
+                <input class="input" id="logs-search" type="text" style="width:220px" placeholder="Search…" value="${esc(logsSearch)}" oninput="setLogsSearch(this.value)" aria-label="Search log messages">
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="toggleLogFreeze()">${logsFrozen ? 'Unfreeze' : 'Freeze'}</button>
-            <button class="btn btn-ghost btn-sm" onclick="loadLogs()">Refresh</button>
+            <button class="btn btn-default btn-sm" onclick="openLogsOptions(event)">${icon('filter')}Options</button>
+            <div class="grow"></div>
+            ${logsFrozen
+                ? '<span class="badge outline"><i class="dot"></i>Frozen</span>'
+                : '<span class="badge ok"><i class="dot pulse"></i>Streaming</span>'}
+            <button class="btn btn-default btn-sm" onclick="toggleLogFreeze()">${logsFrozen ? 'Resume' : 'Freeze'}</button>
+            <button class="btn btn-default btn-sm" onclick="loadLogs()">Refresh</button>
         </div>
-    </div>
-    <div class="log-list">
-        ${isEmpty ? '<div class="empty-state">No log entries</div>' : rows.join('')}
+        ${isEmpty
+            ? emptyState('No matching log entries',
+                'Nothing in the buffer matches these filters. Widen the level or clear the search.',
+                `<button class="btn btn-default btn-sm" onclick="resetLogsFilters()">Clear filters</button>`, 'book')
+            : `<div class="log-list">${rows.join('')}</div>`}
+        ${isEmpty ? '' : `<div class="card-foot"><span>${rows.length} of ${entries.length} entries</span></div>`}
     </div>`)
 
     if (searchFocused) {
@@ -1312,21 +1533,31 @@ function setLogsSearch(val) {
     renderLogs(logsLastEntries)
 }
 
-function toggleLogsOptions(e) {
+function openLogsOptions(e) {
     e.stopPropagation()
-    document.getElementById('logs-options-popup')?.classList.toggle('hidden')
+    if (menuEl) { closeMenu(); return }
+    openMenu(e.currentTarget, [
+        {
+            label: logsHideGin ? 'Show request logs' : 'Hide request logs',
+            icon: logsHideGin ? 'globe' : 'filter',
+            run: () => setLogsHideGin(!logsHideGin),
+        },
+    ])
+}
+
+function resetLogsFilters() {
+    logsSearch = ''
+    logsLevelFilter = 'ALL'
+    logsContextFilter = 'ALL'
+    saveLogsPrefs({ levelFilter: 'ALL', contextFilter: 'ALL' })
+    renderLogs(logsLastEntries)
 }
 
 function toggleLogFreeze() {
     logsFrozen = !logsFrozen
-    if (logsFrozen) {
-        stopLogsPoll()
-    } else {
-        loadLogs()
-    }
-    // re-render toolbar state without re-fetching
-    const btn = document.querySelector('.log-list')?.previousElementSibling?.querySelector('button[onclick="toggleLogFreeze()"]')
-    if (btn) btn.textContent = logsFrozen ? 'Unfreeze' : 'Freeze'
+    if (logsFrozen) stopLogsPoll()
+    else loadLogs()
+    renderLogs(logsLastEntries)
 }
 
 function startLogsPoll() {
@@ -1371,11 +1602,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') submitPasswordReset()
     })
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') closeModal()
+        if (e.key !== 'Escape') return
+        if (menuEl) { closeMenu(); return }
+        closeModal()
+        document.getElementById('app').classList.remove('nav-open')
     })
-    document.addEventListener('click', () => {
-        document.getElementById('account-dropdown').classList.add('hidden')
-        document.getElementById('logs-options-popup')?.classList.add('hidden')
-    })
+    // a click anywhere else dismisses an open popover or the mobile nav drawer
+    document.addEventListener('click', e => {
+        if (menuEl && !menuEl.contains(e.target)) closeMenu()
+        const app = document.getElementById('app')
+        if (app.classList.contains('nav-open') && !e.target.closest('.sidebar')) app.classList.remove('nav-open')
+    }, true)
+
+    buildNav()
+    applyTheme(document.documentElement.dataset.theme || 'light')
     checkSavedKey()
 })

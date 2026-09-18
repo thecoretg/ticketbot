@@ -1,0 +1,44 @@
+/* ============================================================
+   Ticketbot layer — sits on top of navi (navi.css).
+   Only things the kit does not cover live here, and they use
+   navi tokens exclusively. Never restyle a navi component here;
+   if a component needs to change, change it in the kit.
+   ============================================================ */
+
+/* Screens the app shows and hides imperatively (auth vs. app shell,
+   inline error slots, popovers). navi styles [hidden]; the app toggles
+   a class, so the class needs the same behaviour. */
+.hidden { display: none !important; }
+
+/* An inline link inside body copy or a table cell. navi resets anchors to
+   inherit, which is right for nav and rows; these are real links. */
+.link { color: var(--accent-on-soft); font-weight: 500; }
+.link:hover { text-decoration: underline; }
+
+/* Table rows that open a detail page on click. */
+.tbl tbody tr.clickable { cursor: pointer; }
+
+/* Long free text in a dense row: ellipsis rather than a wrapped cell. */
+.cell-ellipsis { max-width: 48ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Monospace editing surfaces: condition text, patch ops, message templates. */
+.textarea.mono {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    line-height: 1.6;
+}
+
+/* Placeholder tokens under a message template — click to insert. */
+.placeholder-list { display: flex; flex-wrap: wrap; gap: var(--s1); }
+.placeholder-list .code { cursor: pointer; }
+.placeholder-list .code:hover { border-color: var(--accent-line); color: var(--accent-on-soft); }
+
+/* The "custom message" disclosure inside a notify action. */
+.action-msg summary { cursor: pointer; user-select: none; }
+
+/* Kit correction (report upstream to thecoretg/navi).
+   navi sticks table headers with `top: var(--topbar-h)`, which assumes the page
+   is the scrollport. `.table-wrap` sets `overflow-x: auto`, so it *is* the
+   scrollport, and the header is pushed 58px down over the first row. Inside the
+   wrap the header belongs at the wrap's own top edge. */
+.table-wrap .tbl thead th { top: 0; }

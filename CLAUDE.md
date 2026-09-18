@@ -23,6 +23,19 @@ Ticketbot ingests ConnectWise PSA ticket webhooks, runs per-board workflows (con
 
 `queries/*.sql` → `internal/db` (generated) → `internal/postgres` (repo impls) → `internal/repos` (interfaces) → `internal/service/*` → `internal/handlers` → `internal/server/routes.go`. New repos are registered in `internal/postgres/all.go` and `internal/repos/all.go`; new services are wired in `internal/server/server.go`.
 
+## Frontend
+
+This project uses the **navi UI kit**. Before writing or changing any
+frontend code — markup, styles, components, pages — invoke the `navi-ui`
+skill and follow it. Do not introduce other CSS frameworks, component
+libraries, raw hex colours or ad-hoc spacing values. The palette is recorded
+in `.navi.json`; do not change it without being asked.
+
+`internal/web/static/navi.css` is a snapshot of the kit: never edit it. Project-only
+rules and corrections to the kit live in `internal/web/static/app.css`, each with a
+comment saying why. `icons.js` is the kit's icon set, loaded as a module in
+`index.html` and exposed as `window.icon` for the classic scripts.
+
 ## Conventions
 
 - Feature branches off `main`; commit there with one-line Conventional Commits with scope (`feat(workflow): …`), no body. The user merges and deletes branches.

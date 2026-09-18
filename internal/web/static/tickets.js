@@ -24,26 +24,34 @@ async function renderTicketsPage() {
     const boardOpts = tkBoards.filter(b => !b.deleted).map(b =>
         `<option value="${b.id}"${String(b.id) === tkFilters.board_id ? ' selected' : ''}>${esc(b.name)}</option>`).join('')
 
-    setContent(`<div class="tab-header">
-        <h2>Tickets</h2>
+    setContent(pageHead('Tickets', 'Every ticket ticketbot has seen, with the history of what it did to each one.') +
+    `<div class="card">
         <div class="filter-bar">
-            <select id="tk-board" class="filter-select" onchange="tkBoardChanged(this.value)">
+            <select id="tk-board" class="select" style="min-width:170px" onchange="tkBoardChanged(this.value)" aria-label="Filter by board">
                 <option value="">All boards</option>${boardOpts}
             </select>
-            <select id="tk-status" class="filter-select" onchange="tkSetFilter('status_id', this.value)" ${tkFilters.board_id ? '' : 'disabled'}>
+            <select id="tk-status" class="select" style="min-width:150px" onchange="tkSetFilter('status_id', this.value)" ${tkFilters.board_id ? '' : 'disabled'} aria-label="Filter by status">
                 <option value="">All statuses</option>
             </select>
-            <select id="tk-closed" class="filter-select" onchange="tkSetFilter('closed', this.value)">
+            <select id="tk-closed" class="select" style="min-width:150px" onchange="tkSetFilter('closed', this.value)" aria-label="Filter by open or closed">
                 <option value=""${tkFilters.closed === '' ? ' selected' : ''}>Open + closed</option>
                 <option value="false"${tkFilters.closed === 'false' ? ' selected' : ''}>Open only</option>
                 <option value="true"${tkFilters.closed === 'true' ? ' selected' : ''}>Closed only</option>
             </select>
-            <input id="tk-search" type="text" class="logs-search-input" placeholder="Search summary or #…" value="${esc(tkFilters.q)}" oninput="tkSetSearch(this.value)">
-            <button class="btn btn-ghost btn-sm" onclick="refreshTicketTable()">Refresh</button>
+            <div class="input-group">
+                ${icon('search')}
+                <input id="tk-search" class="input" type="text" style="width:240px" placeholder="Search summary or #…" value="${esc(tkFilters.q)}" oninput="tkSetSearch(this.value)" aria-label="Search tickets">
+            </div>
+            <div class="grow"></div>
+            <button class="btn btn-default btn-sm" onclick="refreshTicketTable()">Refresh</button>
         </div>
-    </div>
-    <div id="tk-table"><div class="loading-state">Loading…</div></div>
-    <div id="tk-pager" class="pager"></div>`)
+        <div id="tk-table"><div class="stack gap3" style="padding:var(--s5)" aria-busy="true">
+            <div class="skeleton" style="height:13px;width:100%"></div>
+            <div class="skeleton" style="height:13px;width:92%"></div>
+            <div class="skeleton" style="height:13px;width:84%"></div>
+        </div></div>
+        <div id="tk-pager" class="card-foot"></div>
+    </div>`)
 
     if (tkFilters.board_id) await tkLoadStatuses(tkFilters.board_id)
     await refreshTicketTable()
@@ -106,25 +114,35 @@ async function refreshTicketTable() {
         page = await api('GET', `/tickets?${params}`)
     } catch (e) {
         if (seq !== tkRequestSeq) return
-        table.innerHTML = `<div class="empty-state">${esc(e.message)}</div>`
+        table.innerHTML = `<div class="empty">
+            <div class="empty-art">${icon('alert')}</div>
+            <div class="stack gap2"><h3>Could not load tickets</h3><p>${esc(e.message)}</p></div>
+            <button class="btn btn-default btn-sm" onclick="refreshTicketTable()">Try again</button>
+        </div>`
         pager.innerHTML = ''
         return
     }
     if (seq !== tkRequestSeq || !document.getElementById('tk-table')) return
 
     const items = page?.items || []
-    const thead = `<th>ID</th><th>Summary</th><th>Board</th><th>Status</th><th>Company</th><th>Owner</th><th>Updated</th>`
+    const thead = `<th class="r">ID</th><th>Summary</th><th>Board</th><th>Status</th><th>Company</th><th>Owner</th><th>Updated</th>`
     const rows  = items.map(t => `<tr class="clickable" onclick="openTicket(${t.id})">
-        <td><a class="tk-id" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open in ConnectWise">#${t.id}</a></td>
-        <td class="cell-ellipsis" title="${esc(t.summary)}">${esc(t.summary)}${t.deleted ? ' ' + badgeTag('Deleted', 'off') : ''}</td>
+        <td class="r"><a class="link num" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" data-tip="Open in ConnectWise">#${t.id}</a></td>
+        <td class="cell-ellipsis cell-primary" title="${esc(t.summary)}">${esc(t.summary)}${t.deleted ? ' ' + badgeTag('Deleted', 'bad') : ''}</td>
         <td>${esc(t.board_name)}</td>
-        <td>${esc(t.status_name)}${t.closed_flag ? ' ' + badgeTag('Closed', 'muted') : ''}</td>
+        <td class="nowrap">${esc(t.status_name)}${t.closed_flag ? ' ' + badgeTag('Closed', '') : ''}</td>
         <td>${esc(t.company_name)}</td>
         <td>${esc(t.owner_name || '—')}</td>
-        <td class="nowrap">${fmtDateTime(t.updated_on)}</td>
+        <td class="nowrap muted">${fmtDateTime(t.updated_on)}</td>
     </tr>`)
 
-    table.innerHTML = tableWrap(thead, rows)
+    table.innerHTML = rows.length
+        ? `<div class="table-wrap"><table class="tbl">
+            <thead><tr>${thead}</tr></thead><tbody>${rows.join('')}</tbody>
+        </table></div>`
+        : emptyState('No tickets match these filters',
+            'Tickets appear here once ConnectWise sends a webhook, or after a ticket sync.',
+            `<button class="btn btn-default btn-sm" onclick="tkClearFilters()">Clear filters</button>`, 'inbox')
 
     const total    = page?.total || 0
     const size     = page?.page_size || tkFilters.page_size
@@ -135,12 +153,18 @@ async function refreshTicketTable() {
     tkFilters.page = current
 
     pager.innerHTML = total ? `
-        <span>Showing ${from}–${to} of ${total}</span>
-        <div class="pager-btns">
-            <button class="btn btn-ghost btn-sm" onclick="tkPage(-1)" ${current <= 1 ? 'disabled' : ''}>Prev</button>
-            <span>Page ${current} of ${lastPage}</span>
-            <button class="btn btn-ghost btn-sm" onclick="tkPage(1)" ${current >= lastPage ? 'disabled' : ''}>Next</button>
+        <span>Showing <span class="num">${from}–${to}</span> of <span class="num">${total}</span></span>
+        <div class="pagination">
+            <button onclick="tkPage(-1)" ${current <= 1 ? 'disabled' : ''} aria-label="Previous page">${icon('arrowL')}</button>
+            <span class="muted" style="padding:0 var(--s2)">Page <span class="num">${current}</span> of <span class="num">${lastPage}</span></span>
+            <button onclick="tkPage(1)" ${current >= lastPage ? 'disabled' : ''} aria-label="Next page">${icon('arrowR')}</button>
         </div>` : ''
+}
+
+// tkClearFilters resets the toolbar to "everything", from the empty state.
+function tkClearFilters() {
+    tkFilters = { board_id: '', status_id: '', closed: '', q: '', page: 1, page_size: tkFilters.page_size }
+    renderTicketsPage()
 }
 
 function openTicket(id) {
@@ -157,10 +181,7 @@ async function loadTicketDetail(id) {
     try {
         data = await api('GET', `/tickets/${id}`)
     } catch (e) {
-        setContent(`<div class="tab-header"><div class="back-row">
-                <button class="btn btn-ghost btn-sm" onclick="tkBack()">← Tickets</button><h2>Ticket #${id}</h2>
-            </div></div>
-            <div class="empty-state">${esc(e.message)}</div>`)
+        setContent(backRow('tickets', 'Tickets', `#${id}`) + pageHead(`Ticket #${id}`) + errorState(e.message))
         return
     }
     tkDetail = data
@@ -175,9 +196,9 @@ async function tkLoadWorkflowLink(t) {
     let html = ''
     try {
         const w = await api('GET', `/workflows/board/${t.board_id}`)
-        if (w?.id) html = `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})" title="Edit the ${esc(t.board_name)} workflow">Open workflow${w.dry_run ? ' ' + badgeTag('Dry run', 'warn') : ''}${w.enabled ? '' : ' ' + badgeTag('Disabled', 'off')}</button>`
+        if (w?.id) html = `<button class="btn btn-default" onclick="openWorkflow(${w.id})" data-tip="Edit the ${esc(t.board_name)} workflow">${icon('bolt')}Open workflow${w.dry_run ? ' ' + badgeTag('Dry run', 'warn') : ''}${w.enabled ? '' : ' ' + badgeTag('Disabled', '')}</button>`
     } catch (e) {
-        if (e.status === 404) html = `<button class="btn btn-ghost btn-sm" onclick="tkCreateWorkflow(${t.board_id})" title="This board has no workflow yet">Create workflow</button>`
+        if (e.status === 404) html = `<button class="btn btn-default" onclick="tkCreateWorkflow(${t.board_id})" data-tip="This board has no workflow yet">${icon('plus')}Create workflow</button>`
     }
     const el = document.getElementById('tk-workflow-link')
     if (el) el.innerHTML = html
@@ -216,22 +237,25 @@ function renderTicketDetail(d) {
     const contact = d.contact ? [d.contact.first_name, d.contact.last_name].filter(Boolean).join(' ') : '—'
     const resources = (d.resources || []).map(m => memberLabel(m)).join(', ') || (t.resources || '—')
 
-    const meta = (label, value) => `<div><span class="meta-label">${label}</span><span>${value}</span></div>`
+    const meta = (label, value) => `<div><div class="eyebrow">${label}</div><div class="val">${value}</div></div>`
 
-    setContent(`<div class="tab-header">
-        <div class="back-row">
-            <button class="btn btn-ghost btn-sm" onclick="tkBack()">← Tickets</button>
-            <h2 class="tk-title">
-                <a class="ext-link" href="${esc(t.cw_url)}" target="_blank" rel="noopener" title="Open in ConnectWise">#${t.id} ↗</a>
-                <span class="tk-summary">${esc(t.summary)}</span>
-                ${t.deleted ? badgeTag('Deleted', 'off') : ''}
-            </h2>
+    setContent(`${backRow('tickets', 'Tickets', `#${t.id}`)}
+    <header class="page-head row spread wrap gap4">
+        <div>
+            <h1 class="page-title">${esc(t.summary)}</h1>
+            <p class="page-sub row gap2 wrap">
+                <a class="link num" href="${esc(t.cw_url)}" target="_blank" rel="noopener">#${t.id} in ConnectWise</a>
+                ${t.deleted ? badgeTag('Deleted', 'bad') : ''}
+            </p>
         </div>
-        <div class="tk-actions"><span id="tk-workflow-link"></span><button class="btn btn-ghost btn-sm" onclick="loadTicketDetail(${t.id})">Refresh</button></div>
-    </div>
-    <div class="ticket-meta">
+        <div class="row gap2 wrap">
+            <span id="tk-workflow-link"></span>
+            <button class="btn btn-default" onclick="loadTicketDetail(${t.id})">Refresh</button>
+        </div>
+    </header>
+    <div class="meta-grid">
         ${meta('Board', esc(t.board_name))}
-        ${meta('Status', esc(t.status_name) + (t.closed_flag ? ' ' + badgeTag('Closed', 'muted') : ''))}
+        ${meta('Status', esc(t.status_name) + (t.closed_flag ? ' ' + badgeTag('Closed', '') : ''))}
         ${meta('Company', esc(t.company_name))}
         ${meta('Priority', esc(t.priority_name || '—'))}
         ${meta('Owner', esc(t.owner_name || '—'))}
@@ -241,12 +265,19 @@ function renderTicketDetail(d) {
         ${meta('Updated', fmtDateTime(t.updated_on) + (t.updated_by ? ` <span class="muted">by ${esc(t.updated_by)}</span>` : ''))}
         ${meta('Added', fmtDateTime(t.added_on))}
     </div>
-    <div class="section-head">
-        <h3>History</h3>
-        <span class="config-desc">${evs.length} event${evs.length === 1 ? '' : 's'}, oldest first</span>
-        <label class="check-inline history-toggle"><input type="checkbox" ${tkShowNoops ? 'checked' : ''} onchange="tkToggleNoops(this.checked)"> Show runs where nothing happened${!tkShowNoops && hidden ? ` (${hidden})` : ''}</label>
+    <div class="section-head row spread wrap gap4">
+        <div class="row gap3 wrap" style="align-items:baseline">
+            <h3>History</h3>
+            <p>${evs.length} event${evs.length === 1 ? '' : 's'}, oldest first</p>
+        </div>
+        ${checkbox(`Show runs where nothing happened${!tkShowNoops && hidden ? ` <span class="muted">(${hidden})</span>` : ''}`,
+            'onchange="tkToggleNoops(this.checked)"', tkShowNoops)}
     </div>
-    <div class="timeline">${evs.map(tkEventHTML).join('') || '<div class="empty-state">No events recorded</div>'}</div>`)
+    ${evs.length
+        ? `<div class="events">${evs.map(tkEventHTML).join('')}</div>`
+        : `<div class="card">${emptyState('No events recorded',
+            'Events appear here when ConnectWise sends a webhook for this ticket and a workflow runs.',
+            '', 'clock')}</div>`}`)
 }
 
 function memberLabel(m) {
@@ -254,70 +285,78 @@ function memberLabel(m) {
     return name || m.identifier || ''
 }
 
-// ── Timeline ─────────────────────────────────────────────
+// ── Event history ────────────────────────────────────────
+// Each entry is a navi .event card: a dot on the rail whose tone says what
+// happened, plus a card with the detail.
 function tkEventHTML(ev) {
     const p   = ev.payload || {}
-    let title = ev.kind, body = '', cls = ev.kind
+    let title = ev.kind, body = '', tone = ''
 
     switch (ev.kind) {
     case 'created':
         title = 'Ticket created'
+        tone  = 'ok'
         body  = tkChangeBody(p)
         break
     case 'updated':
         title = 'Ticket updated'
+        tone  = 'accent'
         body  = tkChangeBody(p)
         break
     case 'deleted':
         title = 'Ticket deleted in ConnectWise'
+        tone  = 'bad'
         break
     case 'loop_guard':
         title = 'Rules skipped: self-authored update'
-        body  = `<div class="tl-detail">${esc(tkLoopReason(p.reason))}${p.identifier ? ` (<code>${esc(p.identifier)}</code>)` : ''}</div>`
+        body  = `<div class="event-detail">${esc(tkLoopReason(p.reason))}${p.identifier ? ` (<code class="code inline">${esc(p.identifier)}</code>)` : ''}</div>`
         break
     case 'workflow':
         title = p.found ? `Workflow: ${esc(p.workflow_name || '')}` : 'No workflow for this board'
-        if (p.found && !p.enabled) body = '<div class="tl-detail">Workflow is disabled</div>'
-        else if (p.rules?.length) body = `<div class="rule-chips">${p.rules.map(tkRuleChip).join('')}</div>`
+        tone  = p.found && p.enabled ? 'accent' : ''
+        if (p.found && !p.enabled) body = '<div class="event-detail">Workflow is disabled</div>'
+        else if (p.rules?.length) body = `<div class="row wrap gap3">${p.rules.map(tkRuleChip).join('')}</div>`
         break
     case 'action':
         title = `${esc(p.rule_name || 'Rule')} · ${tkActionLabel(p.kind)}`
+        tone  = p.result === 'error' ? 'bad' : 'warn'
         body  = tkActionBody(p, ev.dry_run)
-        if (p.result === 'error') cls += ' tl-error'
         break
     case 'notification':
         title = `${esc(p.rule_name || 'Notify')} → ${esc(p.recipient_name || '?')}`
+        tone  = p.result === 'error' ? 'bad' : 'warn'
         body  = tkNotificationBody(p, ev.dry_run)
-        if (p.result === 'error') cls += ' tl-error'
         break
     case 'error':
         title = `Error${p.stage ? ` during ${esc(p.stage)}` : ''}`
-        body  = `<div class="tl-error-text">${esc(p.error || '')}</div>`
-        cls  += ' tl-error'
+        tone  = 'bad'
+        body  = `<div class="event-error">${esc(p.error || '')}</div>`
         break
     }
 
-    return `<div class="tl-item tl-${cls}">
-        <div class="tl-dot"></div>
-        <div class="tl-card">
-            <div class="tl-head">
-                <span class="tl-title">${title}</span>
-                ${ev.dry_run ? badgeTag('DRY RUN', 'warn') : ''}
-                <span class="tl-source">${esc(ev.source)}</span>
-                <span class="tl-time">${fmtDateTime(ev.occurred_at)}</span>
+    return `<div class="event ${tone}">
+        <div class="event-card">
+            <div class="event-head">
+                <span class="title">${title}</span>
+                ${ev.dry_run ? badgeTag('Dry run', 'warn') : ''}
+                <span class="src">${esc(ev.source)}</span>
+                <span class="time">${fmtDateTime(ev.occurred_at)}</span>
             </div>
-            ${body ? `<div class="tl-body">${body}</div>` : ''}
+            ${body ? `<div class="event-body stack gap2">${body}</div>` : ''}
         </div>
     </div>`
 }
 
 function tkChangeBody(p) {
     let html = ''
-    if (p.updated_by) html += `<div class="tl-detail">by ${esc(p.updated_by)}</div>`
+    if (p.updated_by) html += `<div class="event-detail">by ${esc(p.updated_by)}</div>`
     if (p.changes?.length) html += tkDiffTableHTML(p.changes)
     if (p.new_note) {
         const n = p.new_note
-        html += `<div class="note-preview"><div class="note-author">${esc(n.author_name || n.author_identifier || 'Unknown')}${n.internal ? ' ' + badgeTag('Internal', 'muted') : ''}</div><div class="note-text">${esc(n.preview || '')}</div></div>`
+        html += `<div class="note">
+            <div class="note-author">${esc(n.author_name || n.author_identifier || 'Unknown')}${n.internal ? ' ' + badgeTag('Internal', '') : ''}</div>
+            <div class="note-text">${esc(n.preview || '')}</div>
+        </div>`
     }
     return html
 }
@@ -329,21 +368,22 @@ function tkDiffTableHTML(changes) {
         if (typeof v === 'object') return v.id ? esc(v.name ? `${v.name} (${v.id})` : String(v.id)) : '—'
         return esc(String(v))
     }
-    return `<table class="diff-table"><thead><tr><th>Field</th><th>Old</th><th>New</th></tr></thead><tbody>${
+    return `<table class="diff-table"><thead><tr><th>Field</th><th>Was</th><th>Now</th></tr></thead><tbody>${
         changes.map(c => `<tr>
-            <td class="diff-field">${esc(c.field)}</td>
-            <td class="diff-old">${val(c.old)}</td>
-            <td class="diff-new">${val(c.new)}</td>
+            <td class="field">${esc(c.field)}</td>
+            <td><span class="diff-old">${val(c.old)}</span></td>
+            <td><span class="diff-new">${val(c.new)}</span></td>
         </tr>`).join('')
     }</tbody></table>`
 }
 
 function tkRuleChip(r) {
-    let variant = 'muted', label = 'no match'
-    if (r.error)        { variant = 'off';  label = 'error' }
-    else if (r.skipped) { variant = 'muted'; label = r.skipped === 'trigger' ? 'trigger mismatch' : r.skipped }
-    else if (r.matched) { variant = 'on';   label = r.stopped ? 'matched · stop' : 'matched' }
-    return `<span class="rule-chip" title="${esc(r.error || '')}">${esc(r.rule_name)} ${badgeTag(label, variant)}</span>`
+    let variant = '', label = 'no match'
+    if (r.error)        { variant = 'bad'; label = 'error' }
+    else if (r.skipped) { variant = '';    label = r.skipped === 'trigger' ? 'trigger mismatch' : r.skipped }
+    else if (r.matched) { variant = 'ok';  label = r.stopped ? 'matched · stop' : 'matched' }
+    const tip = r.error ? ` data-tip="${esc(r.error)}"` : ''
+    return `<span class="row gap2"${tip}><span class="cell-sub">${esc(r.rule_name)}</span>${badgeTag(label, variant)}</span>`
 }
 
 function tkActionLabel(kind) {
@@ -371,41 +411,41 @@ function tkActionSummary(kind, o) {
 
 function tkResultBadge(result, dryRun) {
     switch (result) {
-    case 'ok':         return badgeTag('Done', 'on')
-    case 'sent':       return badgeTag('Sent', 'on')
-    case 'queued':     return badgeTag(dryRun ? 'Would notify' : 'Queued', dryRun ? 'warn' : 'on')
+    case 'ok':         return badgeTag('Done', 'ok')
+    case 'sent':       return badgeTag('Sent', 'ok')
+    case 'queued':     return badgeTag(dryRun ? 'Would notify' : 'Queued', dryRun ? 'warn' : 'ok')
     case 'would_run':  return badgeTag('Would run', 'warn')
     case 'would_send': return badgeTag('Would send', 'warn')
-    case 'skipped':    return badgeTag('Skipped', 'muted')
-    case 'error':      return badgeTag('Error', 'off')
-    default:           return badgeTag(result || '?', 'muted')
+    case 'skipped':    return badgeTag('Skipped', '')
+    case 'error':      return badgeTag('Error', 'bad')
+    default:           return badgeTag(result || '?', '')
     }
 }
 
 function tkActionBody(p, dryRun) {
-    let html = `<div class="tl-row">${tkResultBadge(p.result, dryRun)}${p.reason ? `<span class="tl-detail">${esc(p.reason)}</span>` : ''}</div>`
+    let html = `<div class="row gap2 wrap">${tkResultBadge(p.result, dryRun)}${p.reason ? `<span class="event-detail">${esc(p.reason)}</span>` : ''}</div>`
     const o = p.output || {}
     if (p.kind === 'notify' && o.target) {
-        html += `<div class="tl-detail">Target: ${esc(tkTargetLabel(o.target))}${o.recipient_id ? ` (recipient ${o.recipient_id})` : ''}</div>`
+        html += `<div class="event-detail">Target: ${esc(tkTargetLabel(o.target))}${o.recipient_id ? ` (recipient ${o.recipient_id})` : ''}</div>`
     }
     if (p.kind === 'add_note' && o.text) {
         const flags = ['internal', 'discussion', 'resolution'].filter(f => o[f]).join(', ')
-        html += `<div class="note-preview">${flags ? `<div class="note-author">${esc(flags)}</div>` : ''}<div class="note-text">${esc(o.text)}</div>${o.note_id ? `<div class="tl-detail">note #${o.note_id}</div>` : ''}</div>`
+        html += `<div class="note">${flags ? `<div class="note-author">${esc(flags)}</div>` : ''}<div class="note-text">${esc(o.text)}</div>${o.note_id ? `<div class="event-detail">note #${o.note_id}</div>` : ''}</div>`
     }
     if (['set_status', 'set_priority', 'set_owner', 'add_resource'].includes(p.kind)) {
-        html += `<div class="tl-detail">${tkActionSummary(p.kind, o).replace(/^ → /, '')}${p.kind === 'add_resource' && o.resources ? ` <span class="muted">(resources: ${esc(o.resources)})</span>` : ''}</div>`
+        html += `<div class="event-detail">${tkActionSummary(p.kind, o).replace(/^ → /, '')}${p.kind === 'add_resource' && o.resources ? ` <span class="muted">(resources: ${esc(o.resources)})</span>` : ''}</div>`
     }
     if (p.kind === 'patch' && o.ops) {
-        html += `<pre class="tl-code">${esc(JSON.stringify(o.ops, null, 2))}</pre>`
+        html += `<pre class="code">${esc(JSON.stringify(o.ops, null, 2))}</pre>`
     }
-    if (p.error) html += `<div class="tl-error-text">${esc(p.error)}</div>`
+    if (p.error) html += `<div class="event-error">${esc(p.error)}</div>`
     return html
 }
 
 function tkNotificationBody(p, dryRun) {
-    let html = `<div class="tl-row">${tkResultBadge(p.result, dryRun)}<span class="tl-detail">${esc(p.recipient_type || '')}</span></div>`
-    if (p.forwarded_from?.length) html += `<div class="tl-detail">Forwarded from ${esc(p.forwarded_from.join(' → '))}</div>`
-    if (p.error) html += `<div class="tl-error-text">${esc(p.error)}</div>`
+    let html = `<div class="row gap2 wrap">${tkResultBadge(p.result, dryRun)}<span class="event-detail">${esc(p.recipient_type || '')}</span></div>`
+    if (p.forwarded_from?.length) html += `<div class="event-detail">Forwarded from ${esc(p.forwarded_from.join(' → '))}</div>`
+    if (p.error) html += `<div class="event-error">${esc(p.error)}</div>`
     return html
 }
 
