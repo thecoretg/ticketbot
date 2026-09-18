@@ -1,0 +1,28 @@
+# Triggers the Easypanel deploy webhook for the v2 instance on every push to v2-main.
+# Easypanel pulls the branch and builds from the root Dockerfile itself; this only kicks it off.
+# The URL lives in the EASYPANEL_DEPLOY_URL repository secret (Easypanel: app > Deployments >
+# Deploy Webhook).
+name: Deploy v2
+
+on:
+  push:
+    branches: [v2-main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-v2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Easypanel deploy webhook
+        env:
+          DEPLOY_URL: ${{ secrets.EASYPANEL_DEPLOY_URL }}
+        run: |
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "EASYPANEL_DEPLOY_URL secret is not set" >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 -X POST "$DEPLOY_URL"
