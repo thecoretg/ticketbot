@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/thecoretg/ticketbot/internal/env"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/ticketbot/models"
@@ -30,7 +31,11 @@ func TestE2EProcessTicket(t *testing.T) {
 	ctx := context.Background()
 	level := new(slog.LevelVar)
 	logBuf := logging.NewBufferHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}), 100)
-	app, _, err := NewApp(ctx, 11, level, logBuf)
+	e, err := env.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, _, err := NewApp(ctx, e, 11, level, logBuf)
 	if err != nil {
 		t.Fatal(err)
 	}

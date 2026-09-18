@@ -29,13 +29,13 @@ run:
 
 # ── Full stack in Docker ─────────────────────────────────────────────────────
 docker-up:
-	$(COMPOSE) --env-file $(ENV_FILE) up --build
+	VERSION=$(VERSION) $(COMPOSE) --env-file $(ENV_FILE) up --build
 
 docker-down:
 	$(COMPOSE) --env-file $(ENV_FILE) down
 
 docker-build:
-	docker buildx build --platform=linux/amd64 -t ticketbot:$(VERSION) --load -f ./docker/DockerfileMain .
+	docker buildx build --platform=linux/amd64 --build-arg VERSION=$(VERSION) -t ticketbot:$(VERSION) --load -f ./docker/DockerfileMain .
 
 deploy-container: docker-build
 	aws lightsail push-container-image \

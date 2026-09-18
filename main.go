@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/thecoretg/ticketbot/internal/env"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/server"
@@ -20,6 +21,13 @@ import (
 const (
 	gooseMigrationVersion = 11
 	shutdownTimeout       = 10 * time.Second
+
+	// HTTP server timeouts. Webhook and dashboard requests are small and fast; anything slower is
+	// a stuck client holding a connection.
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 15 * time.Second
+	writeTimeout      = 30 * time.Second
+	idleTimeout       = 120 * time.Second
 )
 
 var serverVersion = "dev"
@@ -37,37 +45,28 @@ func Run() error {
 		return nil
 	}
 
+	e, err := env.Load()
+	if err != nil {
+		return fmt.Errorf("loading environment: %w", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var level slog.LevelVar
-	if os.Getenv("DEBUG") == "true" {
+	if e.Debug {
 		level.Set(slog.LevelDebug)
-	}
-
-	var cwHandler *logging.CloudwatchHandler
-	if logging.CloudwatchVarsSet() {
-		var err error
-		p := logging.GetCloudwatchParamsFromEnv(&level)
-		cwHandler, err = logging.NewCloudwatchLogger(ctx, p)
-		if err != nil {
-			return fmt.Errorf("creating cloudwatch logger: %w", err)
-		}
-	}
-
-	var baseLogger *slog.Logger
-	if cwHandler != nil {
-		slog.Info("using AWS log handler")
-		baseLogger = slog.New(cwHandler)
+		gin.SetMode(gin.DebugMode)
 	} else {
-		slog.Info("using stdout json handler")
-		baseLogger = logging.NewDefaultLogger(&level)
+		gin.SetMode(gin.ReleaseMode)
 	}
+
+	baseLogger := logging.NewDefaultLogger(&level)
 	logBuf := logging.NewBufferHandler(baseLogger.Handler(), 500)
 	logger := slog.New(logBuf)
 	slog.SetDefault(logger)
 
-	a, persister, err := server.NewApp(ctx, gooseMigrationVersion, &level, logBuf)
+	a, persister, err := server.NewApp(ctx, e, gooseMigrationVersion, &level, logBuf)
 	if err != nil {
 		return fmt.Errorf("initializing app: %w", err)
 	}
@@ -78,20 +77,16 @@ func Run() error {
 	}
 	persister.Start(ctx)
 
-	if !a.TestFlags.SkipAuth {
-		slog.Info("attempting to bootstrap admin")
-		var adminPwd *string
-		if a.Creds.InitialAdminPassword != "" {
-			adminPwd = &a.Creds.InitialAdminPassword
-		}
-		if err := a.Svc.User.BootstrapAdmin(ctx, a.Creds.InitialAdminEmail, adminPwd); err != nil {
-			return fmt.Errorf("bootstrapping admin: %w", err)
-		}
-	} else {
-		slog.Info("SKIP AUTH ENABLED")
+	slog.Info("attempting to bootstrap admin")
+	var adminPwd *string
+	if e.InitialAdminPassword != "" {
+		adminPwd = &e.InitialAdminPassword
+	}
+	if err := a.Svc.User.BootstrapAdmin(ctx, e.InitialAdminEmail, adminPwd); err != nil {
+		return fmt.Errorf("bootstrapping admin: %w", err)
 	}
 
-	if !a.TestFlags.SkipHooks {
+	if !e.SkipHooks {
 		if err := a.Svc.Hooks.ProcessAllHooks(ctx); err != nil {
 			return fmt.Errorf("processing connectwise hooks: %w", err)
 		}
@@ -103,13 +98,13 @@ func Run() error {
 	srv.Use(gin.RecoveryWithWriter(slogWriter))
 	server.AddRoutes(a, srv, cancel)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
 	httpSrv := &http.Server{
-		Addr:    ":" + port,
-		Handler: srv,
+		Addr:              ":" + e.Port,
+		Handler:           srv,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	// listen for OS signals (SIGTERM from Docker, SIGINT from Ctrl+C)
@@ -126,7 +121,7 @@ func Run() error {
 
 	// start serving
 	go func() {
-		slog.Info("server starting", "port", port)
+		slog.Info("server starting", "port", e.Port, "version", serverVersion)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 			cancel()

@@ -26,10 +26,9 @@ type Service struct {
 	CWCompanyID string
 }
 
-func New(pool *pgxpool.Pool, r repos.CWRepos, events repos.TicketEventRepository, cl *psa.Client, companyID string, ttl int64) *Service {
-	t := time.Second * time.Duration(ttl)
+func New(pool *pgxpool.Pool, r repos.CWRepos, events repos.TicketEventRepository, cl *psa.Client, companyID string, ttl time.Duration) *Service {
 	return &Service{
-		TTL:         t,
+		TTL:         ttl,
 		Events:      events,
 		CWCompanyID: companyID,
 		Boards:      r.Board,

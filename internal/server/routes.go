@@ -16,7 +16,7 @@ func AddRoutes(a *App, g *gin.Engine, shutdown func()) {
 
 	auth := middleware.CombinedAuth(a.Stores.APIKey, a.Svc.Auth)
 
-	g.GET("healthcheck", handlers.HandleHealthCheck) // authless ping for lightsail health checks
+	g.GET("healthcheck", handlers.HandleHealthCheck) // authless ping for load balancer / container health checks
 	g.GET("authtest", auth, handlers.HandleHealthCheck)
 
 	ah := handlers.NewAuthHandler(a.Svc.Auth)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/ticketbot/internal/env"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
@@ -24,8 +25,7 @@ import (
 )
 
 type App struct {
-	Creds                   *Creds
-	TestFlags               *TestFlags
+	Env                     *env.Env
 	Stores                  *repos.AllRepos
 	CWClient                *psa.Client
 	MessageSender           repos.MessageSender
@@ -50,32 +50,20 @@ type Services struct {
 	Lists     *lists.Service
 }
 
-const defaultStoreTTL = int64(900)
+func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.LevelVar, logBuf *logging.BufferHandler) (*App, *logging.Persister, error) {
+	slog.Info("using store TTL", "ttl", e.StoreTTL)
 
-func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf *logging.BufferHandler) (*App, *logging.Persister, error) {
-	cr := getCreds()
-	tf := getTestFlags()
-	if err := cr.validate(tf); err != nil {
-		return nil, nil, fmt.Errorf("validating credentials: %w", err)
-	}
-
-	ttl := defaultStoreTTL
-	if tf.StoreTTLSeconds != 0 {
-		ttl = tf.StoreTTLSeconds
-	}
-	slog.Info("using TTL", "ttl", ttl)
-
-	cw, err := psa.NewClient(ctx, *cr.CWCreds)
+	cw, err := psa.NewClient(ctx, e.CW)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating connectwise client: %w", err)
 	}
 
-	ms, err := makeMessageSender(ctx, tf.MockWebex, cr.WebexAPISecret)
+	ms, err := makeMessageSender(ctx, e.MockWebex, e.WebexSecret)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating message sender: %w", err)
 	}
 
-	s, err := CreateStores(ctx, cr, migVersion)
+	s, err := InitPostgresStores(ctx, e, migVersion)
 	if err != nil {
 		return nil, nil, fmt.Errorf("initializing stores: %w", err)
 	}
@@ -86,7 +74,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		return nil, nil, fmt.Errorf("getting initial config: %w", err)
 	}
 
-	cws := cwsvc.New(s.Pool, r.CW, r.TicketEvents, cw, cr.CWCreds.CompanyID, ttl)
+	cws := cwsvc.New(s.Pool, r.CW, r.TicketEvents, cw, e.CW.CompanyID, e.StoreTTL)
 	ws := webexsvc.New(s.Pool, r.WebexRecipients, ms)
 
 	nr := notifier.SvcParams{
@@ -96,7 +84,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 		Forwards:      r.NotifierForwards,
 		Pool:          s.Pool,
 		MessageSender: ms,
-		CWCompanyID:   cr.CWCreds.CompanyID,
+		CWCompanyID:   e.CW.CompanyID,
 	}
 
 	ns := notifier.New(nr)
@@ -117,9 +105,8 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
 
 	return &App{
-		Creds:         cr,
+		Env:           e,
 		Config:        cfg,
-		TestFlags:     tf,
 		Stores:        r,
 		Pool:          s.Pool,
 		CWClient:      cw,
@@ -129,7 +116,7 @@ func NewApp(ctx context.Context, migVersion int64, level *slog.LevelVar, logBuf 
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
 			Config:    cfgSvc,
 			User:      user.New(r.APIUser, r.APIKey),
-			Hooks:     webhooks.New(cw, cr.RootURL),
+			Hooks:     webhooks.New(cw, e.RootURL),
 			CW:        cws,
 			Webex:     ws,
 			Sync:      syncsvc.New(s.Pool, cws, ws, tb),

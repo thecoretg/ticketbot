@@ -102,7 +102,7 @@ func (h *BufferHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *BufferHandler) Handle(ctx context.Context, rec slog.Record) error {
-	// always forward to the underlying handler (stdout/cloudwatch)
+	// always forward to the underlying handler (stdout)
 	if err := h.inner.Handle(ctx, rec); err != nil {
 		return err
 	}
@@ -213,4 +213,23 @@ func attrsToAny(attrs []slog.Attr) []any {
 		out[i] = a
 	}
 	return out
+}
+
+// addAttrToMap flattens a slog.Attr into m. Groups become nested maps and errors are stored as
+// their message so the entry survives JSON encoding.
+func addAttrToMap(m map[string]any, attr slog.Attr) {
+	if attr.Value.Kind() == slog.KindGroup {
+		groupMap := make(map[string]any)
+		for _, groupAttr := range attr.Value.Group() {
+			addAttrToMap(groupMap, groupAttr)
+		}
+		m[attr.Key] = groupMap
+		return
+	}
+	val := attr.Value.Any()
+	if err, ok := val.(error); ok {
+		m[attr.Key] = err.Error()
+		return
+	}
+	m[attr.Key] = val
 }

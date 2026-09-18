@@ -23,6 +23,8 @@ services:
     build:
       context: ..
       dockerfile: docker/DockerfileMain
+      args:
+        VERSION: ${VERSION:-dev}
     container_name: ticketbot
     depends_on:
       db:
