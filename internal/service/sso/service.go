@@ -70,13 +70,23 @@ func New(ctx context.Context, p Params) (*Service, error) {
 		mappings:    p.Mappings,
 		cfg:         p.Cfg,
 		entra:       p.Entra,
-		rootURL:     strings.TrimRight(p.RootURL, "/"),
+		rootURL:     BaseURL(p.RootURL),
 		byEntraRole: map[string]models.Role{},
 	}
 	if err := s.Reload(ctx); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// BaseURL turns ROOT_URL into the origin entra needs: no trailing slash, and https assumed when
+// the scheme was left off (ROOT_URL is often written as a bare host for ConnectWise callbacks).
+func BaseURL(rootURL string) string {
+	u := strings.TrimRight(strings.TrimSpace(rootURL), "/")
+	if u != "" && !strings.Contains(u, "://") {
+		u = "https://" + u
+	}
+	return u
 }
 
 // SetAuth hands the service the entra.Auth built around it.

@@ -62,11 +62,11 @@ function renderListIndex(lists) {
 
     setContent(pageHead('Lists',
         'Named sets of ConnectWise contacts or companies. A rule condition can ask whether a ticket’s contact or company is in one.',
-        `<button class="btn btn-primary" onclick="showListModal()">${icon('plus')}New list</button>`) +
+        editOnly(`<button class="btn btn-primary" onclick="showListModal()">${icon('plus')}New list</button>`)) +
     tableCard(thead, rows, {
         empty: emptyState('No lists yet',
             'Create a list of contacts or companies, then reference it from a rule condition.',
-            `<button class="btn btn-primary btn-sm" onclick="showListModal()">${icon('plus')}New list</button>`, 'blocks'),
+            editOnly(`<button class="btn btn-primary btn-sm" onclick="showListModal()">${icon('plus')}New list</button>`), 'blocks'),
         foot: `<span>${lists.length} list${lists.length === 1 ? '' : 's'}</span>`,
     }))
 }

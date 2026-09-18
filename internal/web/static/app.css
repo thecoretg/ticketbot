@@ -51,3 +51,16 @@
 /* A code block that wraps instead of scrolling: compiled conditions and simulated messages
    are read in full, not scanned horizontally. */
 .code.prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* "or" divider between "Sign in with Microsoft" and the password form on the login card. navi
+   has no divider component; this is a hairline either side of a muted eyebrow word. */
+.auth-or {
+    display: flex; align-items: center; gap: var(--s3);
+    color: var(--muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em;
+}
+.auth-or::before, .auth-or::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
+
+/* Numbered setup steps on the SSO page. navi resets list markers globally; these are read in
+   order, so the numbers matter. */
+.steps { list-style: decimal; padding-left: var(--s6); }
+.steps li::marker { color: var(--muted); }

@@ -199,3 +199,17 @@ func TestRedirectURIWithoutAuth(t *testing.T) {
 		t.Fatalf("TestConnection without auth: %v", err)
 	}
 }
+
+func TestBaseURL(t *testing.T) {
+	cases := map[string]string{
+		"https://tb.example.com/": "https://tb.example.com",
+		"tb.example.com":          "https://tb.example.com",
+		" http://localhost:8080 ": "http://localhost:8080",
+		"":                        "",
+	}
+	for in, want := range cases {
+		if got := BaseURL(in); got != want {
+			t.Errorf("BaseURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

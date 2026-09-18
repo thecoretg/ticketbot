@@ -28,17 +28,21 @@
         </div>
         <div>
             <h1>Sign in</h1>
-            <p>Enter your credentials to continue</p>
+            <p id="login-sub">Enter your credentials to continue</p>
         </div>
-        <div class="field">
-            <label for="login-email">Email</label>
-            <input id="login-email" class="input" type="email" placeholder="you@example.com" autocomplete="email">
+        <a id="sso-btn" class="btn btn-default btn-lg hidden" href="/auth/sso/start">Sign in with Microsoft</a>
+        <div id="login-or" class="auth-or hidden" aria-hidden="true">or</div>
+        <div id="login-password-form" class="stack gap5">
+            <div class="field">
+                <label for="login-email">Email</label>
+                <input id="login-email" class="input" type="email" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="field">
+                <label for="login-password">Password</label>
+                <input id="login-password" class="input" type="password" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <button id="login-btn" class="btn btn-primary btn-lg" onclick="login()">Continue</button>
         </div>
-        <div class="field">
-            <label for="login-password">Password</label>
-            <input id="login-password" class="input" type="password" placeholder="••••••••" autocomplete="current-password">
-        </div>
-        <button id="login-btn" class="btn btn-primary btn-lg" onclick="login()">Continue</button>
         <div id="login-err" class="callout bad hidden" role="alert"></div>
     </div>
 </div>

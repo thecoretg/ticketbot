@@ -62,12 +62,12 @@ function renderWorkflowList(list) {
 
     setContent(pageHead('Workflows',
         'One workflow per board. Its rules run top to bottom for every new or updated ticket.',
-        `<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`) +
+        editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
     banner +
     tableCard(thead, rows, {
         empty: emptyState('No workflows yet',
             'Create a workflow for a board and ticketbot will start acting on its tickets.',
-            `<button class="btn btn-primary btn-sm" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`, 'bolt'),
+            editOnly(`<button class="btn btn-primary btn-sm" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`), 'bolt'),
         foot: `<span>${list.length} workflow${list.length === 1 ? '' : 's'}</span>`,
     }))
 }
@@ -208,7 +208,7 @@ function renderWorkflowEditor() {
             <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
                 <span class="dirty-dot"></span><span class="cell-sub">Unsaved changes</span>
             </span>
-            <button id="wf-save" class="btn ${dirty ? 'btn-primary' : 'btn-default'}" onclick="saveWorkflow()" ${dirty ? '' : 'disabled'}>Save</button>
+            ${editOnly(`<button id="wf-save" class="btn ${dirty ? 'btn-primary' : 'btn-default'}" onclick="saveWorkflow()" ${dirty ? '' : 'disabled'}>Save</button>`)}
         </div>
     </header>
     ${appConfig?.master_dry_run

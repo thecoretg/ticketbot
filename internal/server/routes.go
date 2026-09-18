@@ -89,7 +89,8 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("DELETE /users/keys/{id}", uh.DeleteAPIKey, auth, admin)
 
 	ch := handlers.NewConfigHandler(a.Svc.Config)
-	rt.handle("GET /config", ch.Get, auth, admin)
+	// Every signed-in user reads config: the shell needs require_totp and master_dry_run.
+	rt.handle("GET /config", ch.Get, auth)
 	rt.handle("PUT /config", ch.Update, auth, admin)
 
 	cwh := handlers.NewCWHandler(a.Svc.CW)

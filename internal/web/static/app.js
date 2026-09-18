@@ -55,13 +55,21 @@ const NAV = [
         { tab: 'keys',   name: 'Keys',   icon: 'key' },
         { tab: 'sync',   name: 'Sync',   icon: 'globe' },
         { tab: 'config', name: 'Config', icon: 'cog' },
+        { tab: 'sso',    name: 'Single sign-on', icon: 'shield' },
         { tab: 'logs',   name: 'Logs',   icon: 'book' },
-    ]},
+    ], admin: true },
 ]
 const NAV_ITEMS = NAV.flatMap(g => g.items)
+const ADMIN_TABS = new Set(NAV.filter(g => g.admin).flatMap(g => g.items.map(i => i.tab)))
+
+// Roles. The server enforces these on every route; the UI only hides what would fail.
+function isAdmin() { return currentUser?.role === 'admin' }
+function canEdit() { return currentUser?.role === 'admin' || currentUser?.role === 'editor' }
+// editOnly drops markup for controls a viewer cannot use.
+function editOnly(html) { return canEdit() ? html : '' }
 
 function buildNav() {
-    document.getElementById('nav').innerHTML = NAV.map(g => `
+    document.getElementById('nav').innerHTML = NAV.filter(g => !g.admin || isAdmin()).map(g => `
         <div class="nav-group">
             <div class="nav-label eyebrow">${g.label}</div>
             ${g.items.map(i => `<button class="nav-item" data-tab="${i.tab}" onclick="switchTab('${i.tab}')">
@@ -130,6 +138,7 @@ let currentHash       = ''
 let appConfig         = null   // last-loaded /config, shared across pages
 let tabGuard          = null   // page-installed veto for navigation (unsaved changes)
 let currentUser       = null
+let authMethods       = { sso: false, password: true }  // last-loaded /auth/methods
 let pendingToken      = null   // pending TOTP token after password login
 let totpEnabled       = false  // cached TOTP status for account menu
 let totpSetupRequired = false  // true when server enforces TOTP and user hasn't set it up
@@ -209,8 +218,7 @@ function sessionExpired() {
     totpSetupRequired = false
     closeModal()
     document.getElementById('app').classList.add('hidden')
-    document.getElementById('login').classList.remove('hidden')
-    showLoginErr('Your session expired. Sign in again to continue.')
+    showLogin().then(() => showLoginErr('Your session expired. Sign in again to continue.'))
     setTimeout(() => { sessionExpiredShown = false }, 2000)
 }
 
@@ -246,7 +254,8 @@ async function login() {
             if (res?.totp_setup_required && !prompted) showTOTPSetupModal(true)
         }
     } catch (e) {
-        // 401 is a bad password; anything else (server down, 500) deserves its real message
+        // 401 is a bad password; anything else (server down, 500, password sign-in off) deserves
+        // its real message
         showLoginErr(e.status === 401 || e.status === 400 ? 'Invalid email or password' : (e.message || 'Login failed'))
     } finally {
         btn.disabled    = false
@@ -260,6 +269,37 @@ function showLoginErr(msg) {
     el.classList.remove('hidden')
 }
 
+// loadAuthMethods asks the server which sign-in options to offer and shapes the login card:
+// a Microsoft button, the password form, or both with a divider between them.
+async function loadAuthMethods() {
+    try { authMethods = await api('GET', '/auth/methods') } catch { authMethods = { sso: false, password: true } }
+    const { sso, password } = authMethods
+    document.getElementById('sso-btn').classList.toggle('hidden', !sso)
+    document.getElementById('login-or').classList.toggle('hidden', !(sso && password))
+    document.getElementById('login-password-form').classList.toggle('hidden', !password)
+    document.getElementById('login-sub').textContent = sso && !password
+        ? 'Use your Microsoft account to continue'
+        : 'Enter your credentials to continue'
+}
+
+// showLogin reveals the login card with the right sign-in options.
+async function showLogin() {
+    await loadAuthMethods()
+    document.getElementById('login').classList.remove('hidden')
+}
+
+// A failed Microsoft sign-in lands on /panel/?err=<message>. Show it once, then drop it from
+// the address bar so a refresh does not repeat it.
+function consumeSSOError() {
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get('err')
+    if (!err) return
+    showLoginErr(err)
+    params.delete('err')
+    const qs = params.toString()
+    history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash)
+}
+
 async function logout() {
     try { await api('POST', '/auth/logout') } catch {}
     currentUser  = null
@@ -271,10 +311,10 @@ async function logout() {
     document.getElementById('login-password').value = ''
     document.getElementById('login-err').classList.add('hidden')
     closeMenu()
-    document.getElementById('login').classList.remove('hidden')
     document.getElementById('app').classList.add('hidden')
     document.getElementById('password-reset').classList.add('hidden')
     document.getElementById('totp-verify').classList.add('hidden')
+    showLogin()
 }
 
 function showTOTPVerify() {
@@ -390,9 +430,11 @@ async function showApp() {
         totpEnabled = totp.enabled
         appConfig   = cfg
         requireTOTP = cfg.require_totp
+        buildNav()
         document.getElementById('header-email').textContent    = currentUser.email_address
         document.getElementById('header-initials').textContent = emailInitials(currentUser.email_address)
-        if (requireTOTP && !totpEnabled) {
+        // Microsoft accounts have no local password or TOTP; Entra handles their MFA.
+        if (requireTOTP && !totpEnabled && !currentUser.sso) {
             await showTOTPSetupModal(true)
             return true
         }
@@ -417,13 +459,15 @@ function totpMenuLabel() {
 
 function toggleAccountMenu(e) {
     e.stopPropagation()
-    toggleMenu(e.currentTarget, [
-        { label: 'Change password', icon: 'key',    run: showChangePasswordModal },
-        { label: totpMenuLabel(),   icon: 'shield', run: handleTOTPMenuClick },
-        '-',
-        { label: 'Restart server', icon: 'bolt',   danger: true, run: confirmRestart },
-        { label: 'Log out',        icon: 'logout', danger: true, run: logout },
-    ])
+    const items = []
+    if (!currentUser?.sso) {
+        items.push({ label: 'Change password', icon: 'key',    run: showChangePasswordModal })
+        items.push({ label: totpMenuLabel(),   icon: 'shield', run: handleTOTPMenuClick })
+        items.push('-')
+    }
+    if (isAdmin()) items.push({ label: 'Restart server', icon: 'bolt', danger: true, run: confirmRestart })
+    items.push({ label: 'Log out', icon: 'logout', danger: true, run: logout })
+    toggleMenu(e.currentTarget, items)
 }
 
 function showChangePasswordModal() {
@@ -612,8 +656,9 @@ function showRestartBanner() {
 function checkSavedKey() {
     api('GET', '/authtest')
         .then(showApp)
-        .catch(() => {
-            document.getElementById('login').classList.remove('hidden')
+        .catch(async () => {
+            await showLogin()
+            consumeSSOError()
         })
 }
 
@@ -626,13 +671,16 @@ const tabLoaders = {
     keys:     loadKeys,
     sync:     loadSync,
     config:   loadConfig,
+    sso:      loadSSO,
     logs:     loadLogs,
 }
 
-// hash is "tab" or "tab/sub" (e.g. tickets/123)
+// hash is "tab" or "tab/sub" (e.g. tickets/123). Admin-only tabs fall back to workflows for
+// everyone else, so a stale bookmark does not open a page that can only 403.
 function parseHash() {
     const [tab, ...rest] = window.location.hash.replace(/^#/, '').split('/')
-    return { tab: tabLoaders[tab] ? tab : 'workflows', sub: rest.join('/') || null }
+    const known = tabLoaders[tab] && (!ADMIN_TABS.has(tab) || isAdmin())
+    return { tab: known ? tab : 'workflows', sub: rest.join('/') || null }
 }
 
 function switchTab(tab, sub = null) {
@@ -972,7 +1020,7 @@ function tableCard(thead, rows, opts = {}) {
 
 // deleteButton is the destructive action in a table row: a word, not a colour.
 function deleteButton(onclick, label = 'Delete') {
-    return `<button class="btn btn-ghost btn-sm" onclick="${onclick}">${icon('trash')}${esc(label)}</button>`
+    return editOnly(`<button class="btn btn-ghost btn-sm" onclick="${onclick}">${icon('trash')}${esc(label)}</button>`)
 }
 
 // checkbox is navi's styled checkbox; the box element carries the tick.
@@ -1016,7 +1064,7 @@ function renderForwards(fwds) {
     const head = pageHead(
         'Notification forwards',
         'Send another person\u2019s ticket notifications to a room or teammate for a period of time.',
-        `<button class="btn btn-primary" onclick="showForwardModal()">${icon('plus')}New forward</button>`)
+        editOnly(`<button class="btn btn-primary" onclick="showForwardModal()">${icon('plus')}New forward</button>`))
 
     const thead = `<th>Source</th><th>Destination</th><th>Dates</th><th class="c">Enabled</th>
         <th class="c">Keeps copy</th><th class="c">Sole only</th><th class="c">Public only</th><th class="r">Actions</th>`
@@ -1037,7 +1085,7 @@ function renderForwards(fwds) {
     setContent(head + tableCard(thead, rows, {
         empty: emptyState('No forwards yet',
             'A forward re-routes one person\u2019s ticket notifications to someone else while they are away.',
-            `<button class="btn btn-primary btn-sm" onclick="showForwardModal()">${icon('plus')}New forward</button>`, 'mail'),
+            editOnly(`<button class="btn btn-primary btn-sm" onclick="showForwardModal()">${icon('plus')}New forward</button>`), 'mail'),
         foot: `<span>${fwds.length} forward${fwds.length === 1 ? '' : 's'}</span>`,
     }))
 }
@@ -1182,7 +1230,7 @@ function renderUsers(users) {
     const head = pageHead('Users', 'People who can sign in to this console.',
         `<button class="btn btn-primary" onclick="showNewUserModal()">${icon('plus')}New user</button>`)
 
-    const thead = '<th class="r">ID</th><th>Email</th><th>Created</th><th class="r">Actions</th>'
+    const thead = '<th class="r">ID</th><th>Email</th><th>Role</th><th>Created</th><th class="r">Actions</th>'
     const rows  = users.map(u => `<tr>
         <td class="r num muted">${u.id}</td>
         <td>
@@ -1194,6 +1242,7 @@ function renderUsers(users) {
                 </div>
             </div>
         </td>
+        <td>${roleCell(u)}</td>
         <td class="muted nowrap">${fmtDateTime(u.created_on)}</td>
         <td class="r nowrap">${u.id === currentUser?.id
             ? '<span class="badge outline">You</span>'
@@ -1207,12 +1256,47 @@ function renderUsers(users) {
     }))
 }
 
+const ROLES = [
+    { value: 'viewer', label: 'Viewer', desc: 'Read workflows, tickets, forwards and lists' },
+    { value: 'editor', label: 'Editor', desc: 'Also create and change workflows, forwards and lists' },
+    { value: 'admin',  label: 'Admin',  desc: 'Also manage users, keys, config, sync and SSO' },
+]
+
+function roleOptions(selected) {
+    return ROLES.map(r => `<option value="${r.value}" ${r.value === selected ? 'selected' : ''}>${r.label}</option>`).join('')
+}
+
+// roleCell is the role control in a user row. Your own role and Entra-managed roles are shown,
+// not edited: the server refuses both.
+function roleCell(u) {
+    const name = ROLES.find(r => r.value === u.role)?.label || esc(u.role || '—')
+    if (u.sso) return `<div class="row gap2 wrap"><span class="badge">${name}</span><span class="badge info" data-tip="Role comes from an Entra app role on every sign-in"><i class="dot"></i>Entra</span></div>`
+    if (u.id === currentUser?.id) return `<span class="badge">${name}</span>`
+    return `<select class="select" aria-label="Role for ${esc(u.email_address)}" onchange="setUserRole(${u.id}, this.value, this)">${roleOptions(u.role)}</select>`
+}
+
+async function setUserRole(id, role, el) {
+    el.disabled = true
+    try {
+        await api('PUT', `/users/${id}/role`, { role })
+        toast('Role updated', 'success')
+    } catch (e) {
+        toast(e.message, 'error')
+        loadUsers()
+    } finally { el.disabled = false }
+}
+
 function showNewUserModal() {
     openModal('New user', `
         <div class="stack gap4">
             <div class="field">
                 <label for="f-email">Email address</label>
                 <input class="input" type="email" id="f-email" placeholder="user@example.com">
+            </div>
+            <div class="field">
+                <label for="f-role">Role</label>
+                <select class="select" id="f-role">${roleOptions('viewer')}</select>
+                <span class="hint" id="f-role-hint">${ROLES[0].desc}</span>
             </div>
             <div class="field">
                 <label for="f-temp-password">Temporary password</label>
@@ -1222,14 +1306,18 @@ function showNewUserModal() {
         </div>`, async () => {
         const email    = document.getElementById('f-email').value.trim()
         const password = document.getElementById('f-temp-password').value
+        const role     = document.getElementById('f-role').value
         if (!email)     { toast('Email is required', 'error'); return }
         if (!password)  { toast('Temporary password is required', 'error'); return }
         try {
-            await api('POST', '/users', { email_address: email, password })
+            await api('POST', '/users', { email_address: email, password, role })
             closeModal()
             toast('User created — they must change their password on first login', 'success')
             loadUsers()
         } catch (e) { toast(e.message, 'error') }
+    })
+    document.getElementById('f-role').addEventListener('change', e => {
+        document.getElementById('f-role-hint').textContent = ROLES.find(r => r.value === e.target.value)?.desc || ''
     })
 }
 
@@ -1437,6 +1525,145 @@ function stopSyncPoll() {
 // ─────────────────────────────────────────────────────────
 // Config
 // ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+// Single sign-on (Microsoft Entra)
+// ─────────────────────────────────────────────────────────
+async function loadSSO() {
+    try {
+        const st = await api('GET', '/sso')
+        renderSSO(st)
+    } catch (e) {
+        setContent(errorState(e.message))
+    }
+}
+
+function renderSSO(st) {
+    const row = (title, desc, control) => `<div class="form-row">
+        <div><h4>${title}</h4><p class="desc">${desc}</p></div>
+        <div class="row gap3 wrap">${control}</div>
+    </div>`
+
+    const configured = st.configured
+        ? badgeTag('Configured', 'ok')
+        : badgeTag('Not configured', 'warn')
+
+    const mappingRows = (st.mappings || []).map(m => `<tr>
+        <td><code class="code inline">${esc(m.entra_role)}</code></td>
+        <td><select class="select" aria-label="Ticketbot role for ${esc(m.entra_role)}" onchange="ssoSaveMapping(${JSON.stringify(m.entra_role)}, this.value, this)">${roleOptions(m.role)}</select></td>
+        <td class="r nowrap">${deleteButton(`ssoDeleteMapping(${m.id})`, 'Remove')}</td>
+    </tr>`)
+
+    setContent(pageHead('Single sign-on', 'Let people sign in with their Microsoft account and take their role from Entra.') +
+    `<div class="stack gap5">
+        <div class="card card-pad">
+            ${row('Credentials',
+                'Tenant, client ID and client secret come from the ENTRA_* variables in .env and need a restart to change.',
+                `<div class="stack gap2">
+                    ${configured}
+                    ${st.configured ? `<span class="muted" style="font-size:var(--text-xs)">Tenant <code class="code inline">${esc(st.tenant_id)}</code> · Client <code class="code inline">${esc(st.client_id)}</code></span>` : ''}
+                </div>`)}
+            ${row('Redirect URI',
+                'Register this exact value under Authentication → Web on the app registration.',
+                `<div class="row gap2 wrap"><code class="code inline" id="sso-redirect">${esc(st.redirect_uri)}</code>
+                    <button class="btn btn-ghost btn-sm" onclick="copyText(document.getElementById('sso-redirect').textContent, 'Copied')">${icon('copy')}Copy</button></div>`)}
+            ${row('Connection',
+                'Runs discovery and checks Microsoft accepts the client secret. It cannot check the redirect URI or role assignments; only a real sign-in does.',
+                `<div class="stack gap2">
+                    <div><button class="btn btn-default" onclick="ssoTest()" ${st.configured ? '' : 'disabled'}>${icon('play')}Test connection</button></div>
+                    <div id="sso-test-result"></div>
+                </div>`)}
+            ${row('Enabled',
+                'Show “Sign in with Microsoft” on the login card. Requires credentials.',
+                toggle(`id="sso-enabled" onchange="ssoSaveToggles()" ${st.configured ? '' : 'disabled'}`, st.enabled, { tip: 'SSO enabled' }))}
+            ${row('Password sign-in',
+                'Allow email and password sign-in alongside Microsoft. Can only be turned off while SSO is on. The INITIAL_ADMIN_EMAIL account can always use a password as a fallback.',
+                toggle(`id="sso-password-login" onchange="ssoSaveToggles()"`, st.password_login_enabled, { tip: 'Password sign-in' }))}
+        </div>
+
+        <div class="section-head"><div><h3>Role mappings</h3><p class="muted">Entra app role value → ticketbot role. A person gets the highest role any of their app roles maps to; with no match, sign-in is refused.</p></div></div>
+        ${tableCard('<th>Entra app role</th><th>Ticketbot role</th><th class="r">Actions</th>', mappingRows, {
+            toolbar: `<div class="row gap2 wrap grow">
+                <input class="input" id="sso-new-role" placeholder="e.g. TicketBot.Admin" aria-label="Entra app role value" style="max-width:260px">
+                <select class="select" id="sso-new-map" aria-label="Ticketbot role" style="max-width:160px">${roleOptions('viewer')}</select>
+                <button class="btn btn-default" onclick="ssoAddMapping()">${icon('plus')}Add mapping</button>
+            </div>`,
+            empty: emptyState('No role mappings', 'Nobody can sign in with Microsoft until at least one Entra app role maps to a ticketbot role.', '', 'shield'),
+        })}
+
+        <div class="card card-pad stack gap4">
+            <div><h3>Setup</h3><p class="muted">Five steps in the Entra admin centre.</p></div>
+            <ol class="steps stack gap2">
+                <li><b>Register the app.</b> App registrations → New registration, single tenant. Authentication → Add a platform → <b>Web</b>, redirect URI as shown above.</li>
+                <li><b>Copy the IDs and a secret.</b> Overview gives the Directory (tenant) ID and Application (client) ID; Certificates &amp; secrets → New client secret. Put all three in <code class="code inline">.env</code> as <code class="code inline">ENTRA_TENANT_ID</code>, <code class="code inline">ENTRA_CLIENT_ID</code>, <code class="code inline">ENTRA_CLIENT_SECRET</code> and restart.</li>
+                <li><b>Create app roles.</b> App roles → Create app role, one per ticketbot role you need, allowed member type Users/Groups. The <em>value</em> is what you map below.</li>
+                <li><b>Assign people.</b> Enterprise applications → this app → Users and groups → add users or groups to those roles.</li>
+                <li><b>Map and enable.</b> Add the mappings above, run Test connection, then turn Enabled on.</li>
+            </ol>
+            <div class="callout warn">${icon('alert')}<div class="body"><b>Client secrets expire</b>When the secret lapses every Microsoft sign-in fails until a new one is set in .env.</div></div>
+        </div>
+    </div>`)
+}
+
+async function ssoTest() {
+    const out = document.getElementById('sso-test-result')
+    out.innerHTML = '<span class="muted">Testing…</span>'
+    try {
+        const res = await api('POST', '/sso/test')
+        out.innerHTML = res.ok
+            ? `<div class="callout ok">${icon('check')}<div class="body"><b>Connected</b>Microsoft accepted the client secret.</div></div>`
+            : `<div class="callout bad">${icon('alert')}<div class="body"><b>Connection failed</b>${esc(res.error)}</div></div>`
+    } catch (e) {
+        out.innerHTML = `<div class="callout bad">${icon('alert')}<div class="body"><b>Connection failed</b>${esc(e.message)}</div></div>`
+    }
+}
+
+async function ssoSaveToggles() {
+    const enabled  = document.getElementById('sso-enabled').checked
+    const password = document.getElementById('sso-password-login').checked
+    try {
+        const res = await api('PUT', '/config', { sso_enabled: enabled, password_login_enabled: password })
+        if (res) appConfig = res
+        toast('Sign-in settings saved', 'success')
+    } catch (e) {
+        toast(e.message, 'error')
+        loadSSO()
+    }
+}
+
+async function ssoSaveMapping(entraRole, role, el) {
+    if (el) el.disabled = true
+    try {
+        await api('PUT', '/sso/mappings', { entra_role: entraRole, role })
+        toast('Mapping saved', 'success')
+        if (!el) loadSSO()
+    } catch (e) {
+        toast(e.message, 'error')
+        loadSSO()
+    } finally { if (el) el.disabled = false }
+}
+
+function ssoAddMapping() {
+    const entraRole = document.getElementById('sso-new-role').value.trim()
+    const role      = document.getElementById('sso-new-map').value
+    if (!entraRole) { toast('Enter the Entra app role value', 'error'); return }
+    ssoSaveMapping(entraRole, role, null)
+}
+
+function ssoDeleteMapping(id) {
+    confirmModal({
+        title: 'Remove this mapping?',
+        body: '<b>People holding only this app role lose access</b>Their next Microsoft sign-in is refused. Existing sessions run until they expire.',
+        confirmLabel: 'Remove mapping',
+        onConfirm: async () => {
+            try {
+                await api('DELETE', `/sso/mappings/${id}`)
+                toast('Mapping removed', 'success')
+                loadSSO()
+            } catch (e) { toast(e.message, 'error') }
+        },
+    })
+}
+
 async function loadConfig() {
     try {
         const cfg = await api('GET', '/config')
