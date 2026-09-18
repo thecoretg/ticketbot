@@ -4,6 +4,8 @@ package middleware
 import (
 	"context"
 	"net/http"
+
+	"github.com/thecoretg/ticketbot/models"
 )
 
 // Middleware wraps a handler.
@@ -19,16 +21,24 @@ func Chain(h http.Handler, mws ...Middleware) http.Handler {
 
 type ctxKey int
 
-const userIDKey ctxKey = iota
+const userKey ctxKey = iota
 
-func withUserID(ctx context.Context, id int) context.Context {
-	return context.WithValue(ctx, userIDKey, id)
+func withUser(ctx context.Context, u *models.APIUser) context.Context {
+	return context.WithValue(ctx, userKey, u)
 }
 
-// UserID returns the authenticated user's ID set by the auth middleware, or 0 when unauthenticated.
+// User returns the authenticated user set by the auth middleware, or nil when unauthenticated.
+func User(ctx context.Context) *models.APIUser {
+	u, _ := ctx.Value(userKey).(*models.APIUser)
+	return u
+}
+
+// UserID returns the authenticated user's ID, or 0 when unauthenticated.
 func UserID(ctx context.Context) int {
-	id, _ := ctx.Value(userIDKey).(int)
-	return id
+	if u := User(ctx); u != nil {
+		return u.ID
+	}
+	return 0
 }
 
 func writeError(w http.ResponseWriter, code int, msg string) {

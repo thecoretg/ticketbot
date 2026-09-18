@@ -25,6 +25,8 @@ func TestNewHandlerRoutes(t *testing.T) {
 		{http.MethodGet, "/workflows/fields", http.StatusUnauthorized},
 		{http.MethodGet, "/workflows/12", http.StatusUnauthorized},
 		{http.MethodDelete, "/lists/1/items/2", http.StatusUnauthorized},
+		{http.MethodPut, "/users/3/role", http.StatusUnauthorized},
+		{http.MethodPut, "/config", http.StatusUnauthorized},
 		{http.MethodGet, "/nope", http.StatusNotFound},
 		{http.MethodGet, "/panel/", http.StatusOK},
 	}

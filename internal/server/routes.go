@@ -7,6 +7,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/handlers"
 	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/web"
+	"github.com/thecoretg/ticketbot/models"
 )
 
 // router registers routes on a ServeMux, wrapping each in the given middleware.
@@ -21,7 +22,12 @@ func (rt *router) handle(pattern string, h http.HandlerFunc, mws ...middleware.M
 // NewHandler builds the application's HTTP routes. shutdown is invoked by the admin restart route.
 func NewHandler(a *App, shutdown func()) http.Handler {
 	rt := &router{mux: http.NewServeMux()}
-	auth := middleware.CombinedAuth(a.Stores.APIKey, a.Svc.Auth)
+	// Every protected route runs auth; editor and admin add a role floor on top. Viewers get
+	// every GET plus the pure workflow-condition helpers, editors mutate automation, admins run
+	// the instance.
+	auth := middleware.CombinedAuth(a.Stores.APIKey, a.Stores.APIUser, a.Svc.Auth, a.ssoAuth(), a.ssoUser)
+	editor := middleware.RequireRole(models.RoleEditor)
+	admin := middleware.RequireRole(models.RoleAdmin)
 
 	panelFS, _ := fs.Sub(web.StaticFiles, "static")
 	rt.mux.Handle("GET /panel/", http.StripPrefix("/panel", http.FileServerFS(panelFS)))
@@ -42,23 +48,24 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("DELETE /auth/totp", th.HandleDisable, auth)
 
 	sh := handlers.NewSyncHandler(a.Svc.Sync, a.Config)
-	rt.handle("POST /sync", sh.HandleSync, auth)
-	rt.handle("GET /sync/status", sh.HandleSyncStatus, auth)
+	rt.handle("POST /sync", sh.HandleSync, auth, admin)
+	rt.handle("GET /sync/status", sh.HandleSyncStatus, auth, admin)
 
 	uh := handlers.NewUserHandler(a.Svc.User)
-	rt.handle("GET /users", uh.ListUsers, auth)
+	rt.handle("GET /users", uh.ListUsers, auth, admin)
 	rt.handle("GET /users/me", uh.GetCurrentUser, auth)
-	rt.handle("GET /users/{id}", uh.GetUser, auth)
-	rt.handle("POST /users", uh.CreateUser, auth)
-	rt.handle("DELETE /users/{id}", uh.DeleteUser, auth)
-	rt.handle("GET /users/keys", uh.ListAPIKeys, auth)
-	rt.handle("GET /users/keys/{id}", uh.GetAPIKey, auth)
-	rt.handle("POST /users/keys", uh.AddAPIKey, auth)
-	rt.handle("DELETE /users/keys/{id}", uh.DeleteAPIKey, auth)
+	rt.handle("GET /users/{id}", uh.GetUser, auth, admin)
+	rt.handle("POST /users", uh.CreateUser, auth, admin)
+	rt.handle("DELETE /users/{id}", uh.DeleteUser, auth, admin)
+	rt.handle("PUT /users/{id}/role", uh.SetRole, auth, admin)
+	rt.handle("GET /users/keys", uh.ListAPIKeys, auth, admin)
+	rt.handle("GET /users/keys/{id}", uh.GetAPIKey, auth, admin)
+	rt.handle("POST /users/keys", uh.AddAPIKey, auth, admin)
+	rt.handle("DELETE /users/keys/{id}", uh.DeleteAPIKey, auth, admin)
 
 	ch := handlers.NewConfigHandler(a.Svc.Config)
-	rt.handle("GET /config", ch.Get, auth)
-	rt.handle("PUT /config", ch.Update, auth)
+	rt.handle("GET /config", ch.Get, auth, admin)
+	rt.handle("PUT /config", ch.Update, auth, admin)
 
 	cwh := handlers.NewCWHandler(a.Svc.CW)
 	rt.handle("GET /cw/boards", cwh.ListBoards, auth)
@@ -76,13 +83,13 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	nh := handlers.NewNotifierHandler(a.Svc.Notifier)
 	rt.handle("GET /notifiers/forwards", nh.ListForwards, auth)
 	rt.handle("GET /notifiers/forwards/{id}", nh.GetForward, auth)
-	rt.handle("POST /notifiers/forwards", nh.AddUserForward, auth)
-	rt.handle("PUT /notifiers/forwards/{id}", nh.UpdateUserForward, auth)
-	rt.handle("DELETE /notifiers/forwards/{id}", nh.DeleteUserForward, auth)
+	rt.handle("POST /notifiers/forwards", nh.AddUserForward, auth, editor)
+	rt.handle("PUT /notifiers/forwards/{id}", nh.UpdateUserForward, auth, editor)
+	rt.handle("DELETE /notifiers/forwards/{id}", nh.DeleteUserForward, auth, editor)
 
 	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW, a.Svc.Notifier, a.Svc.Lists)
 	rt.handle("GET /workflows", wfh.List, auth)
-	rt.handle("POST /workflows", wfh.Create, auth)
+	rt.handle("POST /workflows", wfh.Create, auth, editor)
 	rt.handle("GET /workflows/fields", wfh.Fields, auth)
 	rt.handle("GET /workflows/placeholders", wfh.Placeholders, auth)
 	rt.handle("POST /workflows/validate-condition", wfh.ValidateCondition, auth)
@@ -91,18 +98,18 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("GET /workflows/board/{id}", wfh.GetByBoard, auth)
 	rt.handle("GET /workflows/{id}", wfh.Get, auth)
 	rt.handle("POST /workflows/{id}/simulate", wfh.Simulate, auth)
-	rt.handle("PUT /workflows/{id}", wfh.Replace, auth)
-	rt.handle("DELETE /workflows/{id}", wfh.Delete, auth)
+	rt.handle("PUT /workflows/{id}", wfh.Replace, auth, editor)
+	rt.handle("DELETE /workflows/{id}", wfh.Delete, auth, editor)
 
 	lsh := handlers.NewListsHandler(a.Svc.Lists)
 	rt.handle("GET /lists", lsh.List, auth)
-	rt.handle("POST /lists", lsh.Create, auth)
+	rt.handle("POST /lists", lsh.Create, auth, editor)
 	rt.handle("GET /lists/types", lsh.Types, auth)
 	rt.handle("GET /lists/{id}", lsh.Get, auth)
-	rt.handle("PUT /lists/{id}", lsh.Update, auth)
-	rt.handle("DELETE /lists/{id}", lsh.Delete, auth)
-	rt.handle("POST /lists/{id}/items", lsh.AddItem, auth)
-	rt.handle("DELETE /lists/{id}/items/{item_id}", lsh.RemoveItem, auth)
+	rt.handle("PUT /lists/{id}", lsh.Update, auth, editor)
+	rt.handle("DELETE /lists/{id}", lsh.Delete, auth, editor)
+	rt.handle("POST /lists/{id}/items", lsh.AddItem, auth, editor)
+	rt.handle("DELETE /lists/{id}/items/{item_id}", lsh.RemoveItem, auth, editor)
 
 	tkh := handlers.NewTicketsHandler(a.Svc.CW)
 	rt.handle("GET /tickets", tkh.List, auth)
@@ -111,10 +118,10 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("GET /tickets/{id}/events", tkh.Events, auth)
 
 	lh := handlers.NewLogsHandler(a.LogBuffer)
-	rt.handle("GET /logs", lh.HandleList, auth)
+	rt.handle("GET /logs", lh.HandleList, auth, admin)
 
 	adminh := handlers.NewAdminHandler(shutdown)
-	rt.handle("POST /admin/restart", adminh.HandleRestart, auth)
+	rt.handle("POST /admin/restart", adminh.HandleRestart, auth, admin)
 
 	tb := handlers.NewTicketbotHandler(a.Svc.Ticketbot)
 	rt.handle("POST /hooks/cw/tickets", tb.ProcessTicket, middleware.RequireConnectwiseSignature())

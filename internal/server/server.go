@@ -7,8 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/tctg-go/connectwise/psa"
+	"github.com/thecoretg/tctg-go/entra"
 	"github.com/thecoretg/ticketbot/internal/env"
 	"github.com/thecoretg/ticketbot/internal/logging"
+	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
@@ -34,6 +36,22 @@ type App struct {
 	Svc                     *Services
 	CurrentMigrationVersion int64
 	LogBuffer               *logging.BufferHandler
+	// SSOAuth is nil when the ENTRA_* environment variables are not set.
+	SSOAuth *entra.Auth[*models.APIUser]
+}
+
+// ssoAuth hands the middleware the Entra auth, or a true nil when SSO is not configured. A typed
+// nil pointer must not become a non-nil interface.
+func (a *App) ssoAuth() middleware.SSOAuth {
+	if a.SSOAuth == nil {
+		return nil
+	}
+	return a.SSOAuth
+}
+
+// ssoUser reads the user entra.RequireAuth placed in the request context.
+func (a *App) ssoUser(ctx context.Context) (*models.APIUser, bool) {
+	return entra.UserFromContext[*models.APIUser](ctx)
 }
 
 type Services struct {
