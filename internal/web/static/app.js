@@ -677,7 +677,8 @@ const tabLoaders = {
 
 // Responses faster than this render straight into the view with no loading skeleton first.
 const SKELETON_DELAY_MS = 150
-let switchSeq = 0
+let switchSeq = 0   // increments per tab switch
+let renderSeq = 0   // increments per setContent, so a switch can tell whether its loader drew yet
 
 // hash is "tab" or "tab/sub" (e.g. tickets/123). Admin-only tabs fall back to workflows for
 // everyone else, so a stale bookmark does not open a page that can only 403.
@@ -709,10 +710,12 @@ function switchTab(tab, sub = null) {
     setCrumbs(tab, sub)
     // The skeleton only appears when the data is slow. A fast response renders the page once,
     // so the view's entry fade runs once and the height never jumps from skeleton to content.
-    // The token stops a late timer from painting a skeleton over a newer tab.
-    const token = ++switchSeq
+    // It is painted only if nothing has been rendered since this switch: a loader that draws its
+    // shell early and keeps fetching (tickets, list detail) must not have that shell replaced.
+    const token   = ++switchSeq
+    const painted = renderSeq
     const skeletonTimer = setTimeout(() => {
-        if (token === switchSeq) setContent(skeletonPage())
+        if (token === switchSeq && renderSeq === painted) setContent(skeletonPage())
     }, SKELETON_DELAY_MS)
     Promise.resolve(tabLoaders[tab](sub)).finally(() => clearTimeout(skeletonTimer))
 }
@@ -735,6 +738,7 @@ window.addEventListener('beforeunload', e => {
 })
 
 function setContent(html) {
+    renderSeq++
     document.getElementById('content').innerHTML = html
 }
 
