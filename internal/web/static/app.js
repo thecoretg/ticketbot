@@ -675,6 +675,10 @@ const tabLoaders = {
     logs:     loadLogs,
 }
 
+// Responses faster than this render straight into the view with no loading skeleton first.
+const SKELETON_DELAY_MS = 150
+let switchSeq = 0
+
 // hash is "tab" or "tab/sub" (e.g. tickets/123). Admin-only tabs fall back to workflows for
 // everyone else, so a stale bookmark does not open a page that can only 403.
 function parseHash() {
@@ -703,8 +707,14 @@ function switchTab(tab, sub = null) {
     })
     document.getElementById('app').classList.remove('nav-open')
     setCrumbs(tab, sub)
-    setContent(skeletonPage())
-    tabLoaders[tab](sub)
+    // The skeleton only appears when the data is slow. A fast response renders the page once,
+    // so the view's entry fade runs once and the height never jumps from skeleton to content.
+    // The token stops a late timer from painting a skeleton over a newer tab.
+    const token = ++switchSeq
+    const skeletonTimer = setTimeout(() => {
+        if (token === switchSeq) setContent(skeletonPage())
+    }, SKELETON_DELAY_MS)
+    Promise.resolve(tabLoaders[tab](sub)).finally(() => clearTimeout(skeletonTimer))
 }
 
 function routeFromHash() {

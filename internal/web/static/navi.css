@@ -45,6 +45,7 @@
 
   --ease: cubic-bezier(.32,.72,0,1);
   --dur: 180ms;
+  --dur-view: 140ms;   /* content swap — short enough to survive a re-render */
 
   /* ---- default palette: harbor ---- */
   --seed:      #0E6F80;
@@ -885,13 +886,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .animate-fade { animation: fade 400ms var(--ease) backwards; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
 
-/* view entry stagger */
-.view > * { animation: fade 420ms var(--ease) backwards; }
-.view > *:nth-child(1) { animation-delay: 0ms; }
-.view > *:nth-child(2) { animation-delay: 40ms; }
-.view > *:nth-child(3) { animation-delay: 80ms; }
-.view > *:nth-child(4) { animation-delay: 120ms; }
-.view > *:nth-child(5) { animation-delay: 160ms; }
+/* View entry: one short fade, no movement, no stagger.
+   Opacity only and deliberately brief, so an app that re-renders the view
+   (loading skeleton then data, a filter, a poll) restarts a fade the eye
+   barely registers instead of a half-finished slide. Nothing shifts position,
+   so a height change between renders never reads as a jolt. */
+.view > * { animation: view-in var(--dur-view) var(--ease) backwards; }
+@keyframes view-in { from { opacity: 0; } }
 
 /* ---------- 17. RESPONSIVE ---------- */
 .mobile-only { display: none; }
@@ -919,6 +920,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
   .tbl thead th { position: static; }
   .toasts { left: var(--s4); right: var(--s4); bottom: var(--s4); }
   .toast { max-width: none; }
+}
+
+/* .no-motion freezes entry animations — used for screenshots and visual diffs */
+.no-motion, .no-motion *, .no-motion *::before, .no-motion *::after {
+  animation: none !important; transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
