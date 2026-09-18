@@ -43,8 +43,15 @@ func TestNewHandlerRoutes(t *testing.T) {
 		}
 	}
 
-	// the old /panel/ address redirects to the root so bookmarks keep working
+	// dashboard assets must be revalidated on every load, or a CDN serves the previous build
 	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/app.js", nil))
+	if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("GET /app.js Cache-Control = %q, want no-cache", cc)
+	}
+
+	// the old /panel/ address redirects to the root so bookmarks keep working
+	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/panel/", nil))
 	if rec.Code/100 != 3 || rec.Header().Get("Location") != "/" {
 		t.Errorf("GET /panel/: got %d -> %q, want redirect to /", rec.Code, rec.Header().Get("Location"))

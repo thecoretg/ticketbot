@@ -20,6 +20,17 @@ func (rt *router) handle(pattern string, h http.HandlerFunc, mws ...middleware.M
 	rt.mux.Handle(pattern, middleware.Chain(h, mws...))
 }
 
+// noCache makes browsers and Cloudflare revalidate the dashboard's assets on every load. The files
+// are embedded in the binary and change with every deploy but keep the same names, so a plain
+// max-age would serve the previous build's CSS and JS for hours. Revalidation is cheap: the file
+// server answers If-Modified-Since with a 304 until the binary changes.
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // requireSSOEnabled hides the Microsoft sign-in endpoints while the admin has SSO switched off.
 func (a *App) requireSSOEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +55,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	// The dashboard lives at the root. ServeMux prefers the more specific API patterns, so this
 	// catch-all only sees paths no route claims. /panel/ stays as a redirect for old bookmarks.
 	panelFS, _ := fs.Sub(web.StaticFiles, "static")
-	rt.mux.Handle("GET /", http.FileServerFS(panelFS))
+	rt.mux.Handle("GET /", noCache(http.FileServerFS(panelFS)))
 	rt.mux.Handle("GET /panel/", http.RedirectHandler("/", http.StatusMovedPermanently))
 
 	rt.handle("GET /healthcheck", handlers.HandleHealthCheck) // authless ping for load balancer / container health checks
