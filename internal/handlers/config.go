@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -35,6 +36,11 @@ func (h *ConfigHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	cfg, err := h.Service.Update(r.Context(), p)
 	if err != nil {
+		var ve config.ValidationError
+		if errors.As(err, &ve) {
+			writeJSON(w, http.StatusBadRequest, M{"error": ve.Error()})
+			return
+		}
 		internalServerError(w, fmt.Errorf("updating config: %w", err))
 		return
 	}

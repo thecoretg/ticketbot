@@ -108,7 +108,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	}
 
 	ns := notifier.New(nr)
-	cfgSvc := config.New(r.Config, cfg, level, logBuf)
+	cfgSvc := config.New(r.Config, cfg, level, logBuf, e.Entra.Configured())
 	listSvc := lists.New(lists.Params{Lists: r.Lists, Companies: r.CW.Company, Contacts: r.CW.Contact, Workflows: r.Workflows})
 	engine := workflow.NewEngine(cw)
 	engine.Lists = listSvc
@@ -139,7 +139,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		LogBuffer:     logBuf,
 		SSOAuth:       ssoAuth,
 		Svc: &Services{
-			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
+			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg, e.InitialAdminEmail),
 			Config:    cfgSvc,
 			User:      user.New(r.APIUser, r.APIKey),
 			Hooks:     webhooks.New(cw, e.RootURL),

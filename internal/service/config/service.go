@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -10,22 +11,47 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
+var (
+	ErrSSONotConfigured      = errors.New("sso cannot be enabled until ENTRA_TENANT_ID, ENTRA_CLIENT_ID and ENTRA_CLIENT_SECRET are set")
+	ErrPasswordLoginNeedsSSO = errors.New("password sign-in can only be disabled while sso is enabled")
+)
+
+// ValidationError marks a rejected update the caller should report as a bad request.
+type ValidationError struct{ Err error }
+
+func (e ValidationError) Error() string { return e.Err.Error() }
+func (e ValidationError) Unwrap() error { return e.Err }
+
 type Service struct {
 	Config    repos.ConfigRepository
 	ConfigRef *models.Config
 	level     *slog.LevelVar
 	logBuf    *logging.BufferHandler
+	// ssoConfigured is whether the ENTRA_* environment variables are present.
+	ssoConfigured bool
 }
 
-func New(c repos.ConfigRepository, cfg *models.Config, level *slog.LevelVar, logBuf *logging.BufferHandler) *Service {
+func New(c repos.ConfigRepository, cfg *models.Config, level *slog.LevelVar, logBuf *logging.BufferHandler, ssoConfigured bool) *Service {
 	s := &Service{
-		Config:    c,
-		ConfigRef: cfg,
-		level:     level,
-		logBuf:    logBuf,
+		Config:        c,
+		ConfigRef:     cfg,
+		level:         level,
+		logBuf:        logBuf,
+		ssoConfigured: ssoConfigured,
 	}
 	s.applyChanges(cfg)
 	return s
+}
+
+// validate rejects toggle combinations that would lock everyone out.
+func (s *Service) validate(c *models.Config) error {
+	if c.SSOEnabled && !s.ssoConfigured {
+		return ValidationError{ErrSSONotConfigured}
+	}
+	if !c.PasswordLoginEnabled && !c.SSOEnabled {
+		return ValidationError{ErrPasswordLoginNeedsSSO}
+	}
+	return nil
 }
 
 func (s *Service) Get(ctx context.Context) (*models.Config, error) {
@@ -71,6 +97,10 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	}
 	if p.PasswordLoginEnabled != nil {
 		merged.PasswordLoginEnabled = *p.PasswordLoginEnabled
+	}
+
+	if err := s.validate(&merged); err != nil {
+		return nil, err
 	}
 
 	updated, err := s.Config.Upsert(ctx, &merged)

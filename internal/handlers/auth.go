@@ -38,6 +38,10 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnauthorized, M{"error": "invalid email or password"})
 			return
 		}
+		if errors.Is(err, authsvc.ErrPasswordLoginDisabled) {
+			writeJSON(w, http.StatusForbidden, M{"error": err.Error()})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, M{"error": "login failed"})
 		return
 	}

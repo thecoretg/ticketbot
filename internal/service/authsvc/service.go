@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 	"unicode"
 
@@ -26,6 +27,8 @@ var (
 	ErrNoPassword         = errors.New("user has no password set")
 	ErrWeakPassword       = errors.New("password must be at least 8 characters and include an uppercase letter, lowercase letter, and number")
 	ErrInvalidTOTPCode    = errors.New("invalid or expired TOTP code")
+	// ErrPasswordLoginDisabled means the admin turned password sign-in off in favour of SSO.
+	ErrPasswordLoginDisabled = errors.New("password sign-in is disabled; use Sign in with Microsoft")
 )
 
 // LoginResult is returned by Login. When TOTPRequired is true the caller must
@@ -69,16 +72,29 @@ type Service struct {
 	totpPending  repos.TOTPPendingRepository
 	totpRecovery repos.TOTPRecoveryRepository
 	cfg          *models.Config
+	// breakGlassEmail is INITIAL_ADMIN_EMAIL, which may always sign in with a password so a
+	// broken app registration cannot lock everyone out.
+	breakGlassEmail string
 }
 
-func New(users repos.APIUserRepository, sessions repos.SessionRepository, totpPending repos.TOTPPendingRepository, totpRecovery repos.TOTPRecoveryRepository, cfg *models.Config) *Service {
-	return &Service{users: users, sessions: sessions, totpPending: totpPending, totpRecovery: totpRecovery, cfg: cfg}
+func New(users repos.APIUserRepository, sessions repos.SessionRepository, totpPending repos.TOTPPendingRepository, totpRecovery repos.TOTPRecoveryRepository, cfg *models.Config, breakGlassEmail string) *Service {
+	return &Service{users: users, sessions: sessions, totpPending: totpPending, totpRecovery: totpRecovery, cfg: cfg, breakGlassEmail: breakGlassEmail}
+}
+
+// passwordLoginAllowed reports whether email may sign in with a password under the current
+// config.
+func (s *Service) passwordLoginAllowed(email string) bool {
+	return s.cfg.PasswordLoginEnabled || strings.EqualFold(email, s.breakGlassEmail)
 }
 
 // Login validates credentials. If the user has TOTP enabled it returns a
 // short-lived pending token that must be exchanged via VerifyTOTP; otherwise
 // it creates a full session and returns the session token.
 func (s *Service) Login(ctx context.Context, email, password string) (LoginResult, error) {
+	if !s.passwordLoginAllowed(email) {
+		return LoginResult{}, ErrPasswordLoginDisabled
+	}
+
 	u, err := s.users.GetForAuth(ctx, email)
 	if err != nil {
 		if errors.Is(err, models.ErrAPIUserNotFound) {
