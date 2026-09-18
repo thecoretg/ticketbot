@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/thecoretg/tctg-go/entra"
 	"github.com/thecoretg/ticketbot/internal/env"
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/middleware"
@@ -88,9 +89,12 @@ func Run() error {
 		}
 	}
 
+	// SameOrigin rejects cross-site POST/PUT/DELETE by Origin header; webhooks carry no Origin
+	// and pass through. Together with SameSite=Lax cookies this is the CSRF defence.
 	handler := middleware.Chain(server.NewHandler(a, cancel),
 		middleware.RequestLog(logger),
 		middleware.Recover(logger),
+		entra.SameOrigin,
 	)
 
 	httpSrv := &http.Server{

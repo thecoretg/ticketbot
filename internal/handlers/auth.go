@@ -2,19 +2,22 @@ package handlers
 
 import (
 	"errors"
-	"github.com/thecoretg/ticketbot/internal/middleware"
+	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
+	"github.com/thecoretg/ticketbot/internal/service/sso"
 )
 
 type AuthHandler struct {
 	svc *authsvc.Service
+	sso *sso.Service
 }
 
-func NewAuthHandler(svc *authsvc.Service) *AuthHandler {
-	return &AuthHandler{svc: svc}
+func NewAuthHandler(svc *authsvc.Service, ssoSvc *sso.Service) *AuthHandler {
+	return &AuthHandler{svc: svc, sso: ssoSvc}
 }
 
 type loginRequest struct {
@@ -82,11 +85,20 @@ func (h *AuthHandler) HandleChangePassword(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, M{"ok": true})
 }
 
+// HandleLogout ends whichever session the browser holds: the password session, the Microsoft
+// session, or both.
 func (h *AuthHandler) HandleLogout(w http.ResponseWriter, r *http.Request) {
 	if ck, err := r.Cookie(cookieName); err == nil && ck.Value != "" {
 		_ = h.svc.Logout(r.Context(), ck.Value)
 	}
-
 	setSessionCookie(w, "", -time.Second)
+
+	if ck, err := r.Cookie(sso.SessionCookie); err == nil && ck.Value != "" && h.sso != nil {
+		if err := h.sso.EndSession(r.Context(), ck.Value); err != nil {
+			slog.Warn("ending sso session", "error", err)
+		}
+		http.SetCookie(w, &http.Cookie{Name: sso.SessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	}
+
 	writeJSON(w, http.StatusOK, M{"ok": true})
 }

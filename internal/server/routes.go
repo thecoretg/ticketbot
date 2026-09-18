@@ -6,6 +6,7 @@ import (
 
 	"github.com/thecoretg/ticketbot/internal/handlers"
 	"github.com/thecoretg/ticketbot/internal/middleware"
+	"github.com/thecoretg/ticketbot/internal/service/sso"
 	"github.com/thecoretg/ticketbot/internal/web"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -17,6 +18,17 @@ type router struct {
 
 func (rt *router) handle(pattern string, h http.HandlerFunc, mws ...middleware.Middleware) {
 	rt.mux.Handle(pattern, middleware.Chain(h, mws...))
+}
+
+// requireSSOEnabled hides the Microsoft sign-in endpoints while the admin has SSO switched off.
+func (a *App) requireSSOEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !a.Svc.SSO.Enabled() {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // NewHandler builds the application's HTTP routes. shutdown is invoked by the admin restart route.
@@ -35,10 +47,23 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("GET /healthcheck", handlers.HandleHealthCheck) // authless ping for load balancer / container health checks
 	rt.handle("GET /authtest", handlers.HandleHealthCheck, auth)
 
-	ah := handlers.NewAuthHandler(a.Svc.Auth)
+	ah := handlers.NewAuthHandler(a.Svc.Auth, a.Svc.SSO)
 	rt.handle("POST /auth/login", ah.HandleLogin)
 	rt.handle("POST /auth/logout", ah.HandleLogout)
 	rt.handle("PUT /auth/password", ah.HandleChangePassword, auth)
+
+	// Microsoft sign-in. Start and Callback exist only while SSO is configured and enabled; the
+	// admin API below always exists so the dashboard can show setup state.
+	ssoh := handlers.NewSSOHandler(a.Svc.SSO)
+	rt.handle("GET /auth/methods", ssoh.Methods)
+	if a.SSOAuth != nil {
+		rt.mux.Handle("GET /auth/sso/start", a.requireSSOEnabled(a.SSOAuth.Start()))
+		rt.mux.Handle("GET "+sso.CallbackPath, a.requireSSOEnabled(a.SSOAuth.Callback()))
+	}
+	rt.handle("GET /sso", ssoh.Status, auth, admin)
+	rt.handle("POST /sso/test", ssoh.Test, auth, admin)
+	rt.handle("PUT /sso/mappings", ssoh.UpsertMapping, auth, admin)
+	rt.handle("DELETE /sso/mappings/{id}", ssoh.DeleteMapping, auth, admin)
 
 	th := handlers.NewTOTPHandler(a.Svc.Auth)
 	rt.handle("POST /auth/totp/verify", th.HandleVerify)

@@ -7,13 +7,14 @@ import (
 
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/sso"
 )
 
 // TestNewHandlerRoutes registers every route (ServeMux panics on conflicting patterns) and checks
 // that unauthenticated requests are rejected while the health check is open.
 func TestNewHandlerRoutes(t *testing.T) {
 	// NewNotifierHandler copies the service by value, so it needs a non-nil pointer.
-	a := &App{Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}}}
+	a := &App{Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}, SSO: &sso.Service{}}}
 	h := NewHandler(a, func() {})
 
 	cases := []struct {
@@ -27,6 +28,9 @@ func TestNewHandlerRoutes(t *testing.T) {
 		{http.MethodDelete, "/lists/1/items/2", http.StatusUnauthorized},
 		{http.MethodPut, "/users/3/role", http.StatusUnauthorized},
 		{http.MethodPut, "/config", http.StatusUnauthorized},
+		{http.MethodGet, "/sso", http.StatusUnauthorized},
+		{http.MethodDelete, "/sso/mappings/1", http.StatusUnauthorized},
+		{http.MethodGet, "/auth/sso/start", http.StatusNotFound},
 		{http.MethodGet, "/nope", http.StatusNotFound},
 		{http.MethodGet, "/panel/", http.StatusOK},
 	}

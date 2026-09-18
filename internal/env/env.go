@@ -36,11 +36,25 @@ type Env struct {
 	// Integrations
 	CW          psa.Config
 	WebexSecret string
+	Entra       Entra
 
 	// Local testing
 	SkipHooks bool
 	MockWebex bool
 	StoreTTL  time.Duration
+}
+
+// Entra is the Microsoft Entra ID app registration used for single sign-on. Set all three
+// variables or none: with none the app runs without SSO and the dashboard's SSO page says so.
+type Entra struct {
+	TenantID     string
+	ClientID     string
+	ClientSecret string
+}
+
+// Configured reports whether SSO credentials were supplied. After Load it is all-or-nothing.
+func (e Entra) Configured() bool {
+	return e.TenantID != "" && e.ClientID != "" && e.ClientSecret != ""
 }
 
 // Load reads and validates the environment. It returns one error listing every problem.
@@ -60,6 +74,11 @@ func Load() (*Env, error) {
 			PrivateKey: os.Getenv("CW_PRIV_KEY"),
 			ClientID:   os.Getenv("CW_CLIENT_ID"),
 			CompanyID:  os.Getenv("CW_COMPANY_ID"),
+		},
+		Entra: Entra{
+			TenantID:     os.Getenv("ENTRA_TENANT_ID"),
+			ClientID:     os.Getenv("ENTRA_CLIENT_ID"),
+			ClientSecret: os.Getenv("ENTRA_CLIENT_SECRET"),
 		},
 		SkipHooks: boolVar("SKIP_HOOKS"),
 		MockWebex: boolVar("MOCK_WEBEX"),
@@ -92,6 +111,15 @@ func Load() (*Env, error) {
 	}
 	if !e.SkipHooks {
 		required = append(required, struct{ name, val string }{"ROOT_URL", e.RootURL})
+	}
+	// SSO is all-or-nothing, and the redirect URI is built from ROOT_URL.
+	if e.Entra.TenantID != "" || e.Entra.ClientID != "" || e.Entra.ClientSecret != "" {
+		required = append(required,
+			struct{ name, val string }{"ENTRA_TENANT_ID", e.Entra.TenantID},
+			struct{ name, val string }{"ENTRA_CLIENT_ID", e.Entra.ClientID},
+			struct{ name, val string }{"ENTRA_CLIENT_SECRET", e.Entra.ClientSecret},
+			struct{ name, val string }{"ROOT_URL", e.RootURL},
+		)
 	}
 
 	var missing []string

@@ -56,3 +56,39 @@ func TestLoadRejectsNonPositiveTTL(t *testing.T) {
 		t.Fatal("expected error for zero TTL")
 	}
 }
+
+func TestLoadEntraAllOrNothing(t *testing.T) {
+	setRequired(t)
+	t.Setenv("ENTRA_TENANT_ID", "11111111-1111-1111-1111-111111111111")
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when only one ENTRA_* variable is set")
+	}
+	for _, want := range []string{"ENTRA_CLIENT_ID", "ENTRA_CLIENT_SECRET", "ROOT_URL"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %s", err, want)
+		}
+	}
+
+	t.Setenv("ENTRA_CLIENT_ID", "cid")
+	t.Setenv("ENTRA_CLIENT_SECRET", "sec")
+	t.Setenv("ROOT_URL", "http://localhost:8080")
+	e, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !e.Entra.Configured() {
+		t.Fatal("expected Entra to be configured")
+	}
+}
+
+func TestLoadWithoutEntra(t *testing.T) {
+	setRequired(t)
+	e, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Entra.Configured() {
+		t.Fatal("expected Entra to be unconfigured")
+	}
+}

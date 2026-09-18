@@ -17,6 +17,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/lists"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/sso"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/ticketbot/internal/service/user"
@@ -66,6 +67,7 @@ type Services struct {
 	Ticketbot *ticketbot.Service
 	Workflow  *workflow.Service
 	Lists     *lists.Service
+	SSO       *sso.Service
 }
 
 func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.LevelVar, logBuf *logging.BufferHandler) (*App, *logging.Persister, error) {
@@ -122,6 +124,11 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
 
+	ssoSvc, ssoAuth, err := makeSSO(ctx, e, r, cfg)
+	if err != nil {
+		return nil, nil, fmt.Errorf("configuring sso: %w", err)
+	}
+
 	return &App{
 		Env:           e,
 		Config:        cfg,
@@ -130,6 +137,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		CWClient:      cw,
 		MessageSender: ms,
 		LogBuffer:     logBuf,
+		SSOAuth:       ssoAuth,
 		Svc: &Services{
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg),
 			Config:    cfgSvc,
@@ -149,6 +157,41 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 				Lists:      r.Lists,
 			}),
 			Lists: listSvc,
+			SSO:   ssoSvc,
 		},
 	}, persister, nil
+}
+
+// makeSSO builds the sso service and, when the ENTRA_* variables are present, the entra.Auth
+// around it. Discovery is lazy, so a Microsoft outage cannot stop the app from starting.
+func makeSSO(ctx context.Context, e *env.Env, r *repos.AllRepos, cfg *models.Config) (*sso.Service, *entra.Auth[*models.APIUser], error) {
+	svc, err := sso.New(ctx, sso.Params{Users: r.APIUser, Mappings: r.SSORoleMappings, Cfg: cfg, Entra: e.Entra, RootURL: e.RootURL})
+	if err != nil {
+		return nil, nil, err
+	}
+	if !e.Entra.Configured() {
+		slog.Info("entra sso not configured; password sign-in only")
+		return svc, nil, nil
+	}
+
+	auth, err := entra.New(ctx, entra.Config{
+		TenantID:     e.Entra.TenantID,
+		ClientID:     e.Entra.ClientID,
+		ClientSecret: e.Entra.ClientSecret,
+		BaseURL:      e.RootURL,
+		CallbackPath: sso.CallbackPath,
+		LoginPath:    sso.PanelPath,
+		SuccessPath:  sso.PanelPath,
+		Authorize:    svc.Authorize,
+		Sessions:     r.SSO,
+		States:       r.SSO,
+		Logger:       slog.Default(),
+		Unauthorized: middleware.WriteUnauthorized,
+	}, svc)
+	if err != nil {
+		return nil, nil, err
+	}
+	svc.SetAuth(auth)
+	slog.Info("entra sso configured", "redirect_uri", auth.RedirectURI(), "enabled", cfg.SSOEnabled)
+	return svc, auth, nil
 }
