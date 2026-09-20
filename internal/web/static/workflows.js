@@ -250,20 +250,65 @@ function renderWorkflowEditor() {
         <h3>Rules</h3>
         <p>${wf.rules.length} rule${wf.rules.length === 1 ? '' : 's'}, evaluated in order</p>
     </div>
-    <div id="rule-list">${rules || emptyState('No rules yet',
+    <div id="rule-list" class="rule-list">${rules || emptyState('No rules yet',
         'A rule is a condition plus the actions to take when a ticket matches it.',
         `<button class="btn btn-default btn-sm" onclick="wfAddRule()">${icon('plus')}Add the first rule</button>`, 'bolt')}</div>
     <div style="margin-top:var(--s4)">
         <button class="btn btn-default btn-sm" onclick="wfAddRule()">${icon('plus')}Add rule</button>
     </div>`)
+    wfMountReorder()
+}
+
+// wfRuleSummary is what a collapsed rule says about itself: the three things
+// you would otherwise open it to find out.
+function wfRuleSummary(r) {
+    const trigger = (WF_TRIGGERS.find(([v]) => v === r.trigger) || [null, r.trigger])[1]
+    const rows    = r._ui?.rows?.length || 0
+    const conds   = r._ui?.mode === 'advanced'
+        ? ((r.condition || '').trim() ? 'advanced condition' : 'no conditions')
+        : (rows ? `${rows} condition${rows === 1 ? '' : 's'}` : 'no conditions')
+    const acts = r.actions.length
+    return `${trigger} \u00b7 ${conds} \u00b7 ${acts} action${acts === 1 ? '' : 's'}`
+}
+
+// Collapsing is UI state, not an edit: _ui is stripped from the dirty compare.
+function wfToggleRule(i) {
+    const r = wf.rules[i]
+    r._ui = r._ui || wfDefaultUI()
+    r._ui.open = !r._ui.open
+    wfRerenderRule(i)
+}
+
+// wfMoveRuleTo is the drop half of a drag; wfMoveRule stays for the up/down
+// buttons, which are the keyboard path.
+function wfMoveRuleTo(from, to) {
+    if (from === to) return
+    wf.rules.splice(to, 0, wf.rules.splice(from, 1)[0])
+    renderWorkflowEditor()
+    wfMarkDirty()
+}
+
+// The kit's reorder helper reports a move and never touches the DOM order, so
+// the list stays rendered from wf.rules. A full re-render replaces #rule-list,
+// so the previous listeners are dropped first.
+let wfReorderStop = null
+function wfMountReorder() {
+    wfReorderStop?.()
+    wfReorderStop = null
+    const list = document.getElementById('rule-list')
+    if (!list || !canEdit() || !window.naviReorder) return
+    wfReorderStop = window.naviReorder(list, { item: '.rule-card', handle: '.rule-grip', onMove: wfMoveRuleTo })
 }
 
 function wfRuleCardHTML(r, i) {
     const last = wf.rules.length - 1
     const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('')
 
-    return `<article class="rule-card${r.enabled ? '' : ' is-disabled'}" id="rule-${i}">
+    const open = !!r._ui?.open
+
+    return `<article class="rule-card${r.enabled ? '' : ' is-disabled'}${open ? ' is-open' : ''}" id="rule-${i}">
         <div class="rule-head">
+            ${editOnly(`<button class="rule-grip" aria-label="Drag to reorder rule ${i + 1}">${icon('grip')}</button>`)}
             <div class="order-btns">
                 <button onclick="wfMoveRule(${i}, -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move rule ${i + 1} up">${icon('chevUp')}</button>
                 <button onclick="wfMoveRule(${i}, 1)" ${i === last ? 'disabled' : ''} aria-label="Move rule ${i + 1} down">${icon('chevDn')}</button>
@@ -271,10 +316,13 @@ function wfRuleCardHTML(r, i) {
             <span class="rule-index num">${i + 1}</span>
             <input type="text" class="rule-name" value="${esc(r.name)}" placeholder="Rule name" aria-label="Rule ${i + 1} name" oninput="wfSetRule(${i}, 'name', this.value)">
             ${r.stop_processing ? badgeTag('stops chain', 'outline') : ''}
+            <span class="rule-sum cell-sub">${esc(wfRuleSummary(r))}</span>
             ${toggle(`onchange="wfSetRule(${i}, 'enabled', this.checked); document.getElementById('rule-${i}').classList.toggle('is-disabled', !this.checked)"`, r.enabled, { tip: 'Rule enabled' })}
             ${deleteButton(`wfDeleteRule(${i})`)}
+            <button class="rule-toggle icon-btn" onclick="wfToggleRule(${i})" aria-expanded="${open}"
+                aria-label="${open ? 'Collapse' : 'Expand'} rule ${i + 1}">${icon('chevDn')}</button>
         </div>
-        <div class="rule-body">
+        ${!open ? '' : `<div class="rule-body">
             <div class="grid g2" style="gap:var(--s4)">
                 <div class="field">
                     <label for="rule-trigger-${i}">Run for</label>
@@ -295,14 +343,17 @@ function wfRuleCardHTML(r, i) {
                     <button class="btn btn-default btn-sm" onclick="wfAddAction(${i})">${icon('plus')}Add action</button>
                 </div>
             </div>
-        </div>
+        </div>`}
     </article>`
 }
 
 function wfActionRowHTML(a, i, j) {
     const last = wf.rules[i].actions.length - 1
     const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('')
-    let fields = ''
+    // fields sit on the row's first line with the controls; anything taller than
+    // one control goes in detail, which the kit drops onto its own line. Mixing
+    // the two inside one stack is what pushes the first field off centre.
+    let fields = '', detail = ''
 
     switch (a.kind) {
     case 'notify': {
@@ -315,8 +366,8 @@ function wfActionRowHTML(a, i, j) {
             target += `<span class="cell-sub grow">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
         }
         const hasMsg = !!n.message
-        fields = `<div class="grow stack gap2" style="min-width:260px">
-            <div class="row gap2 wrap">${target}</div>
+        fields = `<div class="row gap2 wrap grow" style="min-width:260px">${target}</div>`
+        detail = `<div class="action-detail">
             <details class="action-msg"${hasMsg ? ' open' : ''}>
                 <summary class="cell-sub">Custom message${hasMsg ? '' : ' (optional — default layout when empty)'}</summary>
                 <textarea class="textarea mono" rows="3" style="margin-top:var(--s2)" aria-label="Custom message" placeholder="{{event}}: {{ticket.link}} {{ticket.summary}}&#10;**Company:** {{company}}&#10;{{note.quote}}" oninput="wfSetAction(${i}, ${j}, 'notify.message', this.value)">${esc(n.message || '')}</textarea>
@@ -356,7 +407,7 @@ function wfActionRowHTML(a, i, j) {
     case 'patch': {
         const n = a.patch || {}
         const ops = typeof n.ops === 'string' ? n.ops : (n.ops ? JSON.stringify(n.ops, null, 2) : '')
-        fields = `<div class="grow stack gap2" style="min-width:260px">
+        detail = `<div class="action-detail stack gap2">
             <textarea rows="4" class="textarea mono" spellcheck="false" aria-label="Patch operations" placeholder='${WF_PATCH_EXAMPLE}' oninput="wfSetPatchOps(${i}, ${j}, this.value)">${esc(ops)}</textarea>
             <span class="cell-sub">JSON array of ConnectWise patch operations: <code class="code inline">op</code> (add / replace / remove), <code class="code inline">path</code>, <code class="code inline">value</code>. Sent as-is to PATCH /service/tickets/{id}.</span>
         </div>`
@@ -365,9 +416,9 @@ function wfActionRowHTML(a, i, j) {
     case 'add_note': {
         const n = a.add_note || {}
         const flag = (key, label) => checkbox(label, `onchange="wfSetAction(${i}, ${j}, 'add_note.${key}', this.checked)"`, !!n[key])
-        fields = `<div class="grow stack gap2" style="min-width:260px">
+        fields = `<div class="action-flags grow">${flag('discussion', 'Discussion')}${flag('internal', 'Internal')}${flag('resolution', 'Resolution')}</div>`
+        detail = `<div class="action-detail">
             <textarea class="textarea" rows="2" aria-label="Note text" placeholder="Note text" oninput="wfSetAction(${i}, ${j}, 'add_note.text', this.value)">${esc(n.text || '')}</textarea>
-            <div class="action-flags">${flag('discussion', 'Discussion')}${flag('internal', 'Internal')}${flag('resolution', 'Resolution')}</div>
         </div>`
         break
     }
@@ -385,6 +436,7 @@ function wfActionRowHTML(a, i, j) {
         <select class="select" style="max-width:170px" aria-label="Action type" onchange="wfChangeActionKind(${i}, ${j}, this.value)">${opts(WF_KINDS, a.kind)}</select>
         ${fields}
         <button class="icon-btn hit-expand" style="width:26px;height:26px;margin-left:auto" aria-label="Remove action ${j + 1}" onclick="wfDeleteAction(${i}, ${j})">${icon('trash')}</button>
+        ${detail}
     </div>`
 }
 
@@ -478,7 +530,7 @@ function wfMarkDirty() {
 
 // ── Structural changes (re-render) ───────────────────────
 function wfNewRule() {
-    return { id: '', name: `Rule ${wf.rules.length + 1}`, enabled: true, trigger: 'both', condition: '', stop_processing: false, actions: [], _ui: wfDefaultUI() }
+    return { id: '', name: `Rule ${wf.rules.length + 1}`, enabled: true, trigger: 'both', condition: '', stop_processing: false, actions: [], _ui: { ...wfDefaultUI(), open: true } }
 }
 
 function wfNewAction(kind) {

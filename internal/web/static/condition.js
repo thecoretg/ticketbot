@@ -7,8 +7,8 @@
 // Conditions the builder cannot represent (nested groups, "not", unknown paths, complex wildcards)
 // stay in advanced mode with a note saying why.
 //
-// Per-rule UI state lives on rule._ui = { mode: 'builder'|'advanced', join: 'and'|'or', rows, reason }
-// and is stripped before the workflow is compared or sent to the server.
+// Per-rule UI state lives on rule._ui = { mode: 'builder'|'advanced', join: 'and'|'or', rows, reason, open }.
+// It is stripped before save and before the dirty compare, so collapsing a rule is not an edit.
 // ─────────────────────────────────────────────────────────
 let wfFields = []                    // /workflows/fields
 let wfBoards = []                    // /cw/boards
@@ -41,7 +41,7 @@ function wfFieldByPath(path) {
 }
 
 function wfDefaultUI() {
-    return { mode: 'builder', join: 'and', rows: [], reason: '' }
+    return { mode: 'builder', join: 'and', rows: [], reason: '', open: false }
 }
 
 function wfNewRow() {
