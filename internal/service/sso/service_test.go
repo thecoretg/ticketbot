@@ -176,7 +176,7 @@ func TestProvisionWithoutMappedRole(t *testing.T) {
 
 func TestLookup(t *testing.T) {
 	users := newFakeUsers()
-	users.Insert(context.Background(), "a@example.com", models.RoleViewer)
+	_, _ = users.Insert(context.Background(), "a@example.com", models.RoleViewer)
 	s := newService(t, users)
 
 	if u, err := s.Lookup(context.Background(), "1"); err != nil || u.ID != 1 {
@@ -202,7 +202,7 @@ func TestRedirectURIWithoutAuth(t *testing.T) {
 
 func TestBreakGlassAccountStaysPasswordOnly(t *testing.T) {
 	users := newFakeUsers()
-	users.Insert(context.Background(), "root@example.com", models.RoleAdmin)
+	_, _ = users.Insert(context.Background(), "root@example.com", models.RoleAdmin)
 	s, err := New(context.Background(), Params{
 		Users:           users,
 		Mappings:        &fakeMappings{list: []*models.SSORoleMapping{mapping("TB.Viewer", models.RoleViewer)}},

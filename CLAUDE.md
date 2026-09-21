@@ -14,6 +14,9 @@ CLAUDE.md edits it lists. Delete the file and this paragraph when everything is 
 - `make gensql` (= `sqlc generate`) after editing `queries/*.sql` or adding a migration. Never hand-edit `internal/db/`.
 - Tests: `go test ./...` is unit-only. Run `TEST_POSTGRES_DSN=<dsn> go test ./internal/postgres/` (against a DB already migrated to the current version) when touching repos, queries, or migrations. `internal/server/e2e_test.go` hits the live ConnectWise API and is gated on `TEST_TICKET_IDS`; leave it to the user.
 - Dashboard files (`internal/web/static/`) are embedded at build time: restart `make run` to see changes, and hard-refresh the browser.
+- CI (`.github/workflows/ci.yml`) runs the same checks as the `verify` skill plus golangci-lint, a
+  clean `sqlc generate` diff and a `docker build`, then calls the Easypanel deploy URL on the
+  watched branch. A red check blocks the deploy.
 - Dependencies are not vendored; they come from the module proxy (tctg-go is public). Run `go mod tidy` after any `go.mod` change.
 
 ## Migrations

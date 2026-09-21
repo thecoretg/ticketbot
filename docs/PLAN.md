@@ -88,17 +88,14 @@ Done.
 
 ### 4. CI
 
-The deploy is a GitHub Action that calls an Easypanel build URL; Easypanel then builds the
-Dockerfile from the watched branch (`v2-main` now, `main` at cutover).
+Done. `.github/workflows/ci.yml`.
 
-- [ ] `.github/workflows/ci.yml` on push and pull request: `go vet`, `gofmt -l`, golangci-lint
-      (config exists in `.golangci.yml`), `go test ./...`, Postgres 16 service container for
-      `TEST_POSTGRES_DSN=... go test ./internal/postgres/` after migrating with goose, and
-      `docker build` with no push.
-- [ ] Deploy job: on the watched branch only, after the checks pass, call the Easypanel URL from
-      a repository secret.
-
-CLAUDE.md: add a line under Commands saying CI runs the same checks as `.claude/skills/verify`.
+- [x] On every push and pull request: gofmt, build, vet, golangci-lint 2.13, `sqlc generate` with
+      a clean-diff check on `internal/db`, unit tests, goose-migrated Postgres 16 service container
+      for `internal/postgres`, `node --check` on the dashboard scripts, and `docker build`.
+- [x] Deploy job runs only on a push to `v2-main` after the checks pass and POSTs the
+      `EASYPANEL_DEPLOY_URL` repository secret. At cutover change the branch in the workflow's
+      `if` and in Easypanel. Add the secret in the repository settings before the first push.
 
 ### 5. Workflow export and import
 
