@@ -208,6 +208,18 @@ Done.
 - [x] `history_retention_days` (default 90, 0 forever) purges `workflow_run` and `ticket_event`
       together on the intake service's hourly tick (`ticketbot.HistoryPurger`).
 
+## Cutover
+
+The steps that end the parallel run, as boxes so the delete rule below holds.
+
+- [ ] After the first clean week: remove the `HOOK_SIGNATURE_MODE=log` fallback from `env.Load`,
+      `RequireConnectwiseSignature` and `.env.example`.
+- [ ] Change the deploy branch to `main` in `.github/workflows/ci.yml` and in Easypanel, in one
+      change. Push `v2-main` to `main`.
+- [ ] On the instance: disable v1's ConnectWise callbacks, clear the redirect room, turn master
+      dry run off. Retire the Lightsail v1 instance.
+- [ ] Remove `MOCK_WEBEX` from every `.env` that still has it.
+
 ## Done## Done
 
 Every box above ticked, including Do last: delete this file, remove its pointer from CLAUDE.md, and confirm every
