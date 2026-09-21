@@ -107,11 +107,13 @@ function renderWorkflowResults() {
 }
 
 function rsNotifSummary(r) {
+    // counts in the mono figure face with a hard space, so "1 sent" never reads as "1sent"
+    const count = (n, word) => `<span class="num">${n}</span>&nbsp;${word}`
     const parts = []
-    if (r.notif_sent)       parts.push(`${r.notif_sent} sent`)
-    if (r.notif_would_send) parts.push(`${r.notif_would_send} would send`)
-    if (r.notif_none)       parts.push(r.notif_none === 1 ? 'nobody to notify' : `${r.notif_none} steps with nobody to notify`)
-    return parts.length ? esc(parts.join(' · ')) : '—'
+    if (r.notif_sent)       parts.push(count(r.notif_sent, 'sent'))
+    if (r.notif_would_send) parts.push(count(r.notif_would_send, 'would send'))
+    if (r.notif_none)       parts.push(r.notif_none === 1 ? 'nobody to notify' : count(r.notif_none, 'steps with nobody to notify'))
+    return parts.length ? parts.join(' · ') : '—'
 }
 
 function rsSetFilter(key, value) {
