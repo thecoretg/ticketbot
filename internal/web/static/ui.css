@@ -1071,8 +1071,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
   background: var(--surface-2); overflow: hidden;
 }
 .cond-tabs {
-  display: flex; gap: var(--s1); padding: var(--s2) var(--s3);
+  display: flex; align-items: center; gap: var(--s1); padding: var(--s2) var(--s3);
   border-bottom: 1px solid var(--line-soft);
+  /* in a 330px dock the mode tabs plus the match switch overflow; the switch drops to a second line */
+  flex-wrap: wrap; row-gap: var(--s2);
 }
 .cond-tabs button {
   padding: 3px var(--s3); border-radius: var(--radius-sm);
