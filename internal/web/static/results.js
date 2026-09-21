@@ -110,7 +110,7 @@ function rsNotifSummary(r) {
     const parts = []
     if (r.notif_sent)       parts.push(`${r.notif_sent} sent`)
     if (r.notif_would_send) parts.push(`${r.notif_would_send} would send`)
-    if (r.notif_none)       parts.push(`${r.notif_none} nobody`)
+    if (r.notif_none)       parts.push(r.notif_none === 1 ? 'nobody to notify' : `${r.notif_none} steps with nobody to notify`)
     return parts.length ? esc(parts.join(' · ')) : '—'
 }
 
