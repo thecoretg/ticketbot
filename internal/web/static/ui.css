@@ -1448,7 +1448,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .node.t-start .node-ico { background: var(--nc); color: var(--accent-ink); }
 .node.sel { border-color: var(--nc); box-shadow: 0 0 0 3px var(--nc-soft), var(--shadow); }
 /* shift-drag selection box, drawn in plane coordinates among the cards */
-.marquee { position: absolute; border: 1px dashed var(--accent); background: var(--accent-soft); border-radius: var(--radius-sm); pointer-events: none; }
+/* --accent-soft is mixed against the surface and so opaque; the box must show the cards under it */
+.marquee { position: absolute; border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: var(--radius-sm); pointer-events: none; }
 .node.off { opacity: .55; }
 .node.dim { opacity: .34; }
 .node.hit { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-soft); }
