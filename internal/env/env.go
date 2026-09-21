@@ -42,10 +42,6 @@ type Env struct {
 	// Local testing
 	SkipHooks bool
 	StoreTTL  time.Duration
-
-	// HookSignatureEnforced rejects ConnectWise callbacks whose signature does not verify. Only
-	// HOOK_SIGNATURE_MODE=log turns it off, for diagnosing a signing problem during the parallel run.
-	HookSignatureEnforced bool
 }
 
 // Entra is the Microsoft Entra ID app registration used for single sign-on. Set all three
@@ -102,15 +98,6 @@ func Load() (*Env, error) {
 		errs = append(errs, errors.New("STORE_TTL_SECONDS must be greater than 0"))
 	}
 	e.StoreTTL = time.Duration(ttlSecs) * time.Second
-
-	switch mode := strings.ToLower(strings.TrimSpace(os.Getenv("HOOK_SIGNATURE_MODE"))); mode {
-	case "", "enforce":
-		e.HookSignatureEnforced = true
-	case "log":
-		e.HookSignatureEnforced = false
-	default:
-		errs = append(errs, fmt.Errorf("HOOK_SIGNATURE_MODE must be enforce or log (got %q)", mode))
-	}
 
 	required := []struct{ name, val string }{
 		{"POSTGRES_DSN", e.PostgresDSN},

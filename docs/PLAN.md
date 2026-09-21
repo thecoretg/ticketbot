@@ -51,9 +51,8 @@ Done. `internal/service/intake` owns the queue; `webhook_intake` is the table (m
 
 Done.
 
-- [x] `RequireConnectwiseSignature(enforce)` returns 401 on a failed check. `HOOK_SIGNATURE_MODE`
-      (`enforce` default, `log` fallback) in `env.Load` and `.env.example`. Remove the `log`
-      option after the first week of the parallel run.
+- [x] `RequireConnectwiseSignature` returns 401 on a failed check. The temporary
+      `HOOK_SIGNATURE_MODE=log` fallback was removed once live traffic proved the check.
 - [x] Patch batching in the engine: `set_*` and `patch` operations queue into one PATCH sent after
       the walks; the last node to set a path wins, the earlier action reports `superseded`, and
       the pair is listed under `conflicts` on the workflow event. Two `add_resource` nodes merge.
@@ -212,8 +211,7 @@ Done.
 
 The steps that end the parallel run, as boxes so the delete rule below holds.
 
-- [ ] After the first clean week: remove the `HOOK_SIGNATURE_MODE=log` fallback from `env.Load`,
-      `RequireConnectwiseSignature` and `.env.example`.
+- [x] Removed the `HOOK_SIGNATURE_MODE=log` fallback (2026-09-21): signatures are always enforced.
 - [ ] Change the deploy branch to `main` in `.github/workflows/ci.yml` and in Easypanel, in one
       change. Push `v2-main` to `main`.
 - [ ] On the instance: disable v1's ConnectWise callbacks, clear the redirect room, turn master

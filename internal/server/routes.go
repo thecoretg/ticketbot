@@ -178,7 +178,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("POST /intake/{id}/discard", ih.Discard, auth, admin)
 
 	tb := handlers.NewTicketbotHandler(a.Svc.Intake)
-	rt.handle("POST /hooks/cw/tickets", tb.ProcessTicket, middleware.RequireConnectwiseSignature(a.Env.HookSignatureEnforced))
+	rt.handle("POST /hooks/cw/tickets", tb.ProcessTicket, middleware.RequireConnectwiseSignature())
 
 	return rt.mux
 }

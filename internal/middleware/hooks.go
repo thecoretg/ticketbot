@@ -10,11 +10,8 @@ import (
 )
 
 // RequireConnectwiseSignature checks the webhook signature and restores the body for the handler.
-//
-// With enforce set a failed check is a 401, so a forged callback cannot start a workflow run.
-// Without it the failure is only logged, which is the v1 behaviour kept behind
-// HOOK_SIGNATURE_MODE=log for diagnosing a signing problem.
-func RequireConnectwiseSignature(enforce bool) Middleware {
+// A failed check is a 401, so a forged callback cannot start a workflow run.
+func RequireConnectwiseSignature() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, err := io.ReadAll(r.Body)
@@ -26,12 +23,9 @@ func RequireConnectwiseSignature(enforce bool) Middleware {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			valid, err := psa.ValidateWebhook(r)
 			if err != nil || !valid {
-				if enforce {
-					slog.Warn("connectwise webhook rejected: signature check failed", "valid", valid, "error", errString(err), "remote", r.RemoteAddr)
-					writeError(w, http.StatusUnauthorized, "invalid webhook signature")
-					return
-				}
-				slog.Warn("connectwise webhook signature check failed; accepted because HOOK_SIGNATURE_MODE=log", "valid", valid, "error", errString(err))
+				slog.Warn("connectwise webhook rejected: signature check failed", "valid", valid, "error", errString(err), "remote", r.RemoteAddr)
+				writeError(w, http.StatusUnauthorized, "invalid webhook signature")
+				return
 			}
 
 			r.Body = io.NopCloser(bytes.NewReader(body))
