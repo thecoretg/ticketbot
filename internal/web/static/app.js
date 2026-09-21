@@ -1293,7 +1293,7 @@ function renderUsers(users) {
         <td class="r nowrap">${u.id === currentUser?.id
             ? '<span class="badge outline">You</span>'
             : u.break_glass
-                ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted.">Break-glass</span>`
+                ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted." data-tip-align="right">Break-glass</span>`
                 : deleteButton(`deleteUser(${u.id})`)}</td>
     </tr>`)
 
