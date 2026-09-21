@@ -1692,14 +1692,25 @@ function ssoDeleteMapping(id) {
 
 async function loadConfig() {
     try {
-        const cfg = await api('GET', '/config')
-        renderConfig(cfg)
+        const [cfg, recipients] = await Promise.all([
+            api('GET', '/config'),
+            api('GET', '/webex/rooms').catch(() => []),
+        ])
+        renderConfig(cfg, recipients || [])
     } catch (e) {
         setContent(errorState(e.message))
     }
 }
 
-function renderConfig(cfg) {
+function renderConfig(cfg, recipients = []) {
+    // room pickers: "None" plus every synced room or person; the current value stays selectable
+    // even if the recipient list failed to load
+    const roomSelect = (id, value, label) => {
+        const opts = recipients.map(r => `<option value="${r.id}"${r.id === value ? ' selected' : ''}>${esc(r.name)} (${esc(r.type)})</option>`)
+        if (value && !recipients.some(r => r.id === value)) opts.unshift(`<option value="${value}" selected>Recipient #${value}</option>`)
+        return `<select class="select" style="max-width:320px" id="${id}" aria-label="${esc(label)}"><option value="0"${value ? '' : ' selected'}>None</option>${opts.join('')}</select>`
+    }
+
     // one settings row: description on the left, control on the right
     const row = (title, desc, control) => `<div class="form-row">
         <div><h4>${title}</h4><p class="desc">${desc}</p></div>
@@ -1726,6 +1737,15 @@ function renderConfig(cfg) {
         ${row('Write cap per ticket',
             'How many ConnectWise writes workflows may make to one ticket in 15 minutes before that ticket is blocked for an hour and the ops room is alerted. A normal run is one write plus one per note. 0 disables the cap.',
             numberInput('c-write-cap', cfg.write_cap_per_ticket, 0))}
+        ${row('Ops room',
+            'Webex room or person that receives operator alerts: failed webhooks, write-cap blocks and webhook staleness. With none set, alerts only go to the log.',
+            roomSelect('c-ops-room', cfg.ops_room_id, 'Ops room'))}
+        ${row('Redirect notifications to',
+            'While set, every notification goes to this room instead of its intended recipient, prefixed with who it was for, and is sent even under dry run. Use it for the parallel run; clear it at cutover.',
+            roomSelect('c-redirect-room', cfg.redirect_room_id, 'Redirect room'))}
+        ${row('Stale webhook alert',
+            'Minutes without a ticket webhook, during business hours (7:30am to 7pm Central, weekdays), before the ops room is alerted. 0 disables the check.',
+            numberInput('c-stale-minutes', cfg.stale_alert_minutes, 0))}
         ${row('Max concurrent syncs',
             'Limits parallel requests to ConnectWise.',
             numberInput('c-max-syncs', cfg.max_concurrent_syncs, 1))}
@@ -1766,6 +1786,9 @@ async function saveConfig() {
             note_preview_length:        num('c-note-preview', 'Note preview length'),
             max_concurrent_syncs:       num('c-max-syncs', 'Max concurrent syncs'),
             write_cap_per_ticket:       num('c-write-cap', 'Write cap per ticket'),
+            ops_room_id:                Number(document.getElementById('c-ops-room').value),
+            redirect_room_id:           Number(document.getElementById('c-redirect-room').value),
+            stale_alert_minutes:        num('c-stale-minutes', 'Stale webhook alert'),
             require_totp:               document.getElementById('c-require-totp').checked,
             debug_logging:              document.getElementById('c-debug-logging').checked,
             log_buffer_size:            num('c-log-buffer-size', 'Log buffer size'),

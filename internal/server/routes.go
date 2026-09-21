@@ -166,6 +166,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	ih := handlers.NewIntakeHandler(a.Svc.Intake)
 	rt.handle("GET /intake", ih.List, auth, admin)
 	rt.handle("GET /intake/stats", ih.Stats, auth, admin)
+	rt.handle("GET /intake/hourly", ih.Hourly, auth, admin)
 	rt.handle("POST /intake/{id}/retry", ih.Retry, auth, admin)
 	rt.handle("POST /intake/{id}/discard", ih.Discard, auth, admin)
 

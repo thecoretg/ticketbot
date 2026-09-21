@@ -55,6 +55,20 @@ type Config struct {
 	// WriteCapPerTicket is how many ConnectWise writes workflows may make to one ticket in a
 	// rolling 15 minutes before that ticket is blocked for an hour. 0 disables the cap.
 	WriteCapPerTicket int `json:"write_cap_per_ticket"`
+
+	// OpsRoomID is the Webex recipient operator alerts go to: intake failures, write-cap blocks
+	// and webhook staleness. nil logs them instead.
+	OpsRoomID *int `json:"ops_room_id"`
+
+	// RedirectRoomID, when set, receives every notification instead of its intended recipient,
+	// prefixed with who it was for. It is the parallel-run switch: workflows keep their real
+	// targets and nobody else sees the messages. While set, notifications are sent even under
+	// dry run, because the redirect is the safety.
+	RedirectRoomID *int `json:"redirect_room_id"`
+
+	// StaleAlertMinutes is how long business hours (07:30 to 19:00 America/Chicago, weekdays) may
+	// pass with no ticket webhook before the ops room is told. 0 disables the check.
+	StaleAlertMinutes int `json:"stale_alert_minutes"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
@@ -73,6 +87,10 @@ type ConfigUpdateParams struct {
 	PasswordLoginEnabled    *bool   `json:"password_login_enabled"`
 	NotePreviewLength       *int    `json:"note_preview_length"`
 	WriteCapPerTicket       *int    `json:"write_cap_per_ticket"`
+	// OpsRoomID and RedirectRoomID clear the setting when sent as 0.
+	OpsRoomID         *int `json:"ops_room_id"`
+	RedirectRoomID    *int `json:"redirect_room_id"`
+	StaleAlertMinutes *int `json:"stale_alert_minutes"`
 }
 
 var DefaultConfig = Config{
@@ -89,4 +107,5 @@ var DefaultConfig = Config{
 	PasswordLoginEnabled:    true,
 	NotePreviewLength:       200,
 	WriteCapPerTicket:       20,
+	StaleAlertMinutes:       60,
 }

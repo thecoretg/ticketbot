@@ -10,7 +10,7 @@ import (
 )
 
 const getAppConfig = `-- name: GetAppConfig :one
-SELECT id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket FROM app_config
+SELECT id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes FROM app_config
 WHERE id = 1
 `
 
@@ -32,6 +32,9 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 		&i.PasswordLoginEnabled,
 		&i.NotePreviewLength,
 		&i.WriteCapPerTicket,
+		&i.OpsRoomID,
+		&i.RedirectRoomID,
+		&i.StaleAlertMinutes,
 	)
 	return &i, err
 }
@@ -39,7 +42,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 const insertDefaultAppConfig = `-- name: InsertDefaultAppConfig :one
 INSERT INTO app_config (id) VALUES (1)
 ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket
+RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes
 `
 
 func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error) {
@@ -60,13 +63,16 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error
 		&i.PasswordLoginEnabled,
 		&i.NotePreviewLength,
 		&i.WriteCapPerTicket,
+		&i.OpsRoomID,
+		&i.RedirectRoomID,
+		&i.StaleAlertMinutes,
 	)
 	return &i, err
 }
 
 const upsertAppConfig = `-- name: UpsertAppConfig :one
-INSERT INTO app_config(id, master_dry_run, cw_api_member_identifier, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket)
-VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+INSERT INTO app_config(id, master_dry_run, cw_api_member_identifier, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes)
+VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (id) DO UPDATE SET
     master_dry_run = EXCLUDED.master_dry_run,
     cw_api_member_identifier = EXCLUDED.cw_api_member_identifier,
@@ -80,8 +86,11 @@ ON CONFLICT (id) DO UPDATE SET
     sso_enabled = EXCLUDED.sso_enabled,
     password_login_enabled = EXCLUDED.password_login_enabled,
     note_preview_length = EXCLUDED.note_preview_length,
-    write_cap_per_ticket = EXCLUDED.write_cap_per_ticket
-RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket
+    write_cap_per_ticket = EXCLUDED.write_cap_per_ticket,
+    ops_room_id = EXCLUDED.ops_room_id,
+    redirect_room_id = EXCLUDED.redirect_room_id,
+    stale_alert_minutes = EXCLUDED.stale_alert_minutes
+RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_cleanup_interval_hours, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes
 `
 
 type UpsertAppConfigParams struct {
@@ -98,6 +107,9 @@ type UpsertAppConfigParams struct {
 	PasswordLoginEnabled    bool   `json:"password_login_enabled"`
 	NotePreviewLength       int    `json:"note_preview_length"`
 	WriteCapPerTicket       int    `json:"write_cap_per_ticket"`
+	OpsRoomID               *int   `json:"ops_room_id"`
+	RedirectRoomID          *int   `json:"redirect_room_id"`
+	StaleAlertMinutes       int    `json:"stale_alert_minutes"`
 }
 
 func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams) (*AppConfig, error) {
@@ -115,6 +127,9 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		arg.PasswordLoginEnabled,
 		arg.NotePreviewLength,
 		arg.WriteCapPerTicket,
+		arg.OpsRoomID,
+		arg.RedirectRoomID,
+		arg.StaleAlertMinutes,
 	)
 	var i AppConfig
 	err := row.Scan(
@@ -132,6 +147,9 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		&i.PasswordLoginEnabled,
 		&i.NotePreviewLength,
 		&i.WriteCapPerTicket,
+		&i.OpsRoomID,
+		&i.RedirectRoomID,
+		&i.StaleAlertMinutes,
 	)
 	return &i, err
 }

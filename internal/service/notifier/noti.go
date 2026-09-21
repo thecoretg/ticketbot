@@ -30,9 +30,11 @@ type Outcome struct {
 	Step          workflow.StepRef
 	Recipient     *models.WebexRecipient
 	ForwardedFrom []string
-	Result        string
-	Err           error
-	Notification  *models.TicketNotification
+	// RedirectedTo names the room that received the message instead of Recipient.
+	RedirectedTo string
+	Result       string
+	Err          error
+	Notification *models.TicketNotification
 }
 
 // Send resolves every intent to recipients, applies forwards once over the union, and delivers one
@@ -79,7 +81,15 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 	final := s.applyForwards(ctx, t, natural)
 	msgs := s.makeTicketMessages(t, final.toSlice(), req.IsNew, attribution)
 
-	for _, m := range msgs {
+	// A redirect room takes every message, prefixed with who it was for. It also overrides dry
+	// run: the redirect is the safety, and the parallel run needs to see real messages.
+	redirect, err := s.redirectRoom(ctx)
+	if err != nil {
+		return outcomes, fmt.Errorf("resolving redirect room: %w", err)
+	}
+
+	for i := range msgs {
+		m := &msgs[i]
 		out := Outcome{
 			Step:      attribution[m.WebexRecipient.origin().ID].Step,
 			Recipient: m.WebexRecipient.recipient,
@@ -88,13 +98,16 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 			out.ForwardedFrom = append(out.ForwardedFrom, f.Name)
 		}
 
-		if req.DryRun {
+		if redirect != nil {
+			m.redirectTo(redirect)
+			out.RedirectedTo = redirect.Name
+		} else if req.DryRun {
 			out.Result = ResultWouldSend
 			outcomes = append(outcomes, out)
 			continue
 		}
 
-		sent := s.sendNotification(ctx, &m)
+		sent := s.sendNotification(ctx, m)
 		out.Notification = sent.Notification
 		if sent.SendError != nil {
 			out.Result, out.Err = ResultError, sent.SendError
@@ -106,6 +119,15 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 
 	logger.Info("notifier: notifications processed", "recipients", len(msgs))
 	return outcomes, nil
+}
+
+// redirectRoom returns the configured redirect recipient, or nil when notifications go to their
+// intended targets.
+func (s *Service) redirectRoom(ctx context.Context) (*models.WebexRecipient, error) {
+	if s.Cfg == nil || s.Cfg.RedirectRoomID == nil {
+		return nil, nil
+	}
+	return s.WebexSvc.GetRecipient(ctx, *s.Cfg.RedirectRoomID)
 }
 
 func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {

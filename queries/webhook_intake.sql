@@ -69,3 +69,10 @@ SELECT received_at FROM webhook_intake ORDER BY received_at DESC LIMIT 1;
 -- name: DeleteFinishedWebhookIntakeBefore :execrows
 DELETE FROM webhook_intake
 WHERE status IN ('done', 'discarded') AND finished_at < $1;
+
+-- name: CountWebhookIntakeByHour :many
+SELECT date_trunc('hour', received_at)::timestamptz AS hour, COUNT(*)::bigint AS n
+FROM webhook_intake
+WHERE received_at >= $1
+GROUP BY 1
+ORDER BY 1;

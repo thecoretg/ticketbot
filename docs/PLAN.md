@@ -23,8 +23,8 @@ ticked, delete this file and the pointer to it in CLAUDE.md.
   notes as its own during the parallel run.
 - Single app instance. No distributed locking anywhere.
 
-Existing switches, keep all three: `master_dry_run` (app config, blocks every CW write),
-per-workflow `dry_run`, and `MOCK_WEBEX` (env, stubs Webex posting only; retire it in item 3).
+Switches: `master_dry_run` (app config, blocks every CW write), per-workflow `dry_run`, and the
+redirect room (app config, sends every notification to one room even under dry run).
 
 ## Before the parallel run
 
@@ -70,19 +70,21 @@ Done.
 
 ### 3. Observability and the parallel run
 
-- [ ] App config: `ops_room_id`, `redirect_room_id` (both nullable `webex_recipient` refs).
-- [ ] Redirect: when set, every notification (room, person, resources_owner) goes to the redirect
-      room, prefixed with the intended target. Then delete `MOCK_WEBEX` and `internal/mock`'s
-      Webex stub, plus the `.env.example` line.
-- [ ] Ops alerts (intake failure, rate cap, staleness) post to the ops room, falling back to
-      `slog.Error` when unset. Implement `alerts.Alerter` in `internal/service/alerts` and pass
-      it where `server.go` currently passes `alerts.Log{}`.
-- [ ] Staleness: no webhook received for 60 minutes between 07:30 and 19:00 America/Chicago,
-      Monday to Friday, posts one alert and one recovery message. Threshold is app config.
-- [ ] Dashboard: webhooks received per hour for the last seven days, so the threshold can be tuned
-      from data. Danny wires an external uptime monitor to `GET /healthcheck` separately.
+Done.
 
-CLAUDE.md: list the new config keys; state that `MOCK_WEBEX` is gone.
+- [x] App config: `ops_room_id`, `redirect_room_id` (nullable `webex_recipient` refs, 0 clears on
+      the wire), `stale_alert_minutes` (default 60). Migration 16. Config page has pickers.
+- [x] Redirect: with a room set, every notification (room, person, resources_owner, forwards) is
+      re-addressed to it with an "intended for" prefix and is sent even under dry run; the stored
+      notification keeps the intended recipient and the history event shows `redirected_to`.
+      `MOCK_WEBEX` and `internal/mock` are gone; the message sender is always the real client.
+- [x] `alerts.Webex` posts intake failures, write-cap blocks and staleness to the ops room and
+      always logs; without a room it only logs.
+- [x] Staleness: `intake.staleWatch` checks every minute; no webhook for `stale_alert_minutes`
+      between 07:30 and 19:00 America/Chicago on a weekday alerts once, and the next webhook posts a
+      recovery. Silence outside those hours never alerts.
+- [x] `GET /intake/hourly` and a webhooks-per-hour bar chart on the Intake page for the last seven
+      days. Danny wires an external uptime monitor to `GET /healthcheck` separately.
 
 ### 4. CI
 

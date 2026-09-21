@@ -49,6 +49,39 @@ func (q *Queries) ClaimWebhookIntake(ctx context.Context) (*WebhookIntake, error
 	return &i, err
 }
 
+const countWebhookIntakeByHour = `-- name: CountWebhookIntakeByHour :many
+SELECT date_trunc('hour', received_at)::timestamptz AS hour, COUNT(*)::bigint AS n
+FROM webhook_intake
+WHERE received_at >= $1
+GROUP BY 1
+ORDER BY 1
+`
+
+type CountWebhookIntakeByHourRow struct {
+	Hour time.Time `json:"hour"`
+	N    int64     `json:"n"`
+}
+
+func (q *Queries) CountWebhookIntakeByHour(ctx context.Context, receivedAt time.Time) ([]*CountWebhookIntakeByHourRow, error) {
+	rows, err := q.db.Query(ctx, countWebhookIntakeByHour, receivedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*CountWebhookIntakeByHourRow
+	for rows.Next() {
+		var i CountWebhookIntakeByHourRow
+		if err := rows.Scan(&i.Hour, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countWebhookIntakeByStatus = `-- name: CountWebhookIntakeByStatus :many
 SELECT status, COUNT(*)::bigint AS n FROM webhook_intake GROUP BY status
 `

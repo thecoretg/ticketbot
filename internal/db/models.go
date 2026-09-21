@@ -45,6 +45,9 @@ type AppConfig struct {
 	PasswordLoginEnabled    bool   `json:"password_login_enabled"`
 	NotePreviewLength       int    `json:"note_preview_length"`
 	WriteCapPerTicket       int    `json:"write_cap_per_ticket"`
+	OpsRoomID               *int   `json:"ops_room_id"`
+	RedirectRoomID          *int   `json:"redirect_room_id"`
+	StaleAlertMinutes       int    `json:"stale_alert_minutes"`
 }
 
 type AppLog struct {

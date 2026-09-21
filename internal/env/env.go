@@ -41,7 +41,6 @@ type Env struct {
 
 	// Local testing
 	SkipHooks bool
-	MockWebex bool
 	StoreTTL  time.Duration
 
 	// HookSignatureEnforced rejects ConnectWise callbacks whose signature does not verify. Only
@@ -86,7 +85,6 @@ func Load() (*Env, error) {
 			ClientSecret: os.Getenv("ENTRA_CLIENT_SECRET"),
 		},
 		SkipHooks: boolVar("SKIP_HOOKS"),
-		MockWebex: boolVar("MOCK_WEBEX"),
 	}
 
 	maxConns, err := intOr("POSTGRES_MAX_CONNS", int(defaultMaxConns))

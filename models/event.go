@@ -125,6 +125,7 @@ type NotificationPayload struct {
 	RecipientName  string   `json:"recipient_name"`
 	RecipientType  string   `json:"recipient_type"`
 	ForwardedFrom  []string `json:"forwarded_from,omitempty"`
+	RedirectedTo   string   `json:"redirected_to,omitempty"`
 	Result         string   `json:"result"` // sent | would_send | error
 	Error          string   `json:"error,omitempty"`
 	NotificationID *int     `json:"notification_id,omitempty"`

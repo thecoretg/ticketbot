@@ -26,9 +26,10 @@ type Processor interface {
 // Alerter receives operator alerts. The default logs at error level; the ops room replaces it.
 type Alerter = alerts.Alerter
 
-// RetentionConfig is the slice of app config the purge goroutine reads.
+// RetentionConfig is the slice of app config the purge and staleness goroutines read.
 type RetentionConfig interface {
 	GetLogRetentionDays() int
+	GetStaleAlertMinutes() int
 }
 
 // DefaultBackoff paces retries. Six attempts spread over about two hours cover a ConnectWise or
@@ -105,8 +106,9 @@ func (s *Service) Start(ctx context.Context) {
 		s.wg.Add(1)
 		go s.runWorker(ctx)
 	}
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.runPurge(ctx)
+	go s.runStaleWatch(ctx)
 }
 
 // Wait blocks until every worker has exited or ctx is done.
@@ -140,6 +142,14 @@ func (s *Service) List(ctx context.Context, status *models.IntakeStatus, limit i
 
 func (s *Service) Stats(ctx context.Context) (*models.IntakeStats, error) {
 	return s.Repo.Stats(ctx)
+}
+
+// Hourly returns webhook counts per hour for the last days days, oldest first, for the dashboard.
+func (s *Service) Hourly(ctx context.Context, days int) ([]models.IntakeHourCount, error) {
+	if days <= 0 || days > 30 {
+		days = 7
+	}
+	return s.Repo.CountsByHour(ctx, s.now().Add(-time.Duration(days)*24*time.Hour).Truncate(time.Hour))
 }
 
 func (s *Service) signal() {

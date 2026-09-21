@@ -72,6 +72,9 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		PasswordLoginEnabled:    c.PasswordLoginEnabled,
 		NotePreviewLength:       c.NotePreviewLength,
 		WriteCapPerTicket:       c.WriteCapPerTicket,
+		OpsRoomID:               c.OpsRoomID,
+		RedirectRoomID:          c.RedirectRoomID,
+		StaleAlertMinutes:       c.StaleAlertMinutes,
 	}
 }
 
@@ -91,5 +94,8 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		PasswordLoginEnabled:    pg.PasswordLoginEnabled,
 		NotePreviewLength:       pg.NotePreviewLength,
 		WriteCapPerTicket:       pg.WriteCapPerTicket,
+		OpsRoomID:               pg.OpsRoomID,
+		RedirectRoomID:          pg.RedirectRoomID,
+		StaleAlertMinutes:       pg.StaleAlertMinutes,
 	}
 }

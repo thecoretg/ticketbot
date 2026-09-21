@@ -7,7 +7,6 @@ import (
 	"log/slog"
 
 	"github.com/thecoretg/tctg-go/webex"
-	"github.com/thecoretg/ticketbot/internal/mock"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -30,11 +29,8 @@ func getStartupConfig(ctx context.Context, r repos.ConfigRepository) (*models.Co
 	return cfg, nil
 }
 
-func makeMessageSender(ctx context.Context, mocking bool, webexSecret string) (repos.MessageSender, error) {
-	if mocking {
-		slog.Info("running with webex mocking")
-		return mock.NewWebexClient(ctx, webexSecret)
-	}
-
+// makeMessageSender is always the real Webex client. Keeping messages away from real rooms is the
+// redirect room's job (app config), not an environment switch.
+func makeMessageSender(ctx context.Context, webexSecret string) (repos.MessageSender, error) {
 	return webex.NewClient(ctx, webex.Config{Token: webexSecret})
 }

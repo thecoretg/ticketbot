@@ -49,6 +49,21 @@ func (h *IntakeHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	outputJSON(w, st)
 }
 
+// Hourly handles GET /intake/hourly?days=7.
+func (h *IntakeHandler) Hourly(w http.ResponseWriter, r *http.Request) {
+	days, err := intQueryDefault(r, "days", 7)
+	if err != nil {
+		badQueryError(w, err)
+		return
+	}
+	rows, err := h.Svc.Hourly(r.Context(), days)
+	if err != nil {
+		internalServerError(w, err)
+		return
+	}
+	outputJSON(w, rows)
+}
+
 func (h *IntakeHandler) Retry(w http.ResponseWriter, r *http.Request) {
 	h.act(w, r, h.Svc.Retry)
 }

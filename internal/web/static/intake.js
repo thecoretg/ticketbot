@@ -17,18 +17,48 @@ let intakePollTimer = null
 
 async function loadIntake() {
     try {
-        const [stats, rows] = await Promise.all([
+        const [stats, rows, hourly] = await Promise.all([
             api('GET', '/intake/stats'),
             api('GET', `/intake?status=${encodeURIComponent(intakeFilter)}&limit=200`),
+            api('GET', '/intake/hourly?days=7').catch(() => []),
         ])
-        renderIntake(stats, rows || [])
+        renderIntake(stats, rows || [], hourly || [])
         startIntakePoll()
     } catch (e) {
         setContent(errorState(e.message))
     }
 }
 
-function renderIntake(stats, rows) {
+// intakeChart draws webhooks per hour for the last seven days as an inline SVG bar chart. It is
+// how the stale-webhook threshold gets tuned: quiet hours show as gaps.
+function intakeChart(hourly) {
+    const hours = 7 * 24
+    const end = new Date(); end.setMinutes(0, 0, 0)
+    const counts = new Array(hours).fill(0)
+    const byHour = new Map(hourly.map(h => [new Date(h.hour).getTime(), h.count]))
+    for (let i = 0; i < hours; i++) {
+        const t = end.getTime() - (hours - 1 - i) * 3600e3
+        counts[i] = byHour.get(t) || 0
+    }
+    const max = Math.max(1, ...counts)
+    const W = 840, H = 120, pad = 4, bw = (W - pad * 2) / hours
+    const bars = counts.map((c, i) => {
+        const h = Math.round((c / max) * (H - 20))
+        const t = new Date(end.getTime() - (hours - 1 - i) * 3600e3)
+        return `<rect x="${(pad + i * bw).toFixed(1)}" y="${H - h}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${h}" fill="var(--chart-1)"><title>${esc(fmtDateTime(t.toISOString()))}: ${c}</title></rect>`
+    }).join('')
+    const days = []
+    for (let i = 0; i < hours; i += 24) {
+        const t = new Date(end.getTime() - (hours - 1 - i) * 3600e3)
+        days.push(`<text x="${(pad + i * bw).toFixed(1)}" y="${H - 4}" font-size="10" fill="var(--muted)">${t.toLocaleDateString(undefined, { weekday: 'short' })}</text>`)
+    }
+    return `<div class="card card-pad stack gap2">
+        <div class="row spread"><span class="eyebrow">Webhooks per hour, last 7 days</span><span class="muted" style="font-size:var(--text-xs)">peak ${max}/h</span></div>
+        <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" aria-label="Webhooks received per hour over the last seven days">${bars}${days.join('')}</svg>
+    </div>`
+}
+
+function renderIntake(stats, rows, hourly = []) {
     const counts = stats?.counts || {}
     const tiles = INTAKE_STATUSES.filter(s => s.value !== 'discarded').map(s => `
         <article class="card stat">
@@ -72,6 +102,7 @@ function renderIntake(stats, rows) {
 
     setContent(`<div class="stack gap6">
         <div class="grid g4">${tiles}</div>
+        ${intakeChart(hourly)}
         <p class="muted">${esc(last)} The table refreshes every few seconds.</p>
         ${tableCard(thead, trs, {
             toolbar: filter,
@@ -115,11 +146,12 @@ function startIntakePoll() {
         if (currentTab !== 'intake') { stopIntakePoll(); return }
         if (document.getElementById('modal')?.classList.contains('on')) return
         try {
-            const [stats, rows] = await Promise.all([
+            const [stats, rows, hourly] = await Promise.all([
                 api('GET', '/intake/stats'),
                 api('GET', `/intake?status=${encodeURIComponent(intakeFilter)}&limit=200`),
+                api('GET', '/intake/hourly?days=7').catch(() => []),
             ])
-            renderIntake(stats, rows || [])
+            renderIntake(stats, rows || [], hourly || [])
         } catch { stopIntakePoll() }
     }, 5000)
 }

@@ -25,5 +25,7 @@ type WebhookIntakeRepository interface {
 	List(ctx context.Context, status *models.IntakeStatus, limit int) ([]*models.WebhookIntake, error)
 	Stats(ctx context.Context) (*models.IntakeStats, error)
 	CountReceivedSince(ctx context.Context, since time.Time) (int64, error)
+	// CountsByHour returns one row per hour that received at least one webhook since the given time.
+	CountsByHour(ctx context.Context, since time.Time) ([]models.IntakeHourCount, error)
 	DeleteFinishedBefore(ctx context.Context, before time.Time) (int64, error)
 }

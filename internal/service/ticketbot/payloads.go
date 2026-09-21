@@ -32,6 +32,7 @@ func notificationPayload(o notifier.Outcome) models.NotificationPayload {
 		NodeID:        o.Step.NodeID,
 		Title:         o.Step.Title,
 		ForwardedFrom: o.ForwardedFrom,
+		RedirectedTo:  o.RedirectedTo,
 		Result:        o.Result,
 	}
 	if o.Recipient != nil {

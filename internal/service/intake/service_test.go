@@ -76,6 +76,10 @@ func (f *fakeRepo) ResetProcessing(context.Context) (int64, error) { return 0, n
 
 func (f *fakeRepo) DeleteFinishedBefore(context.Context, time.Time) (int64, error) { return 0, nil }
 
+func (f *fakeRepo) Stats(context.Context) (*models.IntakeStats, error) {
+	return &models.IntakeStats{}, nil
+}
+
 func (f *fakeRepo) get(id int64) models.WebhookIntake {
 	f.mu.Lock()
 	defer f.mu.Unlock()

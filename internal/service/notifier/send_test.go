@@ -303,3 +303,38 @@ func TestSendCustomMessageFollowsAttribution(t *testing.T) {
 		t.Errorf("person should get the default body: %q", personBody)
 	}
 }
+
+func TestRedirectRoomTakesEveryMessageEvenInDryRun(t *testing.T) {
+	fx := newSendFixture(nil)
+	austin := 2
+	fx.svc.Cfg.RedirectRoomID = &austin
+	outs, err := fx.svc.Send(context.Background(), SendRequest{
+		Ticket:  fullTicket(),
+		DryRun:  true,
+		Intents: []workflow.NotifyIntent{roomIntent("rooms", 1), ownerIntent("people")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.sender.sent) == 0 {
+		t.Fatal("redirect must send even under dry run")
+	}
+	for _, m := range fx.sender.sent {
+		if m.RoomID != "wx-Austin" || m.ToPersonEmail != "" {
+			t.Errorf("message went to %+v, want the Austin room", m)
+		}
+		if !strings.Contains(m.Markdown, "Redirected") || !strings.Contains(m.Markdown, "intended for") {
+			t.Errorf("missing redirect prefix: %q", m.Markdown)
+		}
+	}
+	by := byRecipient(outs)
+	if o := by[1]; o.Result != ResultSent || o.RedirectedTo != "Austin" || o.Recipient.Name != "Dallas" {
+		t.Errorf("room outcome = %+v", o)
+	}
+	// The stored notification still names the intended recipient.
+	for _, n := range fx.notifs.inserted {
+		if n.RecipientID != nil && *n.RecipientID == austin {
+			t.Error("notification record must keep the intended recipient, not the redirect room")
+		}
+	}
+}

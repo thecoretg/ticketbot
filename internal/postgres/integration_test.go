@@ -351,3 +351,25 @@ func TestWebhookIntakeClaimOrdersPerTicket(t *testing.T) {
 		t.Fatalf("stats = %+v", st)
 	}
 }
+
+func TestWebhookIntakeCountsByHour(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	_, _ = pool.Exec(ctx, `DELETE FROM webhook_intake`)
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM webhook_intake`) })
+	repo := NewWebhookIntakeRepo(pool)
+
+	base := time.Now().Truncate(time.Hour).Add(-3 * time.Hour)
+	for _, at := range []time.Time{base, base.Add(5 * time.Minute), base.Add(2 * time.Hour)} {
+		if _, err := pool.Exec(ctx, `INSERT INTO webhook_intake (ticket_id, action, received_at) VALUES (1, 'updated', $1)`, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := repo.CountsByHour(ctx, base.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].Count != 2 || rows[1].Count != 1 || !rows[0].Hour.Equal(base) {
+		t.Fatalf("rows = %+v", rows)
+	}
+}

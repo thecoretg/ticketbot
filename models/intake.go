@@ -46,6 +46,12 @@ type WebhookIntake struct {
 	FinishedAt    *time.Time      `json:"finished_at,omitempty"`
 }
 
+// IntakeHourCount is one bar of the webhooks-per-hour chart.
+type IntakeHourCount struct {
+	Hour  time.Time `json:"hour"`
+	Count int64     `json:"count"`
+}
+
 // IntakeStats summarises the queue for the dashboard.
 type IntakeStats struct {
 	Counts         map[IntakeStatus]int64 `json:"counts"`

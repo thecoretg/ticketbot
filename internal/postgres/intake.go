@@ -124,6 +124,18 @@ func (p *WebhookIntakeRepo) CountReceivedSince(ctx context.Context, since time.T
 	return p.queries.CountWebhookIntakeReceivedSince(ctx, since)
 }
 
+func (p *WebhookIntakeRepo) CountsByHour(ctx context.Context, since time.Time) ([]models.IntakeHourCount, error) {
+	rows, err := p.queries.CountWebhookIntakeByHour(ctx, since)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.IntakeHourCount, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, models.IntakeHourCount{Hour: r.Hour, Count: r.N})
+	}
+	return out, nil
+}
+
 func (p *WebhookIntakeRepo) DeleteFinishedBefore(ctx context.Context, before time.Time) (int64, error) {
 	return p.queries.DeleteFinishedWebhookIntakeBefore(ctx, &before)
 }

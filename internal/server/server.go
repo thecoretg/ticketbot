@@ -81,7 +81,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		return nil, nil, fmt.Errorf("creating connectwise client: %w", err)
 	}
 
-	ms, err := makeMessageSender(ctx, e.MockWebex, e.WebexSecret)
+	ms, err := makeMessageSender(ctx, e.WebexSecret)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating message sender: %w", err)
 	}
@@ -113,7 +113,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	ns := notifier.New(nr)
 	cfgSvc := config.New(r.Config, cfg, level, logBuf, e.Entra.Configured())
 	listSvc := lists.New(lists.Params{Lists: r.Lists, Companies: r.CW.Company, Contacts: r.CW.Contact, Workflows: r.Workflows})
-	alerter := alerts.Log{}
+	alerter := &alerts.Webex{Cfg: cfg, Recipients: r.WebexRecipients, Sender: ms}
 	engine := workflow.NewEngine(cw)
 	engine.Lists = listSvc
 	engine.Limiter = workflow.NewRateLimiter(func() int { return cfg.WriteCapPerTicket })

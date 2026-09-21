@@ -16,6 +16,7 @@ var (
 	ErrPasswordLoginNeedsSSO = errors.New("password sign-in can only be disabled while sso is enabled")
 	ErrNotePreviewLength     = errors.New("note preview length must be at least 1 character")
 	ErrWriteCap              = errors.New("write cap per ticket cannot be negative")
+	ErrStaleMinutes          = errors.New("stale alert minutes cannot be negative")
 )
 
 // ValidationError marks a rejected update the caller should report as a bad request.
@@ -52,6 +53,9 @@ func (s *Service) validate(c *models.Config) error {
 	}
 	if c.WriteCapPerTicket < 0 {
 		return ValidationError{ErrWriteCap}
+	}
+	if c.StaleAlertMinutes < 0 {
+		return ValidationError{ErrStaleMinutes}
 	}
 	if c.SSOEnabled && !s.ssoConfigured {
 		return ValidationError{ErrSSONotConfigured}
@@ -112,6 +116,15 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.WriteCapPerTicket != nil {
 		merged.WriteCapPerTicket = *p.WriteCapPerTicket
 	}
+	if p.OpsRoomID != nil {
+		merged.OpsRoomID = optionalID(*p.OpsRoomID)
+	}
+	if p.RedirectRoomID != nil {
+		merged.RedirectRoomID = optionalID(*p.RedirectRoomID)
+	}
+	if p.StaleAlertMinutes != nil {
+		merged.StaleAlertMinutes = *p.StaleAlertMinutes
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -124,6 +137,14 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 
 	s.applyChanges(updated)
 	return s.ConfigRef, nil
+}
+
+// optionalID turns the update wire form (0 clears) into the stored form (nil).
+func optionalID(id int) *int {
+	if id <= 0 {
+		return nil
+	}
+	return &id
 }
 
 func (s *Service) applyChanges(src *models.Config) {
@@ -141,6 +162,9 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.PasswordLoginEnabled = src.PasswordLoginEnabled
 	cfg.NotePreviewLength = src.NotePreviewLength
 	cfg.WriteCapPerTicket = src.WriteCapPerTicket
+	cfg.OpsRoomID = src.OpsRoomID
+	cfg.RedirectRoomID = src.RedirectRoomID
+	cfg.StaleAlertMinutes = src.StaleAlertMinutes
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)

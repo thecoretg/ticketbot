@@ -19,6 +19,14 @@ type Message struct {
 	SendError      error
 }
 
+// redirectTo re-addresses the message to the redirect recipient and says who it was for. The
+// notification record keeps the intended recipient so history reads as the workflow meant it.
+func (m *Message) redirectTo(to *models.WebexRecipient) {
+	intended := m.WebexRecipient.recipient
+	prefix := fmt.Sprintf("↪️ **Redirected** · intended for **%s** (%s)\n\n", intended.Name, intended.Type)
+	m.WebexMsg = newWebexMsg(to, prefix+m.WebexMsg.Markdown)
+}
+
 func newMessage(wm webex.Message, r recipData, n *models.TicketNotification, isNew bool) Message {
 	mt := "updated_ticket"
 	if isNew {

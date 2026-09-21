@@ -472,6 +472,7 @@ function tkActionBody(p, dryRun) {
 function tkNotificationBody(p, dryRun) {
     let html = `<div class="row gap2 wrap">${tkResultBadge(p.result, dryRun)}<span class="event-detail">${esc(p.recipient_type || '')}</span></div>`
     if (p.forwarded_from?.length) html += `<div class="event-detail">Forwarded from ${esc(p.forwarded_from.join(' → '))}</div>`
+    if (p.redirected_to) html += `<div class="event-detail">${icon('branch')} Redirected to ${esc(p.redirected_to)}</div>`
     if (p.error) html += `<div class="event-error">${esc(p.error)}</div>`
     return html
 }
