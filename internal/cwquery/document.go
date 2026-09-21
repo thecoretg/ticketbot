@@ -12,6 +12,7 @@ import (
 type Changes struct {
 	Fields  []models.FieldChange
 	NewNote bool
+	IsNew   bool
 }
 
 // NewDocument builds the evaluation document for a ticket: the ticket's JSON form plus pseudo-fields:
@@ -20,6 +21,8 @@ type Changes struct {
 //     `latestNote/text contains 'x'` or `latestNote/internalAnalysisFlag = true` work.
 //   - newNote: true when the latest note first appeared in this intake, so `newNote = true`
 //     separates "someone replied" from "a field changed".
+//   - isNew: true when ticketbot is seeing the ticket for the first time, so one branch can tell
+//     a brand-new ticket from an update.
 //   - changed: a map of field name → true for each changed field, so `changed/status = true`
 //     matches only when the status changed in this intake.
 //   - old: the previous value of each changed field, so `old/status/name = 'New'` matches a
@@ -37,6 +40,7 @@ func NewDocument(t *psa.Ticket, note *psa.ServiceTicketNote, ch Changes) map[str
 		doc["latestNote"] = nil
 	}
 	doc["newNote"] = ch.NewNote
+	doc["isNew"] = ch.IsNew
 
 	changed := make(map[string]any, len(ch.Fields))
 	old := make(map[string]any, len(ch.Fields))

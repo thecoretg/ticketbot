@@ -205,7 +205,7 @@ func (s *Service) runWorkflow(ctx context.Context, run *run, f *cwsvc.Fetched, d
 
 	run.add(models.EventWorkflow, workflowPayload(wf, res))
 	for _, a := range res.Actions {
-		run.add(models.EventAction, actionPayload(a))
+		run.add(models.EventAction, a.Payload())
 	}
 
 	if res.LearnedAPIMember != "" && strings.TrimSpace(s.Cfg.CWAPIMemberIdentifier) == "" && s.ConfigSvc != nil {

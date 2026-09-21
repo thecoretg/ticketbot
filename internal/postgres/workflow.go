@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -73,7 +72,7 @@ func (p *WorkflowRepo) ExistsForBoard(ctx context.Context, boardID int) (bool, e
 }
 
 func (p *WorkflowRepo) Insert(ctx context.Context, w *models.Workflow) (*models.Workflow, error) {
-	rules, err := marshalRules(w.Rules)
+	rules, err := models.EncodeWorkflowDocument(w)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +92,7 @@ func (p *WorkflowRepo) Insert(ctx context.Context, w *models.Workflow) (*models.
 }
 
 func (p *WorkflowRepo) Update(ctx context.Context, w *models.Workflow) (*models.Workflow, error) {
-	rules, err := marshalRules(w.Rules)
+	rules, err := models.EncodeWorkflowDocument(w)
 	if err != nil {
 		return nil, err
 	}
@@ -119,18 +118,7 @@ func (p *WorkflowRepo) Delete(ctx context.Context, id int) error {
 	return p.queries.DeleteWorkflow(ctx, id)
 }
 
-func marshalRules(rules []models.Rule) ([]byte, error) {
-	if rules == nil {
-		rules = []models.Rule{}
-	}
-	b, err := json.Marshal(rules)
-	if err != nil {
-		return nil, fmt.Errorf("marshalling workflow rules: %w", err)
-	}
-	return b, nil
-}
-
-func workflowFromParts(id, boardID int, boardName, name string, enabled, dryRun bool, rules []byte, created, updated time.Time) (*models.Workflow, error) {
+func workflowFromParts(id, boardID int, boardName, name string, enabled, dryRun bool, doc []byte, created, updated time.Time) (*models.Workflow, error) {
 	w := &models.Workflow{
 		ID:        id,
 		BoardID:   boardID,
@@ -138,20 +126,12 @@ func workflowFromParts(id, boardID int, boardName, name string, enabled, dryRun 
 		Name:      name,
 		Enabled:   enabled,
 		DryRun:    dryRun,
-		Rules:     []models.Rule{},
 		CreatedOn: created,
 		UpdatedOn: updated,
 	}
 
-	if len(rules) > 0 {
-		if err := json.Unmarshal(rules, &w.Rules); err != nil {
-			return nil, fmt.Errorf("unmarshalling rules for workflow %d: %w", id, err)
-		}
-	}
-	for i := range w.Rules {
-		if w.Rules[i].Actions == nil {
-			w.Rules[i].Actions = []models.Action{}
-		}
+	if err := models.DecodeWorkflowDocument(doc, w); err != nil {
+		return nil, fmt.Errorf("decoding document for workflow %d: %w", id, err)
 	}
 
 	return w, nil

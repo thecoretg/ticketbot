@@ -92,13 +92,13 @@ type ListMembership struct {
 	ItemID int
 }
 
-// ListReference points at a workflow rule whose condition uses a list.
+// ListReference points at a workflow node whose condition uses a list.
 type ListReference struct {
 	WorkflowID   int    `json:"workflow_id"`
 	WorkflowName string `json:"workflow_name"`
 	BoardName    string `json:"board_name"`
-	RuleID       string `json:"rule_id"`
-	RuleName     string `json:"rule_name"`
+	NodeID       string `json:"node_id"`
+	NodeTitle    string `json:"node_title"`
 }
 
 // ListDetail is a list with its members and the rules that reference it.

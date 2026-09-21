@@ -69,40 +69,47 @@ type LoopGuardPayload struct {
 	Identifier string `json:"identifier"`
 }
 
-// WorkflowPayload summarizes a workflow run.
+// WorkflowPayload summarizes a workflow run: the steps every fired trigger's walk visited, in order.
 type WorkflowPayload struct {
-	WorkflowID   *int                 `json:"workflow_id,omitempty"`
-	WorkflowName string               `json:"workflow_name,omitempty"`
-	Found        bool                 `json:"found"`
-	Enabled      bool                 `json:"enabled"`
-	Rules        []RuleOutcomePayload `json:"rules,omitempty"`
+	WorkflowID   *int          `json:"workflow_id,omitempty"`
+	WorkflowName string        `json:"workflow_name,omitempty"`
+	Found        bool          `json:"found"`
+	Enabled      bool          `json:"enabled"`
+	Event        TriggerEvent  `json:"event,omitempty"`
+	Steps        []StepPayload `json:"steps,omitempty"`
 }
 
-type RuleOutcomePayload struct {
-	RuleID   string `json:"rule_id"`
-	RuleName string `json:"rule_name"`
-	Matched  bool   `json:"matched"`
-	Skipped  string `json:"skipped,omitempty"` // disabled | trigger
-	Error    string `json:"error,omitempty"`
-	Stopped  bool   `json:"stopped"`
+// StepPayload records one node the run visited. Via is the edge the walk arrived by and Port the
+// output it left by, so a canvas can light the path.
+type StepPayload struct {
+	NodeID  string   `json:"node_id"`
+	Title   string   `json:"title"`
+	No      int      `json:"no"`
+	Kind    NodeKind `json:"kind"`
+	Trigger string   `json:"trigger,omitempty"`
+	Via     string   `json:"via,omitempty"`
+	Port    Port     `json:"port,omitempty"`
+	Matched *bool    `json:"matched,omitempty"`
+	Skipped string   `json:"skipped,omitempty"` // disabled | joined
+	Error   string   `json:"error,omitempty"`
 }
 
-// ActionPayload records one action's outcome.
+// ActionPayload records one action node's outcome.
 type ActionPayload struct {
-	RuleID   string         `json:"rule_id"`
-	RuleName string         `json:"rule_name"`
-	Index    int            `json:"index"`
-	Kind     string         `json:"kind"`
-	Result   string         `json:"result"` // ok | would_run | queued | skipped | error
-	Reason   string         `json:"reason,omitempty"`
-	Error    string         `json:"error,omitempty"`
-	Output   map[string]any `json:"output,omitempty"`
+	NodeID string         `json:"node_id"`
+	Title  string         `json:"title"`
+	No     int            `json:"no"`
+	Kind   string         `json:"kind"`
+	Result string         `json:"result"` // ok | would_run | queued | skipped | error
+	Reason string         `json:"reason,omitempty"`
+	Error  string         `json:"error,omitempty"`
+	Output map[string]any `json:"output,omitempty"`
 }
 
 // NotificationPayload records one recipient's outcome.
 type NotificationPayload struct {
-	RuleID         string   `json:"rule_id,omitempty"`
-	RuleName       string   `json:"rule_name,omitempty"`
+	NodeID         string   `json:"node_id,omitempty"`
+	Title          string   `json:"title,omitempty"`
 	RecipientID    int      `json:"recipient_id"`
 	RecipientName  string   `json:"recipient_name"`
 	RecipientType  string   `json:"recipient_type"`

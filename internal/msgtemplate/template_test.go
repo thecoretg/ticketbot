@@ -30,7 +30,7 @@ func ticket() *models.FullTicket {
 }
 
 func TestRender(t *testing.T) {
-	ctx := Context{Ticket: ticket(), RuleName: "Escalate", IsNew: true, CompanyID: "acme", MaxNoteLen: 12}
+	ctx := Context{Ticket: ticket(), StepTitle: "Escalate", IsNew: true, CompanyID: "acme", MaxNoteLen: 12}
 	got := Render("{{event}} {{ ticket.link }} {{ticket.summary}} | {{board}}/{{status}}/{{priority}} | {{company}} {{contact}} {{owner}} [{{resources}}] by {{rule}}", ctx)
 	want := "New Ticket [42](https://na.myconnectwise.net/v4_6_release/services/system_io/Service/fv_sr100_request.rails?service_recid=42&companyName=acme) Printer down | Help Desk/New/Priority 2 | Acme Ann Smith Jane Doe [Jane Doe, Bob Ray] by Escalate"
 	if got != want {

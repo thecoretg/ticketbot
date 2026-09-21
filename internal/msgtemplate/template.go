@@ -33,7 +33,7 @@ var Placeholders = []Placeholder{
 	{"contact", "Ticket contact full name"},
 	{"owner", "Owner full name"},
 	{"resources", "Resource full names, comma separated"},
-	{"rule", "Name of the rule that sent this"},
+	{"rule", "Title of the step that sent this"},
 	{"note.author", "Who wrote the latest note"},
 	{"note.text", "Latest note text, truncated to the configured max length"},
 	{"note.quote", "Latest note as a markdown block quote, with author line"},
@@ -62,7 +62,7 @@ func Validate(tpl string) error {
 // Context is everything Render can substitute.
 type Context struct {
 	Ticket     *models.FullTicket
-	RuleName   string
+	StepTitle  string // title of the notify node that sent this
 	IsNew      bool
 	CompanyID  string // ConnectWise company identifier for ticket links
 	MaxNoteLen int    // 0 means no truncation
@@ -126,7 +126,7 @@ func (c Context) value(name string) string {
 		}
 		return strings.Join(names, ", ")
 	case "rule":
-		return c.RuleName
+		return c.StepTitle
 	case "note.author":
 		return NoteAuthor(t)
 	case "note.text":

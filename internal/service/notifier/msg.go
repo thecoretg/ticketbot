@@ -68,12 +68,12 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 	return msgs
 }
 
-// messageBody renders the rule's custom message when it has one, or the default layout.
+// messageBody renders the step's custom message when it has one, or the default layout.
 func (s *Service) messageBody(t *models.FullTicket, in workflow.NotifyIntent, isNew bool) string {
 	if tpl := strings.TrimSpace(in.Target.Message); tpl != "" {
 		rendered := msgtemplate.Render(tpl, msgtemplate.Context{
 			Ticket:     t,
-			RuleName:   in.Rule.RuleName,
+			StepTitle:  in.Step.Title,
 			IsNew:      isNew,
 			CompanyID:  s.CWCompanyID,
 			MaxNoteLen: s.Cfg.MaxMessageLength,

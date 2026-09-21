@@ -14,7 +14,7 @@ type WorkflowRepository interface {
 	GetByBoard(ctx context.Context, boardID int) (*models.Workflow, error)
 	ExistsForBoard(ctx context.Context, boardID int) (bool, error)
 	Insert(ctx context.Context, w *models.Workflow) (*models.Workflow, error)
-	// Update replaces name, enabled, dry_run and the whole rule list.
+	// Update replaces name, enabled, dry_run and the whole graph document.
 	Update(ctx context.Context, w *models.Workflow) (*models.Workflow, error)
 	Delete(ctx context.Context, id int) error
 }

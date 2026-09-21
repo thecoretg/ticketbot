@@ -135,14 +135,21 @@ func TestE2EProcessTicket(t *testing.T) {
 	if existing, err := app.Stores.Workflows.GetByBoard(ctx, stored.BoardID); err == nil {
 		_ = app.Stores.Workflows.Delete(ctx, existing.ID)
 	}
-	wf, err := app.Svc.Workflow.Create(ctx, &models.Workflow{BoardID: stored.BoardID, Enabled: true, Rules: []models.Rule{{
-		Name: "e2e", Enabled: true, Trigger: models.TriggerUpdate, Condition: "changed/summary = true",
-		Actions: []models.Action{
-			{Kind: models.ActionNotify, Enabled: true, Notify: &models.NotifyAction{Target: models.TargetRoom, RecipientID: &room.ID}},
-			{Kind: models.ActionAddNote, Enabled: true, AddNote: &models.AddNoteAction{Text: "e2e dry run", Internal: true}},
-			{Kind: models.ActionNotify, Enabled: true, Notify: &models.NotifyAction{Target: models.TargetResourcesOwner}},
+	wf, err := app.Svc.Workflow.Create(ctx, &models.Workflow{BoardID: stored.BoardID, Enabled: true,
+		Nodes: []models.Node{
+			{ID: "t", Kind: models.NodeTrigger, Title: "updated", Enabled: true, Events: []models.TriggerEvent{models.TriggerUpdated}},
+			{ID: "c", Kind: models.NodeIf, Title: "e2e", Enabled: true, Condition: "changed/summary = true"},
+			{ID: "n1", Kind: models.NodeKind(models.ActionNotify), Title: "room", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: models.TargetRoom, RecipientID: &room.ID}}},
+			{ID: "a", Kind: models.NodeKind(models.ActionAddNote), Title: "note", Enabled: true, ActionSettings: models.ActionSettings{AddNote: &models.AddNoteAction{Text: "e2e dry run", Internal: true}}},
+			{ID: "n2", Kind: models.NodeKind(models.ActionNotify), Title: "owner", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: models.TargetResourcesOwner}}},
 		},
-	}}})
+		Edges: []models.Edge{
+			{From: "t", To: "c", Port: models.PortOut},
+			{From: "c", To: "n1", Port: models.PortYes},
+			{From: "n1", To: "a", Port: models.PortOut},
+			{From: "a", To: "n2", Port: models.PortOut},
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

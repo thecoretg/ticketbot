@@ -12,38 +12,11 @@ func workflowPayload(wf *models.Workflow, res *workflow.Result) models.WorkflowP
 		WorkflowName: wf.Name,
 		Found:        true,
 		Enabled:      true,
-		Rules:        make([]models.RuleOutcomePayload, 0, len(res.Rules)),
+		Event:        res.Event,
+		Steps:        make([]models.StepPayload, 0, len(res.Steps)),
 	}
-
-	for _, r := range res.Rules {
-		rp := models.RuleOutcomePayload{
-			RuleID:   r.Rule.RuleID,
-			RuleName: r.Rule.RuleName,
-			Matched:  r.Matched,
-			Skipped:  r.Skipped,
-			Stopped:  r.Stopped,
-		}
-		if r.Err != nil {
-			rp.Error = r.Err.Error()
-		}
-		p.Rules = append(p.Rules, rp)
-	}
-
-	return p
-}
-
-func actionPayload(a workflow.ActionOutcome) models.ActionPayload {
-	p := models.ActionPayload{
-		RuleID:   a.Rule.RuleID,
-		RuleName: a.Rule.RuleName,
-		Index:    a.Index,
-		Kind:     string(a.Kind),
-		Result:   a.Result,
-		Reason:   a.Reason,
-		Output:   a.Output,
-	}
-	if a.Err != nil {
-		p.Error = a.Err.Error()
+	for _, st := range res.Steps {
+		p.Steps = append(p.Steps, st.Payload())
 	}
 
 	return p
@@ -51,8 +24,8 @@ func actionPayload(a workflow.ActionOutcome) models.ActionPayload {
 
 func notificationPayload(o notifier.Outcome) models.NotificationPayload {
 	p := models.NotificationPayload{
-		RuleID:        o.Rule.RuleID,
-		RuleName:      o.Rule.RuleName,
+		NodeID:        o.Step.NodeID,
+		Title:         o.Step.Title,
 		ForwardedFrom: o.ForwardedFrom,
 		Result:        o.Result,
 	}

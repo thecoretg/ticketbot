@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
@@ -48,6 +49,10 @@ func LoadEnv(ctx context.Context, loader ListLoader, exprs ...cwquery.Expr) (cwq
 	return cwquery.Env{}, nil
 }
 
+// MaxSteps caps the nodes one run may visit. Validation rejects cycles, but the engine must not
+// trust the document it is handed.
+const MaxSteps = 500
+
 // Input is everything the engine needs to run one workflow against one intake.
 type Input struct {
 	Ticket      *psa.Ticket
@@ -58,18 +63,17 @@ type Input struct {
 	DryRun      bool // no ConnectWise writes; actions report would_run
 }
 
-// RuleRef identifies the rule an outcome belongs to.
-type RuleRef struct {
+// StepRef identifies the node an outcome belongs to.
+type StepRef struct {
 	WorkflowID int
-	RuleID     string
-	RuleName   string
+	NodeID     string
+	Title      string
 }
 
-// NotifyIntent is a notify action that matched; the caller resolves recipients and sends.
+// NotifyIntent is a notify node that ran; the caller resolves recipients and sends.
 type NotifyIntent struct {
-	Rule        RuleRef
-	ActionIndex int
-	Target      models.NotifyAction
+	Step   StepRef
+	Target models.NotifyAction
 }
 
 // Action results.
@@ -81,9 +85,15 @@ const (
 	ResultError    = "error"
 )
 
+// Step skip reasons.
+const (
+	SkippedDisabled = "disabled"
+	SkippedJoined   = "joined" // another trigger's walk already ran this node
+)
+
 type ActionOutcome struct {
-	Rule   RuleRef
-	Index  int
+	Step   StepRef
+	No     int // the step number this action ran as
 	Kind   models.ActionKind
 	Result string
 	Reason string
@@ -91,12 +101,53 @@ type ActionOutcome struct {
 	Output map[string]any
 }
 
-type RuleOutcome struct {
-	Rule    RuleRef
-	Matched bool
-	Skipped string // disabled | trigger
+// Payload is the action in its ticket-history form.
+func (a ActionOutcome) Payload() models.ActionPayload {
+	p := models.ActionPayload{
+		NodeID: a.Step.NodeID,
+		Title:  a.Step.Title,
+		No:     a.No,
+		Kind:   string(a.Kind),
+		Result: a.Result,
+		Reason: a.Reason,
+		Output: a.Output,
+	}
+	if a.Err != nil {
+		p.Error = a.Err.Error()
+	}
+	return p
+}
+
+// StepOutcome records one node a walk visited.
+type StepOutcome struct {
+	Step    StepRef
+	No      int // 1-based position in the run
+	Kind    models.NodeKind
+	Trigger string      // node id of the trigger whose walk this is
+	Via     string      // edge id the walk arrived by; empty for the trigger itself
+	Port    models.Port // output the walk left by; empty when the walk ended here
+	Matched *bool       // if nodes: the condition's verdict
+	Skipped string      // SkippedDisabled | SkippedJoined
 	Err     error
-	Stopped bool
+}
+
+// Payload is the step in its ticket-history form.
+func (s StepOutcome) Payload() models.StepPayload {
+	p := models.StepPayload{
+		NodeID:  s.Step.NodeID,
+		Title:   s.Step.Title,
+		No:      s.No,
+		Kind:    s.Kind,
+		Trigger: s.Trigger,
+		Via:     s.Via,
+		Port:    s.Port,
+		Matched: s.Matched,
+		Skipped: s.Skipped,
+	}
+	if s.Err != nil {
+		p.Error = s.Err.Error()
+	}
+	return p
 }
 
 // Result is what one engine run produced.
@@ -108,11 +159,12 @@ type Result struct {
 	// TriggerNote is unchanged from Input; notification text describes this note.
 	TriggerNote *psa.ServiceTicketNote
 
-	Rules      []RuleOutcome
-	Actions    []ActionOutcome
-	Notifies   []NotifyIntent
-	Suppressed bool
-	CWWrites   int
+	// Event is what the intake raised; Steps is empty when no trigger listens for it.
+	Event    models.TriggerEvent
+	Steps    []StepOutcome
+	Actions  []ActionOutcome
+	Notifies []NotifyIntent
+	CWWrites int
 	// LearnedAPIMember is the member identifier ConnectWise attributed to a write the engine made.
 	LearnedAPIMember string
 }
@@ -127,9 +179,25 @@ func NewEngine(cw CWClient) *Engine {
 	return &Engine{CW: cw}
 }
 
-// Run evaluates the workflow's rules in order against the ticket. Notify actions are collected as
-// intents; ticket-mutating actions are executed immediately (unless DryRun) and the ticket is
-// refreshed so later rules see the new state. Errors inside a rule or action are recorded, never
+// run is the mutable state of one engine run.
+type run struct {
+	wf      *models.Workflow
+	in      Input
+	res     *Result
+	nodes   map[string]*models.Node
+	out     map[string]map[models.Port]*models.Edge // from node id → port → edge
+	changes cwquery.Changes
+	doc     map[string]any
+	visited map[string]bool
+	env     cwquery.Env
+	envOK   bool
+}
+
+// Run walks the workflow graph for the ticket. Every enabled trigger listening for the intake's
+// event starts a walk, in canvas order; each walk follows the port its nodes select until a port
+// has no wire, a node another walk already ran is reached, or the step cap trips. Notify nodes are
+// collected as intents; ticket-mutating nodes are executed immediately (unless DryRun) and the
+// ticket is refreshed so later nodes see the new state. Errors inside a node are recorded, never
 // returned; only a nil workflow or ticket is an error.
 func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Result, error) {
 	if wf == nil {
@@ -139,94 +207,174 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 		return nil, errors.New("nil ticket")
 	}
 
-	res := &Result{
-		Ticket:      in.Ticket,
-		LatestNote:  in.TriggerNote,
-		TriggerNote: in.TriggerNote,
+	r := &run{
+		wf: wf,
+		in: in,
+		res: &Result{
+			Ticket:      in.Ticket,
+			LatestNote:  in.TriggerNote,
+			TriggerNote: in.TriggerNote,
+			Event:       models.EventFor(in.IsNew),
+		},
+		nodes:   make(map[string]*models.Node, len(wf.Nodes)),
+		out:     make(map[string]map[models.Port]*models.Edge, len(wf.Nodes)),
+		changes: cwquery.Changes{Fields: in.Changes, NewNote: in.NewNote, IsNew: in.IsNew},
+		visited: make(map[string]bool, len(wf.Nodes)),
 	}
-
-	changes := cwquery.Changes{Fields: in.Changes, NewNote: in.NewNote}
-	doc := cwquery.NewDocument(res.Ticket, in.TriggerNote, changes)
-
-	// list memberships are loaded at most once per run, and only if a rule needs them
-	var env cwquery.Env
-	envLoaded := false
-
-	for _, r := range wf.Rules {
-		ref := RuleRef{WorkflowID: wf.ID, RuleID: r.ID, RuleName: r.Name}
-
-		if !r.Enabled {
-			res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Skipped: "disabled"})
-			continue
+	for i := range wf.Nodes {
+		n := &wf.Nodes[i]
+		r.nodes[n.ID] = n
+	}
+	for i := range wf.Edges {
+		ed := &wf.Edges[i]
+		if r.out[ed.From] == nil {
+			r.out[ed.From] = map[models.Port]*models.Edge{}
 		}
-		if !r.Trigger.Matches(in.IsNew) {
-			res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Skipped: "trigger"})
-			continue
+		if _, dup := r.out[ed.From][ed.Port]; !dup {
+			r.out[ed.From][ed.Port] = ed
 		}
+	}
+	r.doc = cwquery.NewDocument(r.res.Ticket, in.TriggerNote, r.changes)
 
-		q, err := cwquery.Compile(r.Condition)
-		if err != nil {
-			res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Err: fmt.Errorf("compiling condition: %w", err)})
-			continue
-		}
-		if !envLoaded && len(cwquery.ListRefs(q.Expr)) > 0 {
-			env, err = LoadEnv(ctx, e.Lists, q.Expr)
-			if err != nil {
-				res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Err: fmt.Errorf("loading lists: %w", err)})
-				continue
-			}
-			envLoaded = true
-		}
-		matched, err := q.EvalEnv(doc, env)
-		if err != nil {
-			res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Err: fmt.Errorf("evaluating condition: %w", err)})
-			continue
-		}
-		if !matched {
-			res.Rules = append(res.Rules, RuleOutcome{Rule: ref})
-			continue
-		}
-
-		for i, a := range r.Actions {
-			writes := res.CWWrites
-			out := e.runAction(ctx, ref, i, a, in, res)
-			res.Actions = append(res.Actions, out)
-			if res.CWWrites != writes {
-				doc = cwquery.NewDocument(res.Ticket, in.TriggerNote, changes)
-			}
-		}
-
-		res.Rules = append(res.Rules, RuleOutcome{Rule: ref, Matched: true, Stopped: r.StopProcessing})
-		if r.StopProcessing {
+	for _, t := range r.triggers() {
+		e.walk(ctx, r, t)
+		if len(r.res.Steps) >= MaxSteps {
 			break
 		}
 	}
 
-	return res, nil
+	return r.res, nil
 }
 
-func (e *Engine) runAction(ctx context.Context, ref RuleRef, idx int, a models.Action, in Input, res *Result) ActionOutcome {
-	out := ActionOutcome{Rule: ref, Index: idx, Kind: a.Kind}
+// triggers lists the enabled trigger nodes listening for the event, left to right then top to
+// bottom as they sit on the canvas.
+func (r *run) triggers() []*models.Node {
+	var out []*models.Node
+	for _, n := range r.nodes {
+		if n.Kind == models.NodeTrigger && n.Enabled && n.Listens(r.res.Event) {
+			out = append(out, n)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.X != b.X {
+			return a.X < b.X
+		}
+		if a.Y != b.Y {
+			return a.Y < b.Y
+		}
+		return a.ID < b.ID
+	})
+	return out
+}
+
+func (e *Engine) walk(ctx context.Context, r *run, trigger *models.Node) {
+	cur, via := trigger, ""
+	suppressed := false // a skip_notify on this walk silences the notifies after it
+
+	for cur != nil && len(r.res.Steps) < MaxSteps {
+		ref := StepRef{WorkflowID: r.wf.ID, NodeID: cur.ID, Title: cur.Title}
+		st := StepOutcome{Step: ref, No: len(r.res.Steps) + 1, Kind: cur.Kind, Trigger: trigger.ID, Via: via}
+
+		if r.visited[cur.ID] {
+			st.Skipped = SkippedJoined
+			r.res.Steps = append(r.res.Steps, st)
+			return
+		}
+		r.visited[cur.ID] = true
+
+		var port models.Port
+		switch {
+		case cur.Kind == models.NodeTrigger:
+			port = models.PortOut
+
+		case cur.Kind == models.NodeIf:
+			port = models.PortNo
+			if !cur.Enabled {
+				st.Skipped = SkippedDisabled
+				break
+			}
+			matched, err := e.evalCondition(ctx, r, cur.Condition)
+			if err != nil {
+				st.Err = err
+				break
+			}
+			st.Matched = &matched
+			if matched {
+				port = models.PortYes
+			}
+
+		case cur.Kind.IsAction():
+			port = models.PortOut
+			if !cur.Enabled {
+				st.Skipped = SkippedDisabled
+			}
+			writes := r.res.CWWrites
+			out := e.runAction(ctx, ref, st.No, cur.Action(), r, &suppressed)
+			r.res.Actions = append(r.res.Actions, out)
+			if r.res.CWWrites != writes {
+				r.doc = cwquery.NewDocument(r.res.Ticket, r.in.TriggerNote, r.changes)
+			}
+
+		default:
+			st.Err = fmt.Errorf("unknown node kind %q", cur.Kind)
+		}
+
+		next := r.out[cur.ID][port]
+		if next == nil {
+			r.res.Steps = append(r.res.Steps, st)
+			return
+		}
+		st.Port = port
+		r.res.Steps = append(r.res.Steps, st)
+		cur, via = r.nodes[next.To], next.ID
+	}
+}
+
+// evalCondition compiles and evaluates an if node's condition against the current document,
+// loading list memberships the first time a condition needs them.
+func (e *Engine) evalCondition(ctx context.Context, r *run, condition string) (bool, error) {
+	q, err := cwquery.Compile(condition)
+	if err != nil {
+		return false, fmt.Errorf("compiling condition: %w", err)
+	}
+	if !r.envOK && len(cwquery.ListRefs(q.Expr)) > 0 {
+		env, err := LoadEnv(ctx, e.Lists, q.Expr)
+		if err != nil {
+			return false, fmt.Errorf("loading lists: %w", err)
+		}
+		r.env, r.envOK = env, true
+	}
+	matched, err := q.EvalEnv(r.doc, r.env)
+	if err != nil {
+		return false, fmt.Errorf("evaluating condition: %w", err)
+	}
+	return matched, nil
+}
+
+func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Action, r *run, suppressed *bool) ActionOutcome {
+	in, res := r.in, r.res
+	out := ActionOutcome{Step: ref, No: no, Kind: a.Kind}
 
 	if !a.Enabled {
-		out.Result, out.Reason = ResultSkipped, "disabled"
+		out.Result, out.Reason = ResultSkipped, SkippedDisabled
 		return out
 	}
 
 	switch a.Kind {
 	case models.ActionSkipNotify:
-		res.Suppressed = true
+		*suppressed = true
 		out.Result = ResultOK
 
 	case models.ActionNotify:
 		if a.Notify == nil {
 			return missingSettings(out, "notify")
 		}
-		if res.Suppressed {
+		if *suppressed {
 			out.Result, out.Reason = ResultSkipped, "suppressed"
 			return out
 		}
-		res.Notifies = append(res.Notifies, NotifyIntent{Rule: ref, ActionIndex: idx, Target: *a.Notify})
+		res.Notifies = append(res.Notifies, NotifyIntent{Step: ref, Target: *a.Notify})
 		out.Result = ResultQueued
 		out.Output = map[string]any{"target": string(a.Notify.Target)}
 		if a.Notify.RecipientID != nil {
@@ -282,20 +430,20 @@ func (e *Engine) runAction(ctx context.Context, ref RuleRef, idx int, a models.A
 		if a.AddResource == nil {
 			return missingSettings(out, "add_resource")
 		}
-		r := a.AddResource
-		out.Output = map[string]any{"member_id": r.MemberID, "identifier": r.Identifier}
-		if r.Identifier == "" {
+		ar := a.AddResource
+		out.Output = map[string]any{"member_id": ar.MemberID, "identifier": ar.Identifier}
+		if ar.Identifier == "" {
 			out.Result, out.Err = ResultError, errors.New("add_resource has no member identifier")
 			return out
 		}
 		current := ticketdiff.Resources(res.Ticket.Resources)
 		for _, id := range current {
-			if strings.EqualFold(id, r.Identifier) {
+			if strings.EqualFold(id, ar.Identifier) {
 				out.Result, out.Reason = ResultSkipped, "already a resource"
 				return out
 			}
 		}
-		joined := strings.Join(append(current, r.Identifier), ",")
+		joined := strings.Join(append(current, ar.Identifier), ",")
 		out.Output["resources"] = joined
 		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "resources", Value: joined}}, in, res, &out)
 

@@ -53,7 +53,8 @@ type simulateResponse struct {
 
 // Simulate handles POST /workflows/:id/simulate. It runs the workflow (or a posted draft) against a
 // ticket snapshot as a dry run, resolves notification recipients, and returns what would happen.
-// Nothing is written to ConnectWise, Webex, or the ticket history.
+// The workflow payload's steps are the path the canvas highlights, in order. Nothing is written to
+// ConnectWise, Webex, or the ticket history.
 func (h *WorkflowHandler) Simulate(w http.ResponseWriter, r *http.Request) {
 	id, err := convertID(r)
 	if err != nil {
@@ -124,11 +125,7 @@ func (h *WorkflowHandler) Simulate(w http.ResponseWriter, r *http.Request) {
 		Recipients: []notifier.RecipientPreview{},
 	}
 	for _, a := range res.Actions {
-		p := models.ActionPayload{RuleID: a.Rule.RuleID, RuleName: a.Rule.RuleName, Index: a.Index, Kind: string(a.Kind), Result: a.Result, Reason: a.Reason, Output: a.Output}
-		if a.Err != nil {
-			p.Error = a.Err.Error()
-		}
-		out.Actions = append(out.Actions, p)
+		out.Actions = append(out.Actions, a.Payload())
 	}
 
 	if len(res.Notifies) > 0 {
@@ -161,13 +158,9 @@ func (h *WorkflowHandler) Simulate(w http.ResponseWriter, r *http.Request) {
 }
 
 func workflowRunPayload(wf *models.Workflow, res *workflow.Result) models.WorkflowPayload {
-	p := models.WorkflowPayload{WorkflowID: &wf.ID, WorkflowName: wf.Name, Found: true, Enabled: wf.Enabled, Rules: []models.RuleOutcomePayload{}}
-	for _, r := range res.Rules {
-		rp := models.RuleOutcomePayload{RuleID: r.Rule.RuleID, RuleName: r.Rule.RuleName, Matched: r.Matched, Skipped: r.Skipped, Stopped: r.Stopped}
-		if r.Err != nil {
-			rp.Error = r.Err.Error()
-		}
-		p.Rules = append(p.Rules, rp)
+	p := models.WorkflowPayload{WorkflowID: &wf.ID, WorkflowName: wf.Name, Found: true, Enabled: wf.Enabled, Event: res.Event, Steps: []models.StepPayload{}}
+	for _, st := range res.Steps {
+		p.Steps = append(p.Steps, st.Payload())
 	}
 	return p
 }
@@ -240,7 +233,8 @@ type createWorkflowRequest struct {
 	Name    string        `json:"name"`
 	Enabled *bool         `json:"enabled"`
 	DryRun  bool          `json:"dry_run"`
-	Rules   []models.Rule `json:"rules"`
+	Nodes   []models.Node `json:"nodes"`
+	Edges   []models.Edge `json:"edges"`
 }
 
 func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -262,7 +256,8 @@ func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name:    req.Name,
 		Enabled: req.Enabled == nil || *req.Enabled,
 		DryRun:  req.DryRun,
-		Rules:   req.Rules,
+		Nodes:   req.Nodes,
+		Edges:   req.Edges,
 	}
 
 	created, err := h.Service.Create(r.Context(), wf)

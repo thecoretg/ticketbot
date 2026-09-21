@@ -121,11 +121,11 @@ func fullTicket() *models.FullTicket {
 }
 
 func roomIntent(rule string, id int) workflow.NotifyIntent {
-	return workflow.NotifyIntent{Rule: workflow.RuleRef{RuleID: rule, RuleName: rule}, Target: models.NotifyAction{Target: models.TargetRoom, RecipientID: &id}}
+	return workflow.NotifyIntent{Step: workflow.StepRef{NodeID: rule, Title: rule}, Target: models.NotifyAction{Target: models.TargetRoom, RecipientID: &id}}
 }
 
 func ownerIntent(rule string) workflow.NotifyIntent {
-	return workflow.NotifyIntent{Rule: workflow.RuleRef{RuleID: rule, RuleName: rule}, Target: models.NotifyAction{Target: models.TargetResourcesOwner}}
+	return workflow.NotifyIntent{Step: workflow.StepRef{NodeID: rule, Title: rule}, Target: models.NotifyAction{Target: models.TargetResourcesOwner}}
 }
 
 func byRecipient(outs []Outcome) map[int]Outcome {
@@ -154,7 +154,7 @@ func TestSendRoomAndResourcesOwner(t *testing.T) {
 	if len(got) != 2 || got[1].Result != ResultSent || got[10].Result != ResultSent {
 		t.Fatalf("outcomes = %+v", outs)
 	}
-	if got[1].Rule.RuleID != "rooms" || got[10].Rule.RuleID != "people" {
+	if got[1].Step.NodeID != "rooms" || got[10].Step.NodeID != "people" {
 		t.Errorf("attribution wrong: %+v", got)
 	}
 	if len(fx.sender.sent) != 2 || len(fx.notifs.inserted) != 2 {
@@ -192,7 +192,7 @@ func TestSendDedupesRecipientsAcrossIntents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(outs) != 1 || outs[0].Rule.RuleID != "first" {
+	if len(outs) != 1 || outs[0].Step.NodeID != "first" {
 		t.Fatalf("expected one send attributed to first rule: %+v", outs)
 	}
 }
@@ -218,8 +218,8 @@ func TestSendAppliesForwards(t *testing.T) {
 	if len(alice.ForwardedFrom) != 1 || alice.ForwardedFrom[0] != "jane@x.com" {
 		t.Errorf("forwarded_from = %v", alice.ForwardedFrom)
 	}
-	if alice.Rule.RuleID != "people" {
-		t.Errorf("forwarded recipient should inherit origin attribution: %+v", alice.Rule)
+	if alice.Step.NodeID != "people" {
+		t.Errorf("forwarded recipient should inherit origin attribution: %+v", alice.Step)
 	}
 }
 
@@ -235,7 +235,7 @@ func TestSendResolveErrorIsPerIntent(t *testing.T) {
 	if len(outs) != 2 {
 		t.Fatalf("outcomes = %+v", outs)
 	}
-	if outs[0].Result != ResultError || outs[0].Rule.RuleID != "missing" || outs[0].Recipient != nil {
+	if outs[0].Result != ResultError || outs[0].Step.NodeID != "missing" || outs[0].Recipient != nil {
 		t.Errorf("first outcome should be a resolve error: %+v", outs[0])
 	}
 	if outs[1].Result != ResultSent || outs[1].Recipient.ID != 2 {

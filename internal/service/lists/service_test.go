@@ -131,12 +131,13 @@ func newTestService() (*Service, *fakeListRepo) {
 		Contacts:  &fakeContactRepo{contacts: map[int]*models.Contact{123: {ID: 123, FirstName: "Jane", LastName: str("Doe"), CompanyID: num(50)}}},
 		Companies: &fakeCompanyRepo{companies: map[int]*models.Company{50: {ID: 50, Name: "Acme"}}},
 		Workflows: &fakeWorkflowRepo{wfs: []*models.Workflow{
-			{ID: 1, Name: "Help Desk", BoardName: "HD", Rules: []models.Rule{
-				{ID: "r1", Name: "drop", Condition: "contact/id in list 7"},
-				{ID: "r2", Name: "other", Condition: "status/name = 'New'"},
-				{ID: "r3", Name: "broken", Condition: "summary ="},
+			{ID: 1, Name: "Help Desk", BoardName: "HD", Nodes: []models.Node{
+				{ID: "r1", Kind: models.NodeIf, Title: "drop", Condition: "contact/id in list 7"},
+				{ID: "r2", Kind: models.NodeIf, Title: "other", Condition: "status/name = 'New'"},
+				{ID: "r3", Kind: models.NodeIf, Title: "broken", Condition: "summary ="},
+				{ID: "t", Kind: models.NodeTrigger, Title: "trigger", Condition: "contact/id in list 7"}, // not an if: ignored
 			}},
-			{ID: 2, Name: "Sales", Rules: []models.Rule{{ID: "r4", Name: "vip", Condition: "company/id not in list 8 and id > 1"}}},
+			{ID: 2, Name: "Sales", Nodes: []models.Node{{ID: "r4", Kind: models.NodeIf, Title: "vip", Condition: "company/id not in list 8 and id > 1"}}},
 		}},
 	})
 	return svc, lr
@@ -193,7 +194,7 @@ func TestGetLabelsAndReferences(t *testing.T) {
 	if d.Items[1].Label != "Contact #999" || !d.Items[1].Missing {
 		t.Errorf("items[1] = %+v", d.Items[1])
 	}
-	if len(d.UsedBy) != 1 || d.UsedBy[0].WorkflowName != "Help Desk" || d.UsedBy[0].RuleName != "drop" {
+	if len(d.UsedBy) != 1 || d.UsedBy[0].WorkflowName != "Help Desk" || d.UsedBy[0].NodeTitle != "drop" {
 		t.Errorf("used_by = %+v", d.UsedBy)
 	}
 }
@@ -203,7 +204,7 @@ func TestDeleteBlockedWhenReferenced(t *testing.T) {
 	ctx := context.Background()
 
 	var inUse *models.ListInUseError
-	if err := svc.Delete(ctx, 8); !errors.As(err, &inUse) || len(inUse.Refs) != 1 || inUse.Refs[0].RuleID != "r4" {
+	if err := svc.Delete(ctx, 8); !errors.As(err, &inUse) || len(inUse.Refs) != 1 || inUse.Refs[0].NodeID != "r4" {
 		t.Errorf("delete referenced err = %v", err)
 	}
 	if len(lr.deleted) != 0 {

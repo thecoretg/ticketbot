@@ -86,6 +86,7 @@ var ConditionFields = []ConditionField{
 	{"latestNote/contact/id", "Note author (contact)", groupNote, "ref", "contacts", "Use \"is not empty\" for any customer reply", ""},
 
 	// What changed
+	{"isNew", "Ticket is new", groupChanged, "bool", "", "True the first time ticketbot sees the ticket; false for every later update", ""},
 	{"changed/status", "Status changed", groupChanged, "bool", "", "", ""},
 	{"changed/priority", "Priority changed", groupChanged, "bool", "", "", ""},
 	{"changed/owner", "Owner changed", groupChanged, "bool", "", "", ""},

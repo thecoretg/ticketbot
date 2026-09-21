@@ -107,7 +107,7 @@ func TestTicketEventRepo(t *testing.T) {
 	var events []*models.TicketEvent
 	for i, k := range []models.EventKind{models.EventCreated, models.EventUpdated, models.EventAction} {
 		e, err := models.NewTicketEvent(900003, "run-1", k, models.SourceWebhook, i == 2,
-			models.ActionPayload{RuleName: "r", Result: "ok"}, now.Add(time.Duration(i)*time.Second))
+			models.ActionPayload{Title: "r", Result: "ok"}, now.Add(time.Duration(i)*time.Second))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,7 +128,7 @@ func TestTicketEventRepo(t *testing.T) {
 		t.Errorf("newest first expected action/dry_run, got %+v", got[0])
 	}
 	var p models.ActionPayload
-	if err := json.Unmarshal(got[0].Payload, &p); err != nil || p.RuleName != "r" {
+	if err := json.Unmarshal(got[0].Payload, &p); err != nil || p.Title != "r" {
 		t.Errorf("payload round trip failed: %v %+v", err, p)
 	}
 

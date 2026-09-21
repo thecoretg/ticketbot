@@ -143,7 +143,7 @@ func (s *Service) RemoveItem(ctx context.Context, listID, itemID int) error {
 	return s.Lists.RemoveItem(ctx, listID, itemID)
 }
 
-// References finds every workflow rule whose condition mentions list id. Disabled rules and
+// References finds every workflow node whose condition mentions list id. Disabled nodes and
 // workflows count; conditions that fail to parse are skipped.
 func (s *Service) References(ctx context.Context, listID int) ([]models.ListReference, error) {
 	wfs, err := s.Workflows.List(ctx)
@@ -153,14 +153,17 @@ func (s *Service) References(ctx context.Context, listID int) ([]models.ListRefe
 
 	refs := []models.ListReference{}
 	for _, w := range wfs {
-		for _, r := range w.Rules {
-			expr, err := cwquery.Parse(r.Condition)
+		for _, n := range w.Nodes {
+			if n.Kind != models.NodeIf {
+				continue
+			}
+			expr, err := cwquery.Parse(n.Condition)
 			if err != nil {
 				continue
 			}
 			for _, ref := range cwquery.ListRefs(expr) {
 				if ref.ListID == listID {
-					refs = append(refs, models.ListReference{WorkflowID: w.ID, WorkflowName: w.Name, BoardName: w.BoardName, RuleID: r.ID, RuleName: r.Name})
+					refs = append(refs, models.ListReference{WorkflowID: w.ID, WorkflowName: w.Name, BoardName: w.BoardName, NodeID: n.ID, NodeTitle: n.Title})
 					break
 				}
 			}

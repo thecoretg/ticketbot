@@ -27,7 +27,7 @@ type SendRequest struct {
 
 // Outcome is what happened for one recipient.
 type Outcome struct {
-	Rule          workflow.RuleRef
+	Step          workflow.StepRef
 	Recipient     *models.WebexRecipient
 	ForwardedFrom []string
 	Result        string
@@ -49,7 +49,7 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 	t := req.Ticket
 	logger := slog.Default().With("ticket_id", t.Ticket.ID, "dry_run", req.DryRun)
 
-	// union natural recipients across intents; the first rule to name a recipient gets credit
+	// union natural recipients across intents; the first step to name a recipient gets credit
 	// (and its message template)
 	natural := make(recipMap)
 	attribution := make(map[int]workflow.NotifyIntent)
@@ -58,8 +58,8 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 	for _, in := range req.Intents {
 		recips, err := s.resolveTarget(ctx, t, in.Target)
 		if err != nil {
-			logger.Error("notifier: resolving notify target", "rule", in.Rule.RuleName, "target", in.Target.Target, "error", err.Error())
-			outcomes = append(outcomes, Outcome{Rule: in.Rule, Result: ResultError, Err: err})
+			logger.Error("notifier: resolving notify target", "step", in.Step.Title, "target", in.Target.Target, "error", err.Error())
+			outcomes = append(outcomes, Outcome{Step: in.Step, Result: ResultError, Err: err})
 			continue
 		}
 		for id, r := range recips {
@@ -81,7 +81,7 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 
 	for _, m := range msgs {
 		out := Outcome{
-			Rule:      attribution[m.WebexRecipient.origin().ID].Rule,
+			Step:      attribution[m.WebexRecipient.origin().ID].Step,
 			Recipient: m.WebexRecipient.recipient,
 		}
 		for _, f := range m.WebexRecipient.forwardChain {
@@ -134,8 +134,8 @@ func (s *Service) sendNotification(ctx context.Context, m *Message) *Message {
 
 // RecipientPreview describes who a notify intent would reach, without sending anything.
 type RecipientPreview struct {
-	RuleID        string   `json:"rule_id"`
-	RuleName      string   `json:"rule_name"`
+	NodeID        string   `json:"node_id"`
+	Title         string   `json:"title"`
 	RecipientID   int      `json:"recipient_id"`
 	RecipientName string   `json:"recipient_name"`
 	RecipientType string   `json:"recipient_type"`
@@ -158,7 +158,7 @@ func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, i
 	for _, in := range intents {
 		recips, err := s.resolveTarget(ctx, t, in.Target)
 		if err != nil {
-			out = append(out, RecipientPreview{RuleID: in.Rule.RuleID, RuleName: in.Rule.RuleName, Error: err.Error()})
+			out = append(out, RecipientPreview{NodeID: in.Step.NodeID, Title: in.Step.Title, Error: err.Error()})
 			continue
 		}
 		for id, r := range recips {
@@ -172,10 +172,10 @@ func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, i
 
 	for _, m := range s.makeTicketMessages(t, s.applyForwards(ctx, t, natural).toSlice(), isNew, attribution) {
 		r := m.WebexRecipient
-		rule := attribution[r.origin().ID].Rule
+		step := attribution[r.origin().ID].Step
 		p := RecipientPreview{
-			RuleID:        rule.RuleID,
-			RuleName:      rule.RuleName,
+			NodeID:        step.NodeID,
+			Title:         step.Title,
 			RecipientID:   r.recipient.ID,
 			RecipientName: r.recipient.Name,
 			RecipientType: string(r.recipient.Type),
