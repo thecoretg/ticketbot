@@ -15,6 +15,9 @@ const (
 	ResultSent      = "sent"
 	ResultWouldSend = "would_send"
 	ResultError     = "error"
+	// ResultNoRecipients records a step whose channel resolved to nobody, so the history never
+	// shows a queued notify with nothing under it.
+	ResultNoRecipients = "no_recipients"
 )
 
 // SendRequest is a batch of notify intents produced by one workflow run.
@@ -23,6 +26,8 @@ type SendRequest struct {
 	IsNew   bool
 	DryRun  bool
 	Intents []workflow.NotifyIntent
+	// Changes is what this update changed, for the message's Changed line.
+	Changes []models.FieldChange
 }
 
 // Outcome is what happened for one recipient.
@@ -32,6 +37,8 @@ type Outcome struct {
 	ForwardedFrom []string
 	// RedirectedTo names the room that received the message instead of Recipient.
 	RedirectedTo string
+	// Reason explains a no_recipients result.
+	Reason       string
 	Result       string
 	Err          error
 	Notification *models.TicketNotification
@@ -64,6 +71,10 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 			outcomes = append(outcomes, Outcome{Step: in.Step, Result: ResultError, Err: err})
 			continue
 		}
+		if len(recips) == 0 {
+			outcomes = append(outcomes, Outcome{Step: in.Step, Result: ResultNoRecipients, Reason: emptyReason(t, in.Action)})
+			continue
+		}
 		for id, r := range recips {
 			if _, seen := natural[id]; seen {
 				continue
@@ -79,7 +90,7 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 	}
 
 	final := s.applyForwards(ctx, t, natural)
-	msgs := s.makeTicketMessages(t, final.toSlice(), req.IsNew, attribution)
+	msgs := s.makeTicketMessages(t, final.toSlice(), req.IsNew, req.Changes, attribution)
 
 	// A redirect room takes every message, prefixed with who it was for. It also overrides dry
 	// run: the redirect is the safety, and the parallel run needs to see real messages.
@@ -119,6 +130,17 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 
 	logger.Info("notifier: notifications processed", "recipients", len(msgs))
 	return outcomes, nil
+}
+
+// emptyReason says why a channel produced nobody, in the words the history shows.
+func emptyReason(t *models.FullTicket, a models.NotifyAction) string {
+	if a.Channel != models.ChannelResourcesOwner {
+		return "the channel resolved to nobody"
+	}
+	if t.Owner == nil && len(t.Resources) == 0 {
+		return "the ticket has no owner or resources"
+	}
+	return "everyone on the ticket wrote the triggering note, so there was nobody else to tell"
 }
 
 // redirectRoom returns the configured redirect recipient, or nil when notifications go to their
@@ -192,7 +214,7 @@ func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, i
 		}
 	}
 
-	for _, m := range s.makeTicketMessages(t, s.applyForwards(ctx, t, natural).toSlice(), isNew, attribution) {
+	for _, m := range s.makeTicketMessages(t, s.applyForwards(ctx, t, natural).toSlice(), isNew, nil, attribution) {
 		r := m.WebexRecipient
 		step := attribution[r.origin().ID].Step
 		p := RecipientPreview{

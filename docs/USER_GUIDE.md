@@ -39,7 +39,11 @@ note saying why. Use **Validate** to check the text and **Test** to evaluate it 
 
 ## Messages
 
-A Notify step sends the default layout unless you give it a custom message. Click a `{{token}}` to
+A Notify step sends the default layout unless you give it a custom message. On an update the
+default layout includes a **Changed** line (for example `Status: New → Assigned`) so two updates in
+a row read differently; `{{changes}}` puts the same text in a custom message. A step whose people
+list comes out empty, because the only person on the ticket wrote the note, shows "Nobody to
+notify" in the ticket history instead of sending. Click a `{{token}}` to
 insert it at the cursor. **Preview** renders the message with a real ticket so you can see what
 each token produces. Notifications go to a room, a person, or the ticket's resources and owner
 (skipping whoever wrote the note that triggered the run).

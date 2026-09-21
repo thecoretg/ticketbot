@@ -45,6 +45,10 @@ func TestRender(t *testing.T) {
 	if got := Render("{{event}}", Context{Ticket: ticket()}); got != "Ticket Updated" {
 		t.Errorf("event for update = %q", got)
 	}
+	chg := Context{Ticket: ticket(), Changes: []models.FieldChange{{Field: "status", Old: "New", New: "Assigned"}}}
+	if got := Render("{{changes}}", chg); got != "Status: New → Assigned" {
+		t.Errorf("changes = %q", got)
+	}
 	if got := Render("x {{unknown}} y", ctx); got != "x  y" {
 		t.Errorf("unknown placeholder should render empty: %q", got)
 	}

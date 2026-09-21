@@ -338,3 +338,49 @@ func TestRedirectRoomTakesEveryMessageEvenInDryRun(t *testing.T) {
 		}
 	}
 }
+
+func TestNobodyToNotifyIsRecorded(t *testing.T) {
+	fx := newSendFixture(nil)
+	ft := fullTicket()
+	// bob is the only person on the ticket and wrote the note
+	ft.Owner = &models.Member{ID: 2, PrimaryEmail: "bob@x.com"}
+	ft.Resources = []*models.Member{{ID: 2, PrimaryEmail: "bob@x.com"}}
+	outs, err := fx.svc.Send(context.Background(), SendRequest{Ticket: ft, Intents: []workflow.NotifyIntent{ownerIntent("people")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outs) != 1 || outs[0].Result != ResultNoRecipients || outs[0].Step.Title != "people" || !strings.Contains(outs[0].Reason, "wrote the triggering note") {
+		t.Fatalf("outcomes = %+v", outs)
+	}
+	if len(fx.sender.sent) != 0 {
+		t.Fatal("nothing should be sent")
+	}
+}
+
+func TestDefaultMessageCarriesTheChangedLine(t *testing.T) {
+	fx := newSendFixture(nil)
+	changes := []models.FieldChange{{Field: "status", Old: "New", New: "Assigned"}}
+	_, err := fx.svc.Send(context.Background(), SendRequest{Ticket: fullTicket(), Intents: []workflow.NotifyIntent{roomIntent("rooms", 1)}, Changes: changes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fx.sender.sent) != 1 || !strings.Contains(fx.sender.sent[0].Markdown, "**Changed:** Status: New → Assigned") {
+		t.Fatalf("sent = %+v", fx.sender.sent)
+	}
+
+	// a new ticket has nothing to compare against, even if a caller passes changes
+	fx = newSendFixture(nil)
+	_, _ = fx.svc.Send(context.Background(), SendRequest{Ticket: fullTicket(), IsNew: true, Intents: []workflow.NotifyIntent{roomIntent("rooms", 1)}, Changes: changes})
+	if strings.Contains(fx.sender.sent[0].Markdown, "Changed:") {
+		t.Fatal("new-ticket message must not carry a Changed line")
+	}
+
+	// custom messages opt in with the placeholder
+	fx = newSendFixture(nil)
+	in := roomIntent("rooms", 1)
+	in.Action.Message = "{{ticket.id}}: {{changes}}"
+	_, _ = fx.svc.Send(context.Background(), SendRequest{Ticket: fullTicket(), Intents: []workflow.NotifyIntent{in}, Changes: changes})
+	if !strings.HasPrefix(fx.sender.sent[0].Markdown, "42: Status: New → Assigned") {
+		t.Fatalf("custom = %q", fx.sender.sent[0].Markdown)
+	}
+}

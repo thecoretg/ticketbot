@@ -154,7 +154,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (
 	}
 
 	if res != nil && len(res.Notifies) > 0 {
-		s.sendNotifications(ctx, run, ft, d.IsNew, res)
+		s.sendNotifications(ctx, run, ft, d, res)
 	}
 
 	return nil
@@ -234,12 +234,13 @@ func (s *Service) runWorkflow(ctx context.Context, run *run, f *cwsvc.Fetched, d
 	return res
 }
 
-func (s *Service) sendNotifications(ctx context.Context, run *run, ft *models.FullTicket, isNew bool, res *workflow.Result) {
+func (s *Service) sendNotifications(ctx context.Context, run *run, ft *models.FullTicket, d decision, res *workflow.Result) {
 	outs, err := s.Notifier.Send(ctx, notifier.SendRequest{
 		Ticket:  ft,
-		IsNew:   isNew,
+		IsNew:   d.IsNew,
 		DryRun:  run.dryRun,
 		Intents: res.Notifies,
+		Changes: d.Changes,
 	})
 	if err != nil {
 		run.add(models.EventError, models.ErrorPayload{Stage: "notify", Error: err.Error()})

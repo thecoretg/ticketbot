@@ -44,7 +44,7 @@ func newMessage(wm webex.Message, r recipData, n *models.TicketNotification, isN
 // makeTicketMessages builds one Webex message per recipient. intents maps a natural recipient id
 // to the notify intent that named it; a forwarded recipient uses its origin's intent, so a rule's
 // custom message follows the notification through forwards.
-func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, isNew bool, intents map[int]workflow.NotifyIntent) []Message {
+func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, isNew bool, changes []models.FieldChange, intents map[int]workflow.NotifyIntent) []Message {
 	var msgs []Message
 	for _, r := range recips {
 		in := intents[r.origin().ID]
@@ -53,7 +53,7 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 		if !r.isNaturalRecipient() {
 			body = fwdChainStr(r.recipient, r.forwardChain) + "\n"
 		}
-		body += s.messageBody(t, in, isNew)
+		body += s.messageBody(t, in, isNew, changes)
 
 		wm := newWebexMsg(r.recipient, body)
 		n := &models.TicketNotification{
@@ -77,7 +77,7 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 }
 
 // messageBody renders the step's custom message when it has one, or the default layout.
-func (s *Service) messageBody(t *models.FullTicket, in workflow.NotifyIntent, isNew bool) string {
+func (s *Service) messageBody(t *models.FullTicket, in workflow.NotifyIntent, isNew bool, changes []models.FieldChange) string {
 	if tpl := strings.TrimSpace(in.Action.Message); tpl != "" {
 		rendered := msgtemplate.Render(tpl, msgtemplate.Context{
 			Ticket:     t,
@@ -85,11 +85,15 @@ func (s *Service) messageBody(t *models.FullTicket, in workflow.NotifyIntent, is
 			IsNew:      isNew,
 			CompanyID:  s.CWCompanyID,
 			MaxNoteLen: s.Cfg.MaxMessageLength,
+			Changes:    changes,
 		})
 		return rendered + "\n\n---"
 	}
 
-	return makeMessageBody(t, s.notificationHeader(t, isNew), s.Cfg.MaxMessageLength)
+	if isNew {
+		changes = nil // a new ticket has no previous values to compare against
+	}
+	return makeMessageBody(t, s.notificationHeader(t, isNew), s.Cfg.MaxMessageLength, changes)
 }
 
 func fwdChainStr(recip *models.WebexRecipient, fwdChain []*models.WebexRecipient) string {
@@ -123,10 +127,14 @@ func newWebexMsg(r *models.WebexRecipient, body string) webex.Message {
 	return webex.NewMessageToRoom(r.WebexID, r.Name, body)
 }
 
-func makeMessageBody(ticket *models.FullTicket, header string, maxLen int) string {
+func makeMessageBody(ticket *models.FullTicket, header string, maxLen int, changes []models.FieldChange) string {
 	body := header
 	if ticket.Company.Name != "" {
 		body += fmt.Sprintf("\n**Company:** %s", ticket.Company.Name)
+	}
+	// what this update changed, so two updates in a row do not read the same
+	if line := msgtemplate.FormatChanges(changes); line != "" {
+		body += fmt.Sprintf("\n**Changed:** %s", line)
 	}
 
 	if ticket.Contact != nil {

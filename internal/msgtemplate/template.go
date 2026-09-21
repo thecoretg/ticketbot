@@ -34,6 +34,7 @@ var Placeholders = []Placeholder{
 	{"owner", "Owner full name"},
 	{"resources", "Resource full names, comma separated"},
 	{"rule", "Title of the step that sent this"},
+	{"changes", "What changed in this update, e.g. Status: New → Assigned; empty for note-only updates"},
 	{"note.author", "Who wrote the latest note"},
 	{"note.text", "Latest note text, truncated to the configured max length"},
 	{"note.quote", "Latest note as a markdown block quote, with author line"},
@@ -66,6 +67,9 @@ type Context struct {
 	IsNew      bool
 	CompanyID  string // ConnectWise company identifier for ticket links
 	MaxNoteLen int    // 0 means no truncation
+	// Changes is what this update changed; the {{changes}} placeholder and the default layout's
+	// Changed line render it. Empty for new tickets, note-only updates and previews.
+	Changes []models.FieldChange
 }
 
 // Render substitutes every placeholder in tpl. Unknown placeholders render as empty strings.
@@ -127,6 +131,8 @@ func (c Context) value(name string) string {
 		return strings.Join(names, ", ")
 	case "rule":
 		return c.StepTitle
+	case "changes":
+		return FormatChanges(c.Changes)
 	case "note.author":
 		return NoteAuthor(t)
 	case "note.text":

@@ -335,7 +335,7 @@ function tkEventHTML(ev) {
         body  = tkActionBody(p, ev.dry_run)
         break
     case 'notification':
-        title = `${esc(p.title || p.rule_name || 'Notify')} → ${esc(p.recipient_name || '?')}`
+        title = `${esc(p.title || p.rule_name || 'Notify')} → ${esc(p.result === 'no_recipients' ? 'nobody' : (p.recipient_name || '?'))}`
         tone  = p.result === 'error' ? 'bad' : 'warn'
         body  = tkNotificationBody(p, ev.dry_run)
         break
@@ -442,6 +442,7 @@ function tkResultBadge(result, dryRun) {
     case 'queued':     return badgeTag(dryRun ? 'Would notify' : 'Queued', dryRun ? 'warn' : 'ok')
     case 'would_run':  return badgeTag('Would run', 'warn')
     case 'would_send': return badgeTag('Would send', 'warn')
+    case 'no_recipients': return badgeTag('Nobody to notify', '')
     case 'skipped':    return badgeTag('Skipped', '')
     case 'superseded': return badgeTag('Superseded', 'warn')
     case 'error':      return badgeTag('Error', 'bad')
@@ -471,6 +472,7 @@ function tkActionBody(p, dryRun) {
 
 function tkNotificationBody(p, dryRun) {
     let html = `<div class="row gap2 wrap">${tkResultBadge(p.result, dryRun)}<span class="event-detail">${esc(p.recipient_type || '')}</span></div>`
+    if (p.reason) html += `<div class="event-detail">${esc(p.reason)}</div>`
     if (p.forwarded_from?.length) html += `<div class="event-detail">Forwarded from ${esc(p.forwarded_from.join(' → '))}</div>`
     if (p.redirected_to) html += `<div class="event-detail">${icon('branch')} Redirected to ${esc(p.redirected_to)}</div>`
     if (p.error) html += `<div class="event-error">${esc(p.error)}</div>`
