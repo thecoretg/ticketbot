@@ -314,6 +314,7 @@ function renderWorkflowEditor() {
         <button class="btn btn-default btn-sm" onclick="wfSimulate()">${icon('play')}Run</button>
         <span id="wf-arrange-undo">${cv.undo ? `<button class="btn btn-ghost btn-sm" onclick="cvUndoArrange()">${icon('undo')}Undo arrange</button>` : ''}</span>
         <button class="btn btn-default btn-sm" onclick="cvArrange()">${icon('branch')}Auto-arrange</button>
+        <button class="icon-btn" onclick="wfShowHelp()" aria-label="How workflows run" data-tip="How workflows run" data-tip-pos="bottom">${icon('info')}</button>
         <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
             <span class="dirty-dot"></span><span class="cell-sub">Unsaved changes</span>
         </span>
@@ -971,6 +972,17 @@ function cvInspectorHTML(n) {
             <textarea id="insp-msg" class="textarea mono" rows="4" aria-label="Custom message" placeholder="{{event}}: {{ticket.link}} {{ticket.summary}}&#10;**Company:** {{company}}&#10;{{note.quote}}" oninput="cvSetSetting('${id}', 'notify.message', this.value)"${dis}>${esc(s.message || '')}</textarea>
             <span class="hint">Empty uses the default layout. Click a token to insert it.</span>
             <div class="placeholder-list">${wfPlaceholders.map(p => `<code class="code inline" data-tip="${esc(p.description)}" onclick="wfInsertPlaceholder(this, '${p.name}')">{{${p.name}}}</code>`).join('')}</div>
+        </div>
+        <div class="field">
+            <div class="row spread gap2">
+                <label for="insp-preview-ticket">Preview with a ticket</label>
+                <button class="icon-btn hit-expand" style="width:22px;height:22px" onclick="wfShowHelp('messages')" aria-label="How messages work">${icon('info')}</button>
+            </div>
+            <div class="row gap2 wrap">
+                <input type="number" id="insp-preview-ticket" class="input" style="width:120px" min="1" placeholder="Ticket #" value="${esc(wfSimTicket)}" aria-label="Ticket number to render the message with">
+                <button class="btn btn-default btn-sm" onclick="wfPreviewMessage('${id}')">${icon('play')}Preview</button>
+            </div>
+            <div id="insp-preview-out" class="stack gap2"></div>
         </div>`
         break
     }
@@ -1150,6 +1162,46 @@ function cvSetPatchOps(id, value) {
     wfNode(id).patch = { ops: value }
     cvRefreshNode(id)
     wfMarkDirty()
+}
+
+// wfPreviewMessage renders the notify step's message (or the default layout when it is empty)
+// against a stored ticket, so the editor sees what the placeholders produce.
+async function wfPreviewMessage(id) {
+    const n = wfNode(id)
+    const input = document.getElementById('insp-preview-ticket')
+    const out = document.getElementById('insp-preview-out')
+    const tid = parseInt(input?.value || wfSimTicket)
+    if (!tid) { toast('Enter a ticket number to preview with', 'error'); return }
+    wfSimTicket = String(tid)
+    const message = (n?.notify?.message || '').trim() || '{{event}}: {{ticket.link}} {{ticket.summary}}\n**Company:** {{company}}\n{{note.quote}}'
+    out.innerHTML = '<span class="cell-sub">Rendering…</span>'
+    try {
+        const res = await api('POST', '/workflows/preview-message', { message, ticket_id: tid, as_new: wfSimAsNew })
+        out.innerHTML = `<pre class="code prewrap">${esc(res.rendered)}</pre>${(n?.notify?.message || '').trim() ? '' : '<span class="cell-sub">No custom message set: this is the default layout.</span>'}`
+    } catch (e) {
+        out.innerHTML = `<span class="cond-result err">${esc(e.message)}</span>`
+    }
+}
+
+// wfShowHelp opens the concepts guide. section scrolls to one of: flow, conditions, messages, testing.
+function wfShowHelp(section = '') {
+    const h = (id, title) => `<h4 id="wf-help-${id}" style="margin-top:var(--s4)">${title}</h4>`
+    openModal('How workflows run', `<div class="stack gap3" style="max-height:60vh;overflow-y:auto">
+        ${h('flow', 'The flow')}
+        <p>A workflow belongs to one board. Every ticket event on that board (created, or updated) enters at each <b>Trigger</b> that listens for it, and walks the wires from there.</p>
+        <p>An <b>If</b> step sends the walk out of its <b>match</b> port when its condition holds and <b>else</b> when it does not. A port with nothing wired to it simply ends that path. A step that two paths both reach runs once.</p>
+        <p><b>Skip notify</b> silences the Notify steps after it on its own path only. Other paths still notify.</p>
+        <p>Ticket writes (status, priority, owner, resources, patch) are collected and sent to ConnectWise as one change after the whole flow has run. If two steps set the same field, the later one wins and the ticket history says so. Notes are added after that change, then notifications go out.</p>
+        ${h('conditions', 'Conditions')}
+        <p>Each row is a field, a comparison and a value. <b>Match all</b> means every row must hold, <b>match any</b> means one is enough.</p>
+        <p><b>changed to</b> holds only on the update that moved the field to that value, so "Status changed to Waiting" fires once, when it happens. <b>changed from</b> matches the value it left. "is" holds on every update while the field has that value.</p>
+        <p>The builder covers everyday conditions. <b>Advanced</b> shows the same condition as text and lets you write anything the engine understands, including parentheses and "not". A condition the builder cannot show opens in Advanced with a note saying why.</p>
+        ${h('messages', 'Messages')}
+        <p>A Notify step sends the default layout unless you give it a custom message. Click a <code class="code inline">{{token}}</code> to insert it at the cursor; <b>Preview</b> renders the message with a real ticket so you can see what each token produces.</p>
+        ${h('testing', 'Trying it safely')}
+        <p>Turn on the workflow's <b>Dry run</b> first: the flow runs and records what it would have done in the ticket history, but writes nothing to ConnectWise. <b>Simulate</b> in the toolbar runs the flow against a ticket right now and highlights the path it took. Turn dry run off once the history looks right.</p>
+    </div>`, async () => closeModal(), 'Got it')
+    if (section) setTimeout(() => document.getElementById(`wf-help-${section}`)?.scrollIntoView({ block: 'start' }), 50)
 }
 
 function wfInsertPlaceholder(el, name) {

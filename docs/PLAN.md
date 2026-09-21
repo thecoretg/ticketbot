@@ -117,20 +117,21 @@ None of these change engine behaviour, so they can ship without restarting the r
 
 ### 6. Editor surfaces for non-programmers
 
-- [ ] Condition builder on the `if` node: field picker from `ConditionFields`
-      (`internal/service/workflow/fields.go`), operators is, is not, is empty, contains, in list,
-      and for fields with a `changed/*` and `old/*` pair, "changed to" and "changed from". The
-      builder compiles to `cwquery` text; an Advanced toggle shows and edits the raw DSL. Round
-      trip: a DSL the builder cannot represent opens in Advanced.
-- [ ] Notify node: placeholder picker from `msgtemplate.Placeholders` with the descriptions as
-      labels, inserting at the cursor, and a live preview rendered against a ticket chosen from
-      the recent tickets list.
-- [ ] Help buttons (not inline text) on each node kind and on the builder, explaining triggers
-      fire per event, a walk ends at an unwired port, `skip_notify` is per walk, try dry run first.
-- [ ] `docs/USER_GUIDE.md`: one page for the concepts above. Danny trains the team in person.
+Done.
 
-CLAUDE.md: mention the builder and picker in the Frontend section; keep the canvas as the only
-editor.
+- [x] The condition builder already existed (`condition.js`: field picker, is / is not / contains
+      / starts with / one of / empty / in list, match all or any, Advanced raw text with round
+      trip and a reason when the builder cannot show a condition). Added **changed to** and
+      **changed from**: `ConditionField` now carries `changed_path` and `old_path` companions
+      (derived by path in `fields.go`), the builder compiles them to
+      `(changed/x = true and x = v)` and `old/x = v`, and parses those shapes back into one row.
+- [x] Placeholder picker already existed. Added `POST /workflows/preview-message` and a Preview
+      control on the Notify step that renders the message (or the default layout) with a stored
+      ticket.
+- [x] Help buttons: ⓘ in the editor toolbar, on the Condition label and on the message preview,
+      all opening one "How workflows run" modal (`wfShowHelp`) that scrolls to the relevant
+      section. No new inline text.
+- [x] `docs/USER_GUIDE.md`. Danny trains the team in person.
 
 ### 7. Notify as a channel
 

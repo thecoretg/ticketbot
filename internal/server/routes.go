@@ -135,6 +135,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("POST /workflows/import", trh.Import, auth, editor)
 	rt.handle("GET /workflows/fields", wfh.Fields, auth)
 	rt.handle("GET /workflows/placeholders", wfh.Placeholders, auth)
+	rt.handle("POST /workflows/preview-message", wfh.PreviewMessage, auth)
 	rt.handle("POST /workflows/validate-condition", wfh.ValidateCondition, auth)
 	rt.handle("POST /workflows/parse-condition", wfh.ParseCondition, auth)
 	rt.handle("POST /workflows/evaluate-condition", wfh.EvaluateCondition, auth)

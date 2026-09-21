@@ -74,6 +74,11 @@ fixed per kind and shared between `ui.css` and the script, so ports line up. Run
 
 ## Frontend
 
+`docs/USER_GUIDE.md` is the editor-facing explanation of how workflows run; the ⓘ buttons in the
+workflow editor (`wfShowHelp` in `workflows.js`) carry the same text, so change both together.
+The condition builder (`condition.js`) is a view over the stored condition text, with "changed
+to" and "changed from" compiled from each field's `changed_path` and `old_path` companions.
+
 `internal/web/static/ui.css` is the design system: tokens, component classes and six palettes
 (`data-palette` on `<html>`, pinned to `harbor`). `app.css` holds app-specific rules only. Both
 are ours. Edit either, but keep the split: a reusable component belongs in `ui.css`, a one-off

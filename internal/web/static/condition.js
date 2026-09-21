@@ -26,13 +26,19 @@ const WF_OPS = {
     bool:       [['true', 'is true'], ['false', 'is false']],
 }
 const WF_NO_VALUE_OPS = new Set(['empty', 'not_empty', 'true', 'false'])
+// Transition operators: "changed to" compiles to the field's changed flag plus its new value,
+// "changed from" to its previous value (the server only records a previous value when the field
+// changed in this update, so it implies the change).
+const WF_TRANSITION_OPS = new Set(['changed_to', 'changed_from'])
 const WF_MULTI_OPS    = new Set(['in', 'not_in'])
 const WF_LIST_OPS     = new Set(['in_list', 'not_in_list'])
 
 // wfOpsFor returns the operators for a field: its type's table, plus list membership when the
 // field's Source has admin lists (list_type is set by the server).
 function wfOpsFor(f) {
-    const ops = WF_OPS[f.type] || []
+    let ops = WF_OPS[f.type] || []
+    if (f.changed_path) ops = ops.concat([['changed_to', 'changed to']])
+    if (f.old_path)     ops = ops.concat([['changed_from', 'changed from']])
     return f.list_type ? ops.concat([['in_list', 'is in list'], ['not_in_list', 'is not in list']]) : ops
 }
 
@@ -92,6 +98,16 @@ function wfCompileRow(row) {
         if (row.value === null || row.value === undefined || row.value === '' || Number.isNaN(Number(row.value))) return { error: `${f.label}: pick a list` }
         return { text: `${f.path} ${row.op === 'in_list' ? 'in list' : 'not in list'} ${Number(row.value)}` }
     }
+    case 'changed_to': {
+        const e = need(); if (e) return e
+        if (badNum(row.value)) return { error: `${f.label}: must be a number` }
+        return { text: `(${f.changed_path} = true and ${f.path} = ${lit(row.value)})` }
+    }
+    case 'changed_from': {
+        const e = need(); if (e) return e
+        if (badNum(row.value)) return { error: `${f.label}: must be a number` }
+        return { text: `${f.old_path} = ${lit(row.value)}` }
+    }
     }
     return { error: `unknown operator ${row.op}` }
 }
@@ -115,16 +131,48 @@ function wfRowsFromNode(node) {
     const leaves = []
     const flatten = n => {
         if (n.kind === join) { flatten(n.left); flatten(n.right); return }
+        if (n.kind === 'and' && join === 'or') {
+            // "(changed/x = true and x = v)" inside an "or" is one "changed to" row
+            const pair = wfChangedToPair(n.left, n.right)
+            if (pair) { leaves.push({ _row: pair }); return }
+        }
         if (n.kind === 'and' || n.kind === 'or') throw new Error('mixes "and" and "or" (use parentheses only in advanced mode)')
         if (n.kind === 'not') throw new Error('uses "not"')
         leaves.push(n)
     }
     flatten(node)
 
-    return { join, rows: leaves.map(wfRowFromLeaf) }
+    // in an "and" group the same pair sits as two adjacent leaves
+    const rows = []
+    for (let i = 0; i < leaves.length; i++) {
+        const pair = i + 1 < leaves.length && !leaves[i]._row && !leaves[i + 1]._row ? wfChangedToPair(leaves[i], leaves[i + 1]) : null
+        if (pair) { rows.push(pair); i++; continue }
+        rows.push(leaves[i]._row || wfRowFromLeaf(leaves[i]))
+    }
+    return { join, rows }
+}
+
+// wfChangedToPair recognises `changed/x = true` followed by `x/... = v` as one "changed to" row.
+function wfChangedToPair(a, b) {
+    if (!a || !b || a.kind !== 'cmp' && a.op === undefined) return null
+    if (a.op !== '=' || !a.value || a.value.type !== 'bool' || a.value.value !== true) return null
+    if (b.op !== '=' || !b.value || b.value.type === 'null' || b.kind === 'in' || b.kind === 'in_list') return null
+    const f = wfFieldByPath(b.path)
+    if (!f || !f.changed_path || f.changed_path.toLowerCase() !== String(a.path).toLowerCase()) return null
+    const numeric = f.type === 'ref' || f.type === 'number'
+    if (numeric && b.value.type !== 'number') return null
+    return { path: f.path, op: 'changed_to', value: numeric ? b.value.value : String(b.value.value) }
 }
 
 function wfRowFromLeaf(n) {
+    // `old/x = v` reads better as "x changed from v" on the field itself
+    if (n.kind !== 'in' && n.kind !== 'in_list' && n.op === '=' && n.value && n.value.type !== 'null') {
+        const base = wfFields.find(b => b.old_path && b.old_path.toLowerCase() === String(n.path).toLowerCase())
+        if (base) {
+            const numeric = base.type === 'ref' || base.type === 'number'
+            if (!numeric || n.value.type === 'number') return { path: base.path, op: 'changed_from', value: numeric ? n.value.value : String(n.value.value) }
+        }
+    }
     const f = wfFieldByPath(n.path)
     if (!f) throw new Error(`field "${n.path}" is not in the builder`)
     const ops = wfOpsFor(f).map(([v]) => v)
@@ -250,7 +298,10 @@ function wfConditionHTML(r) {
         </div>`
 
     return `<div class="field" id="cond-wrap-${i}">
-        <label>Condition</label>
+        <div class="row spread gap2">
+            <label>Condition</label>
+            <button class="icon-btn hit-expand" style="width:22px;height:22px" onclick="wfShowHelp('conditions')" aria-label="How conditions work">${icon('info')}</button>
+        </div>
         <div class="cond">
             ${tabs}
             ${body}

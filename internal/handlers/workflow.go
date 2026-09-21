@@ -134,16 +134,7 @@ func (h *WorkflowHandler) Simulate(w http.ResponseWriter, r *http.Request) {
 			internalServerError(w, err)
 			return
 		}
-		ft := &models.FullTicket{
-			Ticket:     detail.Ticket.Ticket,
-			Board:      detail.Board,
-			Status:     detail.Status,
-			Company:    detail.Company,
-			Contact:    detail.Contact,
-			Owner:      detail.Owner,
-			LatestNote: detail.LatestNote,
-			Resources:  detail.Resources,
-		}
+		ft := fullTicketFromDetail(detail)
 		recips, err := h.Notifier.PreviewRecipients(ctx, ft, req.AsNew, res.Notifies)
 		if err != nil {
 			internalServerError(w, err)
@@ -155,6 +146,60 @@ func (h *WorkflowHandler) Simulate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	outputJSON(w, out)
+}
+
+func fullTicketFromDetail(detail *models.TicketDetail) *models.FullTicket {
+	return &models.FullTicket{
+		Ticket:     detail.Ticket.Ticket,
+		Board:      detail.Board,
+		Status:     detail.Status,
+		Company:    detail.Company,
+		Contact:    detail.Contact,
+		Owner:      detail.Owner,
+		LatestNote: detail.LatestNote,
+		Resources:  detail.Resources,
+	}
+}
+
+type previewMessageRequest struct {
+	Message  string `json:"message"`
+	TicketID int    `json:"ticket_id"`
+	AsNew    bool   `json:"as_new"`
+}
+
+// PreviewMessage handles POST /workflows/preview-message: it renders a notify message template
+// against a stored ticket so an editor can see what the placeholders produce before saving.
+func (h *WorkflowHandler) PreviewMessage(w http.ResponseWriter, r *http.Request) {
+	var req previewMessageRequest
+	if err := decodeJSON(r, &req); err != nil {
+		badPayloadError(w, err)
+		return
+	}
+	if req.TicketID == 0 {
+		badPayloadError(w, errors.New("ticket_id is required"))
+		return
+	}
+	if err := msgtemplate.Validate(req.Message); err != nil {
+		writeJSON(w, http.StatusBadRequest, M{"error": err.Error()})
+		return
+	}
+	detail, err := h.CW.GetTicketDetail(r.Context(), req.TicketID)
+	if err != nil {
+		if errors.Is(err, models.ErrTicketNotFound) {
+			notFoundError(w, err)
+			return
+		}
+		internalServerError(w, err)
+		return
+	}
+	rendered := msgtemplate.Render(req.Message, msgtemplate.Context{
+		Ticket:     fullTicketFromDetail(detail),
+		StepTitle:  "Preview",
+		IsNew:      req.AsNew,
+		CompanyID:  h.Notifier.CWCompanyID,
+		MaxNoteLen: h.Notifier.Cfg.MaxMessageLength,
+	})
+	outputJSON(w, M{"rendered": rendered, "ticket_id": req.TicketID})
 }
 
 func workflowRunPayload(wf *models.Workflow, res *workflow.Result) models.WorkflowPayload {
