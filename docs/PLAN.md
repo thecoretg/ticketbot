@@ -177,6 +177,20 @@ Polish noted during the 2026-09-21 review of items 1 to 7. None blocks the paral
       one), placing it at the pointer with a new id and no wires. Keyboard equivalents where
       cheap (⌘C / ⌘V / Delete already handles removal).
 
+### 12. Workflow run results page
+
+- [ ] A "Results" tab beside the workflow list under Workflows: every workflow run, newest
+      first, filterable by board, workflow, event and outcome. Each run opens to show the ticket,
+      the trigger event, every step's outcome and notifications, and the path drawn on a read-only
+      copy of that workflow's canvas, the way Simulate highlights it today. The data already
+      exists: the `workflow` ticket event carries `steps` with `via` and `port` per node, and the
+      `action` and `notification` events share its `run_id`. A run listing needs a query over
+      `ticket_event` grouped by `run_id` (or a small `workflow_run` summary table written by the
+      ticketbot run), not a change to how runs execute.
+- [ ] A **Results** button in each workflow's editor toolbar opens that tab filtered to the board.
+- [ ] A related Config setting. Danny to define it when the item is picked up; the likely
+      candidate is how long run results are kept, separate from the log retention.
+
 ## Done## Done
 
 Every box above ticked, including Do last: delete this file, remove its pointer from CLAUDE.md, and confirm every
