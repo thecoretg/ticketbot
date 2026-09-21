@@ -858,7 +858,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid var(--line); box-shadow: var(--shadow-sm);
   backdrop-filter: blur(8px);
-  font-size: var(--text-xs); color: var(--ink-2);
+  font-size: var(--text-xs); color: var(--ink-2); white-space: nowrap;
 }
 .dock-bar.tl { left: var(--s3); top: var(--s3); }
 .dock-bar.tr { right: var(--s3); top: var(--s3); }
@@ -866,6 +866,10 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .dock-bar.br { right: var(--s3); bottom: var(--s3); }
 /* icon buttons sit flush; words need their own breathing room */
 .dock-bar .icon-btn { width: 26px; height: 26px; }
+/* a bare icon in the bar (the collapsed dock's tab) has no .btn/.icon-btn to
+   size it, and an unsized svg takes the 300x150 replaced default and squeezes
+   the label to one word per line */
+.dock-bar > svg { width: 15px; height: 15px; flex: none; }
 .dock-bar > span { padding: 0 var(--s2); }
 
 /* ---------- 15. STATES ---------- */
