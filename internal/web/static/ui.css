@@ -360,8 +360,10 @@ ul, ol { list-style: none; padding: 0; }
 
 .view { padding: var(--s8) var(--s6) var(--s12); max-width: 1440px; }
 
-/* page header */
+/* page header — a record's name on a detail page, or (pageActions) just the row
+   of buttons a section page opens with, which needs far less room below it */
 .page-head { margin-bottom: var(--s8); }
+.page-head:not(:has(.page-title)) { margin-bottom: var(--s5); }
 .page-title {
   font-family: var(--font-display); font-weight: var(--display-weight);
   font-size: var(--text-3xl); line-height: 1.06;

@@ -60,8 +60,7 @@ function renderListIndex(lists) {
         </td>
     </tr>`)
 
-    setContent(pageHead('Lists',
-        'Named sets of ConnectWise contacts or companies. A rule condition can ask whether a ticket’s contact or company is in one.',
+    setContent(pageActions(
         editOnly(`<button class="btn btn-primary" onclick="showListModal()">${icon('plus')}New list</button>`)) +
     tableCard(thead, rows, {
         empty: emptyState('No lists yet',
@@ -150,7 +149,7 @@ async function loadListDetail(id) {
     try {
         ;[d] = await Promise.all([api('GET', `/lists/${id}`), lsLoadTypes()])
     } catch (e) {
-        setContent(backRow('lists', 'Lists') + pageHead('List') + errorState(e.message))
+        setContent(backRow('lists', 'Lists') + errorState(e.message))
         return
     }
     lsDetail = d

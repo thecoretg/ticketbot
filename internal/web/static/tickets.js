@@ -25,7 +25,7 @@ async function renderTicketsPage() {
     const boardOpts = tkBoards.filter(b => !b.deleted).map(b =>
         `<option value="${b.id}"${String(b.id) === tkFilters.board_id ? ' selected' : ''}>${esc(b.name)}</option>`).join('')
 
-    setContent(pageHead('Tickets', 'Every ticket ticketbot has seen, with the history of what it did to each one.') +
+    setContent(
     `<div class="card">
         <div class="filter-bar">
             <select id="tk-board" class="select" style="min-width:170px" onchange="tkBoardChanged(this.value)" aria-label="Filter by board">
@@ -182,7 +182,7 @@ async function loadTicketDetail(id) {
     try {
         data = await api('GET', `/tickets/${id}`)
     } catch (e) {
-        setContent(backRow('tickets', 'Tickets', `#${id}`) + pageHead(`Ticket #${id}`) + errorState(e.message))
+        setContent(backRow('tickets', 'Tickets', `#${id}`) + errorState(e.message))
         return
     }
     tkDetail     = data

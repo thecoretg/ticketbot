@@ -85,8 +85,7 @@ function renderWorkflowList(list) {
         </td>
     </tr>`)
 
-    setContent(pageHead('Workflows',
-        'One workflow per board. Every new or updated ticket enters at a trigger and follows the wires.',
+    setContent(pageActions(
         editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
     banner +
     tableCard(thead, rows, {
@@ -181,7 +180,7 @@ async function loadWorkflowEditor(id) {
         cvFit()
         setCrumbHere(wf.board_name || wf.name)
     } catch (e) {
-        setContent(backRow('workflows', 'Workflows') + pageHead('Workflow') + errorState(e.message))
+        setContent(backRow('workflows', 'Workflows') + errorState(e.message))
     }
 }
 

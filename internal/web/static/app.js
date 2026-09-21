@@ -985,14 +985,13 @@ function badge(val) {
     return badgeTag(val ? 'Yes' : 'No', val ? 'ok' : 'bad')
 }
 
-// pageHead is the title block every view starts with. actions is button markup.
-function pageHead(title, sub = '', actions = '') {
+// pageActions is what is left of a page head: the topbar trail names the page and
+// the page itself says what it does, so all that is left is the buttons. Markup.
+function pageActions(actions = '') {
+    if (!actions) return ''
     return `<header class="page-head row spread wrap gap4">
-        <div>
-            <h1 class="page-title">${esc(title)}</h1>
-            ${sub ? `<p class="page-sub">${sub}</p>` : ''}
-        </div>
-        ${actions ? `<div class="row gap2 wrap">${actions}</div>` : ''}
+        <span></span>
+        <div class="row gap2 wrap">${actions}</div>
     </header>`
 }
 
@@ -1087,9 +1086,7 @@ async function loadForwards() {
 function renderForwards(fwds) {
     forwardsCache = fwds
 
-    const head = pageHead(
-        'Notification forwards',
-        'Send another person\u2019s ticket notifications to a room or teammate for a period of time.',
+    const head = pageActions(
         editOnly(`<button class="btn btn-primary" onclick="showForwardModal()">${icon('plus')}New forward</button>`))
 
     const thead = `<th>Source</th><th>Destination</th><th>Dates</th><th class="c">Enabled</th>
@@ -1253,8 +1250,7 @@ async function loadUsers() {
 }
 
 function renderUsers(users) {
-    const head = pageHead('Users', 'People who can sign in to this console.',
-        `<button class="btn btn-primary" onclick="showNewUserModal()">${icon('plus')}New user</button>`)
+    const head = pageActions(`<button class="btn btn-primary" onclick="showNewUserModal()">${icon('plus')}New user</button>`)
 
     const thead = '<th class="r">ID</th><th>Email</th><th>Role</th><th>Created</th><th class="r">Actions</th>'
     const rows  = users.map(u => `<tr>
@@ -1383,8 +1379,7 @@ function renderKeys(keys, users) {
     const userMap = {}
     users.forEach(u => { userMap[u.id] = u.email_address })
 
-    const head = pageHead('API keys', 'Keys authenticate machine callers against the ticketbot API.',
-        `<button class="btn btn-primary" onclick="showNewKeyModal()">${icon('plus')}New key</button>`)
+    const head = pageActions(`<button class="btn btn-primary" onclick="showNewKeyModal()">${icon('plus')}New key</button>`)
 
     const thead = '<th class="r">ID</th><th>User</th><th>Key</th><th>Created</th><th class="r">Actions</th>'
     const rows  = keys.map(k => `<tr>
@@ -1474,8 +1469,7 @@ async function loadSync() {
 function renderSync(status) {
     const running = status?.status === true
 
-    setContent(pageHead('Sync',
-        'Pulls the latest boards, Webex recipients and tickets from ConnectWise and Webex. Run it after adding a board or changing room membership.',
+    setContent(pageActions(
         // while a sync runs the button is disabled, so it drops the accent: a dimmed
         // accent fill does not hold its contrast
         `<button class="btn ${running ? 'btn-default' : 'btn-primary'}" onclick="showNewSyncModal()" ${running ? 'disabled' : ''}>${icon('globe')}Run sync</button>`) +
@@ -1581,7 +1575,7 @@ function renderSSO(st) {
         <td class="r nowrap">${deleteButton(`ssoDeleteMapping(${m.id})`, 'Remove')}</td>
     </tr>`)
 
-    setContent(pageHead('Single sign-on', 'Let people sign in with their Microsoft account and take their role from Entra.') +
+    setContent(
     `<div class="stack gap5">
         <div class="card card-pad">
             ${row('Credentials',
@@ -1711,8 +1705,7 @@ function renderConfig(cfg) {
     const numberInput = (id, value, min) =>
         `<input class="input" style="max-width:160px" type="number" id="${id}" value="${esc(value)}" min="${min}" aria-label="${esc(id)}">`
 
-    setContent(pageHead('Configuration', 'Runtime settings. Changes take effect without a restart.',
-        `<button class="btn btn-primary" onclick="saveConfig()">Save changes</button>`) +
+    setContent(pageActions(`<button class="btn btn-primary" onclick="saveConfig()">Save changes</button>`) +
     `<div class="card card-pad">
         ${row('Master dry run',
             'Run every workflow as a dry run: no ConnectWise writes, Webex messages are mocked.',
@@ -1884,7 +1877,7 @@ function renderLogs(entries, full = false) {
         return
     }
 
-    setContent(pageHead('Logs', 'Everything the server has logged since it started, newest first.') +
+    setContent(
     `<div class="card" id="logs-frame">
         <div class="filter-bar">
             <select class="select" id="logs-level-filter" onchange="setLogsFilter(this.value)" aria-label="Filter by level">${levelOpts}</select>
