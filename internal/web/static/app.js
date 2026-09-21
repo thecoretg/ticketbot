@@ -104,16 +104,7 @@ function toggleMenu(anchor, items) {
 function openMenu(anchor, items) {
     closeMenu()
     menuAnchor = anchor
-    menuEl = document.createElement('div')
-    menuEl.className = 'menu'
-    menuEl.setAttribute('role', 'menu')
-    menuEl.innerHTML = items.map((it, k) => it === '-' ? '<hr>' : `
-        <button role="menuitem" data-mi="${k}" class="${it.danger ? 'danger' : ''}">
-            ${it.swatch ? `<span class="swatch" style="background:${it.swatch}"></span>` : (it.icon ? icon(it.icon) : '')}
-            <span>${esc(it.label)}</span>
-            ${it.current ? '<span class="check-mark">●</span>' : ''}
-        </button>`).join('')
-    document.body.appendChild(menuEl)
+    buildMenu(items)
 
     const r = anchor.getBoundingClientRect()
     const below = window.scrollY + r.bottom + 6
@@ -121,10 +112,36 @@ function openMenu(anchor, items) {
     // anchored controls near the bottom of the frame (the sidebar foot) flip upwards
     menuEl.style.top  = `${r.bottom + menuEl.offsetHeight + 12 > window.innerHeight ? above : below}px`
     menuEl.style.left = `${Math.max(12, Math.min(r.left, window.innerWidth - menuEl.offsetWidth - 12))}px`
+}
 
+// openMenuAt opens the same popover at a viewport point: a context menu. It flips or slides to
+// stay inside the frame.
+function openMenuAt(x, y, items) {
+    closeMenu()
+    buildMenu(items)
+    const w = menuEl.offsetWidth, h = menuEl.offsetHeight
+    const left = x + w + 12 > window.innerWidth ? x - w : x
+    const top  = y + h + 12 > window.innerHeight ? y - h : y
+    menuEl.style.left = `${window.scrollX + Math.max(12, left)}px`
+    menuEl.style.top  = `${window.scrollY + Math.max(12, top)}px`
+}
+
+// buildMenu renders the items into menuEl. An item is '-' for a divider or
+// { label, icon?, swatch?, current?, danger?, disabled?, run }.
+function buildMenu(items) {
+    menuEl = document.createElement('div')
+    menuEl.className = 'menu'
+    menuEl.setAttribute('role', 'menu')
+    menuEl.innerHTML = items.map((it, k) => it === '-' ? '<hr>' : `
+        <button role="menuitem" data-mi="${k}" class="${it.danger ? 'danger' : ''}"${it.disabled ? ' disabled' : ''}>
+            ${it.swatch ? `<span class="swatch" style="background:${it.swatch}"></span>` : (it.icon ? icon(it.icon) : '')}
+            <span>${esc(it.label)}</span>
+            ${it.current ? '<span class="check-mark">●</span>' : ''}
+        </button>`).join('')
+    document.body.appendChild(menuEl)
     menuEl.addEventListener('click', e => {
         const btn = e.target.closest('[data-mi]')
-        if (!btn) return
+        if (!btn || btn.disabled) return
         const item = items[Number(btn.dataset.mi)]
         closeMenu()
         item.run?.()

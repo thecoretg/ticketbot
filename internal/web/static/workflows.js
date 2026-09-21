@@ -364,6 +364,7 @@ function renderWorkflowEditor() {
 const cv = {
     el: null, zoom: 1, tx: 40, ty: 40,
     sel: null,       // selected node id
+    multi: new Set(),// further selected node ids (shift-click, shift-drag box); sel is among them when set
     selEdge: null,   // selected edge id
     drag: null,      // { type: pan|node|link|pal, ... }
     rail: true,      // step list open
@@ -378,7 +379,7 @@ const cv = {
 
 function cvReset() {
     cvClearTimers()
-    Object.assign(cv, { el: null, zoom: 1, tx: 40, ty: 40, sel: null, selEdge: null, drag: null, run: null, undo: null, errNode: null, ghost: null, link: null, replay: false })
+    Object.assign(cv, { el: null, zoom: 1, tx: 40, ty: 40, sel: null, multi: new Set(), selEdge: null, drag: null, run: null, undo: null, errNode: null, ghost: null, link: null, replay: false })
 }
 
 function cvClearTimers() {
@@ -423,6 +424,7 @@ function cvMount() {
     cv.el.addEventListener('wheel', cvOnWheel, { passive: false })
     cv.el.addEventListener('click', cvOnClick)
     cv.el.addEventListener('dblclick', cvOnDblClick)
+    cv.el.addEventListener('contextmenu', cvOnContext)
     window.addEventListener('pointermove', cvOnMove)
     window.addEventListener('pointerup', cvOnUp)
     window.addEventListener('pointercancel', cvOnUp)
@@ -460,9 +462,58 @@ function cvOnDown(e) {
         return
     }
     e.preventDefault()
+    if (e.shiftKey && cvEditable()) {
+        const p = cvPt(e)
+        cv.drag = { type: 'box', x0: p.x, y0: p.y, x1: p.x, y1: p.y }
+        cvDragClass('drag-box')
+        return
+    }
     cv.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false }
     cv.el.classList.add('panning')
     cvDragClass('drag-pan')
+}
+
+// cvOnContext opens the step or canvas menu at the pointer. Shift keeps the browser's own menu.
+function cvOnContext(e) {
+    if (e.shiftKey || cvInChrome(e.target) || cv.replay) return
+    e.preventDefault()
+    const card = e.target.closest?.('.node')
+    if (card) {
+        const id = card.dataset.node
+        if (!cvSelection().includes(id)) cvSelect(id)
+        openMenuAt(e.clientX, e.clientY, cvNodeMenu())
+        return
+    }
+    cvDeselect()
+    cv.paste = cvPt(e)
+    openMenuAt(e.clientX, e.clientY, [
+        { label: cvClipboard ? `Paste ${cvClipboard.nodes.length} step${cvClipboard.nodes.length === 1 ? '' : 's'}` : 'Paste', icon: 'copy', disabled: !cvClipboard || !cvEditable(), run: () => cvPaste(cv.paste) },
+        { label: 'Add a step…', icon: 'plus', disabled: !cvEditable(), run: () => { if (!cv.rail) cvToggleRail() } },
+        '-',
+        { label: 'Fit to view', icon: 'fit', run: cvFit },
+    ])
+}
+
+// cvNodeMenu is the right-click menu for the selected step or steps.
+function cvNodeMenu() {
+    const ids = cvSelection()
+    const n = ids.length
+    const many = n > 1
+    const label = s => many ? `${s} ${n} steps` : s
+    const nodes = ids.map(wfNode).filter(Boolean)
+    const anyOn = nodes.some(x => x.enabled)
+    const items = []
+    if (!many) items.push({ label: 'Open inspector', icon: 'edit', run: () => cvSelect(ids[0]) })
+    if (cvEditable()) {
+        items.push(
+            { label: label('Duplicate'), icon: 'copy', run: cvDuplicateSelection },
+            { label: label('Copy'), icon: 'copy', run: cvCopySelection },
+            { label: `${anyOn ? 'Disable' : 'Enable'}${many ? ` ${n} steps` : ''}`, icon: anyOn ? 'ban' : 'check', run: () => cvSetSelectionEnabled(!anyOn) },
+            '-',
+            { label: label('Delete'), icon: 'trash', danger: true, run: cvDeleteSelection },
+        )
+    }
+    return items
 }
 
 function cvOnClick(e) {
@@ -489,7 +540,15 @@ function cvOnKey(e) {
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && cvEditable()) {
         if (cv.selEdge) { e.preventDefault(); cvCutEdge() }
+        else if (cv.multi.size > 1) { e.preventDefault(); cvDeleteSelection() }
         else if (cv.sel) { e.preventDefault(); cvDeleteNode(cv.sel) }
+        return
+    }
+    if ((e.metaKey || e.ctrlKey) && !typing && cvEditable() && !e.shiftKey && !e.altKey) {
+        const k = e.key.toLowerCase()
+        if (k === 'c' && cvSelection().length) { e.preventDefault(); cvCopySelection() }
+        else if (k === 'v' && cvClipboard) { e.preventDefault(); cvPaste(null) }
+        else if (k === 'd' && cvSelection().length) { e.preventDefault(); cvDuplicateSelection() }
     }
 }
 
@@ -510,13 +569,114 @@ function cvOnWheel(e) {
 function cvGrabNode(id, e) {
     const n = wfNode(id)
     if (!n) return
-    cvSelect(id, { render: false })
+    if (e.shiftKey && cvEditable()) {
+        // shift-click adds to or removes from the selection; the press can still become a group drag
+        const set = new Set(cvSelection())
+        if (set.has(id)) set.delete(id); else set.add(id)
+        cvSetSelection([...set], { render: false })
+    } else if (!cvSelection().includes(id)) {
+        cvSelect(id, { render: false })
+    } else {
+        cv.selEdge = null
+        if (cv.run && !cv.replay) { cvClearTimers(); cv.run = null }
+    }
+    // dragging any selected card moves the whole selection
+    const ids = cvSelection().includes(id) ? cvSelection() : [id]
+    const orig = {}
+    for (const i of ids) { const m = wfNode(i); if (m) orig[i] = { x: m.x, y: m.y } }
     cv.drag = cvEditable()
-        ? { type: 'node', id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false }
+        ? { type: 'node', id, ids, orig, sx: e.clientX, sy: e.clientY, moved: false }
         : { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false, fromNode: true }
     cvRenderGraph()
     cvRenderSide()
     cvDragClass(cv.drag.type === 'node' ? 'drag-node' : 'drag-pan')
+}
+
+// ── Selection ────────────────────────────────────────────
+// cvSelection lists the selected step ids: the shift-selected set, or the single inspected one.
+function cvSelection() {
+    if (cv.multi.size) return [...cv.multi]
+    return cv.sel ? [cv.sel] : []
+}
+
+// cvSetSelection selects several steps. One step is a plain selection with the inspector; more
+// hide the inspector behind a small "N steps" panel.
+function cvSetSelection(ids, opts = {}) {
+    ids = ids.filter(id => wfNode(id))
+    cv.selEdge = null
+    if (cv.run && !cv.replay) { cvClearTimers(); cv.run = null }
+    if (ids.length <= 1) { cv.multi = new Set(); cv.sel = ids[0] || null }
+    else { cv.multi = new Set(ids); cv.sel = ids[0] }
+    if (opts.render === false) return
+    cvRenderGraph()
+    cvRenderSide()
+}
+
+// ── Clipboard ────────────────────────────────────────────
+// The clipboard lives for the browser session and crosses workflows and boards; save-time
+// validation catches a status that belongs to another board.
+let cvClipboard = null   // { nodes: [...copies without editor state], edges: [...between them] }
+
+function cvSnapshotSelection() {
+    const ids = new Set(cvSelection())
+    const nodes = wf.nodes.filter(n => ids.has(n.id)).map(n => { const c = JSON.parse(JSON.stringify(n)); delete c._ui; return c })
+    const edges = wf.edges.filter(e => ids.has(e.from) && ids.has(e.to)).map(e => ({ ...e }))
+    return nodes.length ? { nodes, edges } : null
+}
+
+function cvCopySelection() {
+    const snap = cvSnapshotSelection()
+    if (!snap) return
+    cvClipboard = snap
+    toast(`Copied ${snap.nodes.length} step${snap.nodes.length === 1 ? '' : 's'}`, 'success')
+}
+
+// cvPlace adds copies of snap.nodes and the wires between them, with new ids, so the group's
+// layout is kept. at is the top-left of the group in plane coordinates; null offsets the
+// originals so a copy never lands exactly on its source.
+async function cvPlace(snap, at) {
+    if (!snap || !cvEditable()) return
+    const ids = {}
+    for (const n of snap.nodes) ids[n.id] = cvNewID()
+    const x0 = Math.min(...snap.nodes.map(n => n.x)), y0 = Math.min(...snap.nodes.map(n => n.y))
+    const dx = at ? Math.round(at.x) - x0 : 32, dy = at ? Math.round(at.y) - y0 : 32
+    const added = snap.nodes.map(n => ({ ...JSON.parse(JSON.stringify(n)), id: ids[n.id], x: n.x + dx, y: n.y + dy }))
+    for (const e of snap.edges) wf.edges.push({ id: cvNewID(), from: ids[e.from], to: ids[e.to], port: e.port })
+    wf.nodes.push(...added)
+    const ifs = added.filter(n => n.kind === 'if')
+    await Promise.all(ifs.map(wfLoadNodeUI))
+    await wfResolveNames(ifs)
+    cvSetSelection(added.map(n => n.id))
+    wfMarkDirty()
+}
+
+function cvPaste(at = null) { return cvPlace(cvClipboard, at) }
+
+function cvDuplicateSelection() { return cvPlace(cvSnapshotSelection(), null) }
+
+function cvSetSelectionEnabled(on) {
+    for (const id of cvSelection()) { const n = wfNode(id); if (n) n.enabled = on }
+    cvRenderGraph()
+    cvRenderSide()
+    wfMarkDirty()
+}
+
+// cvDeleteSelection removes the selected steps and their wires, keeping the last trigger.
+function cvDeleteSelection() {
+    const ids = new Set(cvSelection())
+    if (!ids.size) return
+    const keepTrigger = wf.nodes.filter(n => n.kind === 'trigger' && !ids.has(n.id)).length === 0
+    if (keepTrigger) {
+        const first = wf.nodes.find(n => n.kind === 'trigger' && ids.has(n.id))
+        if (first) { ids.delete(first.id); toast('Kept one trigger: a workflow needs at least one', 'info') }
+    }
+    wf.nodes = wf.nodes.filter(n => !ids.has(n.id))
+    wf.edges = wf.edges.filter(e => !ids.has(e.from) && !ids.has(e.to))
+    cv.multi = new Set()
+    cv.sel = null
+    cvRenderGraph()
+    cvRenderSide()
+    wfMarkDirty()
 }
 
 // Dragging an output port picks up whatever was attached to it, so pulling a link off and
@@ -553,17 +713,24 @@ function cvOnMove(e) {
         return
     }
     if (d.type === 'node') {
-        const n = wfNode(d.id)
-        if (!n) return
-        const nx = Math.round(d.ox + (e.clientX - d.sx) / cv.zoom), ny = Math.round(d.oy + (e.clientY - d.sy) / cv.zoom)
         if (!d.moved && Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) <= 3) return
         d.moved = true
-        n.x = nx; n.y = ny
-        cvMoveNodeEls(n)
+        const dx = (e.clientX - d.sx) / cv.zoom, dy = (e.clientY - d.sy) / cv.zoom
+        for (const id of d.ids) {
+            const n = wfNode(id), o = d.orig[id]
+            if (!n || !o) continue
+            n.x = Math.round(o.x + dx); n.y = Math.round(o.y + dy)
+            cvMoveNodeEls(n)
+        }
         cvRenderWires()
         return
     }
     const p = cvPt(e)
+    if (d.type === 'box') {
+        d.x1 = p.x; d.y1 = p.y
+        cvRenderMarquee()
+        return
+    }
     if (d.type === 'link') {
         cv.link = p
         cvRenderWires()
@@ -609,18 +776,37 @@ function cvOnUp(e) {
         if (d.moved) { cvRenderGraph(); wfMarkDirty() }
         return
     }
+    if (d.type === 'box') {
+        const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1)
+        const hit = wf.nodes.filter(n => n.x < x1 && n.x + CV_W > x0 && n.y < y1 && n.y + cvH(n) > y0).map(n => n.id)
+        document.querySelector('#cv-nodes .marquee')?.remove()
+        cvSetSelection(hit)
+        return
+    }
     if (d.type === 'pan' && !d.moved && !d.fromNode) {
         cvDeselect()
     }
+}
+
+// cvRenderMarquee draws the shift-drag selection box among the cards.
+function cvRenderMarquee() {
+    const d = cv.drag
+    const host = document.getElementById('cv-nodes')
+    if (!host || d?.type !== 'box') return
+    let el = host.querySelector('.marquee')
+    if (!el) { el = document.createElement('div'); el.className = 'marquee'; host.appendChild(el) }
+    const x = Math.min(d.x0, d.x1), y = Math.min(d.y0, d.y1)
+    el.style.left = `${x}px`; el.style.top = `${y}px`
+    el.style.width = `${Math.abs(d.x1 - d.x0)}px`; el.style.height = `${Math.abs(d.y1 - d.y0)}px`
 }
 
 // cvDragClass marks the shell for the length of a gesture: no text selection, one cursor, and the
 // docks stop taking pointer events so the drag passes over them.
 function cvDragClass(kind) {
     const b = document.body
-    b.classList.remove('is-dragging', 'drag-link', 'drag-copy')
+    b.classList.remove('is-dragging', 'drag-link', 'drag-copy', 'drag-box')
     if (kind) b.classList.add('is-dragging')
-    if (kind === 'drag-link' || kind === 'drag-copy') b.classList.add(kind)
+    if (kind === 'drag-link' || kind === 'drag-copy' || kind === 'drag-box') b.classList.add(kind)
     cvRenderHint()
 }
 
@@ -672,6 +858,7 @@ function cvFit() {
 // ── Selection ────────────────────────────────────────────
 function cvSelect(id, opts = {}) {
     cv.sel = id
+    cv.multi = new Set()
     cv.selEdge = null
     if (cv.run) { cvClearTimers(); cv.run = null }
     if (cv.errNode && cv.errNode !== id) cv.errNode = null
@@ -690,6 +877,7 @@ function cvSelectEdge(id) {
 
 function cvDeselect() {
     cv.sel = null
+    cv.multi = new Set()
     cv.selEdge = null
     cvRenderGraph()
     cvRenderSide()
@@ -717,7 +905,7 @@ function cvRenderGraph() {
     for (const n of wf.nodes) {
         let cls = ''
         if (n.kind === 'if') cls += 'isif '
-        if (n.id === cv.sel) cls += 'sel '
+        if (n.id === cv.sel || cv.multi.has(n.id)) cls += 'sel '
         if (!n.enabled) cls += 'off '
         if (n.id === cv.errNode) cls += 'err '
         if (run) cls += onPath[n.id] ? (n.id === nowId ? 'now ' : 'hit ') : 'dim '
@@ -887,13 +1075,15 @@ function cvRenderGhost() {
 function cvRenderHint() {
     const el = document.getElementById('cv-hint')
     if (!el) return
-    let hint = 'drag a step in from the list · drag to pan · pinch or ⌘-scroll to zoom'
+    let hint = 'drag a step in from the list · drag to pan · shift-drag to select several · right-click for actions'
     if (cv.drag?.type === 'link') hint = 'drop on a step to connect, or on empty canvas to disconnect'
     else if (cv.drag?.type === 'pal') hint = 'release over the canvas to place it'
     else if (cv.run?.record) hint = 'recorded path highlighted · drag to pan · pinch or ⌘-scroll to zoom'
     else if (cv.run) hint = 'simulated path highlighted — nothing was sent'
+    else if (cv.drag?.type === 'box') hint = 'release to select the steps inside the box'
+    else if (cv.multi.size > 1) hint = `${cv.multi.size} steps selected · drag to move them · ⌘C copies · ⌘D duplicates · Delete removes them`
     else if (cv.selEdge) hint = 'wire selected · × or Delete disconnects it'
-    else if (cv.sel) hint = 'drag a port to wire it · Delete removes the step'
+    else if (cv.sel) hint = 'drag a port to wire it · Delete removes the step · ⌘C copies it'
     el.textContent = hint
 }
 
@@ -930,6 +1120,23 @@ function cvRenderSide() {
     const host = document.getElementById('cv-side')
     if (!host) return
     if (cv.run) { host.innerHTML = cvRunHTML(); return }
+    if (cv.multi.size > 1) {
+        const n = cv.multi.size
+        const anyOn = [...cv.multi].some(id => wfNode(id)?.enabled)
+        host.innerHTML = `<aside class="dock dock-r"><article class="card">
+            <div class="card-head">
+                <div><h3>${n} steps selected</h3><p>Drag any of them to move the group. Right-click for the same actions.</p></div>
+                <button class="icon-btn" aria-label="Clear the selection" onclick="cvDeselect()">${icon('x')}</button>
+            </div>
+            <div class="card-body row gap2 wrap">
+                <button class="btn btn-default btn-sm" onclick="cvDuplicateSelection()">${icon('copy')}Duplicate</button>
+                <button class="btn btn-default btn-sm" onclick="cvCopySelection()">${icon('copy')}Copy</button>
+                <button class="btn btn-default btn-sm" onclick="cvSetSelectionEnabled(${anyOn ? 'false' : 'true'})">${icon(anyOn ? 'ban' : 'check')}${anyOn ? 'Disable' : 'Enable'}</button>
+                <button class="btn btn-ghost btn-sm" onclick="cvDeleteSelection()">${icon('trash')}Delete</button>
+            </div>
+        </article></aside>`
+        return
+    }
     const n = cv.sel ? wfNode(cv.sel) : null
     if (!n) { host.innerHTML = ''; return }
     host.innerHTML = `<aside class="dock dock-r"><article class="card">${cvInspectorHTML(n)}</article></aside>`
@@ -1210,6 +1417,7 @@ function wfShowHelp(section = '') {
         <p>A workflow belongs to one board. Every ticket event on that board (created, or updated) enters at each <b>Trigger</b> that listens for it, and walks the wires from there.</p>
         <p>An <b>If</b> step sends the walk out of its <b>match</b> port when its condition holds and <b>else</b> when it does not. A port with nothing wired to it simply ends that path. A step that two paths both reach runs once.</p>
         <p><b>Skip notify</b> silences the Notify steps after it on its own path only. Other paths still notify.</p>
+        <p>Right-click a step to duplicate, copy, disable or delete it. Shift-drag on empty canvas selects several steps; dragging any of them moves the group, and a copied group pastes into another workflow with its wires.</p>
         <p>Ticket writes (status, priority, owner, resources, patch) are collected and sent to ConnectWise as one change after the whole flow has run. If two steps set the same field, the later one wins and the ticket history says so. Notes are added after that change, then notifications go out.</p>
         ${h('conditions', 'Conditions')}
         <p>Each row is a field, a comparison and a value. <b>Match all</b> means every row must hold, <b>match any</b> means one is enough.</p>

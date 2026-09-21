@@ -813,6 +813,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 }
 .menu button:hover { background: var(--bg-sunken); color: var(--ink); }
 .menu button.danger { color: var(--bad); }
+.menu button:disabled { color: var(--faint); cursor: default; }
+.menu button:disabled:hover { background: transparent; }
 .menu button.danger:hover { background: var(--bad-soft); }
 .menu button svg { width: 14px; height: 14px; opacity: .7; }
 .menu hr { border: 0; border-top: 1px solid var(--line-soft); margin: var(--s1) 0; }
@@ -1056,6 +1058,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .is-dragging * { cursor: inherit !important; }
 .is-dragging.drag-link { cursor: crosshair; }
 .is-dragging.drag-copy { cursor: copy; }
+.is-dragging.drag-box { cursor: crosshair; }
 .is-dragging .dock, .is-dragging .dock-bar { pointer-events: none; }
 
 /* ---- condition builder ---- */
@@ -1444,6 +1447,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .node.t-start { border-color: color-mix(in srgb, var(--trigger) 32%, var(--line)); }
 .node.t-start .node-ico { background: var(--nc); color: var(--accent-ink); }
 .node.sel { border-color: var(--nc); box-shadow: 0 0 0 3px var(--nc-soft), var(--shadow); }
+/* shift-drag selection box, drawn in plane coordinates among the cards */
+.marquee { position: absolute; border: 1px dashed var(--accent); background: var(--accent-soft); border-radius: var(--radius-sm); pointer-events: none; }
 .node.off { opacity: .55; }
 .node.dim { opacity: .34; }
 .node.hit { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-soft); }

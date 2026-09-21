@@ -21,6 +21,14 @@ them.
   and the ticket history lists the conflict. Notes are added after that change; notifications go
   out last.
 
+## Moving steps around
+
+Right-click a step for Duplicate, Copy, Enable or Disable and Delete. Shift-drag on empty canvas
+selects several steps at once, and Shift-click adds one to the selection; dragging any selected
+step moves them all. Copied steps can be pasted into another board's workflow with the wires
+between them intact, by right-clicking the empty canvas. Keyboard: ⌘C copies, ⌘V pastes, ⌘D
+duplicates, Delete removes.
+
 ## Conditions
 
 Each row is a field, a comparison and a value. **Match all** means every row must hold; **match

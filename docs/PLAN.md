@@ -173,15 +173,20 @@ Decisions from the 2026-09-21 grilling of items 9 to 12. Order of work: 12, 11, 
 
 ### 11. Canvas context menu and multi-select
 
-- [ ] Right-click on a step opens the app popover (`openMenu`) at the pointer: Open inspector,
-      Duplicate, Copy, Enable or disable, Delete. Right-click on empty canvas: Paste, Add step,
-      Fit to view. Shift plus right-click keeps the browser menu.
-- [ ] Shift-drag on empty canvas draws a selection box; Shift-click adds or removes one step.
-      Move, Copy, Duplicate, Delete, Enable or disable act on the whole selection.
-- [ ] Clipboard is in-memory for the browser session and works across workflows and boards;
-      save-time validation catches a status from another board. Paste keeps wires between the
-      copied steps, drops wires to anything outside, lands at the pointer with the relative
-      layout kept, new ids, offset when pasted onto the same canvas. Triggers copy like any step.
+Done.
+
+- [x] Right-click on a step opens the app popover at the pointer (`openMenuAt` in `app.js`):
+      Open inspector, Duplicate, Copy, Enable or disable, Delete. Right-click on empty canvas:
+      Paste (disabled until something is copied), Add a step (opens the step list), Fit to view.
+      Shift plus right-click keeps the browser menu. Viewers get Open inspector only.
+- [x] Shift-drag on empty canvas draws a `.marquee` and selects the steps it touches; Shift-click
+      adds or removes one. Dragging any selected card moves the group. A "N steps selected"
+      panel replaces the inspector with Duplicate, Copy, Enable or disable, Delete. ⌘C, ⌘V, ⌘D
+      and Delete act on the selection.
+- [x] `cvClipboard` lives for the browser session and crosses workflows. Paste keeps the wires
+      between copied steps, drops the rest, keeps the layout, gives new ids, lands at the pointer
+      from the menu or offset by 32px from the originals from the keyboard or Duplicate. Deleting a
+      selection keeps the last trigger.
 
 ### 12. Workflow run results page
 
