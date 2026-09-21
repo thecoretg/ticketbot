@@ -15,6 +15,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
+	"github.com/thecoretg/ticketbot/internal/service/intake"
 	"github.com/thecoretg/ticketbot/internal/service/lists"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/sso"
@@ -65,6 +66,7 @@ type Services struct {
 	Sync      *syncsvc.Service
 	Notifier  *notifier.Service
 	Ticketbot *ticketbot.Service
+	Intake    *intake.Service
 	Workflow  *workflow.Service
 	Lists     *lists.Service
 	SSO       *sso.Service
@@ -123,6 +125,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	})
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
+	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg})
 
 	ssoSvc, ssoAuth, err := makeSSO(ctx, e, r, cfg)
 	if err != nil {
@@ -148,6 +151,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 			Sync:      syncsvc.New(s.Pool, cws, ws, tb),
 			Notifier:  ns,
 			Ticketbot: tb,
+			Intake:    intakeSvc,
 			Workflow: workflow.New(workflow.Params{
 				Workflows:  r.Workflows,
 				Recipients: r.WebexRecipients,

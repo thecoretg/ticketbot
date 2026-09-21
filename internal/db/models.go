@@ -254,6 +254,19 @@ type WebexRecipient struct {
 	UpdatedOn    time.Time `json:"updated_on"`
 }
 
+type WebhookIntake struct {
+	ID            int64      `json:"id"`
+	TicketID      int        `json:"ticket_id"`
+	Action        string     `json:"action"`
+	Payload       []byte     `json:"payload"`
+	Status        string     `json:"status"`
+	Attempts      int        `json:"attempts"`
+	NextAttemptAt time.Time  `json:"next_attempt_at"`
+	LastError     *string    `json:"last_error"`
+	ReceivedAt    time.Time  `json:"received_at"`
+	FinishedAt    *time.Time `json:"finished_at"`
+}
+
 type Workflow struct {
 	ID        int       `json:"id"`
 	BoardID   int       `json:"board_id"`

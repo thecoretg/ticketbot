@@ -30,25 +30,22 @@ per-workflow `dry_run`, and `MOCK_WEBEX` (env, stubs Webex posting only; retire 
 
 ### 1. Persisted webhook intake
 
-Today `TicketbotHandler.ProcessTicket` spawns a goroutine with in-memory retries (2s, 10s, 30s)
-and the work is lost on restart. Replace it with a table-backed queue.
+Done. `internal/service/intake` owns the queue; `webhook_intake` is the table (migration 14).
 
-- [ ] Migration: `webhook_intake` (id, ticket_id, payload jsonb, status pending/processing/done/
-      failed, attempts, next_attempt_at, last_error, received_at, finished_at). Bump
-      `gooseMigrationVersion`, add queries, `make gensql`.
-- [ ] Handler inserts a row and returns 200. Deletes go through the same table.
-- [ ] One in-process worker: claims rows in per-ticket order (never two rows for one ticket at
-      once), backoff 5s, 30s, 2m, 10m, 30m, 1h, then `failed`. Graceful shutdown finishes the
-      row in flight.
-- [ ] Dashboard page listing `failed` rows with retry and discard. Each failure posts to the ops
-      room (item 3) and records an `error` ticket event.
-- [ ] `done` rows purge on `log_retention_days`.
-- [ ] Unit tests for the worker with partial fakes, matching `internal/service/notifier/forwards_test.go`.
-- [ ] Periodic sync keeps running as the backstop. Processing is diff-based, so sync and a late
-      queued webhook cannot double-fire.
-
-CLAUDE.md: replace any mention of goroutine intake with the queue; note that the worker assumes
-one instance.
+- [x] Migration, queries, sqlc.
+- [x] Handler inserts a row and returns 200 (500 when the insert itself fails, so ConnectWise
+      retries the delivery). Deletes go through the same table.
+- [x] Four workers claim rows through a query that never hands out a ticket with an older open
+      row, so one ticket's webhooks run in arrival order and never concurrently. Backoff 5s, 30s,
+      2m, 10m, 30m, 1h, then `failed`. An attempt ignores shutdown cancellation and `Wait` gives
+      it the shutdown timeout to finish; rows still in flight are reset to pending on start.
+- [x] Intake page under Administration: counts per status, filterable table, retry and discard
+      on failed rows. Failure alerts go through `intake.Alerter`, which logs until item 3 wires
+      the ops room. Ticket-level `error` events are still recorded by the ticketbot run itself.
+- [x] `done` and `discarded` rows purge hourly on `log_retention_days`.
+- [x] Worker unit tests with fakes; claim-ordering test in `internal/postgres`.
+- [x] Sync (manual, from the Sync page) stays as the backstop. Processing is diff-based, so sync
+      and a late queued webhook cannot double-fire.
 
 ### 2. Write safety
 

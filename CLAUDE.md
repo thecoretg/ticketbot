@@ -22,6 +22,15 @@ CLAUDE.md edits it lists. Delete the file and this paragraph when everything is 
 - Bump `gooseMigrationVersion` in `main.go` to the new number or the migration will not run. Startup migrates to *exactly* that version (down as well as up), so lowering it rolls the schema back.
 - sqlc reads the schema from `migrations/`, so add the migration before regenerating.
 
+## Intake
+
+`POST /hooks/cw/tickets` only inserts a `webhook_intake` row and returns 200. Workers in
+`internal/service/intake` claim rows with a query that never hands out a ticket that has an older
+open row, so one ticket's webhooks run in arrival order and never concurrently; the worker count
+is otherwise free. Failed attempts back off (5s to 1h, six tries) and then park as `failed` for the
+Intake page's retry or discard. The queue assumes a single app instance: rows left `processing`
+are reset to `pending` on start. Ticket intake logic itself stays in `internal/service/ticketbot`.
+
 ## Layering
 
 `queries/*.sql` → `internal/db` (generated) → `internal/postgres` (repo impls) → `internal/repos` (interfaces) → `internal/service/*` → `internal/handlers` → `internal/server/routes.go`. New repos are registered in `internal/postgres/all.go` and `internal/repos/all.go`; new services are wired in `internal/server/server.go`.

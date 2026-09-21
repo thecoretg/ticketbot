@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	gooseMigrationVersion = 13
+	gooseMigrationVersion = 14
 	shutdownTimeout       = 10 * time.Second
 
 	// HTTP server timeouts. Webhook and dashboard requests are small and fast; anything slower is
@@ -83,6 +83,9 @@ func Run() error {
 		return fmt.Errorf("bootstrapping admin: %w", err)
 	}
 
+	// Workers start before the callback is registered so nothing arrives with no one to drain it.
+	a.Svc.Intake.Start(ctx)
+
 	if !e.SkipHooks {
 		if err := a.Svc.Hooks.ProcessAllHooks(ctx); err != nil {
 			return fmt.Errorf("processing connectwise hooks: %w", err)
@@ -137,6 +140,7 @@ func Run() error {
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("error during shutdown", "error", err)
 	}
+	a.Svc.Intake.Wait(shutdownCtx)
 
 	return nil
 }

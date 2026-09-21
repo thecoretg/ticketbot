@@ -12,6 +12,7 @@ type AllRepos struct {
 	NotifierForwards    NotifierForwardRepository
 	WebexRecipients     WebexRecipientRepository
 	TicketEvents        TicketEventRepository
+	WebhookIntake       WebhookIntakeRepository
 	Workflows           WorkflowRepository
 	Lists               ListRepository
 	SSO                 SSOStore

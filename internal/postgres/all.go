@@ -18,6 +18,7 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		NotifierForwards:    NewUserForwardRepo(pool),
 		WebexRecipients:     NewWebexRecipientRepo(pool),
 		TicketEvents:        NewTicketEventRepo(pool),
+		WebhookIntake:       NewWebhookIntakeRepo(pool),
 		Workflows:           NewWorkflowRepo(pool),
 		Lists:               NewListRepo(pool),
 		SSO:                 NewSSOStore(pool),

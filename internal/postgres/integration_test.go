@@ -274,3 +274,80 @@ func TestListRepo(t *testing.T) {
 		t.Errorf("items after cascade = %d, %v", n, err)
 	}
 }
+
+// TestWebhookIntakeClaimOrdersPerTicket checks the claim query never hands out a ticket's second
+// webhook while its first is open, but does let other tickets through.
+func TestWebhookIntakeClaimOrdersPerTicket(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	_, _ = pool.Exec(ctx, `DELETE FROM webhook_intake`)
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM webhook_intake`) })
+	repo := NewWebhookIntakeRepo(pool)
+
+	first, err := repo.Insert(ctx, 900201, models.IntakeAdded, []byte(`{"a":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _ := repo.Insert(ctx, 900201, models.IntakeUpdated, nil)
+	other, _ := repo.Insert(ctx, 900202, models.IntakeUpdated, nil)
+
+	c1, err := repo.Claim(ctx)
+	if err != nil || c1.ID != first.ID {
+		t.Fatalf("first claim = %+v, %v; want row %d", c1, err, first.ID)
+	}
+	if c1.Status != models.IntakeProcessing || c1.Attempts != 1 {
+		t.Fatalf("claimed row status=%s attempts=%d", c1.Status, c1.Attempts)
+	}
+
+	// The same ticket's next row is blocked; the other ticket is not.
+	c2, err := repo.Claim(ctx)
+	if err != nil || c2.ID != other.ID {
+		t.Fatalf("second claim = %+v, %v; want row %d", c2, err, other.ID)
+	}
+	if _, err := repo.Claim(ctx); !errors.Is(err, models.ErrIntakeEmpty) {
+		t.Fatalf("third claim err = %v, want ErrIntakeEmpty", err)
+	}
+
+	// A rescheduled first row still blocks the second even though the second is ready now.
+	if err := repo.Reschedule(ctx, first.ID, time.Now().Add(time.Hour), "boom"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Claim(ctx); !errors.Is(err, models.ErrIntakeEmpty) {
+		t.Fatalf("claim behind a delayed sibling err = %v, want ErrIntakeEmpty", err)
+	}
+
+	// Once the first is done, the second is claimable.
+	if err := repo.Finish(ctx, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	c3, err := repo.Claim(ctx)
+	if err != nil || c3.ID != second.ID {
+		t.Fatalf("claim after finish = %+v, %v; want row %d", c3, err, second.ID)
+	}
+
+	// Fail, retry and discard round-trip; retry and discard refuse non-failed rows.
+	if err := repo.Fail(ctx, c3.ID, "gave up"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Discard(ctx, other.ID); !errors.Is(err, models.ErrIntakeNotFound) {
+		t.Fatalf("discard of a processing row err = %v, want ErrIntakeNotFound", err)
+	}
+	retried, err := repo.Retry(ctx, c3.ID)
+	if err != nil || retried.Status != models.IntakePending || retried.Attempts != 0 {
+		t.Fatalf("retry = %+v, %v", retried, err)
+	}
+
+	// Crash recovery returns processing rows to pending.
+	n, err := repo.ResetProcessing(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("reset = %d, %v; want 1", n, err)
+	}
+
+	st, err := repo.Stats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Counts[models.IntakePending] != 2 || st.Counts[models.IntakeDone] != 1 || st.LastReceivedAt == nil {
+		t.Fatalf("stats = %+v", st)
+	}
+}

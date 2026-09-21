@@ -163,7 +163,13 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	adminh := handlers.NewAdminHandler(shutdown)
 	rt.handle("POST /admin/restart", adminh.HandleRestart, auth, admin)
 
-	tb := handlers.NewTicketbotHandler(a.Svc.Ticketbot)
+	ih := handlers.NewIntakeHandler(a.Svc.Intake)
+	rt.handle("GET /intake", ih.List, auth, admin)
+	rt.handle("GET /intake/stats", ih.Stats, auth, admin)
+	rt.handle("POST /intake/{id}/retry", ih.Retry, auth, admin)
+	rt.handle("POST /intake/{id}/discard", ih.Discard, auth, admin)
+
+	tb := handlers.NewTicketbotHandler(a.Svc.Intake)
 	rt.handle("POST /hooks/cw/tickets", tb.ProcessTicket, middleware.RequireConnectwiseSignature())
 
 	return rt.mux

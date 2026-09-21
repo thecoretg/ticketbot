@@ -54,6 +54,7 @@ const NAV = [
         { tab: 'users',  name: 'Users',  icon: 'users' },
         { tab: 'keys',   name: 'Keys',   icon: 'key' },
         { tab: 'sync',   name: 'Sync',   icon: 'globe' },
+        { tab: 'intake', name: 'Intake', icon: 'inbox' },
         { tab: 'config', name: 'Config', icon: 'cog' },
         { tab: 'sso',    name: 'Single sign-on', icon: 'shield' },
         { tab: 'logs',   name: 'Logs',   icon: 'book' },
@@ -213,6 +214,7 @@ function sessionExpired() {
     sessionExpiredShown = true
     stopSyncPoll()
     stopLogsPoll()
+    stopIntakePoll()
     tabGuard = null
     currentUser = null
     totpSetupRequired = false
@@ -319,6 +321,7 @@ async function logout() {
     totpEnabled  = false
     stopSyncPoll()
     stopLogsPoll()
+    stopIntakePoll()
     document.getElementById('login-email').value    = ''
     document.getElementById('login-password').value = ''
     document.getElementById('login-err').classList.add('hidden')
@@ -710,6 +713,7 @@ function switchTab(tab, sub = null) {
     tabGuard = null
     stopSyncPoll()
     stopLogsPoll()
+    stopIntakePoll()
     currentTab  = tab
     currentHash = sub ? `${tab}/${sub}` : tab
     window.location.hash = currentHash
