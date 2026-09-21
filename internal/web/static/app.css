@@ -29,6 +29,10 @@
 }
 
 /* Placeholder tokens under a message template — click to insert. */
+/* a link that leaves the app says so with a small trailing icon instead of a tooltip, because a
+   tooltip inside the tickets table's scrolling wrap is clipped at the edge */
+.link.ext { display: inline-flex; align-items: center; gap: 3px; }
+.link.ext svg { width: 12px; height: 12px; stroke-width: 2; opacity: .7; }
 .placeholder-list { display: flex; flex-wrap: wrap; gap: var(--s1); }
 .placeholder-list .code { cursor: pointer; }
 .placeholder-list .code:hover { border-color: var(--accent-line); color: var(--accent-on-soft); }

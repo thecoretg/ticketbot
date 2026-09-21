@@ -128,7 +128,7 @@ async function refreshTicketTable() {
     const items = page?.items || []
     const thead = `<th class="r">ID</th><th>Summary</th><th>Board</th><th>Status</th><th>Company</th><th>Owner</th><th>Updated</th>`
     const rows  = items.map(t => `<tr class="clickable" onclick="openTicket(${t.id})">
-        <td class="r"><a class="link num" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" data-tip="Open in ConnectWise">#${t.id}</a></td>
+        <td class="r nowrap"><a class="link num ext" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Ticket ${t.id}, opens in ConnectWise">#${t.id}${icon('external')}</a></td>
         <td class="cell-ellipsis cell-primary" title="${esc(t.summary)}">${esc(t.summary)}${t.deleted ? ' ' + badgeTag('Deleted', 'bad') : ''}</td>
         <td class="nowrap">${esc(t.board_name)}</td>
         <td class="nowrap">${esc(t.status_name)}${t.closed_flag ? ' ' + badgeTag('Closed', '') : ''}</td>

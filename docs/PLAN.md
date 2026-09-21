@@ -160,9 +160,8 @@ Decisions from the 2026-09-21 grilling of items 9 to 12. Order of work: 12, 11, 
 
 ### 9. Tooltip clipped on the ticket list
 
-- [ ] Drop the `data-tip` on ticket ids in the Tickets table (a CSS `::after` cannot escape the
-      scrolling `.table-wrap`). Show a small external-link icon after the number with an
-      accessible label instead. Light and dark.
+Done. The ticket id link in the Tickets table lost its `data-tip` and gained a trailing
+external-link icon (`icons.js` `external`, `.link.ext` in `app.css`) with an accessible label.
 
 ### 10. Configurable business hours for the stale-webhook alert
 
