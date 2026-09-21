@@ -125,13 +125,15 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		CW:        cws,
 		Workflows: r.Workflows,
 		Events:    r.TicketEvents,
+		Runs:      r.WorkflowRuns,
 		Engine:    engine,
 		Notifier:  ns,
 		Alerter:   alerter,
 	})
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
-	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter})
+	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter,
+		Purgers: []intake.Purger{&ticketbot.HistoryPurger{Runs: r.WorkflowRuns, Events: r.TicketEvents, Cfg: cfg}}})
 
 	wfSvc := workflow.New(workflow.Params{
 		Workflows:  r.Workflows,

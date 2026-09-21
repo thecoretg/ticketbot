@@ -373,3 +373,67 @@ func TestWebhookIntakeCountsByHour(t *testing.T) {
 		t.Fatalf("rows = %+v", rows)
 	}
 }
+
+func TestWorkflowRunRepoListFilters(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	seedTicket(t, pool, 900301, "Run summary ticket")
+	seedTicket(t, pool, 900302, "Run summary ticket two")
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM workflow_run WHERE run_id LIKE 'test-run-%'`) })
+	repo := NewWorkflowRunRepo(pool)
+
+	// far in the past so DeleteBefore at the end cannot touch real rows in a shared test database
+	base := time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)
+	mk := func(id string, ticket, board int, at time.Time, outcome models.RunOutcome) {
+		wfID := 7
+		if err := repo.Insert(ctx, &models.WorkflowRun{RunID: id, TicketID: ticket, BoardID: board, WorkflowID: &wfID, WorkflowName: "wf",
+			Event: models.TriggerUpdated, Source: models.SourceWebhook, StartedAt: at, Steps: 2, Outcome: outcome}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("test-run-1", 900301, 900001, base, models.OutcomeClean)
+	mk("test-run-2", 900301, 900001, base.Add(time.Hour), models.OutcomeErrors)
+	mk("test-run-3", 900302, 900009, base.Add(2*time.Hour), models.OutcomeClean)
+
+	// the shared database holds real runs too, so order is checked inside the test rows' window
+	lo, hi := base.Add(-time.Hour), base.Add(3*time.Hour)
+	all, err := repo.List(ctx, models.RunFilter{From: &lo, To: &hi, Limit: 10})
+	if err != nil || len(all) != 3 || all[0].RunID != "test-run-3" || all[2].RunID != "test-run-1" {
+		t.Fatalf("list = %d rows, err %v, want test-run-3 first", len(all), err)
+	}
+	board := 900001
+	byBoard, _ := repo.List(ctx, models.RunFilter{BoardID: &board, Limit: 10})
+	if len(byBoard) != 2 {
+		t.Errorf("board filter = %d, want 2", len(byBoard))
+	}
+	bad, _ := repo.List(ctx, models.RunFilter{Outcome: models.OutcomeErrors, Limit: 10})
+	if len(bad) != 1 || bad[0].RunID != "test-run-2" {
+		t.Errorf("outcome filter = %v", bad)
+	}
+	ticket := 900302
+	byTicket, _ := repo.List(ctx, models.RunFilter{TicketID: &ticket, Limit: 10})
+	if len(byTicket) != 1 {
+		t.Errorf("ticket filter = %d, want 1", len(byTicket))
+	}
+	from, to := base.Add(30*time.Minute), base.Add(90*time.Minute)
+	window, _ := repo.List(ctx, models.RunFilter{From: &from, To: &to, Limit: 10})
+	if len(window) != 1 || window[0].RunID != "test-run-2" {
+		t.Errorf("window filter = %v", window)
+	}
+	got, err := repo.Get(ctx, "test-run-2")
+	if err != nil || got.Outcome != models.OutcomeErrors || got.WorkflowID == nil || *got.WorkflowID != 7 {
+		t.Errorf("get = %+v, %v", got, err)
+	}
+	if _, err := repo.Get(ctx, "test-run-nope"); !errors.Is(err, models.ErrRunNotFound) {
+		t.Errorf("missing run err = %v", err)
+	}
+	// insert is idempotent on run id (the backfill relies on it too)
+	mk("test-run-1", 900301, 900001, base, models.OutcomeErrors)
+	if again, _ := repo.Get(ctx, "test-run-1"); again.Outcome != models.OutcomeClean {
+		t.Error("re-insert must not overwrite")
+	}
+	n, err := repo.DeleteBefore(ctx, base.Add(90*time.Minute))
+	if err != nil || n < 2 {
+		t.Errorf("delete before = %d, %v", n, err)
+	}
+}

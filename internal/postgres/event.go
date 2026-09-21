@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -109,6 +110,18 @@ func (p *TicketEventRepo) ListRecent(ctx context.Context, kind *models.EventKind
 	}
 
 	return eventsFromPG(rows), nil
+}
+
+func (p *TicketEventRepo) ListByRun(ctx context.Context, runID string) ([]*models.TicketEvent, error) {
+	rows, err := p.queries.ListTicketEventsByRun(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	return eventsFromPG(rows), nil
+}
+
+func (p *TicketEventRepo) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
+	return p.queries.DeleteTicketEventsBefore(ctx, before)
 }
 
 func payloadBytes(p json.RawMessage) []byte {

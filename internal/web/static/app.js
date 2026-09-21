@@ -215,6 +215,7 @@ function sessionExpired() {
     stopSyncPoll()
     stopLogsPoll()
     stopIntakePoll()
+    rsStopPoll()
     tabGuard = null
     currentUser = null
     totpSetupRequired = false
@@ -322,6 +323,7 @@ async function logout() {
     stopSyncPoll()
     stopLogsPoll()
     stopIntakePoll()
+    rsStopPoll()
     document.getElementById('login-email').value    = ''
     document.getElementById('login-password').value = ''
     document.getElementById('login-err').classList.add('hidden')
@@ -714,6 +716,7 @@ function switchTab(tab, sub = null) {
     stopSyncPoll()
     stopLogsPoll()
     stopIntakePoll()
+    rsStopPoll()
     currentTab  = tab
     currentHash = sub ? `${tab}/${sub}` : tab
     window.location.hash = currentHash
@@ -1758,6 +1761,9 @@ function renderConfig(cfg, recipients = []) {
         ${row('Log buffer size',
             'Maximum log entries held in memory for the web panel.',
             numberInput('c-log-buffer-size', cfg.log_buffer_size, 100))}
+        ${row('History retention',
+            'How many days of workflow run results and ticket history to keep. They are the same records seen two ways, so they age out together. 0 keeps them forever.',
+            numberInput('c-history-retention', cfg.history_retention_days, 0))}
         ${row('Log retention',
             'How many days of logs to keep in the database. 0 keeps them forever.',
             numberInput('c-log-retention', cfg.log_retention_days, 0))}
@@ -1789,6 +1795,7 @@ async function saveConfig() {
             ops_room_id:                Number(document.getElementById('c-ops-room').value),
             redirect_room_id:           Number(document.getElementById('c-redirect-room').value),
             stale_alert_minutes:        num('c-stale-minutes', 'Stale webhook alert'),
+            history_retention_days:     num('c-history-retention', 'History retention'),
             require_totp:               document.getElementById('c-require-totp').checked,
             debug_logging:              document.getElementById('c-debug-logging').checked,
             log_buffer_size:            num('c-log-buffer-size', 'Log buffer size'),

@@ -185,20 +185,23 @@ Decisions from the 2026-09-21 grilling of items 9 to 12. Order of work: 12, 11, 
 
 ### 12. Workflow run results page
 
-- [ ] `workflow_run` summary table written at the end of each run where a workflow was found
-      and enabled (including runs where no trigger listened): run id, ticket, board, workflow,
-      event, source, dry run, started at, duration, step / action / write counts, notification
-      counts by result, error count, outcome (clean, errors, nobody_notified, no_trigger). The
-      migration backfills it from existing `ticket_event` rows grouped by run id.
-- [ ] Results tab beside the workflow list at `#workflows/results`: newest first, filters for
-      board, outcome, date range and ticket number carried in the hash, polling every 5 seconds
-      while open. Viewers may open it.
-- [ ] Run detail: ticket link, event, the path drawn on a read-only copy of the current canvas
-      the way Simulate highlights it, steps whose node no longer exists listed under the canvas,
-      then actions and notifications.
-- [ ] **Results** button in the editor toolbar opens the tab filtered to the board.
-- [ ] Config: `history_retention_days` (default 90, 0 keeps forever). Purges run summaries and
-      ticket history events together, hourly.
+Done.
+
+- [x] `workflow_run` (migration 17) written by `run.flush` for every run where an enabled
+      workflow was found, including runs where no trigger listened. Counts, duration and the
+      outcome (`clean`, `errors`, `nobody_notified`, `no_trigger`, derived by `Verdict`). The
+      migration backfilled 109 runs from the existing history on the local database; the live
+      instance backfills on deploy.
+- [x] Results tab beside the workflow list at `#workflows/results`, filters (board, outcome, date
+      range, ticket) in the hash, 5-second polling of the first page, "Load older runs" paging.
+      `GET /workflows/runs` and `GET /workflows/runs/{run_id}`, viewer-readable.
+- [x] Run detail (`results.js`): the workflow's canvas in replay (`cv.replay`: pan and zoom only,
+      no rail, no edits) with the recorded path lit and a "Recorded run" side panel, steps whose
+      node is gone listed under the canvas, then the run's events rendered by the ticket history
+      renderer.
+- [x] **Results** button in the editor toolbar opens the tab filtered to the board.
+- [x] `history_retention_days` (default 90, 0 forever) purges `workflow_run` and `ticket_event`
+      together on the intake service's hourly tick (`ticketbot.HistoryPurger`).
 
 ## Done## Done
 

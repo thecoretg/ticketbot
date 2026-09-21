@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/models"
@@ -15,4 +16,7 @@ type TicketEventRepository interface {
 	// only events with a smaller id are returned, for paging backwards through history.
 	ListByTicket(ctx context.Context, ticketID int, limit int, beforeID *int64) ([]*models.TicketEvent, error)
 	ListRecent(ctx context.Context, kind *models.EventKind, limit int) ([]*models.TicketEvent, error)
+	// ListByRun returns every event of one run, oldest first.
+	ListByRun(ctx context.Context, runID string) ([]*models.TicketEvent, error)
+	DeleteBefore(ctx context.Context, before time.Time) (int64, error)
 }

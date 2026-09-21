@@ -17,6 +17,7 @@ var (
 	ErrNotePreviewLength     = errors.New("note preview length must be at least 1 character")
 	ErrWriteCap              = errors.New("write cap per ticket cannot be negative")
 	ErrStaleMinutes          = errors.New("stale alert minutes cannot be negative")
+	ErrHistoryRetention      = errors.New("history retention days cannot be negative")
 )
 
 // ValidationError marks a rejected update the caller should report as a bad request.
@@ -56,6 +57,9 @@ func (s *Service) validate(c *models.Config) error {
 	}
 	if c.StaleAlertMinutes < 0 {
 		return ValidationError{ErrStaleMinutes}
+	}
+	if c.HistoryRetentionDays < 0 {
+		return ValidationError{ErrHistoryRetention}
 	}
 	if c.SSOEnabled && !s.ssoConfigured {
 		return ValidationError{ErrSSONotConfigured}
@@ -125,6 +129,9 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.StaleAlertMinutes != nil {
 		merged.StaleAlertMinutes = *p.StaleAlertMinutes
 	}
+	if p.HistoryRetentionDays != nil {
+		merged.HistoryRetentionDays = *p.HistoryRetentionDays
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -165,6 +172,7 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.OpsRoomID = src.OpsRoomID
 	cfg.RedirectRoomID = src.RedirectRoomID
 	cfg.StaleAlertMinutes = src.StaleAlertMinutes
+	cfg.HistoryRetentionDays = src.HistoryRetentionDays
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)

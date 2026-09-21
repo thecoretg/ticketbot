@@ -10,6 +10,18 @@ import (
 	"time"
 )
 
+const deleteTicketEventsBefore = `-- name: DeleteTicketEventsBefore :execrows
+DELETE FROM ticket_event WHERE occurred_at < $1
+`
+
+func (q *Queries) DeleteTicketEventsBefore(ctx context.Context, occurredAt time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteTicketEventsBefore, occurredAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertTicketEvent = `-- name: InsertTicketEvent :one
 INSERT INTO ticket_event (ticket_id, run_id, kind, source, dry_run, payload, occurred_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -64,6 +76,41 @@ type ListRecentTicketEventsParams struct {
 
 func (q *Queries) ListRecentTicketEvents(ctx context.Context, arg ListRecentTicketEventsParams) ([]*TicketEvent, error) {
 	rows, err := q.db.Query(ctx, listRecentTicketEvents, arg.Kind, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*TicketEvent
+	for rows.Next() {
+		var i TicketEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.TicketID,
+			&i.RunID,
+			&i.Kind,
+			&i.Source,
+			&i.DryRun,
+			&i.Payload,
+			&i.OccurredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTicketEventsByRun = `-- name: ListTicketEventsByRun :many
+SELECT id, ticket_id, run_id, kind, source, dry_run, payload, occurred_at FROM ticket_event
+WHERE run_id = $1
+ORDER BY id
+`
+
+func (q *Queries) ListTicketEventsByRun(ctx context.Context, runID string) ([]*TicketEvent, error) {
+	rows, err := q.db.Query(ctx, listTicketEventsByRun, runID)
 	if err != nil {
 		return nil, err
 	}

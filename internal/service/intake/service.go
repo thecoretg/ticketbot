@@ -48,12 +48,19 @@ const (
 	purgeInterval  = time.Hour
 )
 
+// Purger is anything else that ages data out on the hourly purge tick.
+type Purger interface {
+	Purge(ctx context.Context, now time.Time)
+}
+
 type Service struct {
 	Repo      repos.WebhookIntakeRepository
 	Processor Processor
 	Alerter   Alerter
 	Cfg       RetentionConfig
 	Backoff   []time.Duration
+	// Purgers run after the queue's own purge, on the same hourly tick.
+	Purgers []Purger
 
 	wake chan struct{}
 	wg   sync.WaitGroup
@@ -65,6 +72,7 @@ type Params struct {
 	Processor Processor
 	Alerter   Alerter
 	Cfg       RetentionConfig
+	Purgers   []Purger
 }
 
 func New(p Params) *Service {
@@ -73,6 +81,7 @@ func New(p Params) *Service {
 		Processor: p.Processor,
 		Alerter:   p.Alerter,
 		Cfg:       p.Cfg,
+		Purgers:   p.Purgers,
 		Backoff:   DefaultBackoff,
 		wake:      make(chan struct{}, 1),
 		now:       time.Now,
@@ -252,6 +261,9 @@ func (s *Service) runPurge(ctx context.Context) {
 		}
 		if n > 0 {
 			slog.Info("intake: purged finished rows", "deleted", n, "retention_days", days)
+		}
+		for _, p := range s.Purgers {
+			p.Purge(ctx, s.now())
 		}
 	}
 

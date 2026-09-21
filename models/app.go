@@ -69,6 +69,10 @@ type Config struct {
 	// StaleAlertMinutes is how long business hours (07:30 to 19:00 America/Chicago, weekdays) may
 	// pass with no ticket webhook before the ops room is told. 0 disables the check.
 	StaleAlertMinutes int `json:"stale_alert_minutes"`
+
+	// HistoryRetentionDays is how long workflow run summaries and ticket history events are kept.
+	// They are the same story told twice, so they age out together. 0 keeps them forever.
+	HistoryRetentionDays int `json:"history_retention_days"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
@@ -88,9 +92,10 @@ type ConfigUpdateParams struct {
 	NotePreviewLength       *int    `json:"note_preview_length"`
 	WriteCapPerTicket       *int    `json:"write_cap_per_ticket"`
 	// OpsRoomID and RedirectRoomID clear the setting when sent as 0.
-	OpsRoomID         *int `json:"ops_room_id"`
-	RedirectRoomID    *int `json:"redirect_room_id"`
-	StaleAlertMinutes *int `json:"stale_alert_minutes"`
+	OpsRoomID            *int `json:"ops_room_id"`
+	RedirectRoomID       *int `json:"redirect_room_id"`
+	StaleAlertMinutes    *int `json:"stale_alert_minutes"`
+	HistoryRetentionDays *int `json:"history_retention_days"`
 }
 
 var DefaultConfig = Config{
@@ -108,4 +113,5 @@ var DefaultConfig = Config{
 	NotePreviewLength:       200,
 	WriteCapPerTicket:       20,
 	StaleAlertMinutes:       60,
+	HistoryRetentionDays:    90,
 }

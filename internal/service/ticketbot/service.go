@@ -24,8 +24,10 @@ type Service struct {
 	CW        *cwsvc.Service
 	Workflows repos.WorkflowRepository
 	Events    repos.TicketEventRepository
-	Engine    *workflow.Engine
-	Notifier  *notifier.Service
+	// Runs receives one summary row per workflow run, for the results page. nil skips it.
+	Runs     repos.WorkflowRunRepository
+	Engine   *workflow.Engine
+	Notifier *notifier.Service
 	// Alerter receives the rate-cap alert. nil logs.
 	Alerter alerts.Alerter
 
@@ -54,6 +56,7 @@ type Params struct {
 	CW        *cwsvc.Service
 	Workflows repos.WorkflowRepository
 	Events    repos.TicketEventRepository
+	Runs      repos.WorkflowRunRepository
 	Engine    *workflow.Engine
 	Notifier  *notifier.Service
 	Alerter   alerts.Alerter
@@ -66,6 +69,7 @@ func New(p Params) *Service {
 		CW:        p.CW,
 		Workflows: p.Workflows,
 		Events:    p.Events,
+		Runs:      p.Runs,
 		Engine:    p.Engine,
 		Notifier:  p.Notifier,
 		Alerter:   p.Alerter,
@@ -100,7 +104,7 @@ func (s *Service) ProcessTicket(ctx context.Context, id int, opts ProcessOpts) (
 
 	run := newRun(id, opts.Source, s.now)
 	run.dryRun = s.Cfg.MasterDryRun
-	defer run.flush(ctx, s.Events)
+	defer run.flush(ctx, s.Events, s.Runs)
 
 	stored, err := s.CW.Tickets.Get(ctx, id)
 	if err != nil && !errors.Is(err, models.ErrTicketNotFound) {
@@ -198,6 +202,7 @@ func (s *Service) runWorkflow(ctx context.Context, run *run, f *cwsvc.Fetched, d
 	}
 
 	run.dryRun = s.Cfg.MasterDryRun || wf.DryRun
+	run.wf, run.boardID = wf, f.Ticket.Board.ID
 
 	res, err := s.Engine.Run(ctx, wf, workflow.Input{
 		Ticket:      f.Ticket,
@@ -212,6 +217,7 @@ func (s *Service) runWorkflow(ctx context.Context, run *run, f *cwsvc.Fetched, d
 		return nil
 	}
 
+	run.res = res
 	run.add(models.EventWorkflow, workflowPayload(wf, res))
 	for _, a := range res.Actions {
 		run.add(models.EventAction, a.Payload())
@@ -247,6 +253,7 @@ func (s *Service) sendNotifications(ctx context.Context, run *run, ft *models.Fu
 		return
 	}
 
+	run.notifs = outs
 	for _, o := range outs {
 		run.add(models.EventNotification, notificationPayload(o))
 	}
@@ -282,7 +289,7 @@ func (s *Service) SoftDeleteTicket(ctx context.Context, id int, source models.Ev
 	}
 
 	run := newRun(id, source, s.now)
-	defer run.flush(ctx, s.Events)
+	defer run.flush(ctx, s.Events, s.Runs)
 
 	return s.handleDeleted(ctx, run, stored)
 }

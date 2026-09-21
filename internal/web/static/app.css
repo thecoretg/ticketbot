@@ -73,6 +73,8 @@
     height: calc(100vh - var(--topbar-h) - var(--s8) - var(--s12));
 }
 .wf-canvas { flex: 1; min-height: 480px; }
+/* the results page shows the canvas above the run's events, so it takes a fixed height instead of the view */
+.run-canvas { flex: none; height: 460px; min-height: 0; }
 /* the step list is narrow: names and swatches only */
 .wf-canvas .dock-l { width: 190px; }
 .wf-canvas .dock-r { width: 330px; }

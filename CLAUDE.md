@@ -73,7 +73,11 @@ same on every instance and travel as they are. `Validate` in `service.go` owns t
 trigger minimum, one wire per port, nothing into a trigger, no cycles, everything reachable). The
 canvas (`internal/web/static/workflows.js`, `cv*` functions) is the only editor; node heights are
 fixed per kind and shared between `ui.css` and the script, so ports line up. Run history stores
-`steps` per run; rows from before the graph carry `rules`, and `tickets.js` renders both.
+`steps` per run; rows from before the graph carry `rules`, and `tickets.js` renders both. Every run
+that found an enabled workflow also leaves a `workflow_run` summary row (written in `run.flush`)
+that the Results tab lists; its detail replays the recorded path on the editor canvas with
+`cv.replay` set, so canvas edits must check `cvEditable()` rather than `canEdit()`. Summaries and
+history events age out together on `history_retention_days`.
 
 ## Frontend
 

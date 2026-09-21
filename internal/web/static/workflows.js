@@ -45,12 +45,22 @@ const CV_KINDS = {
 }
 const CV_GROUPS = ['Triggers', 'Logic', 'Notify', 'Ticket writes']
 
+// cvEditable is canEdit() minus replay: the results page shows a recorded run on a canvas that
+// pans and zooms but never changes.
+function cvEditable() { return canEdit() && !cv.replay }
+
 function cvKind(kind) { return CV_KINDS[kind] || { label: kind, tone: 't-write', icon: 'edit', group: '', hint: '' } }
 function cvIsAction(kind) { return kind !== 'trigger' && kind !== 'if' }
 
 async function loadWorkflows(sub) {
     if (sub && /^\d+$/.test(sub)) {
         await loadWorkflowEditor(parseInt(sub))
+        return
+    }
+    const m = sub && sub.match(/^results(?:\/([^?]+))?(\?.*)?$/)
+    if (m) {
+        if (m[1]) await loadWorkflowRun(m[1])
+        else await loadWorkflowResults(m[2] ? m[2].slice(1) : '')
         return
     }
     await loadWorkflowList()
@@ -89,7 +99,7 @@ function renderWorkflowList(list) {
         </td>
     </tr>`)
 
-    setContent(pageActions(
+    setContent(wfTabs('workflows') + pageActions(
         (list.length ? `<button class="btn btn-default" onclick="wfExportAll()">${icon('download')}Export</button>` : '') +
         editOnly(`<button class="btn btn-default" onclick="wfImportPick()">${icon('up')}Import</button>`) +
         editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
@@ -318,6 +328,7 @@ function renderWorkflowEditor() {
         <button class="btn btn-default btn-sm" onclick="wfSimulate()">${icon('play')}Run</button>
         <span id="wf-arrange-undo">${cv.undo ? `<button class="btn btn-ghost btn-sm" onclick="cvUndoArrange()">${icon('undo')}Undo arrange</button>` : ''}</span>
         <button class="btn btn-default btn-sm" onclick="cvArrange()">${icon('branch')}Auto-arrange</button>
+        <button class="btn btn-default btn-sm" onclick="switchTab('workflows', 'results?board=${wf.board_id}')" data-tip="Runs of this workflow" data-tip-pos="bottom">${icon('chart')}Results</button>
         <button class="icon-btn" onclick="wfShowHelp()" aria-label="How workflows run" data-tip="How workflows run" data-tip-pos="bottom">${icon('info')}</button>
         <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
             <span class="dirty-dot"></span><span class="cell-sub">Unsaved changes</span>
@@ -356,7 +367,8 @@ const cv = {
     selEdge: null,   // selected edge id
     drag: null,      // { type: pan|node|link|pal, ... }
     rail: true,      // step list open
-    run: null,       // simulation { ticket, asNew, res, steps, step }
+    run: null,       // simulation or recorded run { ticket, asNew, res, steps, step, record }
+    replay: false,   // results page: the canvas shows a recorded run and cannot be edited
     timers: [],
     undo: null,      // node positions before the last auto-arrange
     errNode: null,   // node the last server validation error pointed at
@@ -366,7 +378,7 @@ const cv = {
 
 function cvReset() {
     cvClearTimers()
-    Object.assign(cv, { el: null, zoom: 1, tx: 40, ty: 40, sel: null, selEdge: null, drag: null, run: null, undo: null, errNode: null, ghost: null, link: null })
+    Object.assign(cv, { el: null, zoom: 1, tx: 40, ty: 40, sel: null, selEdge: null, drag: null, run: null, undo: null, errNode: null, ghost: null, link: null, replay: false })
 }
 
 function cvClearTimers() {
@@ -435,7 +447,7 @@ function cvOnDown(e) {
 
     const port = t.closest?.('.port')
     if (port && !port.classList.contains('inp')) {
-        if (!canEdit()) return
+        if (!cvEditable()) return
         e.preventDefault()
         cvGrabPort(port.dataset.portOf, port.dataset.port, e)
         return
@@ -471,11 +483,11 @@ function cvOnKey(e) {
     const tag = document.activeElement?.tagName
     const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable
     if (e.key === 'Escape') {
-        if (cv.run) cvClearRun()
+        if (cv.run && !cv.replay) cvClearRun()
         else if (cv.sel || cv.selEdge) cvDeselect()
         return
     }
-    if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && canEdit()) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && cvEditable()) {
         if (cv.selEdge) { e.preventDefault(); cvCutEdge() }
         else if (cv.sel) { e.preventDefault(); cvDeleteNode(cv.sel) }
     }
@@ -499,7 +511,7 @@ function cvGrabNode(id, e) {
     const n = wfNode(id)
     if (!n) return
     cvSelect(id, { render: false })
-    cv.drag = canEdit()
+    cv.drag = cvEditable()
         ? { type: 'node', id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false }
         : { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false, fromNode: true }
     cvRenderGraph()
@@ -878,6 +890,7 @@ function cvRenderHint() {
     let hint = 'drag a step in from the list · drag to pan · pinch or ⌘-scroll to zoom'
     if (cv.drag?.type === 'link') hint = 'drop on a step to connect, or on empty canvas to disconnect'
     else if (cv.drag?.type === 'pal') hint = 'release over the canvas to place it'
+    else if (cv.run?.record) hint = 'recorded path highlighted · drag to pan · pinch or ⌘-scroll to zoom'
     else if (cv.run) hint = 'simulated path highlighted — nothing was sent'
     else if (cv.selEdge) hint = 'wire selected · × or Delete disconnects it'
     else if (cv.sel) hint = 'drag a port to wire it · Delete removes the step'
@@ -888,7 +901,7 @@ function cvRenderHint() {
 function cvRenderRail() {
     const host = document.getElementById('cv-rail')
     if (!host) return
-    if (!canEdit()) { host.innerHTML = ''; return }
+    if (!cvEditable()) { host.innerHTML = ''; return }
     if (!cv.rail) {
         host.innerHTML = `<button class="dock-bar tl" style="cursor:pointer" onclick="cvToggleRail()">${icon('plus')}<span>Add a step</span></button>`
         return
@@ -1529,6 +1542,24 @@ function cvRunHTML() {
         ? 'no trigger accepts this event'
         : (done ? `${run.steps.length} step${run.steps.length === 1 ? '' : 's'} · ${esc(res.source)} snapshot` : 'running…')
 
+    if (run.record) {
+        return `<aside class="dock dock-r"><article class="card">
+            <div class="card-head">
+                <div>
+                    <h3>Recorded run</h3>
+                    <p>Ticket <a class="link num" href="#tickets/${run.ticket}">#${run.ticket}</a> · ${run.asNew ? 'created' : 'updated'}</p>
+                </div>
+            </div>
+            <div class="card-body">
+                ${none ? `<div class="callout warn">${icon('alert')}<div>No trigger listened for a ${run.asNew ? 'created' : 'updated'} ticket, so nothing ran.</div></div>` : `<div class="events">${steps}</div>`}
+            </div>
+            <div class="card-foot">
+                <span class="cell-sub">${none ? 'no trigger fired' : `${run.steps.length} step${run.steps.length === 1 ? '' : 's'}`}</span>
+                ${run.dryRun ? '<span class="badge warn">dry run</span>' : ''}
+            </div>
+        </article></aside>`
+    }
+
     return `<aside class="dock dock-r"><article class="card">
         <div class="card-head">
             <div>
@@ -1561,9 +1592,11 @@ function cvStepText(s, n) {
     }
     const a = (cv.run.res.actions || []).find(x => x.node_id === s.node_id && x.no === s.no) || {}
     const what = `${tkActionLabel(s.kind)}${tkActionSummary(s.kind, a.output)}`
+    const rec = cv.run.record
     switch (a.result) {
-    case 'queued':    return ['ok', `Would ${s.kind === 'notify' ? 'notify' : 'run'}: ${what}.`]
-    case 'would_run': return ['ok', `Would write to ConnectWise: ${what}.`]
+    case 'queued':    return ['ok', `${rec ? 'Asked to notify' : 'Would notify'}: ${what}.`]
+    case 'would_run': return ['ok', `${rec ? 'Dry run, would have written' : 'Would write'} to ConnectWise: ${what}.`]
+    case 'superseded': return ['warn', `Superseded${a.reason ? ` — ${esc(a.reason)}` : ''}.`]
     case 'ok':        return ['ok', s.kind === 'skip_notify' ? 'Later notify steps on this path are silenced.' : `Done: ${what}.`]
     case 'skipped':   return ['', `Skipped${a.reason ? ` — ${esc(a.reason)}` : ''}.`]
     case 'error':     return ['bad', `Error: ${esc(a.error || 'unknown')}`]

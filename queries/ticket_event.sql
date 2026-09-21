@@ -15,3 +15,11 @@ SELECT * FROM ticket_event
 WHERE (sqlc.narg('kind')::text IS NULL OR kind = sqlc.narg('kind')::text)
 ORDER BY id DESC
 LIMIT sqlc.arg('lim');
+
+-- name: ListTicketEventsByRun :many
+SELECT * FROM ticket_event
+WHERE run_id = $1
+ORDER BY id;
+
+-- name: DeleteTicketEventsBefore :execrows
+DELETE FROM ticket_event WHERE occurred_at < $1;

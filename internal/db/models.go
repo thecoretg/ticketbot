@@ -48,6 +48,7 @@ type AppConfig struct {
 	OpsRoomID               *int   `json:"ops_room_id"`
 	RedirectRoomID          *int   `json:"redirect_room_id"`
 	StaleAlertMinutes       int    `json:"stale_alert_minutes"`
+	HistoryRetentionDays    int    `json:"history_retention_days"`
 }
 
 type AppLog struct {
@@ -280,4 +281,25 @@ type Workflow struct {
 	Rules     []byte    `json:"rules"`
 	CreatedOn time.Time `json:"created_on"`
 	UpdatedOn time.Time `json:"updated_on"`
+}
+
+type WorkflowRun struct {
+	RunID          string    `json:"run_id"`
+	TicketID       int       `json:"ticket_id"`
+	BoardID        int       `json:"board_id"`
+	WorkflowID     *int      `json:"workflow_id"`
+	WorkflowName   string    `json:"workflow_name"`
+	Event          string    `json:"event"`
+	Source         string    `json:"source"`
+	DryRun         bool      `json:"dry_run"`
+	StartedAt      time.Time `json:"started_at"`
+	DurationMs     int       `json:"duration_ms"`
+	Steps          int       `json:"steps"`
+	Actions        int       `json:"actions"`
+	Writes         int       `json:"writes"`
+	NotifSent      int       `json:"notif_sent"`
+	NotifWouldSend int       `json:"notif_would_send"`
+	NotifNone      int       `json:"notif_none"`
+	Errors         int       `json:"errors"`
+	Outcome        string    `json:"outcome"`
 }

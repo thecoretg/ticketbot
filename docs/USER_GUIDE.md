@@ -48,6 +48,13 @@ insert it at the cursor. **Preview** renders the message with a real ticket so y
 each token produces. Notifications go to a room, a person, or the ticket's resources and owner
 (skipping whoever wrote the note that triggered the run).
 
+## Seeing what ran
+
+The **Results** tab beside the workflow list shows every run: when, which ticket, what fired and
+how it ended. Open a run to see the path it took drawn on the workflow's canvas, then every step,
+write and notification underneath. Filter by board, outcome, date or ticket; the **Results** button
+in a workflow's toolbar opens the list already filtered to that board.
+
 ## Trying it safely
 
 1. Turn on the workflow's **Dry run**. The flow runs and records what it would have done in the

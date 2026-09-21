@@ -75,6 +75,7 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		OpsRoomID:               c.OpsRoomID,
 		RedirectRoomID:          c.RedirectRoomID,
 		StaleAlertMinutes:       c.StaleAlertMinutes,
+		HistoryRetentionDays:    c.HistoryRetentionDays,
 	}
 }
 
@@ -97,5 +98,6 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		OpsRoomID:               pg.OpsRoomID,
 		RedirectRoomID:          pg.RedirectRoomID,
 		StaleAlertMinutes:       pg.StaleAlertMinutes,
+		HistoryRetentionDays:    pg.HistoryRetentionDays,
 	}
 }
