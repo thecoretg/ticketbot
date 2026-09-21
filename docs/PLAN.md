@@ -99,12 +99,17 @@ Done. `.github/workflows/ci.yml`.
 
 ### 5. Workflow export and import
 
-- [ ] Export one or all workflows as JSON. Recipients are embedded by email or room name plus
-      type, lists by name with their items, so nothing references a database ID.
-- [ ] Import creates missing recipients and lists, then the workflows, and reports what it
-      created. Validate through `Validate` in `internal/service/workflow/service.go` before saving.
+Done. `internal/service/transfer`, `GET /workflows/export`, `POST /workflows/import`, buttons on
+the Workflows page.
 
-CLAUDE.md: one line under Workflows on the export format.
+- [x] The bundle (`models.WorkflowBundle`, version 1) carries the workflows plus the Webex
+      recipients (by Webex id) and lists (by name, with member ids) their nodes reference, keyed
+      by the source database id. ConnectWise ids travel unchanged.
+- [x] Import matches recipients by Webex id and lists by name, creates what is missing (skipping
+      list members the synced data does not know, with a warning), rewrites `recipient_id` and
+      `in list N` tokens, then creates each workflow through `Create` or, with replace, `Replace`,
+      so validation runs. The report lists created recipients and lists and each workflow's
+      created / replaced / skipped / error.
 
 ## During the parallel run
 

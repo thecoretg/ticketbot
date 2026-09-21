@@ -35,6 +35,8 @@ func TestNewHandlerRoutes(t *testing.T) {
 		{http.MethodGet, "/nope", http.StatusNotFound},
 		{http.MethodPost, "/hooks/cw/tickets", http.StatusUnauthorized}, // unsigned callback
 		{http.MethodGet, "/intake/stats", http.StatusUnauthorized},
+		{http.MethodGet, "/workflows/export", http.StatusUnauthorized},
+		{http.MethodPost, "/workflows/import", http.StatusUnauthorized},
 		{http.MethodGet, "/", http.StatusOK},
 		{http.MethodGet, "/app.js", http.StatusOK},
 	}

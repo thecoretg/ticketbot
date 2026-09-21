@@ -86,6 +86,8 @@ function renderWorkflowList(list) {
     </tr>`)
 
     setContent(pageActions(
+        (list.length ? `<button class="btn btn-default" onclick="wfExportAll()">${icon('download')}Export</button>` : '') +
+        editOnly(`<button class="btn btn-default" onclick="wfImportPick()">${icon('up')}Import</button>`) +
         editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
     banner +
     tableCard(thead, rows, {
@@ -94,6 +96,69 @@ function renderWorkflowList(list) {
             editOnly(`<button class="btn btn-primary btn-sm" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`), 'bolt'),
         foot: `<span>${list.length} workflow${list.length === 1 ? '' : 's'}</span>`,
     }))
+}
+
+// ── Export / import ──────────────────────────────────────
+// A bundle carries the workflows plus the recipients and lists they name, keyed by this
+// instance's ids; import matches recipients by Webex id and lists by name, creating what is
+// missing, and rewrites the references. It is how workflows move to a fresh instance.
+async function wfExportAll() {
+    try {
+        const res = await fetch('/workflows/export', { credentials: 'same-origin' })
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || res.statusText)
+        const blob = await res.blob()
+        const name = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'ticketbot-workflows.json'
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name })
+        document.body.appendChild(a); a.click(); a.remove()
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    } catch (e) { toast(e.message, 'error') }
+}
+
+function wfImportPick() {
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept: 'application/json,.json' })
+    input.onchange = async () => {
+        const file = input.files?.[0]
+        if (!file) return
+        let bundle
+        try { bundle = JSON.parse(await file.text()) } catch { toast('That file is not JSON', 'error'); return }
+        wfImportConfirm(bundle, file.name)
+    }
+    input.click()
+}
+
+function wfImportConfirm(bundle, fileName) {
+    const n = bundle?.workflows?.length || 0
+    openModal('Import workflows', `
+        <div class="stack gap4">
+            <p>${esc(fileName)} holds <b>${n}</b> workflow${n === 1 ? '' : 's'}, ${bundle?.recipients?.length || 0} recipient${(bundle?.recipients?.length || 0) === 1 ? '' : 's'} and ${bundle?.lists?.length || 0} list${(bundle?.lists?.length || 0) === 1 ? '' : 's'}. Recipients and lists that already exist here are reused; missing ones are created.</p>
+            ${checkbox('Replace a board\u2019s existing workflow instead of skipping it', 'id="f-import-replace"')}
+        </div>`, async () => {
+        try {
+            const rep = await api('POST', '/workflows/import', { bundle, replace: document.getElementById('f-import-replace').checked })
+            closeModal()
+            wfImportReport(rep)
+            loadWorkflowList()
+        } catch (e) { toast(e.message, 'error') }
+    }, 'Import')
+}
+
+function wfImportReport(rep) {
+    const tone = { created: 'ok', replaced: 'ok', skipped: 'warn', error: 'bad' }
+    const rows = (rep.workflows || []).map(w => `<tr>
+        <td class="cell-primary">${esc(w.board_name || w.name || `Board ${w.board_id}`)}${w.name && w.name !== w.board_name ? `<div class="cell-sub">${esc(w.name)}</div>` : ''}</td>
+        <td>${badgeTag(w.result, tone[w.result] || '')}</td>
+        <td class="muted">${esc(w.error || '')}</td>
+    </tr>`).join('')
+    const created = [
+        rep.recipients_created?.length ? `Created recipients: ${rep.recipients_created.map(esc).join(', ')}.` : '',
+        rep.lists_created?.length ? `Created lists: ${rep.lists_created.map(esc).join(', ')}.` : '',
+    ].filter(Boolean).join(' ')
+    openModal('Import finished', `
+        <div class="stack gap4">
+            ${created ? `<p>${created}</p>` : ''}
+            <div class="table-wrap"><table class="tbl"><thead><tr><th>Workflow</th><th>Result</th><th>Detail</th></tr></thead><tbody>${rows}</tbody></table></div>
+            ${rep.warnings?.length ? `<div class="callout warn">${icon('alert')}<div class="body">${rep.warnings.map(esc).join('<br>')}</div></div>` : ''}
+        </div>`, async () => closeModal(), 'Done')
 }
 
 function openWorkflow(id) {

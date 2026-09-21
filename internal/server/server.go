@@ -22,6 +22,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/sso"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
+	"github.com/thecoretg/ticketbot/internal/service/transfer"
 	"github.com/thecoretg/ticketbot/internal/service/user"
 	"github.com/thecoretg/ticketbot/internal/service/webexsvc"
 	"github.com/thecoretg/ticketbot/internal/service/webhooks"
@@ -70,6 +71,7 @@ type Services struct {
 	Intake    *intake.Service
 	Workflow  *workflow.Service
 	Lists     *lists.Service
+	Transfer  *transfer.Service
 	SSO       *sso.Service
 }
 
@@ -131,6 +133,15 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
 	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter})
 
+	wfSvc := workflow.New(workflow.Params{
+		Workflows:  r.Workflows,
+		Recipients: r.WebexRecipients,
+		Boards:     r.CW.Board,
+		Statuses:   r.CW.TicketStatus,
+		Members:    r.CW.Member,
+		Lists:      r.Lists,
+	})
+
 	ssoSvc, ssoAuth, err := makeSSO(ctx, e, r, cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configuring sso: %w", err)
@@ -156,16 +167,10 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 			Notifier:  ns,
 			Ticketbot: tb,
 			Intake:    intakeSvc,
-			Workflow: workflow.New(workflow.Params{
-				Workflows:  r.Workflows,
-				Recipients: r.WebexRecipients,
-				Boards:     r.CW.Board,
-				Statuses:   r.CW.TicketStatus,
-				Members:    r.CW.Member,
-				Lists:      r.Lists,
-			}),
-			Lists: listSvc,
-			SSO:   ssoSvc,
+			Workflow:  wfSvc,
+			Lists:     listSvc,
+			Transfer:  transfer.New(transfer.Params{Workflows: wfSvc, Lists: listSvc, Recipients: r.WebexRecipients, Boards: r.CW.Board}),
+			SSO:       ssoSvc,
 		},
 	}, persister, nil
 }
