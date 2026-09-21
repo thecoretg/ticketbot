@@ -499,6 +499,13 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
   border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
+/* a header row flush with the card's top edge: its own background is square and
+   would paint over the card's rounded corners, so round the end cells to match
+   the inside of the card's 1px border. Its top rule goes too — straight, it runs
+   out past the arc, and the card's own border already draws that edge */
+.card > .table-wrap:first-child .tbl thead tr:first-child th { border-top: 0; }
+.card > .table-wrap:first-child .tbl thead tr:first-child th:first-child { border-top-left-radius: calc(var(--radius-lg) - 1px); }
+.card > .table-wrap:first-child .tbl thead tr:first-child th:last-child  { border-top-right-radius: calc(var(--radius-lg) - 1px); }
 .tbl thead th.sortable { cursor: pointer; user-select: none; }
 .tbl thead th.sortable:hover { color: var(--ink-2); }
 .tbl thead th .sort { display: inline-block; width: 10px; margin-left: 4px; color: var(--faint); }
@@ -1026,6 +1033,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
   background: var(--info-soft); color: var(--info);
   font-size: var(--text-sm); border: 1px solid transparent;
 }
+/* a banner announces what follows; it never sits flush against it */
+.banner:not(:last-child) { margin-bottom: var(--s3); }
 .banner svg { width: 16px; height: 16px; flex-shrink: 0; }
 .banner.warn { background: var(--warn-soft); color: var(--warn); }
 .banner.bad  { background: var(--bad-soft);  color: var(--bad); }
@@ -1310,6 +1319,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .app.auth-mode .sidebar, .app.auth-mode .topbar { display: none; }
 .app.auth-mode .main { margin-left: 0; }
 .app.auth-mode .view { padding: 0; max-width: none; }
+/* the parent crumb ships its own link + separator; display:contents puts them
+   in the row itself so they take the same gap as the rest of the trail */
+.crumbs #crumb-parent { display: contents; }
 .crumbs #crumb-parent a { color: var(--muted); }
 .crumbs #crumb-parent a:hover { color: var(--ink); }
 
