@@ -1,16 +1,16 @@
 /* ============================================================
-   Ticketbot layer — sits on top of navi (navi.css).
-   Only things the kit does not cover live here, and they use
-   navi tokens exclusively. Never restyle a navi component here;
-   if a component needs to change, change it in the kit.
+   Ticketbot app layer — rules that are specific to this app and
+   do not belong in ui.css (the design system). Tokens only, no
+   literal colours or spacing. A rule that turns out to be a
+   reusable component moves to ui.css.
    ============================================================ */
 
 /* Screens the app shows and hides imperatively (auth vs. app shell,
-   inline error slots, popovers). navi styles [hidden]; the app toggles
+   inline error slots, popovers). ui.css styles [hidden]; the app toggles
    a class, so the class needs the same behaviour. */
 .hidden { display: none !important; }
 
-/* An inline link inside body copy or a table cell. navi resets anchors to
+/* An inline link inside body copy or a table cell. ui.css resets anchors to
    inherit, which is right for nav and rows; these are real links. */
 .link { color: var(--accent-on-soft); font-weight: 500; }
 .link:hover { text-decoration: underline; }
@@ -36,8 +36,7 @@
 /* The "custom message" disclosure inside a notify action. */
 .action-msg summary { cursor: pointer; user-select: none; }
 
-/* Kit correction (report upstream to thecoretg/navi).
-   navi sticks table headers with `top: var(--topbar-h)`, which assumes the page
+/* ui.css sticks table headers with `top: var(--topbar-h)`, which assumes the page
    is the scrollport. `.table-wrap` sets `overflow-x: auto`, so it *is* the
    scrollport, and the header is pushed 58px down over the first row. Inside the
    wrap the header belongs at the wrap's own top edge. */
@@ -52,7 +51,7 @@
    are read in full, not scanned horizontally. */
 .code.prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* "or" divider between "Sign in with Microsoft" and the password form on the login card. navi
+/* "or" divider between "Sign in with Microsoft" and the password form on the login card. ui.css
    has no divider component; this is a hairline either side of a muted eyebrow word. */
 .auth-or {
     display: flex; align-items: center; gap: var(--s3);
@@ -60,7 +59,7 @@
 }
 .auth-or::before, .auth-or::after { content: ''; flex: 1; border-top: 1px solid var(--line); }
 
-/* Numbered setup steps on the SSO page. navi resets list markers globally; these are read in
+/* Numbered setup steps on the SSO page. ui.css resets list markers globally; these are read in
    order, so the numbers matter. */
 .steps { list-style: decimal; padding-left: var(--s6); }
 .steps li::marker { color: var(--muted); }

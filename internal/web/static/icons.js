@@ -12,6 +12,7 @@ const P = {
   moon:     '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>',
   panel:    '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>',
   plus:     '<path d="M12 5v14M5 12h14"/>',
+  minus:    '<path d="M5 12h14"/>',
   down:     '<path d="m6 9 6 6 6-6"/>',
   up:       '<path d="m18 15-6-6-6 6"/>',
   arrowUp:  '<path d="M12 19V5M5 12l7-7 7 7"/>',

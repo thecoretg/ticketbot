@@ -25,16 +25,19 @@ Ticketbot ingests ConnectWise PSA ticket webhooks, runs per-board workflows (con
 
 ## Frontend
 
-This project uses the **navi UI kit**. Before writing or changing any
-frontend code — markup, styles, components, pages — invoke the `navi-ui`
-skill and follow it. Do not introduce other CSS frameworks, component
-libraries, raw hex colours or ad-hoc spacing values. The palette is recorded
-in `.navi.json`; do not change it without being asked.
+`internal/web/static/ui.css` is the design system: tokens, component classes and six palettes
+(`data-palette` on `<html>`, pinned to `harbor`). `app.css` holds app-specific rules only. Both
+are ours. Edit either, but keep the split: a reusable component belongs in `ui.css`, a one-off
+in `app.css`, each with a comment saying why. `docs/ui/COMPONENTS.md` documents the component
+markup; compose from it before writing anything new. `icons.js` is the icon set, loaded as a
+module in `index.html` and exposed as `window.icon` for the classic scripts.
 
-`internal/web/static/navi.css` is a snapshot of the kit: never edit it. Project-only
-rules and corrections to the kit live in `internal/web/static/app.css`, each with a
-comment saying why. `icons.js` is the kit's icon set, loaded as a module in
-`index.html` and exposed as `window.icon` for the classic scripts.
+Never write a literal colour, spacing or radius. Everything comes from the `var(--*)` tokens at
+the top of `ui.css`. Spacing is the 4px scale (`--s1`…`--s12`). Text clears 4.5:1 against its
+actual background; never dim text with `opacity`. No other CSS frameworks or component libraries.
+
+Every change is checked in light **and** dark. `scripts/contrast-audit.js` pasted into the
+browser console lists contrast, hit-target and accessible-name failures on the page.
 
 ## Conventions
 

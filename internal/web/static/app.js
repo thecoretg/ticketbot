@@ -83,7 +83,7 @@ function toggleNav(e) {
     document.getElementById('app').classList.toggle('nav-open')
 }
 
-// openMenu renders a navi popover anchored under a control. Items are
+// openMenu renders a .popover anchored under a control. Items are
 // { label, icon | swatch, danger, current, run }.
 let menuEl     = null
 let menuAnchor = null   // the control the open menu hangs off; a click on it closes the menu
@@ -794,7 +794,7 @@ function skeletonPage() {
 // ─────────────────────────────────────────────────────────
 // Toast
 // ─────────────────────────────────────────────────────────
-// type is the app's own vocabulary ('success' | 'error' | 'info'); navi's
+// type is the app's own vocabulary ('success' | 'error' | 'info'); ui.css's
 // variants are ok / bad / (default).
 const TOAST_VARIANT = { success: 'ok', error: 'bad', info: '' }
 const TOAST_TITLE   = { success: 'Done', error: 'Something went wrong', info: 'Heads up' }
@@ -866,7 +866,7 @@ function confirmModal({ title, body, confirmLabel = 'Delete', tone = 'bad', onCo
 // ─────────────────────────────────────────────────────────
 // Typeahead popup
 //
-// Search inputs offer their matches in a navi .typeahead-pop. The native <datalist>
+// Search inputs offer their matches in a .typeahead-pop. The native <datalist>
 // popup is drawn by the browser rather than the page, and embedded web views put it
 // nowhere near the input. The popup hangs off <body> at the input's page coordinates,
 // so an ancestor that clips (the condition box has overflow: hidden) cannot cut it off.
@@ -972,9 +972,9 @@ function localDT(iso) {
 }
 
 // ─────────────────────────────────────────────────────────
-// Render helpers (navi components)
+// Render helpers (ui.css components)
 // ─────────────────────────────────────────────────────────
-// badgeTag renders a labelled badge. variant is a navi tone —
+// badgeTag renders a labelled badge. variant is a ui.css tone —
 // ok | bad | warn | info | accent | outline | '' (neutral).
 function badgeTag(label, variant = '') {
     const dot = ['ok', 'bad', 'warn', 'info'].includes(variant) ? '<i class="dot"></i>' : ''
@@ -1049,7 +1049,7 @@ function deleteButton(onclick, label = 'Delete') {
     return editOnly(`<button class="btn btn-ghost btn-sm" onclick="${onclick}">${icon('trash')}${esc(label)}</button>`)
 }
 
-// checkbox is navi's styled checkbox; the box element carries the tick.
+// checkbox is the styled .checkbox; the box element carries the tick.
 function checkbox(label, attrs = '', checked = false) {
     return `<label class="check">
         <input type="checkbox" ${checked ? 'checked' : ''} ${attrs}>
@@ -1058,7 +1058,7 @@ function checkbox(label, attrs = '', checked = false) {
     </label>`
 }
 
-// toggle is navi's switch; .track must stay a flex box or the thumb collapses.
+// toggle is the .toggle switch; .track must stay a flex box or the thumb collapses.
 // A switch with no visible label takes its name from `tip`; it gets no tooltip,
 // because the setting it belongs to is already named beside it.
 function toggle(attrs = '', checked = false, opts = {}) {

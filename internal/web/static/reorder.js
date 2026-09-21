@@ -1,6 +1,6 @@
-/* navi — drag-to-reorder for grip-handled lists. No dependencies.
+/* Drag-to-reorder for grip-handled lists. No dependencies.
  *
- * The kit styles the parts (.rule-grip, .is-source, .drag-ghost, .drop-line);
+ * ui.css styles the parts (.rule-grip, .is-source, .drag-ghost, .drop-line);
  * this adds the gesture. It never reorders the DOM itself — it reports the move
  * and leaves the list to re-render from its own data, which is the only thing
  * that works when the list is redrawn from state on every change.
@@ -20,7 +20,7 @@
  * helper deliberately does not try to be one.
  */
 
-const GAP = 18;   // half the gap the kit leaves between cards, for the drop line
+const GAP = 18;   // half the gap .rule-list leaves between cards, for the drop line
 
 export function reorder(list, opts = {}) {
   const itemSel   = opts.item   || '[data-reorder-item]';

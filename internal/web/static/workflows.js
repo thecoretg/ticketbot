@@ -296,8 +296,8 @@ function wfMountReorder() {
     wfReorderStop?.()
     wfReorderStop = null
     const list = document.getElementById('rule-list')
-    if (!list || !canEdit() || !window.naviReorder) return
-    wfReorderStop = window.naviReorder(list, { item: '.rule-card', handle: '.rule-grip', onMove: wfMoveRuleTo })
+    if (!list || !canEdit() || !window.reorderList) return
+    wfReorderStop = window.reorderList(list, { item: '.rule-card', handle: '.rule-grip', onMove: wfMoveRuleTo })
 }
 
 function wfRuleCardHTML(r, i) {
@@ -351,7 +351,7 @@ function wfActionRowHTML(a, i, j) {
     const last = wf.rules[i].actions.length - 1
     const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('')
     // fields sit on the row's first line with the controls; anything taller than
-    // one control goes in detail, which the kit drops onto its own line. Mixing
+    // one control goes in detail, which .action-row drops onto its own line. Mixing
     // the two inside one stack is what pushes the first field off centre.
     let fields = '', detail = ''
 

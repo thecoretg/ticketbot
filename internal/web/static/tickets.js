@@ -290,7 +290,7 @@ function memberLabel(m) {
 }
 
 // ── Event history ────────────────────────────────────────
-// Each entry is a navi .event card: a dot on the rail whose tone says what
+// Each entry is an .event card: a dot on the rail whose tone says what
 // happened, plus a card with the detail.
 function tkEventHTML(ev) {
     const p   = ev.payload || {}
