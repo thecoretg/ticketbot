@@ -96,6 +96,31 @@ const (
 	PortNo  Port = "no"
 )
 
+// NotifyChannel is where a notify node delivers. Webex is the only transport today; the channel
+// is the seam a Slack or Teams room would be added at, as a new kind with its own params rather
+// than a new action kind.
+type NotifyChannel string
+
+const (
+	ChannelWebexRoom      NotifyChannel = "webex_room"
+	ChannelWebexPerson    NotifyChannel = "webex_person"
+	ChannelResourcesOwner NotifyChannel = "resources_owner" // the ticket's resources and owner, as Webex people
+)
+
+// RecipientType is the webex_recipient row type a channel's RecipientID must point at, when it
+// names one.
+func (c NotifyChannel) RecipientType() (WebexRecipientType, bool) {
+	switch c {
+	case ChannelWebexRoom:
+		return RecipientTypeRoom, true
+	case ChannelWebexPerson:
+		return RecipientTypePerson, true
+	}
+	return "", false
+}
+
+// NotifyTarget is the pre-channel field name. It is read so stored and exported documents from
+// before channels still load; NotifyAction.Normalize maps it and clears it.
 type NotifyTarget string
 
 const (
@@ -196,11 +221,39 @@ type ActionSettings struct {
 }
 
 type NotifyAction struct {
-	Target      NotifyTarget `json:"target"`
-	RecipientID *int         `json:"recipient_id,omitempty"` // webex_recipient.id for room / person
+	Channel     NotifyChannel `json:"channel"`
+	RecipientID *int          `json:"recipient_id,omitempty"` // webex_recipient.id for the webex_* channels
 	// Message, when set, replaces the default notification body. It may use {{placeholder}}
 	// tokens; see msgtemplate.Placeholders.
 	Message string `json:"message,omitempty"`
+	// Target is the pre-channel name of Channel. Never written; see Normalize.
+	Target NotifyTarget `json:"target,omitempty"`
+}
+
+// Normalize upgrades a pre-channel action in place: target room / person / resources_owner
+// becomes the matching channel. A document that already has a channel is left alone.
+func (n *NotifyAction) Normalize() {
+	if n == nil {
+		return
+	}
+	if n.Channel == "" {
+		switch n.Target {
+		case TargetRoom:
+			n.Channel = ChannelWebexRoom
+		case TargetPerson:
+			n.Channel = ChannelWebexPerson
+		case TargetResourcesOwner:
+			n.Channel = ChannelResourcesOwner
+		}
+	}
+	n.Target = ""
+}
+
+// NormalizeNodes upgrades every notify node in place.
+func NormalizeNodes(nodes []Node) {
+	for i := range nodes {
+		nodes[i].Notify.Normalize()
+	}
 }
 
 // SetStatusAction moves the ticket to a status on its board. StatusName is display-only and is
@@ -286,6 +339,7 @@ func DecodeWorkflowDocument(raw []byte, w *Workflow) error {
 			return fmt.Errorf("unmarshalling v1 rules: %w", err)
 		}
 		w.Nodes, w.Edges = UpgradeRules(rules)
+		NormalizeNodes(w.Nodes)
 		return nil
 	}
 
@@ -302,6 +356,7 @@ func DecodeWorkflowDocument(raw []byte, w *Workflow) error {
 	if doc.Edges != nil {
 		w.Edges = doc.Edges
 	}
+	NormalizeNodes(w.Nodes)
 	return nil
 }
 

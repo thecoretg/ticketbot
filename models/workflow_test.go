@@ -131,10 +131,10 @@ func TestDecodeWorkflowDocumentV2AndEmpty(t *testing.T) {
 }
 
 func TestNodeJSONShape(t *testing.T) {
-	n := Node{ID: "n", Kind: "notify", Title: "Notify", Enabled: true, ActionSettings: ActionSettings{Notify: &NotifyAction{Target: TargetRoom}}}
+	n := Node{ID: "n", Kind: "notify", Title: "Notify", Enabled: true, ActionSettings: ActionSettings{Notify: &NotifyAction{Channel: ChannelWebexRoom}}}
 	raw, _ := json.Marshal(n)
 	s := string(raw)
-	for _, want := range []string{`"kind":"notify"`, `"notify":{"target":"room"}`, `"x":0`} {
+	for _, want := range []string{`"kind":"notify"`, `"notify":{"channel":"webex_room"}`, `"x":0`} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %s in %s", want, s)
 		}

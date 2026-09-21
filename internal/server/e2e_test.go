@@ -139,9 +139,9 @@ func TestE2EProcessTicket(t *testing.T) {
 		Nodes: []models.Node{
 			{ID: "t", Kind: models.NodeTrigger, Title: "updated", Enabled: true, Events: []models.TriggerEvent{models.TriggerUpdated}},
 			{ID: "c", Kind: models.NodeIf, Title: "e2e", Enabled: true, Condition: "changed/summary = true"},
-			{ID: "n1", Kind: models.NodeKind(models.ActionNotify), Title: "room", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: models.TargetRoom, RecipientID: &room.ID}}},
+			{ID: "n1", Kind: models.NodeKind(models.ActionNotify), Title: "room", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Channel: models.ChannelWebexRoom, RecipientID: &room.ID}}},
 			{ID: "a", Kind: models.NodeKind(models.ActionAddNote), Title: "note", Enabled: true, ActionSettings: models.ActionSettings{AddNote: &models.AddNoteAction{Text: "e2e dry run", Internal: true}}},
-			{ID: "n2", Kind: models.NodeKind(models.ActionNotify), Title: "owner", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: models.TargetResourcesOwner}}},
+			{ID: "n2", Kind: models.NodeKind(models.ActionNotify), Title: "owner", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Channel: models.ChannelResourcesOwner}}},
 		},
 		Edges: []models.Edge{
 			{From: "t", To: "c", Port: models.PortOut},

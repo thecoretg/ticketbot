@@ -135,13 +135,17 @@ Done.
 
 ### 7. Notify as a channel
 
-- [ ] Reshape `NotifyAction`: `Target NotifyTarget` becomes a channel type with kind
-      (`webex_room`, `webex_person`, `resources_owner`) and per-kind params. No new channels.
-      Upgrade on read like the v1 rule chain (`models.DecodeWorkflowDocument`).
-- [ ] Slack, Teams, client-facing notifications, Notion sync and reporting are deliberately
-      unplanned. Add a channel kind only when one is scheduled.
+Done.
 
-CLAUDE.md: update the Workflows section to describe channels.
+- [x] `NotifyAction.Channel` (`webex_room`, `webex_person`, `resources_owner`) replaces `Target`.
+      `NotifyAction.Normalize` maps a pre-channel `target` on read (`DecodeWorkflowDocument`, the
+      v1 rule upgrade, validation and the engine all call it), so stored rows, old exports and old
+      API bodies still load; the field is never written back. `NotifyChannel.RecipientType` says
+      which recipient row a channel needs. Action events record `channel`; the history renders
+      both spellings.
+- [x] Slack, Teams, client-facing notifications, Notion sync and reporting stay unplanned. A new
+      transport is a new channel kind with its own params, resolved in
+      `notifier.resolveTarget`, not a new action kind.
 
 ### 8. Backups
 

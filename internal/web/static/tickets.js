@@ -424,7 +424,7 @@ function tkActionLabel(kind) {
 function tkActionSummary(kind, o) {
     o = o || {}
     switch (kind) {
-    case 'notify':       return o.target ? ` → ${esc(tkTargetLabel(o.target))}${o.custom_message ? ' <span class="muted">(custom message)</span>' : ''}` : ''
+    case 'notify':       return (o.channel || o.target) ? ` → ${esc(tkTargetLabel(o.channel || o.target))}${o.custom_message ? ' <span class="muted">(custom message)</span>' : ''}` : ''
     case 'add_note':     return o.text ? `: <span class="muted">${esc(o.text)}</span>` : ''
     case 'set_status':   return ` → ${esc(o.status_name || `status ${o.status_id ?? '?'}`)}`
     case 'set_priority': return ` → ${esc(o.priority_name || `priority ${o.priority_id ?? '?'}`)}`
@@ -452,8 +452,8 @@ function tkResultBadge(result, dryRun) {
 function tkActionBody(p, dryRun) {
     let html = `<div class="row gap2 wrap">${tkResultBadge(p.result, dryRun)}${p.reason ? `<span class="event-detail">${esc(p.reason)}</span>` : ''}</div>`
     const o = p.output || {}
-    if (p.kind === 'notify' && o.target) {
-        html += `<div class="event-detail">Target: ${esc(tkTargetLabel(o.target))}${o.recipient_id ? ` (recipient ${o.recipient_id})` : ''}</div>`
+    if (p.kind === 'notify' && (o.channel || o.target)) {
+        html += `<div class="event-detail">Channel: ${esc(tkTargetLabel(o.channel || o.target))}${o.recipient_id ? ` (recipient ${o.recipient_id})` : ''}</div>`
     }
     if (p.kind === 'add_note' && o.text) {
         const flags = ['internal', 'discussion', 'resolution'].filter(f => o[f]).join(', ')
@@ -478,7 +478,8 @@ function tkNotificationBody(p, dryRun) {
 }
 
 function tkTargetLabel(t) {
-    return { room: 'Webex room', person: 'Webex person', resources_owner: 'Ticket resources & owner' }[t] || t
+    // pre-channel events say room / person; channel events say webex_room / webex_person
+    return { room: 'Webex room', webex_room: 'Webex room', person: 'Webex person', webex_person: 'Webex person', resources_owner: 'Ticket resources & owner' }[t] || t
 }
 
 function tkLoopReason(r) {

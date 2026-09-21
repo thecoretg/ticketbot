@@ -121,11 +121,11 @@ func fullTicket() *models.FullTicket {
 }
 
 func roomIntent(rule string, id int) workflow.NotifyIntent {
-	return workflow.NotifyIntent{Step: workflow.StepRef{NodeID: rule, Title: rule}, Target: models.NotifyAction{Target: models.TargetRoom, RecipientID: &id}}
+	return workflow.NotifyIntent{Step: workflow.StepRef{NodeID: rule, Title: rule}, Action: models.NotifyAction{Channel: models.ChannelWebexRoom, RecipientID: &id}}
 }
 
 func ownerIntent(rule string) workflow.NotifyIntent {
-	return workflow.NotifyIntent{Step: workflow.StepRef{NodeID: rule, Title: rule}, Target: models.NotifyAction{Target: models.TargetResourcesOwner}}
+	return workflow.NotifyIntent{Step: workflow.StepRef{NodeID: rule, Title: rule}, Action: models.NotifyAction{Channel: models.ChannelResourcesOwner}}
 }
 
 func byRecipient(outs []Outcome) map[int]Outcome {
@@ -275,7 +275,7 @@ func TestSendNoIntents(t *testing.T) {
 func TestSendCustomMessageFollowsAttribution(t *testing.T) {
 	fx := newSendFixture(nil)
 	custom := roomIntent("custom", 1)
-	custom.Target.Message = "{{event}}: {{ticket.summary}} ({{rule}})"
+	custom.Action.Message = "{{event}}: {{ticket.summary}} ({{rule}})"
 	outs, err := fx.svc.Send(context.Background(), SendRequest{
 		Ticket:  fullTicket(),
 		IsNew:   true,

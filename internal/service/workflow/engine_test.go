@@ -78,8 +78,8 @@ func ticket() *psa.Ticket {
 
 func rid(id int) *int { return &id }
 
-func notify(target models.NotifyTarget, recipient *int) models.Action {
-	return models.Action{Kind: models.ActionNotify, Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: target, RecipientID: recipient}}}
+func notify(target models.NotifyChannel, recipient *int) models.Action {
+	return models.Action{Kind: models.ActionNotify, Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Channel: target, RecipientID: recipient}}}
 }
 
 func addNote(text string) models.Action {
@@ -153,8 +153,8 @@ func results(res *Result) []string {
 func recipients(res *Result) []int {
 	out := make([]int, 0, len(res.Notifies))
 	for _, n := range res.Notifies {
-		if n.Target.RecipientID != nil {
-			out = append(out, *n.Target.RecipientID)
+		if n.Action.RecipientID != nil {
+			out = append(out, *n.Action.RecipientID)
 		} else {
 			out = append(out, 0)
 		}
@@ -201,11 +201,11 @@ func eq[T comparable](t *testing.T, what string, got, want []T) {
 func TestEveryListeningTriggerFires(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := graph([]models.Node{
-		trig("t-upd", 300, models.TriggerUpdated), act("n2", notify(models.TargetRoom, rid(2))),
-		trig("t-new", 0, models.TriggerCreated), act("n1", notify(models.TargetRoom, rid(1))),
-		trig("t-both", 600), act("n3", notify(models.TargetRoom, rid(3))),
+		trig("t-upd", 300, models.TriggerUpdated), act("n2", notify(models.ChannelWebexRoom, rid(2))),
+		trig("t-new", 0, models.TriggerCreated), act("n1", notify(models.ChannelWebexRoom, rid(1))),
+		trig("t-both", 600), act("n3", notify(models.ChannelWebexRoom, rid(3))),
 		{ID: "t-off", Kind: models.NodeTrigger, Title: "off", Enabled: false, X: 900, Events: []models.TriggerEvent{models.TriggerCreated}},
-		act("n4", notify(models.TargetRoom, rid(4))),
+		act("n4", notify(models.ChannelWebexRoom, rid(4))),
 	},
 		edge("t-new", models.PortOut, "n1"), edge("t-upd", models.PortOut, "n2"),
 		edge("t-both", models.PortOut, "n3"), edge("t-off", models.PortOut, "n4"),
@@ -237,8 +237,8 @@ func TestBranchesFollowThePortAndRejoinOnce(t *testing.T) {
 	w := graph([]models.Node{
 		trig("t", 0),
 		iff("crit", "summary contains 'help'"),
-		act("yes", notify(models.TargetRoom, rid(1))),
-		act("no", notify(models.TargetRoom, rid(2))),
+		act("yes", notify(models.ChannelWebexRoom, rid(1))),
+		act("no", notify(models.ChannelWebexRoom, rid(2))),
 		act("join", addNote("done")),
 	},
 		edge("t", models.PortOut, "crit"),
@@ -269,8 +269,8 @@ func TestNodeReachedByTwoTriggersRunsOnce(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := graph([]models.Node{
 		trig("a", 0), trig("b", 300),
-		act("shared", notify(models.TargetRoom, rid(1))),
-		act("after", notify(models.TargetRoom, rid(2))),
+		act("shared", notify(models.ChannelWebexRoom, rid(1))),
+		act("after", notify(models.ChannelWebexRoom, rid(2))),
 	},
 		edge("a", models.PortOut, "shared"), edge("b", models.PortOut, "shared"),
 		edge("shared", models.PortOut, "after"),
@@ -288,9 +288,9 @@ func TestSkipNotifySilencesOnlyItsOwnPath(t *testing.T) {
 	w := graph([]models.Node{
 		trig("t", 0),
 		iff("c", "id = 42"),
-		act("quiet", skip()), act("silenced", notify(models.TargetRoom, rid(1))),
-		act("loud", notify(models.TargetRoom, rid(2))),
-		trig("t2", 300), act("other", notify(models.TargetRoom, rid(3))),
+		act("quiet", skip()), act("silenced", notify(models.ChannelWebexRoom, rid(1))),
+		act("loud", notify(models.ChannelWebexRoom, rid(2))),
+		trig("t2", 300), act("other", notify(models.ChannelWebexRoom, rid(3))),
 	},
 		edge("t", models.PortOut, "c"),
 		edge("c", models.PortYes, "quiet"), edge("quiet", models.PortOut, "silenced"),
@@ -307,14 +307,14 @@ func TestSkipNotifySilencesOnlyItsOwnPath(t *testing.T) {
 
 func TestDisabledNodesPassThrough(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
-	off := notify(models.TargetRoom, rid(1))
+	off := notify(models.ChannelWebexRoom, rid(1))
 	off.Enabled = false
 	offIf := iff("c", "id = 42")
 	offIf.Enabled = false
 	w := graph([]models.Node{
 		trig("t", 0), offIf,
-		act("yes", notify(models.TargetRoom, rid(2))),
-		act("off", off), act("on", notify(models.TargetRoom, rid(3))),
+		act("yes", notify(models.ChannelWebexRoom, rid(2))),
+		act("off", off), act("on", notify(models.ChannelWebexRoom, rid(3))),
 	},
 		edge("t", models.PortOut, "c"),
 		edge("c", models.PortYes, "yes"), edge("c", models.PortNo, "off"),
@@ -338,7 +338,7 @@ func TestConditionErrorTakesTheElsePort(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := graph([]models.Node{
 		trig("t", 0), iff("bad", "summary ="),
-		act("yes", notify(models.TargetRoom, rid(1))), act("no", notify(models.TargetRoom, rid(2))),
+		act("yes", notify(models.ChannelWebexRoom, rid(1))), act("no", notify(models.ChannelWebexRoom, rid(2))),
 	},
 		edge("t", models.PortOut, "bad"), edge("bad", models.PortYes, "yes"), edge("bad", models.PortNo, "no"),
 	)
@@ -382,7 +382,7 @@ func TestCyclesStopAtTheStepCap(t *testing.T) {
 func TestUnknownNodeKindEndsThePath(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := graph([]models.Node{
-		trig("t", 0), {ID: "x", Kind: "teleport", Title: "x", Enabled: true}, act("n", notify(models.TargetRoom, rid(1))),
+		trig("t", 0), {ID: "x", Kind: "teleport", Title: "x", Enabled: true}, act("n", notify(models.ChannelWebexRoom, rid(1))),
 	}, edge("t", models.PortOut, "x"), edge("x", models.PortOut, "n"))
 	res := exec(t, cw, w, Input{})
 	eq(t, "path", path(res), []string{"t", "x"})
@@ -406,9 +406,9 @@ func TestRunNilInputs(t *testing.T) {
 func TestLegacyTriggers(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := legacy(
-		rule("create", models.TriggerCreate, "", false, notify(models.TargetRoom, rid(1))),
-		rule("update", models.TriggerUpdate, "", false, notify(models.TargetRoom, rid(2))),
-		rule("both", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(3))),
+		rule("create", models.TriggerCreate, "", false, notify(models.ChannelWebexRoom, rid(1))),
+		rule("update", models.TriggerUpdate, "", false, notify(models.ChannelWebexRoom, rid(2))),
+		rule("both", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(3))),
 	)
 
 	res := exec(t, cw, w, Input{IsNew: true})
@@ -424,10 +424,10 @@ func TestLegacyTriggers(t *testing.T) {
 func TestLegacyConditionMatchAndNoMatch(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := legacy(
-		rule("match", models.TriggerBoth, "summary contains 'help' and status/name = 'New'", false, notify(models.TargetRoom, rid(1))),
-		rule("nomatch", models.TriggerBoth, "company/id = 999", false, notify(models.TargetRoom, rid(2))),
-		rule("changed", models.TriggerBoth, "changed/status = true", false, notify(models.TargetRoom, rid(3))),
-		rule("note", models.TriggerBoth, "latestNote/internalAnalysisFlag = true", false, notify(models.TargetRoom, rid(4))),
+		rule("match", models.TriggerBoth, "summary contains 'help' and status/name = 'New'", false, notify(models.ChannelWebexRoom, rid(1))),
+		rule("nomatch", models.TriggerBoth, "company/id = 999", false, notify(models.ChannelWebexRoom, rid(2))),
+		rule("changed", models.TriggerBoth, "changed/status = true", false, notify(models.ChannelWebexRoom, rid(3))),
+		rule("note", models.TriggerBoth, "latestNote/internalAnalysisFlag = true", false, notify(models.ChannelWebexRoom, rid(4))),
 	)
 
 	note := &psa.ServiceTicketNote{ID: 5, Text: "x", InternalAnalysisFlag: true}
@@ -442,8 +442,8 @@ func TestLegacyConditionMatchAndNoMatch(t *testing.T) {
 func TestLegacyConditionErrorSkipsRule(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := legacy(
-		rule("bad", models.TriggerBoth, "summary =", false, notify(models.TargetRoom, rid(1))),
-		rule("good", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(2))),
+		rule("bad", models.TriggerBoth, "summary =", false, notify(models.ChannelWebexRoom, rid(1))),
+		rule("good", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(2))),
 	)
 	res := exec(t, cw, w, Input{})
 	if s := step(res, "bad"); s.Err == nil || matched(res, "bad") {
@@ -455,8 +455,8 @@ func TestLegacyConditionErrorSkipsRule(t *testing.T) {
 func TestLegacyStopProcessing(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := legacy(
-		rule("first", models.TriggerBoth, "", true, notify(models.TargetRoom, rid(1))),
-		rule("second", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(2))),
+		rule("first", models.TriggerBoth, "", true, notify(models.ChannelWebexRoom, rid(1))),
+		rule("second", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(2))),
 	)
 	res := exec(t, cw, w, Input{})
 	if step(res, "second") != nil {
@@ -466,8 +466,8 @@ func TestLegacyStopProcessing(t *testing.T) {
 
 	// stop only applies when the rule matched
 	w = legacy(
-		rule("first", models.TriggerBoth, "company/id = 999", true, notify(models.TargetRoom, rid(1))),
-		rule("second", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(2))),
+		rule("first", models.TriggerBoth, "company/id = 999", true, notify(models.ChannelWebexRoom, rid(1))),
+		rule("second", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(2))),
 	)
 	res = exec(t, cw, w, Input{})
 	if step(res, "second") == nil {
@@ -479,9 +479,9 @@ func TestLegacyStopProcessing(t *testing.T) {
 func TestLegacySkipNotifySuppressesLaterOnly(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := legacy(
-		rule("early", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(1))),
-		rule("quiet", models.TriggerBoth, "", false, skip(), notify(models.TargetRoom, rid(2))),
-		rule("late", models.TriggerBoth, "", false, notify(models.TargetResourcesOwner, nil)),
+		rule("early", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(1))),
+		rule("quiet", models.TriggerBoth, "", false, skip(), notify(models.ChannelWebexRoom, rid(2))),
+		rule("late", models.TriggerBoth, "", false, notify(models.ChannelResourcesOwner, nil)),
 	)
 	res := exec(t, cw, w, Input{})
 	eq(t, "recipients", recipients(res), []int{1})
@@ -493,10 +493,10 @@ func TestLegacySkipNotifySuppressesLaterOnly(t *testing.T) {
 
 func TestLegacyDisabledRule(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
-	disabled := rule("off", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(2)))
+	disabled := rule("off", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(2)))
 	disabled.Enabled = false
-	w := legacy(rule("on", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(1))), disabled,
-		rule("after", models.TriggerBoth, "", false, notify(models.TargetRoom, rid(3))))
+	w := legacy(rule("on", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(1))), disabled,
+		rule("after", models.TriggerBoth, "", false, notify(models.ChannelWebexRoom, rid(3))))
 	res := exec(t, cw, w, Input{})
 	if s := step(res, "off"); s == nil || s.Skipped != SkippedDisabled {
 		t.Errorf("rule should be skipped as disabled: %+v", s)
@@ -519,8 +519,8 @@ func TestAddNotePostsAfterTheWalksAndRefetches(t *testing.T) {
 
 	w := legacy(
 		rule("note", models.TriggerBoth, "", false, addNote("Escalating this ticket")),
-		rule("after", models.TriggerBoth, "status/name = 'Escalated'", false, notify(models.TargetRoom, rid(1))),
-		rule("trigger note unchanged", models.TriggerBoth, "latestNote/text = 'customer note'", false, notify(models.TargetRoom, rid(2))),
+		rule("after", models.TriggerBoth, "status/name = 'Escalated'", false, notify(models.ChannelWebexRoom, rid(1))),
+		rule("trigger note unchanged", models.TriggerBoth, "latestNote/text = 'customer note'", false, notify(models.ChannelWebexRoom, rid(2))),
 	)
 	res := exec(t, cw, w, Input{TriggerNote: trigger})
 
@@ -547,7 +547,7 @@ func TestAddNotePostsAfterTheWalksAndRefetches(t *testing.T) {
 
 func TestAddNoteDryRun(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
-	w := legacy(rule("note", models.TriggerBoth, "", false, addNote("hi"), notify(models.TargetRoom, rid(1))))
+	w := legacy(rule("note", models.TriggerBoth, "", false, addNote("hi"), notify(models.ChannelWebexRoom, rid(1))))
 	res := exec(t, cw, w, Input{DryRun: true})
 
 	if len(cw.posted) != 0 || cw.getCalls != 0 {
@@ -564,7 +564,7 @@ func TestAddNoteDryRun(t *testing.T) {
 
 func TestAddNoteError(t *testing.T) {
 	cw := &fakeCW{ticket: ticket(), postErr: errors.New("boom")}
-	w := legacy(rule("note", models.TriggerBoth, "", false, addNote("hi"), notify(models.TargetRoom, rid(1))))
+	w := legacy(rule("note", models.TriggerBoth, "", false, addNote("hi"), notify(models.ChannelWebexRoom, rid(1))))
 	res := exec(t, cw, w, Input{})
 	if res.Actions[0].Result != ResultError || res.Actions[0].Err == nil {
 		t.Errorf("expected error outcome: %+v", res.Actions[0])
@@ -591,9 +591,9 @@ func TestUnknownActionKind(t *testing.T) {
 func TestNewNoteAndOldValuesInConditions(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := legacy(
-		rule("reply", models.TriggerUpdate, "newNote = true", false, notify(models.TargetRoom, rid(1))),
-		rule("left new", models.TriggerUpdate, "changed/status = true and old/status/name = 'Assigned'", false, notify(models.TargetRoom, rid(2))),
-		rule("wrong old", models.TriggerUpdate, "old/status/name = 'Closed'", false, notify(models.TargetRoom, rid(3))),
+		rule("reply", models.TriggerUpdate, "newNote = true", false, notify(models.ChannelWebexRoom, rid(1))),
+		rule("left new", models.TriggerUpdate, "changed/status = true and old/status/name = 'Assigned'", false, notify(models.ChannelWebexRoom, rid(2))),
+		rule("wrong old", models.TriggerUpdate, "old/status/name = 'Closed'", false, notify(models.ChannelWebexRoom, rid(3))),
 	)
 
 	res := exec(t, cw, w, Input{NewNote: true, Changes: []models.FieldChange{
@@ -612,7 +612,7 @@ func TestIsNewInConditions(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := graph([]models.Node{
 		trig("t", 0), iff("new", "isNew = true"),
-		act("y", notify(models.TargetRoom, rid(1))), act("n", notify(models.TargetRoom, rid(2))),
+		act("y", notify(models.ChannelWebexRoom, rid(1))), act("n", notify(models.ChannelWebexRoom, rid(2))),
 	}, edge("t", models.PortOut, "new"), edge("new", models.PortYes, "y"), edge("new", models.PortNo, "n"))
 	eq(t, "new", recipients(exec(t, cw, w, Input{IsNew: true})), []int{1})
 	eq(t, "updated", recipients(exec(t, cw, w, Input{IsNew: false})), []int{2})
@@ -630,7 +630,7 @@ func TestSetStatusPatchesAndLaterNodesSeeIt(t *testing.T) {
 	// The later node sees the queued status (id and the action's name) before anything is written.
 	w := legacy(
 		rule("escalate", models.TriggerBoth, "", false, setStatus(11)),
-		rule("after", models.TriggerBoth, "status/id = 11 and status/name = 'S'", false, notify(models.TargetRoom, rid(1))),
+		rule("after", models.TriggerBoth, "status/id = 11 and status/name = 'S'", false, notify(models.ChannelWebexRoom, rid(1))),
 	)
 	res := exec(t, cw, w, Input{})
 
@@ -761,7 +761,7 @@ func TestTwoAddResourcesMergeWithoutConflict(t *testing.T) {
 
 func TestPatchErrorRestoresTheTicketAndFailsEveryQueuedAction(t *testing.T) {
 	cw := &fakeCW{ticket: ticket(), patchErr: errors.New("cw down")}
-	w := legacy(rule("r", models.TriggerBoth, "", false, setStatus(11), notify(models.TargetRoom, rid(1))))
+	w := legacy(rule("r", models.TriggerBoth, "", false, setStatus(11), notify(models.ChannelWebexRoom, rid(1))))
 	res := exec(t, cw, w, Input{})
 
 	if res.Actions[0].Result != ResultError || res.Actions[0].Err == nil {
@@ -812,7 +812,7 @@ func TestPatchActionRejectsBadOps(t *testing.T) {
 
 func TestPatchError(t *testing.T) {
 	cw := &fakeCW{ticket: ticket(), patchErr: errors.New("boom")}
-	w := legacy(rule("r", models.TriggerBoth, "", false, setStatus(11), notify(models.TargetRoom, rid(1))))
+	w := legacy(rule("r", models.TriggerBoth, "", false, setStatus(11), notify(models.ChannelWebexRoom, rid(1))))
 	res := exec(t, cw, w, Input{})
 	if res.Actions[0].Result != ResultError || res.CWWrites != 0 || len(res.Notifies) != 1 {
 		t.Errorf("failed patch should record error and not stop later actions: %+v", res.Actions)
@@ -835,11 +835,11 @@ func TestInListConditions(t *testing.T) {
 	cw.ticket.Contact.ID = 123
 	lists := &fakeLists{lists: cwquery.Lists{3: cwquery.NewListSet(123), 4: cwquery.NewListSet(100)}}
 	w := legacy(
-		rule("contact in", models.TriggerBoth, "contact/id in list 3", false, notify(models.TargetRoom, rid(1))),
-		rule("contact not in", models.TriggerBoth, "contact/id not in list 3", false, notify(models.TargetRoom, rid(2))),
-		rule("company in", models.TriggerBoth, "company/id in list 4", false, notify(models.TargetRoom, rid(3))),
-		rule("missing list", models.TriggerBoth, "company/id in list 99", false, notify(models.TargetRoom, rid(4))),
-		rule("missing negated", models.TriggerBoth, "company/id not in list 99", false, notify(models.TargetRoom, rid(5))),
+		rule("contact in", models.TriggerBoth, "contact/id in list 3", false, notify(models.ChannelWebexRoom, rid(1))),
+		rule("contact not in", models.TriggerBoth, "contact/id not in list 3", false, notify(models.ChannelWebexRoom, rid(2))),
+		rule("company in", models.TriggerBoth, "company/id in list 4", false, notify(models.ChannelWebexRoom, rid(3))),
+		rule("missing list", models.TriggerBoth, "company/id in list 99", false, notify(models.ChannelWebexRoom, rid(4))),
+		rule("missing negated", models.TriggerBoth, "company/id not in list 99", false, notify(models.ChannelWebexRoom, rid(5))),
 	)
 
 	eng := NewEngine(cw)

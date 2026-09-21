@@ -64,6 +64,9 @@ and notes post after the PATCH. Queued operations are applied to a copy of the t
 nodes see the intended state. `workflow.RateLimiter` caps writes per ticket (`write_cap_per_ticket`
 in app config, 15-minute window, one-hour block) and is the only loop protection until ticketbot
 has posted a note, because `loopGuard` learns its own member identifier from that first note.
+A notify node delivers on a channel (`webex_room`, `webex_person`, `resources_owner`); a new
+transport is a new channel kind resolved in `notifier.resolveTarget`, not a new action kind.
+Documents that still say `target` are upgraded on read by `NotifyAction.Normalize`.
 `internal/service/transfer` exports workflows as a bundle that carries their Webex recipients (by
 Webex id) and lists (by name) and rewrites those references on import; ConnectWise ids are the
 same on every instance and travel as they are. `Validate` in `service.go` owns the structural rules (one

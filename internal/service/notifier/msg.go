@@ -78,7 +78,7 @@ func (s *Service) makeTicketMessages(t *models.FullTicket, recips []recipData, i
 
 // messageBody renders the step's custom message when it has one, or the default layout.
 func (s *Service) messageBody(t *models.FullTicket, in workflow.NotifyIntent, isNew bool) string {
-	if tpl := strings.TrimSpace(in.Target.Message); tpl != "" {
+	if tpl := strings.TrimSpace(in.Action.Message); tpl != "" {
 		rendered := msgtemplate.Render(tpl, msgtemplate.Context{
 			Ticket:     t,
 			StepTitle:  in.Step.Title,

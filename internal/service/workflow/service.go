@@ -552,27 +552,29 @@ func (s *Service) validateNotify(ctx context.Context, n *models.NotifyAction) []
 }
 
 func (s *Service) validateNotifyTarget(ctx context.Context, n *models.NotifyAction) []fieldMsg {
-	switch n.Target {
-	case models.TargetResourcesOwner:
+	n.Normalize()
+	switch n.Channel {
+	case models.ChannelResourcesOwner:
 		if n.RecipientID != nil {
 			return []fieldMsg{{field: "notify.recipient_id", text: "must be empty for resources_owner"}}
 		}
 		return nil
 
-	case models.TargetRoom, models.TargetPerson:
+	case models.ChannelWebexRoom, models.ChannelWebexPerson:
+		want, _ := n.Channel.RecipientType()
 		if n.RecipientID == nil {
-			return []fieldMsg{{field: "notify.recipient_id", text: fmt.Sprintf("recipient is required for target %s", n.Target)}}
+			return []fieldMsg{{field: "notify.recipient_id", text: fmt.Sprintf("a %s is required for channel %s", want, n.Channel)}}
 		}
 		rec, err := s.Recipients.Get(ctx, *n.RecipientID)
 		if err != nil {
 			return []fieldMsg{{field: "notify.recipient_id", text: fmt.Sprintf("recipient %d not found", *n.RecipientID)}}
 		}
-		if string(rec.Type) != string(n.Target) {
-			return []fieldMsg{{field: "notify.recipient_id", text: fmt.Sprintf("recipient %d is a %s, not a %s", rec.ID, rec.Type, n.Target)}}
+		if rec.Type != want {
+			return []fieldMsg{{field: "notify.recipient_id", text: fmt.Sprintf("recipient %d is a %s, not a %s", rec.ID, rec.Type, want)}}
 		}
 		return nil
 
 	default:
-		return []fieldMsg{{field: "notify.target", text: fmt.Sprintf("target must be one of room, person, resources_owner (got %q)", n.Target)}}
+		return []fieldMsg{{field: "notify.channel", text: fmt.Sprintf("channel must be one of webex_room, webex_person, resources_owner (got %q)", n.Channel)}}
 	}
 }

@@ -43,14 +43,14 @@ func (r recipData) origin() *models.WebexRecipient {
 	return r.forwardChain[0]
 }
 
-// resolveTarget returns the natural recipients for one notify target, before forwards.
+// resolveTarget returns the natural recipients for one notify channel, before forwards.
 func (s *Service) resolveTarget(ctx context.Context, t *models.FullTicket, target models.NotifyAction) (recipMap, error) {
 	recips := make(recipMap)
 
-	switch target.Target {
-	case models.TargetRoom, models.TargetPerson:
+	switch target.Channel {
+	case models.ChannelWebexRoom, models.ChannelWebexPerson:
 		if target.RecipientID == nil {
-			return nil, fmt.Errorf("notify target %s has no recipient id", target.Target)
+			return nil, fmt.Errorf("notify channel %s has no recipient id", target.Channel)
 		}
 		r, err := s.WebexSvc.GetRecipient(ctx, *target.RecipientID)
 		if err != nil {
@@ -58,7 +58,7 @@ func (s *Service) resolveTarget(ctx context.Context, t *models.FullTicket, targe
 		}
 		recips[r.ID] = newRecip(r)
 
-	case models.TargetResourcesOwner:
+	case models.ChannelResourcesOwner:
 		for e := range s.resourceOwnerEmails(t) {
 			r, err := s.WebexSvc.EnsurePersonRecipientByEmail(ctx, e)
 			if err != nil {
@@ -69,7 +69,7 @@ func (s *Service) resolveTarget(ctx context.Context, t *models.FullTicket, targe
 		}
 
 	default:
-		return nil, fmt.Errorf("unknown notify target %q", target.Target)
+		return nil, fmt.Errorf("unknown notify channel %q", target.Channel)
 	}
 
 	return recips, nil

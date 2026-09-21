@@ -58,9 +58,9 @@ func (s *Service) Send(ctx context.Context, req SendRequest) ([]Outcome, error) 
 	var outcomes []Outcome
 
 	for _, in := range req.Intents {
-		recips, err := s.resolveTarget(ctx, t, in.Target)
+		recips, err := s.resolveTarget(ctx, t, in.Action)
 		if err != nil {
-			logger.Error("notifier: resolving notify target", "step", in.Step.Title, "target", in.Target.Target, "error", err.Error())
+			logger.Error("notifier: resolving notify channel", "step", in.Step.Title, "channel", in.Action.Channel, "error", err.Error())
 			outcomes = append(outcomes, Outcome{Step: in.Step, Result: ResultError, Err: err})
 			continue
 		}
@@ -178,7 +178,7 @@ func (s *Service) PreviewRecipients(ctx context.Context, t *models.FullTicket, i
 	var out []RecipientPreview
 
 	for _, in := range intents {
-		recips, err := s.resolveTarget(ctx, t, in.Target)
+		recips, err := s.resolveTarget(ctx, t, in.Action)
 		if err != nil {
 			out = append(out, RecipientPreview{NodeID: in.Step.NodeID, Title: in.Step.Title, Error: err.Error()})
 			continue

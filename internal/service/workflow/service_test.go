@@ -137,14 +137,14 @@ func TestValidateAssignsIDsAndNormalizes(t *testing.T) {
 func TestValidateValidWorkflow(t *testing.T) {
 	w := flow(
 		iff("c", "summary contains 'x' and company/id in (1,2)"),
-		act("n1", notify(models.TargetRoom, rid(1))),
-		act("n2", notify(models.TargetPerson, rid(2))),
-		act("n3", notify(models.TargetResourcesOwner, nil)),
+		act("n1", notify(models.ChannelWebexRoom, rid(1))),
+		act("n2", notify(models.ChannelWebexPerson, rid(2))),
+		act("n3", notify(models.ChannelResourcesOwner, nil)),
 		act("a", addNote("hello")),
 		act("s", skip()),
 	)
 	// the else branch may end unwired, and a node may take several inputs
-	w.Nodes = append(w.Nodes, act("end", notify(models.TargetRoom, rid(1))))
+	w.Nodes = append(w.Nodes, act("end", notify(models.ChannelWebexRoom, rid(1))))
 	w.Edges = append(w.Edges, edge("s", models.PortOut, "end"), edge("c", models.PortNo, "end"))
 	// wait: s already leaves by out; move that edge onto the join instead
 	w.Edges = w.Edges[:len(w.Edges)-2]
@@ -233,13 +233,13 @@ func TestValidateErrorsCarryNodeAndPosition(t *testing.T) {
 	bad := addNote("")
 	bad.AddNote.Internal = false
 
-	mismatch := notify(models.TargetRoom, rid(2)) // 2 is a person
-	missing := notify(models.TargetRoom, rid(99))
-	noRecip := notify(models.TargetPerson, nil)
-	extra := notify(models.TargetResourcesOwner, rid(1))
-	badTarget := notify(models.NotifyTarget("everyone"), nil)
+	mismatch := notify(models.ChannelWebexRoom, rid(2)) // 2 is a person
+	missing := notify(models.ChannelWebexRoom, rid(99))
+	noRecip := notify(models.ChannelWebexPerson, nil)
+	extra := notify(models.ChannelResourcesOwner, rid(1))
+	badTarget := notify(models.NotifyChannel("everyone"), nil)
 	noSettings := models.Action{Kind: models.ActionNotify, Enabled: true}
-	mixed := models.Action{Kind: models.ActionSkipNotify, Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: models.TargetRoom}}}
+	mixed := models.Action{Kind: models.ActionSkipNotify, Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Channel: models.ChannelWebexRoom}}}
 
 	w := flow(iff("cond", "summary ="),
 		act("bad", bad), act("mismatch", mismatch), act("missing", missing), act("norecip", noRecip),
@@ -250,7 +250,7 @@ func TestValidateErrorsCarryNodeAndPosition(t *testing.T) {
 	for _, want := range []string{
 		"condition",
 		"add_note.text", "add_note",
-		"notify.recipient_id", "notify.target", "notify", "kind",
+		"notify.recipient_id", "notify.channel", "notify", "kind",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in %s", want, got)
@@ -281,7 +281,7 @@ func TestValidateMutatingActions(t *testing.T) {
 		models.Node{ID: "o", Kind: "set_owner", Title: "o", Enabled: true, ActionSettings: models.ActionSettings{SetOwner: &models.SetOwnerAction{MemberID: 5}}},
 		models.Node{ID: "r", Kind: "add_resource", Title: "r", Enabled: true, ActionSettings: models.ActionSettings{AddResource: &models.AddResourceAction{MemberID: 5, Identifier: "stale"}}},
 		models.Node{ID: "j", Kind: "patch", Title: "j", Enabled: true, ActionSettings: models.ActionSettings{Patch: &models.PatchAction{Ops: []byte(` [ {"op":"replace", "path":"severity", "value":"High"} ] `)}}},
-		models.Node{ID: "n", Kind: "notify", Title: "n", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: models.TargetRoom, RecipientID: rid(1), Message: "{{event}} {{ticket.link}} for {{company}}"}}},
+		models.Node{ID: "n", Kind: "notify", Title: "n", Enabled: true, ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Channel: models.ChannelWebexRoom, RecipientID: rid(1), Message: "{{event}} {{ticket.link}} for {{company}}"}}},
 	)
 	if errs := testService().Validate(context.Background(), w); len(errs) != 0 {
 		t.Fatalf("unexpected errors: %v", errs)
@@ -310,7 +310,7 @@ func TestValidateMutatingActionErrors(t *testing.T) {
 		models.Node{ID: "7", Kind: "add_resource", Title: "x", ActionSettings: models.ActionSettings{AddResource: &models.AddResourceAction{MemberID: 99}}},                                     // missing
 		models.Node{ID: "8", Kind: "patch", Title: "x", ActionSettings: models.ActionSettings{Patch: &models.PatchAction{Ops: []byte(`{"op":"replace"}`)}}},                                     // not an array
 		models.Node{ID: "9", Kind: "patch", Title: "x", ActionSettings: models.ActionSettings{Patch: &models.PatchAction{Ops: []byte(`[]`)}, SetStatus: &models.SetStatusAction{StatusID: 10}}}, // mixed
-		models.Node{ID: "10", Kind: "notify", Title: "x", ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Target: models.TargetResourcesOwner, Message: "hi {{nope}}"}}},
+		models.Node{ID: "10", Kind: "notify", Title: "x", ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{Channel: models.ChannelResourcesOwner, Message: "hi {{nope}}"}}},
 	)
 	errs := testService().Validate(context.Background(), w)
 	want := []string{

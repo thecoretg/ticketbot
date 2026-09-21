@@ -16,7 +16,11 @@ let wfPlaceholders = []   // /workflows/placeholders cache
 let wfSimTicket  = ''     // last simulated ticket number, kept across re-renders
 let wfSimAsNew   = false  // last simulated event
 
-const WF_TARGETS = [['room', 'Webex room'], ['person', 'Webex person'], ['resources_owner', 'Ticket resources & owner']]
+// Notify channels. Webex is the only transport today; a Slack or Teams room would be another
+// channel here, not another step kind.
+const WF_CHANNELS = [['webex_room', 'Webex room'], ['webex_person', 'Webex person'], ['resources_owner', 'Ticket resources & owner']]
+// wfChannelRecipientType maps a channel to the recipient rows it picks from.
+function wfChannelRecipientType(ch) { return ch === 'webex_person' ? 'person' : 'room' }
 const WF_PATCH_EXAMPLE = '[\n  { "op": "replace", "path": "severity", "value": "High" }\n]'
 
 // Node geometry, shared with ui.css: cards are 248 wide and a fixed height per kind, so the
@@ -759,9 +763,10 @@ function cvNodeSub(n) {
     }
     case 'notify': {
         const s = n.notify || {}
-        if (s.target === 'resources_owner') return 'ticket resources & owner'
+        if (s.channel === 'resources_owner') return 'ticket resources & owner'
+        const kind = wfChannelRecipientType(s.channel)
         const r = wfRecipients.find(r => r.id === s.recipient_id)
-        return r ? `${s.target === 'person' ? 'person' : 'room'} · ${r.name}` : `choose a ${s.target || 'room'}`
+        return r ? `${kind} · ${r.name}` : `choose a ${kind}`
     }
     case 'add_note': {
         const s = n.add_note || {}
@@ -954,18 +959,19 @@ function cvInspectorHTML(n) {
         </div>`
         break
     case 'notify': {
-        const s = n.notify || (n.notify = { target: 'room', recipient_id: null })
+        const s = n.notify || (n.notify = { channel: 'webex_room', recipient_id: null })
         const hasMsg = !!s.message
+        const rtype = wfChannelRecipientType(s.channel)
         body = `<div class="field">
-            <label for="insp-target">Send to</label>
-            <select id="insp-target" class="select" onchange="cvSetNotifyTarget('${id}', this.value)"${dis}>${WF_TARGETS.map(([v, l]) => `<option value="${v}"${v === s.target ? ' selected' : ''}>${l}</option>`).join('')}</select>
+            <label for="insp-channel">Send to</label>
+            <select id="insp-channel" class="select" onchange="cvSetNotifyChannel('${id}', this.value)"${dis}>${WF_CHANNELS.map(([v, l]) => `<option value="${v}"${v === s.channel ? ' selected' : ''}>${l}</option>`).join('')}</select>
         </div>
-        ${s.target === 'resources_owner'
+        ${s.channel === 'resources_owner'
             ? `<span class="hint">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
             : `<div class="field">
-                <label for="insp-recipient">${s.target === 'person' ? 'Person' : 'Room'}</label>
+                <label for="insp-recipient">${rtype === 'person' ? 'Person' : 'Room'}</label>
                 <select id="insp-recipient" class="select" onchange="cvSetSetting('${id}', 'notify.recipient_id', this.value ? parseInt(this.value) : null)"${dis}>
-                    <option value="">— choose a ${s.target} —</option>${wfRecipientOptions(s.target, s.recipient_id)}</select>
+                    <option value="">— choose a ${rtype} —</option>${wfRecipientOptions(rtype, s.recipient_id)}</select>
             </div>`}
         <div class="field">
             <label for="insp-msg">Custom message${hasMsg ? '' : ' <span class="muted">(optional)</span>'}</label>
@@ -1123,11 +1129,11 @@ function cvToggleEvent(id, ev, on) {
     wfMarkDirty()
 }
 
-function cvSetNotifyTarget(id, target) {
+function cvSetNotifyChannel(id, channel) {
     const n = wfNode(id)
     if (!n) return
-    n.notify = { target, message: n.notify?.message || '' }
-    if (target !== 'resources_owner') n.notify.recipient_id = null
+    n.notify = { channel, message: n.notify?.message || '' }
+    if (channel !== 'resources_owner') n.notify.recipient_id = null
     cvRerenderSide()
     wfMarkDirty()
 }
@@ -1248,7 +1254,7 @@ function cvNewNode(kind, x, y) {
     switch (kind) {
     case 'trigger':      n.events = ['created', 'updated']; break
     case 'if':           n.condition = ''; n._ui = wfDefaultUI(); break
-    case 'notify':       n.notify       = { target: 'room', recipient_id: null }; break
+    case 'notify':       n.notify       = { channel: 'webex_room', recipient_id: null }; break
     case 'add_note':     n.add_note     = { text: '', internal: true, discussion: false, resolution: false }; break
     case 'set_status':   n.set_status   = { status_id: 0 }; break
     case 'set_priority': n.set_priority = { priority_id: 0 }; break
@@ -1584,7 +1590,7 @@ function wfClientValidate() {
             }
             break
         case 'notify':
-            if (n.notify?.target !== 'resources_owner' && !n.notify?.recipient_id) return bad(`choose a ${n.notify?.target || 'room'}`)
+            if (n.notify?.channel !== 'resources_owner' && !n.notify?.recipient_id) return bad(`choose a ${wfChannelRecipientType(n.notify?.channel)}`)
             break
         case 'add_note':
             if (!n.add_note?.text?.trim()) return bad('note text is required')

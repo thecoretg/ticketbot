@@ -70,10 +70,10 @@ type StepRef struct {
 	Title      string
 }
 
-// NotifyIntent is a notify node that ran; the caller resolves recipients and sends.
+// NotifyIntent is a notify node that ran; the caller resolves the channel's recipients and sends.
 type NotifyIntent struct {
 	Step   StepRef
-	Target models.NotifyAction
+	Action models.NotifyAction
 }
 
 // Action results.
@@ -421,9 +421,10 @@ func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Ac
 			out.Result, out.Reason = ResultSkipped, "suppressed"
 			return out
 		}
-		res.Notifies = append(res.Notifies, NotifyIntent{Step: ref, Target: *a.Notify})
+		a.Notify.Normalize()
+		res.Notifies = append(res.Notifies, NotifyIntent{Step: ref, Action: *a.Notify})
 		out.Result = ResultQueued
-		out.Output = map[string]any{"target": string(a.Notify.Target)}
+		out.Output = map[string]any{"channel": string(a.Notify.Channel)}
 		if a.Notify.RecipientID != nil {
 			out.Output["recipient_id"] = *a.Notify.RecipientID
 		}
