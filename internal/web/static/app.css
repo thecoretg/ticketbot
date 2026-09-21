@@ -64,9 +64,15 @@
 .steps { list-style: decimal; padding-left: var(--s6); }
 .steps li::marker { color: var(--muted); }
 
-/* The workflow canvas fills the viewport below the page head and toolbar, so
-   the graph gets the room; the floor keeps it usable on a short window. */
-.wf-canvas { height: calc(100vh - 290px); min-height: 480px; }
+/* The editor is one column the height of the view, so the canvas takes whatever
+   the toolbar (and the dry-run banner, when it is up) leaves instead of a magic
+   constant that only holds for one of them. The floor keeps it usable on a short
+   window; past that the page scrolls, as it always did. */
+.wf-page {
+    display: flex; flex-direction: column;
+    height: calc(100vh - var(--topbar-h) - var(--s8) - var(--s12));
+}
+.wf-canvas { flex: 1; min-height: 480px; }
 /* the step list is narrow: names and swatches only */
 .wf-canvas .dock-l { width: 190px; }
 .wf-canvas .dock-r { width: 330px; }

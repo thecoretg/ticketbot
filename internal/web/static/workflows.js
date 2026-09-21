@@ -229,20 +229,10 @@ function wfEdge(id) { return wf?.edges.find(e => e.id === id) || null }
 function renderWorkflowEditor() {
     const dirty = wfIsDirty()
 
-    setContent(`${backRow('workflows', 'Workflows', wf.board_name || wf.name)}
-    <header class="page-head row spread wrap gap4" style="margin-bottom:var(--s4)">
-        <div>
-            <h1 class="page-title">${esc(wf.board_name || wf.name)}</h1>
-            <p class="page-sub">Every new or updated ticket on this board enters at a trigger and follows the wires. Drag steps in from the list; drag a port to wire it.</p>
-        </div>
-        <div class="row gap3 wrap">
-            <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
-                <span class="dirty-dot"></span><span class="cell-sub">Unsaved changes</span>
-            </span>
-            ${editOnly(`<button id="wf-save" class="btn ${dirty ? 'btn-primary' : 'btn-default'}" onclick="saveWorkflow()" ${dirty ? '' : 'disabled'}>Save</button>`)}
-        </div>
-    </header>
-    ${appConfig?.master_dry_run
+    // No head and no trail: the topbar crumbs already say Workflows / this board,
+    // and the canvas wants the height. What the blurb used to explain now lives in
+    // the canvas hint bar, and saving rides at the end of the toolbar.
+    setContent(`<div class="wf-page">${appConfig?.master_dry_run
         ? `<div class="banner warn">${icon('alert')}<div><b>Master dry run is on.</b> This workflow will not write to ConnectWise or send Webex messages, whatever its own dry-run setting says.</div></div>`
         : ''}
 
@@ -260,6 +250,10 @@ function renderWorkflowEditor() {
         <button class="btn btn-default btn-sm" onclick="wfSimulate()">${icon('play')}Run</button>
         <span id="wf-arrange-undo">${cv.undo ? `<button class="btn btn-ghost btn-sm" onclick="cvUndoArrange()">${icon('undo')}Undo arrange</button>` : ''}</span>
         <button class="btn btn-default btn-sm" onclick="cvArrange()">${icon('branch')}Auto-arrange</button>
+        <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
+            <span class="dirty-dot"></span><span class="cell-sub">Unsaved changes</span>
+        </span>
+        ${editOnly(`<button id="wf-save" class="btn ${dirty ? 'btn-primary' : 'btn-default'}" onclick="saveWorkflow()" ${dirty ? '' : 'disabled'}>Save</button>`)}
     </div>
 
     <div class="canvas wf-canvas" id="cv">
@@ -276,6 +270,7 @@ function renderWorkflowEditor() {
             <button class="icon-btn" onclick="cvFit()" aria-label="Fit the whole flow in view">${icon('fit')}</button>
         </div>
         <div class="dock-bar br" id="cv-hint"></div>
+    </div>
     </div>`)
 
     cvMount()
@@ -810,7 +805,7 @@ function cvRenderGhost() {
 function cvRenderHint() {
     const el = document.getElementById('cv-hint')
     if (!el) return
-    let hint = 'drag to pan · scroll to pan · pinch or ⌘-scroll to zoom'
+    let hint = 'drag a step in from the list · drag to pan · pinch or ⌘-scroll to zoom'
     if (cv.drag?.type === 'link') hint = 'drop on a step to connect, or on empty canvas to disconnect'
     else if (cv.drag?.type === 'pal') hint = 'release over the canvas to place it'
     else if (cv.run) hint = 'simulated path highlighted — nothing was sent'
