@@ -63,3 +63,22 @@
    order, so the numbers matter. */
 .steps { list-style: decimal; padding-left: var(--s6); }
 .steps li::marker { color: var(--muted); }
+
+/* The workflow canvas fills the viewport below the page head and toolbar, so
+   the graph gets the room; the floor keeps it usable on a short window. */
+.wf-canvas { height: calc(100vh - 290px); min-height: 480px; }
+/* the step list is narrow: names and swatches only */
+.wf-canvas .dock-l { width: 190px; }
+.wf-canvas .dock-r { width: 330px; }
+/* both docks stop above the HUD row so the zoom cluster never sits under a panel */
+.wf-canvas .dock { bottom: 46px; }
+/* the inspector's card head is compact: the panel is narrow and the kind label is short */
+.wf-canvas .dock .card-head { padding: var(--s3) var(--s4); }
+.wf-canvas .dock .card-body { padding: 0 var(--s4) var(--s4); }
+/* the simulation trace reuses the ticket-history event rail inside the dock */
+.wf-canvas .dock .events { padding-left: var(--s5); }
+/* the toolbar above the canvas is a bare row, not a card's toolbar */
+.wf-toolbar { padding: 0; margin-bottom: var(--s3); }
+.wf-toolbar .input.wf-name { max-width: 240px; }
+.wf-toolbar .input.wf-ticket { width: 110px; }
+/* the workflow list's step count is a plain number */

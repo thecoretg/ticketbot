@@ -134,7 +134,7 @@ function deleteList(id, fromDetail = false) {
                 else loadListIndex()
             } catch (e) {
                 if (e.status === 409 && e.data?.references?.length) {
-                    const used = e.data.references.map(r => `${r.workflow_name} / ${r.rule_name}`).join(', ')
+                    const used = e.data.references.map(r => `${r.workflow_name} / ${r.node_title}`).join(', ')
                     toast(`This list is used by: ${used}. Remove those conditions first.`, 'error')
                     return
                 }
@@ -164,7 +164,7 @@ function renderListDetail(d) {
     const noun   = count === 1 ? info.label.toLowerCase() : info.plural.toLowerCase()
     const usedBy = d.used_by?.length
         ? `<div class="banner">${icon('info')}<div>Used by ${d.used_by.map(r =>
-            `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${r.workflow_id})" data-tip="${esc(r.board_name || '')}">${esc(r.workflow_name)} / ${esc(r.rule_name)}</button>`).join(' ')}</div></div>`
+            `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${r.workflow_id})" data-tip="${esc(r.board_name || '')}">${esc(r.workflow_name)} / ${esc(r.node_title)}</button>`).join(' ')}</div></div>`
         : ''
 
     const detail = !!info.detail_label  // e.g. a contact's company

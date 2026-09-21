@@ -44,6 +44,11 @@ const P = {
   grip:     '<circle cx="9" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.5" fill="currentColor" stroke="none"/>',
   chevUp:   '<path d="m6 14 6-6 6 6"/>',
   chevDn:   '<path d="m6 10 6 6 6-6"/>',
+  branch:   '<path d="M12 3v5"/><path d="M12 8c0 3-6 3-6 6v3"/><path d="M12 8c0 3 6 3 6 6v3"/>',
+  ban:      '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>',
+  fit:      '<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>',
+  undo:     '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  panelL:   '<path d="M19 12H5M12 19l-7-7 7-7"/>',
 };
 
 export const icon = (name, cls = '') =>

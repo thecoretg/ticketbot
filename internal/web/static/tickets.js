@@ -219,8 +219,9 @@ function tkToggleNoops(on) {
 }
 
 // tkIsNoop reports events that only say "nothing happened": a board with no workflow, a disabled
-// workflow, a run where no rule matched, or a self-authored update the loop guard skipped.
-// Anything that ran, would run (dry run) or failed stays visible.
+// workflow, a run that reached no action step, or a self-authored update the loop guard skipped.
+// Anything that ran, would run (dry run) or failed stays visible. Runs recorded before the graph
+// editor carry `rules` instead of `steps`.
 function tkIsNoop(ev) {
     const p = ev.payload || {}
     switch (ev.kind) {
@@ -228,6 +229,7 @@ function tkIsNoop(ev) {
         return true
     case 'workflow':
         if (!p.found || !p.enabled) return true
+        if (p.steps) return !p.steps.some(s => s.error || (s.kind !== 'trigger' && s.kind !== 'if' && !s.skipped))
         return !(p.rules || []).some(r => r.matched || r.error)
     }
     return false
@@ -319,15 +321,17 @@ function tkEventHTML(ev) {
         title = p.found ? `Workflow: ${esc(p.workflow_name || '')}` : 'No workflow for this board'
         tone  = p.found && p.enabled ? 'accent' : ''
         if (p.found && !p.enabled) body = '<div class="event-detail">Workflow is disabled</div>'
+        else if (p.steps?.length) body = `<div class="row wrap gap3">${p.steps.map(tkStepChip).join('')}</div>`
+        else if (p.steps) body = `<div class="event-detail">No trigger listens for a ${esc(p.event || '')} ticket</div>`
         else if (p.rules?.length) body = `<div class="row wrap gap3">${p.rules.map(tkRuleChip).join('')}</div>`
         break
     case 'action':
-        title = `${esc(p.rule_name || 'Rule')} · ${tkActionLabel(p.kind)}`
+        title = `${esc(p.title || p.rule_name || 'Step')} · ${tkActionLabel(p.kind)}`
         tone  = p.result === 'error' ? 'bad' : 'warn'
         body  = tkActionBody(p, ev.dry_run)
         break
     case 'notification':
-        title = `${esc(p.rule_name || 'Notify')} → ${esc(p.recipient_name || '?')}`
+        title = `${esc(p.title || p.rule_name || 'Notify')} → ${esc(p.recipient_name || '?')}`
         tone  = p.result === 'error' ? 'bad' : 'warn'
         body  = tkNotificationBody(p, ev.dry_run)
         break
@@ -381,6 +385,20 @@ function tkDiffTableHTML(changes) {
     }</tbody></table>`
 }
 
+// tkStepChip summarizes one node the run visited: what it decided, or why it was skipped.
+function tkStepChip(s) {
+    let variant = '', label = ''
+    if (s.error)                     { variant = 'bad'; label = 'error' }
+    else if (s.skipped === 'joined') { label = 'already ran' }
+    else if (s.skipped)              { label = s.skipped }
+    else if (s.kind === 'trigger')   { variant = 'accent'; label = 'fired' }
+    else if (s.kind === 'if')        { variant = s.matched ? 'ok' : ''; label = s.matched ? 'match' : 'else' }
+    else                             { variant = 'ok'; label = 'ran' }
+    const tip = s.error ? ` data-tip="${esc(s.error)}"` : ''
+    return `<span class="row gap2"${tip}><span class="num muted">${s.no}</span><span class="cell-sub">${esc(s.title)}</span>${badgeTag(label, variant)}</span>`
+}
+
+// tkRuleChip renders a step from a run recorded before the graph editor (payload.rules).
 function tkRuleChip(r) {
     let variant = '', label = 'no match'
     if (r.error)        { variant = 'bad'; label = 'error' }

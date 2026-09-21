@@ -1,5 +1,10 @@
 // ─────────────────────────────────────────────────────────
 // Workflows
+//
+// A workflow is a graph: trigger nodes accept ticket events, if nodes branch on a condition, action
+// nodes do something, and edges wire an output port to a node's input. The editor is a pannable,
+// zoomable canvas (cv*) with a step list docked left and an inspector docked right. Node positions
+// are part of the document and are saved with it.
 // ─────────────────────────────────────────────────────────
 let wf           = null   // working copy of the workflow being edited
 let wfOriginal   = ''     // JSON.stringify(wf) at load/save time, for dirty compare
@@ -9,15 +14,35 @@ let wfMembers    = []     // /cw/members cache
 let wfPriorities = []     // /cw/priorities cache (live from ConnectWise)
 let wfPlaceholders = []   // /workflows/placeholders cache
 let wfSimTicket  = ''     // last simulated ticket number, kept across re-renders
+let wfSimAsNew   = false  // last simulated event
 
-const WF_TRIGGERS = [['create', 'New tickets'], ['update', 'Updated tickets'], ['both', 'New and updated']]
-const WF_KINDS    = [
-    ['notify', 'Notify'], ['add_note', 'Add note'], ['skip_notify', 'Skip notify'],
-    ['set_status', 'Set status'], ['set_priority', 'Set priority'], ['set_owner', 'Set owner'],
-    ['add_resource', 'Add resource'], ['patch', 'Patch ticket (JSON)'],
-]
-const WF_TARGETS  = [['room', 'Webex room'], ['person', 'Webex person'], ['resources_owner', 'Ticket resources & owner']]
+const WF_TARGETS = [['room', 'Webex room'], ['person', 'Webex person'], ['resources_owner', 'Ticket resources & owner']]
 const WF_PATCH_EXAMPLE = '[\n  { "op": "replace", "path": "severity", "value": "High" }\n]'
+
+// Node geometry, shared with ui.css: cards are 248 wide and a fixed height per kind, so the
+// ports can be placed from constants. A card that sized itself from its content would put every
+// wire endpoint off by the difference.
+const CV_W = 248, CV_H = 88, CV_IF_H = 136
+const CV_ZOOM_MIN = 0.3, CV_ZOOM_MAX = 1.8
+
+// CV_KINDS is what the canvas knows about each node kind: its label, tone, icon and where it sits
+// in the step list. Every key is a NodeKind the server accepts.
+const CV_KINDS = {
+    trigger:      { label: 'Trigger',      tone: 't-start',  icon: 'bolt',   group: 'Triggers',      hint: 'Where a ticket event enters the flow' },
+    if:           { label: 'If',           tone: 't-logic',  icon: 'branch', group: 'Logic',         hint: 'Branch on a condition' },
+    skip_notify:  { label: 'Skip notify',  tone: 't-stop',   icon: 'ban',    group: 'Logic',         hint: 'Silence the notifies after it on this path' },
+    notify:       { label: 'Notify',       tone: 't-notify', icon: 'bell',   group: 'Notify',        hint: 'Webex room, person or the ticket’s people' },
+    add_note:     { label: 'Add note',     tone: 't-notify', icon: 'book',   group: 'Notify',        hint: 'Write a ticket note' },
+    set_status:   { label: 'Set status',   tone: 't-write',  icon: 'edit',   group: 'Ticket writes', hint: 'Move the ticket to a status' },
+    set_priority: { label: 'Set priority', tone: 't-write',  icon: 'edit',   group: 'Ticket writes', hint: 'Re-rank the ticket' },
+    set_owner:    { label: 'Set owner',    tone: 't-write',  icon: 'edit',   group: 'Ticket writes', hint: 'Assign the ticket' },
+    add_resource: { label: 'Add resource', tone: 't-write',  icon: 'edit',   group: 'Ticket writes', hint: 'Append a member to the resources' },
+    patch:        { label: 'Patch',        tone: 't-write',  icon: 'edit',   group: 'Ticket writes', hint: 'Raw ConnectWise JSON patch' },
+}
+const CV_GROUPS = ['Triggers', 'Logic', 'Notify', 'Ticket writes']
+
+function cvKind(kind) { return CV_KINDS[kind] || { label: kind, tone: 't-write', icon: 'edit', group: '', hint: '' } }
+function cvIsAction(kind) { return kind !== 'trigger' && kind !== 'if' }
 
 async function loadWorkflows(sub) {
     if (sub && /^\d+$/.test(sub)) {
@@ -45,7 +70,7 @@ function renderWorkflowList(list) {
         ? `<div class="banner warn">${icon('alert')}<div><b>Master dry run is on.</b> Every workflow runs as a dry run — nothing is written or sent. Turn it off under Config.</div></div>`
         : ''
 
-    const thead = `<th>Board</th><th class="c">Enabled</th><th>Mode</th><th class="r">Rules</th><th class="r">Actions</th>`
+    const thead = `<th>Board</th><th class="c">Enabled</th><th>Mode</th><th class="r">Steps</th><th class="r">Actions</th>`
     const rows  = list.map(w => `<tr class="clickable" onclick="openWorkflow(${w.id})">
         <td>
             <div class="cell-primary">${esc(w.board_name || w.name)}</div>
@@ -53,7 +78,7 @@ function renderWorkflowList(list) {
         </td>
         <td class="c">${w.enabled ? badgeTag('Enabled', 'ok') : badgeTag('Disabled', '')}</td>
         <td>${w.dry_run ? badgeTag('Dry run', 'warn') : (appConfig?.master_dry_run ? badgeTag('Dry run (master)', 'warn') : badgeTag('Live', 'ok'))}</td>
-        <td class="r num">${(w.rules || []).length}</td>
+        <td class="r num">${(w.nodes || []).length}</td>
         <td class="r nowrap" onclick="event.stopPropagation()">
             <button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})">${icon('edit')}Open</button>
             ${deleteButton(`deleteWorkflow(${w.id})`)}
@@ -61,7 +86,7 @@ function renderWorkflowList(list) {
     </tr>`)
 
     setContent(pageHead('Workflows',
-        'One workflow per board. Its rules run top to bottom for every new or updated ticket.',
+        'One workflow per board. Every new or updated ticket enters at a trigger and follows the wires.',
         editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
     banner +
     tableCard(thead, rows, {
@@ -77,7 +102,8 @@ function openWorkflow(id) {
 }
 
 // showNewWorkflowModal lets the admin pick a board without a workflow; preselect chooses one up front
-// (used by the "Create workflow" button on a ticket).
+// (used by the "Create workflow" button on a ticket). A new workflow starts with one trigger so the
+// canvas has somewhere to begin.
 async function showNewWorkflowModal(preselect = null) {
     let boards, existing
     try {
@@ -92,12 +118,13 @@ async function showNewWorkflowModal(preselect = null) {
         <div class="field">
             <label for="wf-new-board">Board</label>
             <select class="select" id="wf-new-board">${free.map(b => `<option value="${b.id}"${b.id === preselect ? ' selected' : ''}>${esc(b.name)}</option>`).join('')}</select>
-            <span class="hint">A workflow starts with no rules. Add them in the editor and save.</span>
+            <span class="hint">A workflow starts with one trigger and nothing wired to it. Add steps on the canvas and save.</span>
         </div>`,
     async () => {
         const boardID = parseInt(document.getElementById('wf-new-board').value)
         try {
-            const created = await api('POST', '/workflows', { board_id: boardID })
+            const trigger = cvNewNode('trigger', 0, 0)
+            const created = await api('POST', '/workflows', { board_id: boardID, nodes: [wfNodeForServer(trigger)], edges: [] })
             closeModal()
             openWorkflow(created.id)
         } catch (e) { toast(e.message, 'error') }
@@ -107,11 +134,11 @@ async function showNewWorkflowModal(preselect = null) {
 function deleteWorkflow(id) {
     const w = wfList.find(x => x.id === id)
     const name = w ? (w.board_name || w.name) : `workflow ${id}`
-    const rules = w?.rules?.length || 0
+    const steps = w?.nodes?.length || 0
     confirmModal({
         title: 'Delete this workflow?',
         body: `<b>${esc(name)}</b>Tickets on this board stop being processed: no notifications, notes or ticket updates.${
-            rules ? ` Its ${rules} rule${rules === 1 ? '' : 's'} ${rules === 1 ? 'is' : 'are'} deleted too.` : ''}`,
+            steps ? ` Its ${steps} step${steps === 1 ? '' : 's'} ${steps === 1 ? 'is' : 'are'} deleted too.` : ''}`,
         confirmLabel: 'Delete workflow',
         onConfirm: async () => {
             try {
@@ -144,11 +171,14 @@ async function loadWorkflowEditor(id) {
         wfStatuses   = (statuses || []).filter(s => !s.deleted && !s.inactive)
         wfPriorities = priorities || []
         wf = wfNormalize(w)
-        await Promise.all(wf.rules.map(wfLoadRuleUI))
-        await wfResolveNames(wf.rules)
+        const ifs = wf.nodes.filter(n => n.kind === 'if')
+        await Promise.all(ifs.map(wfLoadNodeUI))
+        await wfResolveNames(ifs)
         wfOriginal = JSON.stringify(wfStrip(wf))
         tabGuard = wfGuard
+        cvReset()
         renderWorkflowEditor()
+        cvFit()
         setCrumbHere(wf.board_name || wf.name)
     } catch (e) {
         setContent(backRow('workflows', 'Workflows') + pageHead('Workflow') + errorState(e.message))
@@ -156,10 +186,13 @@ async function loadWorkflowEditor(id) {
 }
 
 function wfNormalize(w) {
-    w.rules = w.rules || []
-    for (const r of w.rules) {
-        r.actions = r.actions || []
-        r.condition = r.condition || ''
+    w.nodes = w.nodes || []
+    w.edges = w.edges || []
+    for (const n of w.nodes) {
+        n.x = Math.round(n.x || 0)
+        n.y = Math.round(n.y || 0)
+        if (n.kind === 'if') n.condition = n.condition || ''
+        if (n.kind === 'trigger') n.events = n.events || []
     }
     return w
 }
@@ -167,7 +200,7 @@ function wfNormalize(w) {
 // wfStrip returns a copy without editor-only state (the condition builder's rows).
 function wfStrip(w) {
     const copy = JSON.parse(JSON.stringify(w))
-    for (const r of copy.rules) delete r._ui
+    for (const n of copy.nodes) delete n._ui
     return copy
 }
 
@@ -190,19 +223,17 @@ function wfGuard(retry) {
 }
 wfGuard.isDirty = wfIsDirty
 
-function wfBack() {
-    switchTab('workflows')
-}
+function wfNode(id) { return wf?.nodes.find(n => n.id === id) || null }
+function wfEdge(id) { return wf?.edges.find(e => e.id === id) || null }
 
 function renderWorkflowEditor() {
-    const rules = wf.rules.map((r, i) => wfRuleCardHTML(r, i)).join('')
     const dirty = wfIsDirty()
 
     setContent(`${backRow('workflows', 'Workflows', wf.board_name || wf.name)}
-    <header class="page-head row spread wrap gap4">
+    <header class="page-head row spread wrap gap4" style="margin-bottom:var(--s4)">
         <div>
             <h1 class="page-title">${esc(wf.board_name || wf.name)}</h1>
-            <p class="page-sub">Rules run top to bottom for every new or updated ticket on this board.</p>
+            <p class="page-sub">Every new or updated ticket on this board enters at a trigger and follows the wires. Drag steps in from the list; drag a port to wire it.</p>
         </div>
         <div class="row gap3 wrap">
             <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
@@ -215,228 +246,757 @@ function renderWorkflowEditor() {
         ? `<div class="banner warn">${icon('alert')}<div><b>Master dry run is on.</b> This workflow will not write to ConnectWise or send Webex messages, whatever its own dry-run setting says.</div></div>`
         : ''}
 
-    <div class="card card-pad">
-        <div class="form-row">
-            <div><h4>Workflow name</h4><p class="desc">Shown in the ticket history.</p></div>
-            <div><input class="input" style="max-width:320px" type="text" value="${esc(wf.name)}" oninput="wfSet('name', this.value)" aria-label="Workflow name"></div>
-        </div>
-        <div class="form-row">
-            <div><h4>Enabled</h4><p class="desc">Process tickets on this board.</p></div>
-            <div>${toggle(`onchange="wfSet('enabled', this.checked)"`, wf.enabled, { tip: 'Workflow enabled' })}</div>
-        </div>
-        <div class="form-row">
-            <div><h4>Dry run</h4><p class="desc">Record what would happen: no ConnectWise writes, no Webex messages.</p></div>
-            <div>${toggle(`onchange="wfSet('dry_run', this.checked)"`, wf.dry_run, { tip: 'Dry run' })}</div>
-        </div>
+    <div class="toolbar wf-toolbar">
+        <input class="input wf-name" type="text" value="${esc(wf.name)}" oninput="wfSet('name', this.value)" aria-label="Workflow name" data-tip="Workflow name, shown in the ticket history" data-tip-pos="bottom">
+        ${toggle(`onchange="wfSet('enabled', this.checked)"`, wf.enabled, { label: 'Enabled' })}
+        ${toggle(`onchange="wfSet('dry_run', this.checked)"`, wf.dry_run, { label: 'Dry run' })}
+        <span class="grow"></span>
+        <span class="cell-sub">Simulate</span>
+        <input type="number" id="sim-ticket" class="input wf-ticket" placeholder="Ticket #" min="1" value="${esc(wfSimTicket)}" aria-label="Ticket number to simulate">
+        <select id="sim-mode" class="select" style="width:auto" aria-label="Simulate as">
+            <option value="update"${wfSimAsNew ? '' : ' selected'}>as an update</option>
+            <option value="create"${wfSimAsNew ? ' selected' : ''}>as a new ticket</option>
+        </select>
+        <button class="btn btn-default btn-sm" onclick="wfSimulate()">${icon('play')}Run</button>
+        <span id="wf-arrange-undo">${cv.undo ? `<button class="btn btn-ghost btn-sm" onclick="cvUndoArrange()">${icon('undo')}Undo arrange</button>` : ''}</span>
+        <button class="btn btn-default btn-sm" onclick="cvArrange()">${icon('branch')}Auto-arrange</button>
     </div>
 
-    <div class="section-head">
-        <h3>Simulate</h3>
-        <p>Runs the rules as shown — saved or not — against a stored ticket. Nothing is sent or written.</p>
-    </div>
-    <div class="card card-pad">
-        <div class="row gap3 wrap">
-            <input type="number" id="sim-ticket" class="input" style="max-width:120px" placeholder="Ticket #" min="1" value="${esc(wfSimTicket)}" aria-label="Ticket number to simulate">
-            <select id="sim-mode" class="select" style="max-width:190px" aria-label="Simulate as">
-                <option value="update">as an update</option>
-                <option value="create">as a new ticket</option>
-            </select>
-            <button class="btn btn-default" onclick="wfSimulate()">${icon('play')}Run simulation</button>
+    <div class="canvas wf-canvas" id="cv">
+        <div class="plane" id="cv-plane">
+            <svg class="wires" id="cv-wires" viewBox="-4000 -4000 8000 8000" aria-hidden="true"></svg>
+            <div id="cv-nodes"></div>
         </div>
-        <div id="sim-result"></div>
-    </div>
-
-    <div class="section-head">
-        <h3>Rules</h3>
-        <p>${wf.rules.length} rule${wf.rules.length === 1 ? '' : 's'}, evaluated in order</p>
-    </div>
-    <div id="rule-list" class="rule-list">${rules || emptyState('No rules yet',
-        'A rule is a condition plus the actions to take when a ticket matches it.',
-        `<button class="btn btn-default btn-sm" onclick="wfAddRule()">${icon('plus')}Add the first rule</button>`, 'bolt')}</div>
-    <div style="margin-top:var(--s4)">
-        <button class="btn btn-default btn-sm" onclick="wfAddRule()">${icon('plus')}Add rule</button>
+        <div id="cv-rail"></div>
+        <div id="cv-side"></div>
+        <div class="dock-bar bl">
+            <button class="icon-btn" onclick="cvZoomBy(0.8)" aria-label="Zoom out">${icon('minus')}</button>
+            <span class="pct" id="cv-pct">100%</span>
+            <button class="icon-btn" onclick="cvZoomBy(1.25)" aria-label="Zoom in">${icon('plus')}</button>
+            <button class="icon-btn" onclick="cvFit()" aria-label="Fit the whole flow in view">${icon('fit')}</button>
+        </div>
+        <div class="dock-bar br" id="cv-hint"></div>
     </div>`)
-    wfMountReorder()
+
+    cvMount()
+    cvRenderGraph()
+    cvRenderRail()
+    cvRenderSide()
+    cvApplyView()
 }
 
-// wfRuleSummary is what a collapsed rule says about itself: the three things
-// you would otherwise open it to find out.
-function wfRuleSummary(r) {
-    const trigger = (WF_TRIGGERS.find(([v]) => v === r.trigger) || [null, r.trigger])[1]
-    const rows    = r._ui?.rows?.length || 0
-    const conds   = r._ui?.mode === 'advanced'
-        ? ((r.condition || '').trim() ? 'advanced condition' : 'no conditions')
-        : (rows ? `${rows} condition${rows === 1 ? '' : 's'}` : 'no conditions')
-    const acts = r.actions.length
-    return `${trigger} \u00b7 ${conds} \u00b7 ${acts} action${acts === 1 ? '' : 's'}`
+// ── Canvas state ─────────────────────────────────────────
+const cv = {
+    el: null, zoom: 1, tx: 40, ty: 40,
+    sel: null,       // selected node id
+    selEdge: null,   // selected edge id
+    drag: null,      // { type: pan|node|link|pal, ... }
+    rail: true,      // step list open
+    run: null,       // simulation { ticket, asNew, res, steps, step }
+    timers: [],
+    undo: null,      // node positions before the last auto-arrange
+    errNode: null,   // node the last server validation error pointed at
+    ghost: null,     // { kind, x, y } while a palette drag is over the canvas
+    link: null,      // { x, y } pointer position in plane space during a link drag
 }
 
-// Collapsing is UI state, not an edit: _ui is stripped from the dirty compare.
-function wfToggleRule(i) {
-    const r = wf.rules[i]
-    r._ui = r._ui || wfDefaultUI()
-    r._ui.open = !r._ui.open
-    wfRerenderRule(i)
+function cvReset() {
+    cvClearTimers()
+    Object.assign(cv, { el: null, zoom: 1, tx: 40, ty: 40, sel: null, selEdge: null, drag: null, run: null, undo: null, errNode: null, ghost: null, link: null })
 }
 
-// wfMoveRuleTo is the drop half of a drag; wfMoveRule stays for the up/down
-// buttons, which are the keyboard path.
-function wfMoveRuleTo(from, to) {
-    if (from === to) return
-    wf.rules.splice(to, 0, wf.rules.splice(from, 1)[0])
-    renderWorkflowEditor()
-    wfMarkDirty()
+function cvClearTimers() {
+    cv.timers.forEach(clearTimeout)
+    cv.timers = []
 }
 
-// The kit's reorder helper reports a move and never touches the DOM order, so
-// the list stays rendered from wf.rules. A full re-render replaces #rule-list,
-// so the previous listeners are dropped first.
-let wfReorderStop = null
-function wfMountReorder() {
-    wfReorderStop?.()
-    wfReorderStop = null
-    const list = document.getElementById('rule-list')
-    if (!list || !canEdit() || !window.reorderList) return
-    wfReorderStop = window.reorderList(list, { item: '.rule-card', handle: '.rule-grip', onMove: wfMoveRuleTo })
+function cvH(n) { return n.kind === 'if' ? CV_IF_H : CV_H }
+function cvPorts(n) { return n.kind === 'if' ? ['yes', 'no'] : ['out'] }
+function cvOutPt(n, port) {
+    const h = cvH(n)
+    if (n.kind !== 'if') return { x: n.x + CV_W / 2, y: n.y + h }
+    return port === 'yes' ? { x: n.x + 62, y: n.y + h } : { x: n.x + 186, y: n.y + h }
+}
+function cvInPt(n) { return { x: n.x + CV_W / 2, y: n.y } }
+function cvCurve(p, q) {
+    const dy = Math.max(30, Math.abs(q.y - p.y) * 0.45)
+    return `M ${p.x} ${p.y} C ${p.x} ${p.y + dy}, ${q.x} ${q.y - dy}, ${q.x} ${q.y}`
 }
 
-function wfRuleCardHTML(r, i) {
-    const last = wf.rules.length - 1
-    const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('')
+// cvPt converts a pointer event to plane coordinates.
+function cvPt(e) {
+    const r = cv.el.getBoundingClientRect()
+    return { x: (e.clientX - r.left - cv.tx) / cv.zoom, y: (e.clientY - r.top - cv.ty) / cv.zoom }
+}
 
-    const open = !!r._ui?.open
+function cvHitNode(p) {
+    for (let i = wf.nodes.length - 1; i >= 0; i--) {
+        const n = wf.nodes[i]
+        if (p.x >= n.x && p.x <= n.x + CV_W && p.y >= n.y && p.y <= n.y + cvH(n)) return n
+    }
+    return null
+}
 
-    return `<article class="rule-card${r.enabled ? '' : ' is-disabled'}${open ? ' is-open' : ''}" id="rule-${i}">
-        <div class="rule-head">
-            ${editOnly(`<button class="rule-grip" aria-label="Drag to reorder rule ${i + 1}">${icon('grip')}</button>`)}
-            <div class="order-btns">
-                <button onclick="wfMoveRule(${i}, -1)" ${i === 0 ? 'disabled' : ''} aria-label="Move rule ${i + 1} up">${icon('chevUp')}</button>
-                <button onclick="wfMoveRule(${i}, 1)" ${i === last ? 'disabled' : ''} aria-label="Move rule ${i + 1} down">${icon('chevDn')}</button>
-            </div>
-            <span class="rule-index num">${i + 1}</span>
-            <input type="text" class="rule-name" value="${esc(r.name)}" placeholder="Rule name" aria-label="Rule ${i + 1} name" oninput="wfSetRule(${i}, 'name', this.value)">
-            ${r.stop_processing ? badgeTag('stops chain', 'outline') : ''}
-            <span class="rule-sum cell-sub">${esc(wfRuleSummary(r))}</span>
-            ${toggle(`onchange="wfSetRule(${i}, 'enabled', this.checked); document.getElementById('rule-${i}').classList.toggle('is-disabled', !this.checked)"`, r.enabled, { tip: 'Rule enabled' })}
-            ${deleteButton(`wfDeleteRule(${i})`)}
-            <button class="rule-toggle icon-btn" onclick="wfToggleRule(${i})" aria-expanded="${open}"
-                aria-label="${open ? 'Collapse' : 'Expand'} rule ${i + 1}">${icon('chevDn')}</button>
+// the docks sit over the canvas, so pointer events inside them are not canvas gestures
+function cvInChrome(t) { return !!(t && t.closest && t.closest('.dock, .dock-bar')) }
+
+// ── Mount and events ─────────────────────────────────────
+function cvMount() {
+    cv.el = document.getElementById('cv')
+    cv.el.addEventListener('pointerdown', cvOnDown)
+    cv.el.addEventListener('wheel', cvOnWheel, { passive: false })
+    cv.el.addEventListener('click', cvOnClick)
+    cv.el.addEventListener('dblclick', cvOnDblClick)
+    window.addEventListener('pointermove', cvOnMove)
+    window.addEventListener('pointerup', cvOnUp)
+    window.addEventListener('pointercancel', cvOnUp)
+    document.addEventListener('keydown', cvOnKey)
+}
+
+// cvUnmounted reports whether the canvas has left the page; the window listeners then stand down.
+function cvUnmounted() {
+    if (cv.el && document.body.contains(cv.el)) return false
+    window.removeEventListener('pointermove', cvOnMove)
+    window.removeEventListener('pointerup', cvOnUp)
+    window.removeEventListener('pointercancel', cvOnUp)
+    document.removeEventListener('keydown', cvOnKey)
+    cv.el = null
+    return true
+}
+
+function cvOnDown(e) {
+    if (e.button !== 0) return
+    const t = e.target
+    if (cvInChrome(t)) return
+
+    const port = t.closest?.('.port')
+    if (port && !port.classList.contains('inp')) {
+        if (!canEdit()) return
+        e.preventDefault()
+        cvGrabPort(port.dataset.portOf, port.dataset.port, e)
+        return
+    }
+    if (t.closest?.('.wirex, .wirehit')) return
+    const node = t.closest?.('.node')
+    if (node) {
+        e.preventDefault()
+        cvGrabNode(node.dataset.node, e)
+        return
+    }
+    e.preventDefault()
+    cv.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false }
+    cv.el.classList.add('panning')
+    cvDragClass('drag-pan')
+}
+
+function cvOnClick(e) {
+    const t = e.target
+    const hit = t.closest?.('.wirehit')
+    if (hit) { cvSelectEdge(hit.dataset.edge); return }
+    if (t.closest?.('.wirex')) { cvCutEdge(); return }
+}
+
+// double-clicking a step in the list appends it below the selection
+function cvOnDblClick(e) {
+    const pal = e.target.closest?.('.pal')
+    if (pal && canEdit()) cvAppend(pal.dataset.kind)
+}
+
+function cvOnKey(e) {
+    if (cvUnmounted()) return
+    const tag = document.activeElement?.tagName
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable
+    if (e.key === 'Escape') {
+        if (cv.run) cvClearRun()
+        else if (cv.sel || cv.selEdge) cvDeselect()
+        return
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !typing && canEdit()) {
+        if (cv.selEdge) { e.preventDefault(); cvCutEdge() }
+        else if (cv.sel) { e.preventDefault(); cvDeleteNode(cv.sel) }
+    }
+}
+
+function cvOnWheel(e) {
+    if (cvInChrome(e.target)) return
+    e.preventDefault()
+    const r = cv.el.getBoundingClientRect()
+    const mx = e.clientX - r.left, my = e.clientY - r.top
+    if (e.ctrlKey || e.metaKey) {
+        cvZoomAt(cv.zoom * Math.exp(-e.deltaY * 0.012), mx, my)
+    } else {
+        cv.tx -= e.deltaX
+        cv.ty -= e.deltaY
+        cvApplyView()
+    }
+}
+
+function cvGrabNode(id, e) {
+    const n = wfNode(id)
+    if (!n) return
+    cvSelect(id, { render: false })
+    cv.drag = canEdit()
+        ? { type: 'node', id, sx: e.clientX, sy: e.clientY, ox: n.x, oy: n.y, moved: false }
+        : { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false, fromNode: true }
+    cvRenderGraph()
+    cvRenderSide()
+    cvDragClass(cv.drag.type === 'node' ? 'drag-node' : 'drag-pan')
+}
+
+// Dragging an output port picks up whatever was attached to it, so pulling a link off and
+// dropping it on empty canvas is how you disconnect.
+function cvGrabPort(id, port, e) {
+    const n = wfNode(id)
+    if (!n) return
+    const had = wf.edges.find(x => x.from === id && x.port === port)
+    wf.edges = wf.edges.filter(x => !(x.from === id && x.port === port))
+    cv.selEdge = null
+    cv.link = cvPt(e)
+    cv.drag = { type: 'link', from: id, port, had: !!had }
+    cvDragClass('drag-link')
+    cvRenderGraph()
+}
+
+// No preventDefault here: it would also cancel the click and dblclick the same press produces,
+// and double-clicking a step is how it gets appended. .is-dragging keeps text unselected instead.
+function cvGrabPal(kind, e) {
+    if (!canEdit()) return
+    cv.drag = { type: 'pal', kind, started: false }
+    cv.ghost = null
+}
+
+function cvOnMove(e) {
+    const d = cv.drag
+    if (!d || cvUnmounted()) return
+
+    if (d.type === 'pan') {
+        cv.tx = d.otx + (e.clientX - d.sx)
+        cv.ty = d.oty + (e.clientY - d.sy)
+        d.moved = d.moved || Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > 3
+        cvApplyView()
+        return
+    }
+    if (d.type === 'node') {
+        const n = wfNode(d.id)
+        if (!n) return
+        const nx = Math.round(d.ox + (e.clientX - d.sx) / cv.zoom), ny = Math.round(d.oy + (e.clientY - d.sy) / cv.zoom)
+        if (!d.moved && Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) <= 3) return
+        d.moved = true
+        n.x = nx; n.y = ny
+        cvMoveNodeEls(n)
+        cvRenderWires()
+        return
+    }
+    const p = cvPt(e)
+    if (d.type === 'link') {
+        cv.link = p
+        cvRenderWires()
+        return
+    }
+    if (d.type === 'pal') {
+        // the gesture only becomes a drag once the pointer moves; a plain press stays a click
+        if (!d.started) { d.started = true; cvDragClass('drag-copy') }
+        const r = cv.el.getBoundingClientRect()
+        const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
+        cv.ghost = inside ? { kind: d.kind, x: Math.round(p.x) - CV_W / 2, y: Math.round(p.y) - CV_H / 2 } : null
+        cvRenderGhost()
+    }
+}
+
+function cvOnUp(e) {
+    const d = cv.drag
+    if (!d || cvUnmounted()) return
+    cv.drag = null
+    cv.el.classList.remove('panning')
+    cvDragClass(null)
+
+    if (d.type === 'link') {
+        const target = cvHitNode(cvPt(e))
+        const dupe = target && wf.edges.some(x => x.from === d.from && x.port === d.port && x.to === target.id)
+        // several links may land on one node: that is how two paths rejoin. A trigger has no
+        // input, so it can never be a target.
+        if (target && target.id !== d.from && target.kind !== 'trigger' && !dupe) {
+            wf.edges.push({ id: cvNewID(), from: d.from, to: target.id, port: d.port })
+        }
+        cv.link = null
+        cvRenderGraph()
+        wfMarkDirty()
+        return
+    }
+    if (d.type === 'pal') {
+        if (cv.ghost) cvDrop(d.kind, cv.ghost.x, cv.ghost.y)
+        cv.ghost = null
+        cvRenderGhost()
+        return
+    }
+    if (d.type === 'node') {
+        if (d.moved) { cvRenderGraph(); wfMarkDirty() }
+        return
+    }
+    if (d.type === 'pan' && !d.moved && !d.fromNode) {
+        cvDeselect()
+    }
+}
+
+// cvDragClass marks the shell for the length of a gesture: no text selection, one cursor, and the
+// docks stop taking pointer events so the drag passes over them.
+function cvDragClass(kind) {
+    const b = document.body
+    b.classList.remove('is-dragging', 'drag-link', 'drag-copy')
+    if (kind) b.classList.add('is-dragging')
+    if (kind === 'drag-link' || kind === 'drag-copy') b.classList.add(kind)
+    cvRenderHint()
+}
+
+// ── View ─────────────────────────────────────────────────
+function cvApplyView() {
+    const plane = document.getElementById('cv-plane')
+    if (!plane) return
+    plane.style.transform = `translate(${cv.tx}px, ${cv.ty}px) scale(${cv.zoom})`
+    const pct = document.getElementById('cv-pct')
+    if (pct) pct.textContent = `${Math.round(cv.zoom * 100)}%`
+}
+
+function cvZoomAt(z2, mx, my) {
+    z2 = Math.min(CV_ZOOM_MAX, Math.max(CV_ZOOM_MIN, z2))
+    const k = z2 / cv.zoom
+    cv.tx = mx - (mx - cv.tx) * k
+    cv.ty = my - (my - cv.ty) * k
+    cv.zoom = z2
+    cvApplyView()
+}
+
+function cvZoomBy(k) {
+    if (!cv.el) return
+    const r = cv.el.getBoundingClientRect()
+    cvZoomAt(cv.zoom * k, r.width / 2, r.height / 2)
+}
+
+// cvFit frames every node in the space the open docks leave, so nothing lands underneath them.
+function cvFit() {
+    if (!cv.el || !wf?.nodes.length) return
+    const r = cv.el.getBoundingClientRect()
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    for (const n of wf.nodes) {
+        x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y)
+        x1 = Math.max(x1, n.x + CV_W); y1 = Math.max(y1, n.y + cvH(n))
+    }
+    const left = (cv.rail ? 190 + 12 : 12) + 24
+    const right = (cv.sel || cv.run ? 330 + 12 : 12) + 24
+    const top = 24, bottom = 58
+    const w = Math.max(200, r.width - left - right)
+    const h = Math.max(160, r.height - top - bottom)
+    const z = Math.min(1.2, Math.max(CV_ZOOM_MIN, Math.min(w / (x1 - x0), h / (y1 - y0))))
+    cv.zoom = z
+    cv.tx = left + (w - (x1 - x0) * z) / 2 - x0 * z
+    cv.ty = top + (h - (y1 - y0) * z) / 2 - y0 * z
+    cvApplyView()
+}
+
+// ── Selection ────────────────────────────────────────────
+function cvSelect(id, opts = {}) {
+    cv.sel = id
+    cv.selEdge = null
+    if (cv.run) { cvClearTimers(); cv.run = null }
+    if (cv.errNode && cv.errNode !== id) cv.errNode = null
+    if (opts.render === false) return
+    cvRenderGraph()
+    cvRenderSide()
+}
+
+function cvSelectEdge(id) {
+    cv.selEdge = id
+    cv.sel = null
+    if (cv.run) { cvClearTimers(); cv.run = null }
+    cvRenderGraph()
+    cvRenderSide()
+}
+
+function cvDeselect() {
+    cv.sel = null
+    cv.selEdge = null
+    cvRenderGraph()
+    cvRenderSide()
+}
+
+function cvToggleRail() {
+    cv.rail = !cv.rail
+    cvRenderRail()
+    cvRenderHint()
+}
+
+// ── Graph rendering ──────────────────────────────────────
+// cvRenderGraph redraws every card, port, label and wire from wf. Drags move elements in place
+// (cvMoveNodeEls, cvRenderWires) and call this once on release.
+function cvRenderGraph() {
+    const host = document.getElementById('cv-nodes')
+    if (!host) return
+    const run = cv.run
+    const shown = run ? run.steps.slice(0, run.step) : []
+    const onPath = {}
+    for (const s of shown) if (!onPath[s.node_id]) onPath[s.node_id] = s.no
+    const nowId = shown.length ? shown[shown.length - 1].node_id : null
+
+    let html = ''
+    for (const n of wf.nodes) {
+        let cls = ''
+        if (n.kind === 'if') cls += 'isif '
+        if (n.id === cv.sel) cls += 'sel '
+        if (!n.enabled) cls += 'off '
+        if (n.id === cv.errNode) cls += 'err '
+        if (run) cls += onPath[n.id] ? (n.id === nowId ? 'now ' : 'hit ') : 'dim '
+        html += cvNodeHTML(n, cls, onPath[n.id] || 0)
+    }
+    for (const n of wf.nodes) {
+        if (n.kind !== 'trigger') {
+            const ip = cvInPt(n)
+            html += `<button class="port inp" data-port-of="${n.id}" data-port="in" style="left:${ip.x}px;top:${ip.y}px" tabindex="-1" aria-label="Input of ${esc(n.title)}"></button>`
+        }
+        for (const p of cvPorts(n)) {
+            const pt = cvOutPt(n, p)
+            const wired = wf.edges.some(e => e.from === n.id && e.port === p)
+            const tgt = cv.drag?.type === 'link' && cv.drag.from === n.id && cv.drag.port === p
+            const what = n.kind === 'if' ? (p === 'yes' ? 'match' : 'else') : 'output'
+            html += `<button class="port${wired ? ' wired' : ''}${tgt ? ' tgt' : ''}" data-port-of="${n.id}" data-port="${p}" style="left:${pt.x}px;top:${pt.y}px" aria-label="Drag to connect the ${what} port of ${esc(n.title)}"></button>`
+            if (n.kind === 'if') html += `<span class="wlabel${p === 'yes' ? ' yes' : ''}" data-label-of="${n.id}" data-port="${p}" style="left:${pt.x}px;top:${pt.y + 24}px">${what}</span>`
+        }
+    }
+    host.innerHTML = html
+    cvRenderWires()
+    cvRenderGhost()
+    cvRenderHint()
+}
+
+function cvNodeHTML(n, cls, stepNo) {
+    const k = cvKind(n.kind)
+    return `<article class="node ${k.tone} ${cls}" data-node="${n.id}" style="transform:translate(${n.x}px, ${n.y}px)">
+        ${stepNo ? `<span class="step-no">${stepNo}</span>` : ''}
+        <div class="node-top">
+            <span class="node-ico">${icon(k.icon)}</span>
+            <span class="node-kind grow">${esc(k.label)}</span>
+            ${n.enabled ? '' : '<span class="badge outline">off</span>'}
         </div>
-        ${!open ? '' : `<div class="rule-body">
-            <div class="grid g2" style="gap:var(--s4)">
-                <div class="field">
-                    <label for="rule-trigger-${i}">Run for</label>
-                    <select class="select" id="rule-trigger-${i}" onchange="wfSetRule(${i}, 'trigger', this.value)">${opts(WF_TRIGGERS, r.trigger)}</select>
-                </div>
-                <div class="field">
-                    <label>After this rule matches</label>
-                    <div style="padding-top:6px">${checkbox('Stop processing further rules',
-                        `onchange="wfSetRule(${i}, 'stop_processing', this.checked); wfRerenderRule(${i})"`, r.stop_processing)}</div>
-                </div>
-            </div>
-            ${wfConditionHTML(r, i)}
-            <div class="field">
-                <label>Actions</label>
-                <div id="actions-${i}">${r.actions.map((a, j) => wfActionRowHTML(a, i, j)).join('')
-                    || '<p class="cell-sub">No actions — this rule only affects the chain if “stop processing” is set.</p>'}</div>
-                <div style="margin-top:var(--s2)">
-                    <button class="btn btn-default btn-sm" onclick="wfAddAction(${i})">${icon('plus')}Add action</button>
-                </div>
-            </div>
-        </div>`}
+        <div class="node-body">
+            <div class="node-title">${esc(n.title || k.label)}</div>
+            <div class="node-sub">${esc(cvNodeSub(n))}</div>
+        </div>
+        ${n.kind === 'if' ? `<div class="node-cond">${esc((n.condition || '').trim() || 'always matches')}</div>` : ''}
     </article>`
 }
 
-function wfActionRowHTML(a, i, j) {
-    const last = wf.rules[i].actions.length - 1
-    const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}"${v === sel ? ' selected' : ''}>${l}</option>`).join('')
-    // fields sit on the row's first line with the controls; anything taller than
-    // one control goes in detail, which .action-row drops onto its own line. Mixing
-    // the two inside one stack is what pushes the first field off centre.
-    let fields = '', detail = ''
-
-    switch (a.kind) {
+// cvNodeSub is the one line a card says about its settings.
+function cvNodeSub(n) {
+    switch (n.kind) {
+    case 'trigger': {
+        const ev = n.events || []
+        return ev.length ? `on ticket ${ev.join(' or ')}` : 'no events — nothing enters'
+    }
+    case 'if': {
+        const ui = n._ui
+        if (ui?.mode === 'advanced') return (n.condition || '').trim() ? 'advanced condition' : 'no conditions'
+        const rows = ui?.rows?.length || 0
+        return rows ? `${rows} condition${rows === 1 ? '' : 's'}` : 'no conditions'
+    }
     case 'notify': {
-        const n = a.notify || {}
-        let target = `<select class="select" style="max-width:190px" aria-label="Notify target" onchange="wfChangeTargetKind(${i}, ${j}, this.value)">${opts(WF_TARGETS, n.target)}</select>`
-        if (n.target === 'room' || n.target === 'person') {
-            target += `<select class="select grow" aria-label="Recipient" onchange="wfSetAction(${i}, ${j}, 'notify.recipient_id', this.value ? parseInt(this.value) : null)">
-                <option value="">— choose a ${n.target} —</option>${wfRecipientOptions(n.target, n.recipient_id)}</select>`
-        } else {
-            target += `<span class="cell-sub grow">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
-        }
-        const hasMsg = !!n.message
-        fields = `<div class="row gap2 wrap grow" style="min-width:260px">${target}</div>`
-        detail = `<div class="action-detail">
-            <details class="action-msg"${hasMsg ? ' open' : ''}>
-                <summary class="cell-sub">Custom message${hasMsg ? '' : ' (optional — default layout when empty)'}</summary>
-                <textarea class="textarea mono" rows="3" style="margin-top:var(--s2)" aria-label="Custom message" placeholder="{{event}}: {{ticket.link}} {{ticket.summary}}&#10;**Company:** {{company}}&#10;{{note.quote}}" oninput="wfSetAction(${i}, ${j}, 'notify.message', this.value)">${esc(n.message || '')}</textarea>
-                <div class="placeholder-list" style="margin-top:var(--s2)">${wfPlaceholders.map(p => `<code class="code inline" data-tip="${esc(p.description)}" onclick="wfInsertPlaceholder(this, '${p.name}')">{{${p.name}}}</code>`).join('')}</div>
-            </details>
-        </div>`
-        break
+        const s = n.notify || {}
+        if (s.target === 'resources_owner') return 'ticket resources & owner'
+        const r = wfRecipients.find(r => r.id === s.recipient_id)
+        return r ? `${s.target === 'person' ? 'person' : 'room'} · ${r.name}` : `choose a ${s.target || 'room'}`
+    }
+    case 'add_note': {
+        const s = n.add_note || {}
+        const flags = ['discussion', 'internal', 'resolution'].filter(f => s[f]).join(' · ')
+        return (s.text || '').trim() ? `${flags || 'note'} · ${s.text.trim()}` : (flags || 'no text yet')
     }
     case 'set_status': {
-        const n = a.set_status || {}
-        const known = wfStatuses.some(s => s.id === n.status_id)
-        fields = `<select class="select grow" aria-label="Status" onchange="wfSetStatus(${i}, ${j}, this.value)">
-            <option value="">— choose a status —</option>
-            ${wfStatuses.map(s => `<option value="${s.id}"${s.id === n.status_id ? ' selected' : ''}>${esc(s.name)}${s.closed ? ' (closed)' : ''}</option>`).join('')}
-            ${n.status_id && !known ? `<option value="${n.status_id}" selected>${esc(n.status_name || `Status ${n.status_id}`)} (not on this board)</option>` : ''}
-        </select>`
-        break
+        const s = n.set_status || {}
+        return s.status_id ? (wfStatuses.find(x => x.id === s.status_id)?.name || s.status_name || `status ${s.status_id}`) : 'choose a status'
     }
     case 'set_priority': {
-        const n = a.set_priority || {}
-        const known = wfPriorities.some(p => p.id === n.priority_id)
-        fields = `<select class="select grow" aria-label="Priority" onchange="wfSetPriority(${i}, ${j}, this.value)">
-            <option value="">— choose a priority —</option>
-            ${wfPriorities.map(p => `<option value="${p.id}"${p.id === n.priority_id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
-            ${n.priority_id && !known ? `<option value="${n.priority_id}" selected>${esc(n.priority_name || `Priority ${n.priority_id}`)}</option>` : ''}
-        </select>`
-        break
+        const s = n.set_priority || {}
+        return s.priority_id ? (wfPriorities.find(x => x.id === s.priority_id)?.name || s.priority_name || `priority ${s.priority_id}`) : 'choose a priority'
     }
     case 'set_owner':
     case 'add_resource': {
-        const n = a[a.kind] || {}
-        fields = `<select class="select grow" aria-label="Member" onchange="wfSetMember(${i}, ${j}, '${a.kind}', this.value)">
-            <option value="">— choose a member —</option>${wfMemberOptions(n.member_id)}</select>
-        <span class="cell-sub">${a.kind === 'set_owner' ? 'Skipped if already the owner.' : 'Skipped if already assigned.'}</span>`
-        break
+        const s = n[n.kind] || {}
+        const m = wfMembers.find(x => x.id === s.member_id)
+        return s.member_id ? (m ? memberLabel(m) : s.identifier || `member ${s.member_id}`) : 'choose a member'
     }
     case 'patch': {
-        const n = a.patch || {}
-        const ops = typeof n.ops === 'string' ? n.ops : (n.ops ? JSON.stringify(n.ops, null, 2) : '')
-        detail = `<div class="action-detail stack gap2">
-            <textarea rows="4" class="textarea mono" spellcheck="false" aria-label="Patch operations" placeholder='${WF_PATCH_EXAMPLE}' oninput="wfSetPatchOps(${i}, ${j}, this.value)">${esc(ops)}</textarea>
-            <span class="cell-sub">JSON array of ConnectWise patch operations: <code class="code inline">op</code> (add / replace / remove), <code class="code inline">path</code>, <code class="code inline">value</code>. Sent as-is to PATCH /service/tickets/{id}.</span>
+        const ops = n.patch?.ops
+        const arr = typeof ops === 'string' ? (() => { try { return JSON.parse(ops) } catch { return null } })() : ops
+        return Array.isArray(arr) && arr.length ? `${arr.length} operation${arr.length === 1 ? '' : 's'}` : 'JSON operations'
+    }
+    case 'skip_notify':
+        return 'silences later notifies on this path'
+    }
+    return ''
+}
+
+// cvRefreshNode redraws one card's text after an inspector edit, without touching the rest.
+function cvRefreshNode(id) {
+    const n = wfNode(id)
+    const el = document.querySelector(`#cv-nodes .node[data-node="${id}"]`)
+    if (!n || !el) return
+    const k = cvKind(n.kind)
+    el.classList.toggle('off', !n.enabled)
+    el.querySelector('.node-title').textContent = n.title || k.label
+    el.querySelector('.node-sub').textContent = cvNodeSub(n)
+    const cond = el.querySelector('.node-cond')
+    if (cond) cond.textContent = (n.condition || '').trim() || 'always matches'
+    const badge = el.querySelector('.node-top .badge')
+    if (!n.enabled && !badge) el.querySelector('.node-top').insertAdjacentHTML('beforeend', '<span class="badge outline">off</span>')
+    if (n.enabled && badge) badge.remove()
+}
+
+// cvMoveNodeEls repositions a card and its ports and labels during a drag.
+function cvMoveNodeEls(n) {
+    const card = document.querySelector(`#cv-nodes .node[data-node="${n.id}"]`)
+    if (card) card.style.transform = `translate(${n.x}px, ${n.y}px)`
+    document.querySelectorAll(`#cv-nodes .port[data-port-of="${n.id}"]`).forEach(p => {
+        const pt = p.dataset.port === 'in' ? cvInPt(n) : cvOutPt(n, p.dataset.port)
+        p.style.left = `${pt.x}px`; p.style.top = `${pt.y}px`
+    })
+    document.querySelectorAll(`#cv-nodes .wlabel[data-label-of="${n.id}"]`).forEach(l => {
+        const pt = cvOutPt(n, l.dataset.port)
+        l.style.left = `${pt.x}px`; l.style.top = `${pt.y + 24}px`
+    })
+}
+
+function cvRenderWires() {
+    const svg = document.getElementById('cv-wires')
+    if (!svg) return
+    const run = cv.run
+    const shown = run ? run.steps.slice(0, run.step) : []
+    const ran = new Set(shown.map(s => s.via).filter(Boolean))
+
+    let html = ''
+    let cut = null
+    for (const e of wf.edges) {
+        const a = wfNode(e.from), b = wfNode(e.to)
+        if (!a || !b) continue
+        const p = cvOutPt(a, e.port), q = cvInPt(b)
+        let cls = ''
+        if (run) cls = ran.has(e.id) ? 'ran' : 'dim'
+        else if (e.id === cv.selEdge) cls = 'pick'
+        else if (e.from === cv.sel || e.to === cv.sel) cls = 'hot'
+        const d = cvCurve(p, q)
+        html += `<g><path class="wire ${cls}" d="${d}"></path><path class="wirehit" data-edge="${e.id}" d="${d}"></path></g>`
+        if (e.id === cv.selEdge && !run) cut = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }
+    }
+    if (cv.drag?.type === 'link' && cv.link) {
+        const a = wfNode(cv.drag.from)
+        if (a) html += `<path class="wire temp" d="${cvCurve(cvOutPt(a, cv.drag.port), cv.link)}"></path>`
+    }
+    svg.innerHTML = html
+
+    // the disconnect button lives among the nodes so it takes clicks; one per selected wire
+    document.querySelector('#cv-nodes .wirex')?.remove()
+    if (cut && canEdit()) {
+        document.getElementById('cv-nodes').insertAdjacentHTML('beforeend',
+            `<button class="wirex" style="left:${cut.x}px;top:${cut.y}px" aria-label="Disconnect this wire">${icon('x')}</button>`)
+    }
+}
+
+function cvRenderGhost() {
+    const host = document.getElementById('cv-nodes')
+    if (!host) return
+    host.querySelector('.ghost')?.remove()
+    if (cv.ghost) {
+        host.insertAdjacentHTML('beforeend', `<div class="ghost" style="transform:translate(${cv.ghost.x}px, ${cv.ghost.y}px)">drop ${esc(cvKind(cv.ghost.kind).label)}</div>`)
+    }
+}
+
+function cvRenderHint() {
+    const el = document.getElementById('cv-hint')
+    if (!el) return
+    let hint = 'drag to pan · scroll to pan · pinch or ⌘-scroll to zoom'
+    if (cv.drag?.type === 'link') hint = 'drop on a step to connect, or on empty canvas to disconnect'
+    else if (cv.drag?.type === 'pal') hint = 'release over the canvas to place it'
+    else if (cv.run) hint = 'simulated path highlighted — nothing was sent'
+    else if (cv.selEdge) hint = 'wire selected · × or Delete disconnects it'
+    else if (cv.sel) hint = 'drag a port to wire it · Delete removes the step'
+    el.textContent = hint
+}
+
+// ── Step list (left dock) ────────────────────────────────
+function cvRenderRail() {
+    const host = document.getElementById('cv-rail')
+    if (!host) return
+    if (!canEdit()) { host.innerHTML = ''; return }
+    if (!cv.rail) {
+        host.innerHTML = `<button class="dock-bar tl" style="cursor:pointer" onclick="cvToggleRail()">${icon('plus')}<span>Add a step</span></button>`
+        return
+    }
+    const groups = CV_GROUPS.map(g => {
+        const kinds = Object.entries(CV_KINDS).filter(([, k]) => k.group === g)
+        return `<div class="eyebrow" style="margin:var(--s3) 0 var(--s2)">${esc(g)}</div>
+        <div class="pal-list">${kinds.map(([kind, k]) =>
+            `<button class="pal ${k.tone}" data-kind="${kind}" onpointerdown="cvGrabPal('${kind}', event)" title="Drag onto the canvas, or double-click to add it below the selected step">
+                <span class="swat"></span><span class="grow">${esc(k.label)}</span>
+            </button>`).join('')}</div>`
+    }).join('')
+    host.innerHTML = `<aside class="dock dock-l">
+        <article class="card">
+            <div class="card-head">
+                <div><h3 style="font-size:var(--text-sm)">Steps</h3></div>
+                <button class="icon-btn" aria-label="Hide the step list" onclick="cvToggleRail()">${icon('panelL')}</button>
+            </div>
+            <div class="card-body">${groups}</div>
+        </article>
+    </aside>`
+}
+
+// ── Inspector and simulation trace (right dock) ──────────
+function cvRenderSide() {
+    const host = document.getElementById('cv-side')
+    if (!host) return
+    if (cv.run) { host.innerHTML = cvRunHTML(); return }
+    const n = cv.sel ? wfNode(cv.sel) : null
+    if (!n) { host.innerHTML = ''; return }
+    host.innerHTML = `<aside class="dock dock-r"><article class="card">${cvInspectorHTML(n)}</article></aside>`
+}
+
+// cvRerenderSide redraws the inspector for the selected node; used after a structural change to
+// a node's settings (a kind-specific block appearing or disappearing).
+function cvRerenderSide() {
+    cvRenderSide()
+    if (cv.sel) cvRefreshNode(cv.sel)
+}
+
+function cvInspectorHTML(n) {
+    const k = cvKind(n.kind)
+    const ro = !canEdit()
+    const dis = ro ? ' disabled' : ''
+    const id = n.id
+    let body = ''
+
+    switch (n.kind) {
+    case 'trigger': {
+        const ev = n.events || []
+        const has = e => ev.includes(e)
+        body = `<div class="field">
+            <label>Enters this flow when a ticket is</label>
+            <div class="stack gap3" style="padding-top:var(--s1)">
+                ${checkbox('created', `onchange="cvToggleEvent('${id}', 'created', this.checked)"${dis}`, has('created'))}
+                ${checkbox('updated', `onchange="cvToggleEvent('${id}', 'updated', this.checked)"${dis}`, has('updated'))}
+            </div>
+            <span class="hint">A flow can have more than one trigger. Every trigger that accepts an event runs; a step two paths both reach runs once.</span>
+        </div>
+        <div id="trigger-warn-${id}">${ev.length ? '' : `<div class="callout warn">${icon('alert')}<div>No events selected, so nothing ever enters here.</div></div>`}</div>`
+        break
+    }
+    case 'if':
+        body = `${wfConditionHTML(n)}
+        <div class="field">
+            <label>Branches</label>
+            <span class="hint">The <b>match</b> port leaves when the condition holds, <b>else</b> when it does not. An unwired port simply ends that path. A disabled If always takes else.</span>
+        </div>`
+        break
+    case 'notify': {
+        const s = n.notify || (n.notify = { target: 'room', recipient_id: null })
+        const hasMsg = !!s.message
+        body = `<div class="field">
+            <label for="insp-target">Send to</label>
+            <select id="insp-target" class="select" onchange="cvSetNotifyTarget('${id}', this.value)"${dis}>${WF_TARGETS.map(([v, l]) => `<option value="${v}"${v === s.target ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        </div>
+        ${s.target === 'resources_owner'
+            ? `<span class="hint">Everyone assigned to the ticket, plus the owner. Skips whoever wrote the triggering note; forwards apply.</span>`
+            : `<div class="field">
+                <label for="insp-recipient">${s.target === 'person' ? 'Person' : 'Room'}</label>
+                <select id="insp-recipient" class="select" onchange="cvSetSetting('${id}', 'notify.recipient_id', this.value ? parseInt(this.value) : null)"${dis}>
+                    <option value="">— choose a ${s.target} —</option>${wfRecipientOptions(s.target, s.recipient_id)}</select>
+            </div>`}
+        <div class="field">
+            <label for="insp-msg">Custom message${hasMsg ? '' : ' <span class="muted">(optional)</span>'}</label>
+            <textarea id="insp-msg" class="textarea mono" rows="4" aria-label="Custom message" placeholder="{{event}}: {{ticket.link}} {{ticket.summary}}&#10;**Company:** {{company}}&#10;{{note.quote}}" oninput="cvSetSetting('${id}', 'notify.message', this.value)"${dis}>${esc(s.message || '')}</textarea>
+            <span class="hint">Empty uses the default layout. Click a token to insert it.</span>
+            <div class="placeholder-list">${wfPlaceholders.map(p => `<code class="code inline" data-tip="${esc(p.description)}" onclick="wfInsertPlaceholder(this, '${p.name}')">{{${p.name}}}</code>`).join('')}</div>
         </div>`
         break
     }
     case 'add_note': {
-        const n = a.add_note || {}
-        const flag = (key, label) => checkbox(label, `onchange="wfSetAction(${i}, ${j}, 'add_note.${key}', this.checked)"`, !!n[key])
-        fields = `<div class="action-flags grow">${flag('discussion', 'Discussion')}${flag('internal', 'Internal')}${flag('resolution', 'Resolution')}</div>`
-        detail = `<div class="action-detail">
-            <textarea class="textarea" rows="2" aria-label="Note text" placeholder="Note text" oninput="wfSetAction(${i}, ${j}, 'add_note.text', this.value)">${esc(n.text || '')}</textarea>
+        const s = n.add_note || (n.add_note = { text: '', internal: true, discussion: false, resolution: false })
+        const flag = (key, label) => checkbox(label, `onchange="cvSetSetting('${id}', 'add_note.${key}', this.checked)"${dis}`, !!s[key])
+        body = `<div class="field">
+            <label for="insp-note">Note text</label>
+            <textarea id="insp-note" class="textarea" rows="4" placeholder="Note text" oninput="cvSetSetting('${id}', 'add_note.text', this.value)"${dis}>${esc(s.text || '')}</textarea>
+        </div>
+        <div class="field">
+            <label>Post as</label>
+            <div class="stack gap3" style="padding-top:var(--s1)">${flag('discussion', 'Discussion')}${flag('internal', 'Internal')}${flag('resolution', 'Resolution')}</div>
+        </div>`
+        break
+    }
+    case 'set_status': {
+        const s = n.set_status || (n.set_status = { status_id: 0 })
+        const known = wfStatuses.some(x => x.id === s.status_id)
+        body = `<div class="field">
+            <label for="insp-status">Status</label>
+            <select id="insp-status" class="select" onchange="cvSetStatus('${id}', this.value)"${dis}>
+                <option value="">— choose a status —</option>
+                ${wfStatuses.map(x => `<option value="${x.id}"${x.id === s.status_id ? ' selected' : ''}>${esc(x.name)}${x.closed ? ' (closed)' : ''}</option>`).join('')}
+                ${s.status_id && !known ? `<option value="${s.status_id}" selected>${esc(s.status_name || `Status ${s.status_id}`)} (not on this board)</option>` : ''}
+            </select>
+            <span class="hint">Skipped when the ticket is already in this status.</span>
+        </div>`
+        break
+    }
+    case 'set_priority': {
+        const s = n.set_priority || (n.set_priority = { priority_id: 0 })
+        const known = wfPriorities.some(x => x.id === s.priority_id)
+        body = `<div class="field">
+            <label for="insp-priority">Priority</label>
+            <select id="insp-priority" class="select" onchange="cvSetPriority('${id}', this.value)"${dis}>
+                <option value="">— choose a priority —</option>
+                ${wfPriorities.map(x => `<option value="${x.id}"${x.id === s.priority_id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}
+                ${s.priority_id && !known ? `<option value="${s.priority_id}" selected>${esc(s.priority_name || `Priority ${s.priority_id}`)}</option>` : ''}
+            </select>
+            <span class="hint">Skipped when the ticket already has this priority.</span>
+        </div>`
+        break
+    }
+    case 'set_owner':
+    case 'add_resource': {
+        const s = n[n.kind] || (n[n.kind] = { member_id: 0 })
+        body = `<div class="field">
+            <label for="insp-member">Member</label>
+            <select id="insp-member" class="select" onchange="cvSetMember('${id}', this.value)"${dis}>
+                <option value="">— choose a member —</option>${wfMemberOptions(s.member_id)}</select>
+            <span class="hint">${n.kind === 'set_owner' ? 'Skipped if already the owner.' : 'Skipped if already assigned.'}</span>
+        </div>`
+        break
+    }
+    case 'patch': {
+        const s = n.patch || (n.patch = { ops: '' })
+        const ops = typeof s.ops === 'string' ? s.ops : (s.ops ? JSON.stringify(s.ops, null, 2) : '')
+        body = `<div class="field">
+            <label for="insp-ops">Operations</label>
+            <textarea id="insp-ops" rows="6" class="textarea mono" spellcheck="false" placeholder='${WF_PATCH_EXAMPLE}' oninput="cvSetPatchOps('${id}', this.value)"${dis}>${esc(ops)}</textarea>
+            <span class="hint">JSON array of ConnectWise patch operations: <code class="code inline">op</code> (add / replace / remove), <code class="code inline">path</code>, <code class="code inline">value</code>. Sent as-is to PATCH /service/tickets/{id}.</span>
         </div>`
         break
     }
     case 'skip_notify':
-        fields = `<span class="cell-sub grow">Suppresses every notify action later in this run.</span>`
+        body = `<span class="hint">Every Notify step after this one on the same path is skipped. Other paths are not affected.</span>`
         break
     }
 
-    return `<div class="action-row${a.enabled ? '' : ' is-disabled'}" id="act-${i}-${j}">
-        <div class="order-btns">
-            <button onclick="wfMoveAction(${i}, ${j}, -1)" ${j === 0 ? 'disabled' : ''} aria-label="Move action ${j + 1} up">${icon('chevUp')}</button>
-            <button onclick="wfMoveAction(${i}, ${j}, 1)" ${j === last ? 'disabled' : ''} aria-label="Move action ${j + 1} down">${icon('chevDn')}</button>
+    const canDelete = canEdit() && !(n.kind === 'trigger' && wf.nodes.filter(x => x.kind === 'trigger').length < 2)
+    return `<div class="card-head">
+        <div><h3>${esc(k.label)}</h3><p>${esc(k.hint)}</p></div>
+        <button class="icon-btn" aria-label="Close the inspector" onclick="cvDeselect()">${icon('x')}</button>
+    </div>
+    <div class="card-body stack gap4">
+        <div class="field">
+            <label for="insp-title">Step name</label>
+            <input id="insp-title" class="input" type="text" value="${esc(n.title)}" placeholder="${esc(k.label)}" oninput="wfSetNode('${id}', 'title', this.value)"${dis}>
         </div>
-        ${toggle(`onchange="wfSetAction(${i}, ${j}, 'enabled', this.checked); document.getElementById('act-${i}-${j}').classList.toggle('is-disabled', !this.checked)"`, a.enabled, { small: true, tip: 'Action enabled' })}
-        <select class="select" style="max-width:170px" aria-label="Action type" onchange="wfChangeActionKind(${i}, ${j}, this.value)">${opts(WF_KINDS, a.kind)}</select>
-        ${fields}
-        <button class="icon-btn hit-expand" style="width:26px;height:26px;margin-left:auto" aria-label="Remove action ${j + 1}" onclick="wfDeleteAction(${i}, ${j})">${icon('trash')}</button>
-        ${detail}
+        <div class="row spread gap3">
+            ${toggle(`onchange="wfSetNode('${id}', 'enabled', this.checked)"${dis}`, n.enabled, { label: 'Enabled' })}
+            ${canEdit() ? `<button class="btn btn-ghost btn-sm" onclick="cvDeleteNode('${id}')"${canDelete ? '' : ' disabled data-tip="A workflow needs at least one trigger" data-tip-align="right"'}>${icon('trash')}Delete step</button>` : ''}
+        </div>
+        ${body}
     </div>`
 }
 
@@ -461,54 +1021,81 @@ function wfSet(field, value) {
     wfMarkDirty()
 }
 
-function wfSetRule(i, field, value) {
-    wf.rules[i][field] = value
+function wfSetNode(id, field, value) {
+    const n = wfNode(id)
+    if (!n) return
+    n[field] = value
+    cvRefreshNode(id)
     wfMarkDirty()
 }
 
-// path is "enabled", "notify.recipient_id", "add_note.text", ...
-function wfSetAction(i, j, path, value) {
-    const a = wf.rules[i].actions[j]
+// path is "notify.recipient_id", "add_note.text", ...
+function cvSetSetting(id, path, value) {
+    const n = wfNode(id)
+    if (!n) return
     const [group, key] = path.split('.')
-    if (key) {
-        a[group] = a[group] || {}
-        a[group][key] = value
-    } else {
-        a[group] = value
-    }
+    n[group] = n[group] || {}
+    n[group][key] = value
+    cvRefreshNode(id)
     wfMarkDirty()
 }
 
-function wfSetStatus(i, j, value) {
-    const id = value ? parseInt(value) : 0
-    const st = wfStatuses.find(s => s.id === id)
-    wf.rules[i].actions[j].set_status = { status_id: id, status_name: st ? st.name : '' }
+function cvToggleEvent(id, ev, on) {
+    const n = wfNode(id)
+    if (!n) return
+    const set = new Set(n.events || [])
+    if (on) set.add(ev); else set.delete(ev)
+    n.events = ['created', 'updated'].filter(e => set.has(e))
+    const warn = document.getElementById(`trigger-warn-${id}`)
+    if (warn) warn.innerHTML = n.events.length ? '' : `<div class="callout warn">${icon('alert')}<div>No events selected, so nothing ever enters here.</div></div>`
+    cvRefreshNode(id)
     wfMarkDirty()
 }
 
-function wfSetPriority(i, j, value) {
-    const id = value ? parseInt(value) : 0
-    const p = wfPriorities.find(p => p.id === id)
-    wf.rules[i].actions[j].set_priority = { priority_id: id, priority_name: p ? p.name : '' }
+function cvSetNotifyTarget(id, target) {
+    const n = wfNode(id)
+    if (!n) return
+    n.notify = { target, message: n.notify?.message || '' }
+    if (target !== 'resources_owner') n.notify.recipient_id = null
+    cvRerenderSide()
     wfMarkDirty()
 }
 
-function wfSetMember(i, j, kind, value) {
-    const id = value ? parseInt(value) : 0
-    const m = wfMembers.find(m => m.id === id)
-    wf.rules[i].actions[j][kind] = { member_id: id, identifier: m ? m.identifier : '' }
+function cvSetStatus(id, value) {
+    const sid = value ? parseInt(value) : 0
+    const st = wfStatuses.find(s => s.id === sid)
+    wfNode(id).set_status = { status_id: sid, status_name: st ? st.name : '' }
+    cvRefreshNode(id)
     wfMarkDirty()
 }
 
-// patch ops are kept as the raw string while editing; wfPatchOps parses on save/simulate
-function wfSetPatchOps(i, j, value) {
-    wf.rules[i].actions[j].patch = { ops: value }
+function cvSetPriority(id, value) {
+    const pid = value ? parseInt(value) : 0
+    const p = wfPriorities.find(p => p.id === pid)
+    wfNode(id).set_priority = { priority_id: pid, priority_name: p ? p.name : '' }
+    cvRefreshNode(id)
+    wfMarkDirty()
+}
+
+function cvSetMember(id, value) {
+    const n = wfNode(id)
+    const mid = value ? parseInt(value) : 0
+    const m = wfMembers.find(m => m.id === mid)
+    n[n.kind] = { member_id: mid, identifier: m ? m.identifier : '' }
+    cvRefreshNode(id)
+    wfMarkDirty()
+}
+
+// patch ops are kept as the raw string while editing; wfPrepareForServer parses on save/simulate
+function cvSetPatchOps(id, value) {
+    wfNode(id).patch = { ops: value }
+    cvRefreshNode(id)
     wfMarkDirty()
 }
 
 function wfInsertPlaceholder(el, name) {
-    const ta = el.closest('.action-msg')?.querySelector('textarea')
-    if (!ta) return
+    const ta = el.closest('.field')?.querySelector('textarea')
+    if (!ta || ta.disabled) return
     const start = ta.selectionStart ?? ta.value.length
     const tok = `{{${name}}}`
     ta.value = ta.value.slice(0, start) + tok + ta.value.slice(ta.selectionEnd ?? start)
@@ -528,123 +1115,189 @@ function wfMarkDirty() {
     save.classList.toggle('btn-default', !dirty)
 }
 
-// ── Structural changes (re-render) ───────────────────────
-function wfNewRule() {
-    return { id: '', name: `Rule ${wf.rules.length + 1}`, enabled: true, trigger: 'both', condition: '', stop_processing: false, actions: [], _ui: { ...wfDefaultUI(), open: true } }
+// wfRerenderCondBlock replaces the inspector's condition block after the builder changes shape.
+function wfRerenderCondBlock(id) {
+    const n = wfNode(id)
+    const el = document.getElementById(`cond-wrap-${id}`)
+    if (n && el) el.outerHTML = wfConditionHTML(n)
+    cvRefreshNode(id)
 }
 
-function wfNewAction(kind) {
-    const a = { kind, enabled: true }
-    if (kind === 'notify')       a.notify       = { target: 'room', recipient_id: null }
-    if (kind === 'add_note')     a.add_note     = { text: '', internal: true, discussion: false, resolution: false }
-    if (kind === 'set_status')   a.set_status   = { status_id: 0 }
-    if (kind === 'set_priority') a.set_priority = { priority_id: 0 }
-    if (kind === 'set_owner')    a.set_owner    = { member_id: 0 }
-    if (kind === 'add_resource') a.add_resource = { member_id: 0 }
-    if (kind === 'patch')        a.patch        = { ops: '' }
-    return a
-}
-
-function wfAddRule() {
-    wf.rules.push(wfNewRule())
-    renderWorkflowEditor()
-    document.getElementById(`rule-${wf.rules.length - 1}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    wfMarkDirty()
-}
-
-function wfDeleteRule(i) {
-    const r = wf.rules[i]
-    const remove = () => {
-        wf.rules.splice(i, 1)
-        renderWorkflowEditor()
-        wfMarkDirty()
-    }
-    // an empty rule is nothing to lose; anything else gets asked about
-    if (!r.actions.length && !r.condition) { remove(); return }
-    const acts = r.actions.length
-    confirmModal({
-        title: 'Delete this rule?',
-        body: `<b>${esc(r.name || `Rule ${i + 1}`)}</b>${
-            acts ? `${acts} action${acts === 1 ? '' : 's'}` : 'Its condition'} goes with it. The workflow is only changed once you save.`,
-        confirmLabel: 'Delete rule',
-        onConfirm: remove,
+// ── Structural changes ───────────────────────────────────
+function cvNewID() {
+    if (crypto.randomUUID) return crypto.randomUUID()
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
     })
 }
 
-function wfMoveRule(i, dir) {
-    const j = i + dir
-    if (j < 0 || j >= wf.rules.length) return
-    ;[wf.rules[i], wf.rules[j]] = [wf.rules[j], wf.rules[i]]
-    renderWorkflowEditor()
+function cvNewNode(kind, x, y) {
+    const n = { id: cvNewID(), kind, title: cvKind(kind).label, enabled: true, x: Math.round(x), y: Math.round(y) }
+    switch (kind) {
+    case 'trigger':      n.events = ['created', 'updated']; break
+    case 'if':           n.condition = ''; n._ui = wfDefaultUI(); break
+    case 'notify':       n.notify       = { target: 'room', recipient_id: null }; break
+    case 'add_note':     n.add_note     = { text: '', internal: true, discussion: false, resolution: false }; break
+    case 'set_status':   n.set_status   = { status_id: 0 }; break
+    case 'set_priority': n.set_priority = { priority_id: 0 }; break
+    case 'set_owner':    n.set_owner    = { member_id: 0 }; break
+    case 'add_resource': n.add_resource = { member_id: 0 }; break
+    case 'patch':        n.patch        = { ops: '' }; break
+    }
+    return n
+}
+
+// cvDrop places a new step and wires it from the nearest free port above it, so a step dropped
+// under a card joins the flow without a second gesture.
+function cvDrop(kind, x, y) {
+    const n = cvNewNode(kind, x, y)
+    wf.nodes.push(n)
+    if (kind !== 'trigger') {
+        const parent = cvNearestFree(y, x)
+        if (parent) wf.edges.push({ id: cvNewID(), from: parent.id, to: n.id, port: parent.port })
+    }
+    cvSelect(n.id)
+    wfMarkDirty()
+    document.getElementById('insp-title')?.select()
+}
+
+// cvAppend adds a step below the selected node (or the lowest node) and wires it there.
+function cvAppend(kind) {
+    const anchor = wfNode(cv.sel) || wf.nodes.reduce((a, n) => (!a || n.y > a.y ? n : a), null)
+    if (!anchor) { cvDrop(kind, 0, 0); return }
+    cvDrop(kind, anchor.x, anchor.y + cvH(anchor) + 56)
+}
+
+function cvNearestFree(y, x) {
+    let best = null
+    for (const n of wf.nodes) {
+        const bottom = n.y + cvH(n)
+        if (bottom > y) continue
+        for (const p of cvPorts(n)) {
+            if (wf.edges.some(e => e.from === n.id && e.port === p)) continue
+            const dist = (y - bottom) + Math.abs(n.x - x) * 0.5
+            if (!best || dist < best.dist) best = { id: n.id, port: p, dist }
+        }
+    }
+    return best && best.dist < 460 ? best : null
+}
+
+function cvDeleteNode(id) {
+    const n = wfNode(id)
+    if (!n) return
+    if (n.kind === 'trigger' && wf.nodes.filter(x => x.kind === 'trigger').length < 2) {
+        toast('A workflow needs at least one trigger', 'error')
+        return
+    }
+    wf.nodes = wf.nodes.filter(x => x.id !== id)
+    wf.edges = wf.edges.filter(e => e.from !== id && e.to !== id)
+    if (cv.sel === id) cv.sel = null
+    cvRenderGraph()
+    cvRenderSide()
     wfMarkDirty()
 }
 
-function wfAddAction(i) {
-    wf.rules[i].actions.push(wfNewAction('notify'))
-    wfRerenderRule(i)
+function cvCutEdge() {
+    if (!cv.selEdge) return
+    wf.edges = wf.edges.filter(e => e.id !== cv.selEdge)
+    cv.selEdge = null
+    cvRenderGraph()
     wfMarkDirty()
 }
 
-function wfDeleteAction(i, j) {
-    wf.rules[i].actions.splice(j, 1)
-    wfRerenderRule(i)
+// ── Auto-arrange: a layered forest, top to bottom ────────
+// Depth is the LONGEST path from any trigger, so a node several paths reach lands below all of
+// them and the merge reads as a merge. Positions persist, so the previous layout is kept for undo.
+function cvArrange() {
+    const GAP = 48, VGAP = 66
+    const nodes = wf.nodes, edges = wf.edges
+    if (!nodes.length) return
+    cv.undo = Object.fromEntries(nodes.map(n => [n.id, { x: n.x, y: n.y }]))
+
+    // a child remembers the port it hangs off: match branches lean left, else branches right,
+    // so an if node's two paths fan out instead of stacking in one column
+    const parents = {}, depth = {}
+    const lean = { yes: -(CV_W + GAP) / 2, no: (CV_W + GAP) / 2, out: 0 }
+    for (const n of nodes) { parents[n.id] = []; depth[n.id] = 0 }
+    for (const e of edges) if (parents[e.to]) parents[e.to].push({ id: e.from, lean: lean[e.port] || 0 })
+    for (let i = 0; i < nodes.length; i++) {
+        let moved = false
+        for (const e of edges) {
+            if (depth[e.to] === undefined || depth[e.from] === undefined) continue
+            if (depth[e.from] + 1 > depth[e.to]) { depth[e.to] = depth[e.from] + 1; moved = true }
+        }
+        if (!moved) break
+    }
+
+    const levels = {}
+    for (const n of nodes) (levels[depth[n.id]] = levels[depth[n.id]] || []).push(n.id)
+    const maxD = Math.max(0, ...Object.keys(levels).map(Number))
+
+    const y = {}
+    let cur = 24
+    for (let d = 0; d <= maxD; d++) {
+        y[d] = cur
+        const tall = (levels[d] || []).reduce((a, id) => Math.max(a, cvH(wfNode(id))), CV_H)
+        cur += tall + VGAP
+    }
+
+    // x: each node starts under the average of its parents, then siblings on the level are
+    // pushed apart until nothing overlaps
+    const x = {}
+    let slot = 0
+    for (const id of (levels[0] || []).sort((a, b) => wfNode(a).x - wfNode(b).x)) { x[id] = slot; slot += CV_W + GAP }
+    for (let d = 1; d <= maxD; d++) {
+        const ids = (levels[d] || []).slice()
+        for (const id of ids) {
+            const ps = parents[id].filter(p => x[p.id] !== undefined)
+            x[id] = ps.length ? ps.reduce((a, p) => a + x[p.id] + p.lean, 0) / ps.length : 0
+        }
+        ids.sort((a, b) => x[a] - x[b])
+        for (let i = 1; i < ids.length; i++) {
+            const min = x[ids[i - 1]] + CV_W + GAP
+            if (x[ids[i]] < min) x[ids[i]] = min
+        }
+    }
+
+    for (const n of nodes) { n.x = Math.round(x[n.id] || 0); n.y = y[depth[n.id]] }
+    cvRenderGraph()
+    cvFit()
     wfMarkDirty()
+    cvRenderUndo()
 }
 
-function wfMoveAction(i, j, dir) {
-    const acts = wf.rules[i].actions
-    const k = j + dir
-    if (k < 0 || k >= acts.length) return
-    ;[acts[j], acts[k]] = [acts[k], acts[j]]
-    wfRerenderRule(i)
+function cvUndoArrange() {
+    if (!cv.undo) return
+    for (const n of wf.nodes) {
+        const p = cv.undo[n.id]
+        if (p) { n.x = p.x; n.y = p.y }
+    }
+    cv.undo = null
+    cvRenderGraph()
+    cvFit()
     wfMarkDirty()
+    cvRenderUndo()
 }
 
-function wfChangeActionKind(i, j, kind) {
-    const prev = wf.rules[i].actions[j]
-    const next = wfNewAction(kind)
-    next.enabled = prev.enabled
-    wf.rules[i].actions[j] = next
-    wfRerenderAction(i, j)
-    wfMarkDirty()
+function cvRenderUndo() {
+    const el = document.getElementById('wf-arrange-undo')
+    if (el) el.innerHTML = cv.undo ? `<button class="btn btn-ghost btn-sm" onclick="cvUndoArrange()">${icon('undo')}Undo arrange</button>` : ''
 }
 
-function wfChangeTargetKind(i, j, target) {
-    const a = wf.rules[i].actions[j]
-    a.notify = { target, message: a.notify?.message || '' }
-    if (target !== 'resources_owner') a.notify.recipient_id = null
-    wfRerenderAction(i, j)
-    wfMarkDirty()
-}
-
-// wfRerenderRule replaces one rule card. Replacing the card blurs any focused input inside it,
-// and a blur can fire change handlers that call back in here; the guard makes that a no-op.
-let wfRerendering = false
-function wfRerenderRule(i) {
-    if (wfRerendering) return
-    const el = document.getElementById(`rule-${i}`)
-    if (!el) { renderWorkflowEditor(); return }
-    wfRerendering = true
-    try { el.outerHTML = wfRuleCardHTML(wf.rules[i], i) } finally { wfRerendering = false }
-}
-
-function wfRerenderAction(i, j) {
-    const el = document.getElementById(`act-${i}-${j}`)
-    if (!el) { wfRerenderRule(i); return }
-    el.outerHTML = wfActionRowHTML(wf.rules[i].actions[j], i, j)
-}
-
-// ── Condition tools ──────────────────────────────────────
-async function wfValidate(i) {
-    const out = document.getElementById(`cond-result-${i}`)
-    const ta  = document.getElementById(`cond-${i}`)
+// ── Condition tools (inspector footer) ───────────────────
+async function wfValidate(id) {
+    const out = document.getElementById(`cond-result-${id}`)
+    const ta  = document.getElementById(`cond-${id}`)
+    const n   = wfNode(id)
+    if (!out || !n) return
     out.className = 'cond-result'
     out.textContent = 'Checking…'
     try {
-        const res = await api('POST', '/workflows/validate-condition', { condition: wf.rules[i].condition })
+        const res = await api('POST', '/workflows/validate-condition', { condition: n.condition })
         if (res.valid) {
             out.className = 'cond-result ok'
-            out.textContent = wf.rules[i].condition.trim() ? 'Valid' : 'Valid (matches everything)'
+            out.textContent = n.condition.trim() ? 'Valid' : 'Valid (matches everything)'
         } else {
             out.className = 'cond-result err'
             out.textContent = `${res.error} (position ${res.pos})`
@@ -656,16 +1309,18 @@ async function wfValidate(i) {
     }
 }
 
-async function wfTest(i) {
-    const out = document.getElementById(`test-result-${i}`)
-    const id  = parseInt(document.getElementById(`test-ticket-${i}`).value)
+async function wfTest(id) {
+    const out = document.getElementById(`test-result-${id}`)
+    const tid = parseInt(document.getElementById(`test-ticket-${id}`)?.value)
+    const n   = wfNode(id)
+    if (!out || !n) return
     out.className = 'cond-result'
-    if (!id) { out.className = 'cond-result err'; out.textContent = 'Enter a ticket number'; return }
+    if (!tid) { out.className = 'cond-result err'; out.textContent = 'Enter a ticket number'; return }
     out.textContent = 'Testing…'
     try {
-        const res = await api('POST', '/workflows/evaluate-condition', { condition: wf.rules[i].condition, ticket_id: id })
+        const res = await api('POST', '/workflows/evaluate-condition', { condition: n.condition, ticket_id: tid })
         out.className = `cond-result ${res.matches ? 'ok' : 'err'}`
-        out.textContent = `${res.matches ? 'Matches' : 'No match'} against #${id} (${res.source})`
+        out.textContent = `${res.matches ? 'Matches' : 'No match'} against #${tid} (${res.source})`
     } catch (e) {
         out.className = 'cond-result err'
         out.textContent = e.message
@@ -673,108 +1328,172 @@ async function wfTest(i) {
 }
 
 // ── Simulate ─────────────────────────────────────────────
+// The server walks the draft against a stored ticket and returns the path; the canvas replays it
+// one step at a time and the right dock becomes the trace.
 async function wfSimulate() {
-    const out = document.getElementById('sim-result')
-    const id  = parseInt(document.getElementById('sim-ticket').value)
+    const id = parseInt(document.getElementById('sim-ticket')?.value)
     wfSimTicket = id ? String(id) : ''
-    if (!id) { out.innerHTML = wfSimError('Enter a ticket number to simulate against.'); return }
+    wfSimAsNew  = document.getElementById('sim-mode')?.value === 'create'
+    if (!id) { toast('Enter a ticket number to simulate against', 'error'); return }
 
     const bad = wfClientValidate()
-    if (bad) { out.innerHTML = wfSimError(`Rule ${bad.i + 1}: ${bad.msg}`); return }
+    if (bad) { cvShowProblem(bad); return }
 
-    out.innerHTML = `<div class="skeleton" style="height:13px;width:60%;margin-top:var(--s4)"></div>`
     try {
         const draft = wfPrepareForServer(JSON.parse(JSON.stringify(wf)))
-        const res = await api('POST', `/workflows/${wf.id}/simulate`, {
-            ticket_id: id,
-            as_new: document.getElementById('sim-mode').value === 'create',
-            workflow: draft,
-        })
-        out.innerHTML = wfSimResultHTML(id, res)
+        const res = await api('POST', `/workflows/${wf.id}/simulate`, { ticket_id: id, as_new: wfSimAsNew, workflow: draft })
+        cvClearTimers()
+        cv.sel = null
+        cv.selEdge = null
+        cv.run = { ticket: id, asNew: wfSimAsNew, res, steps: res.workflow?.steps || [], step: 0 }
+        cvRenderGraph()
+        cvRenderSide()
+        cvRenderHint()
+        const total = cv.run.steps.length
+        for (let i = 1; i <= total; i++) {
+            cv.timers.push(setTimeout(() => {
+                if (!cv.run) return
+                cv.run.step = i
+                cvRenderGraph()
+                cvRenderSide()
+            }, i * 420))
+        }
     } catch (e) {
         const d = e.data?.details?.[0]
-        out.innerHTML = wfSimError(d ? `Rule ${d.rule_index + 1}: ${d.field}: ${d.message}` : e.message)
+        if (d) cvShowProblem(wfProblemFromDetail(d))
+        else toast(e.message, 'error')
     }
 }
 
-// wfSimError explains why a simulation could not run, inside the simulate card.
-function wfSimError(msg) {
-    return `<div class="callout bad" style="margin-top:var(--s4)">${icon('alert')}<div class="body">
-        <b>Simulation did not run</b>${esc(msg)}
-    </div></div>`
+function cvClearRun() {
+    cvClearTimers()
+    cv.run = null
+    cvRenderGraph()
+    cvRenderSide()
+    cvRenderHint()
 }
 
-function wfSimResultHTML(id, res) {
-    const rules = (res.workflow?.rules || []).map(tkRuleChip).join('') || '<span class="cell-sub">No rules</span>'
+function cvRunHTML() {
+    const run = cv.run
+    const res = run.res
+    const shown = run.steps.slice(0, run.step)
+    const done = run.step >= run.steps.length
+    const steps = shown.map(s => {
+        const n = wfNode(s.node_id)
+        const [tone, body] = cvStepText(s, n)
+        return `<div class="event ${tone}">
+            <div class="event-card">
+                <div class="event-head">
+                    <span class="title">${esc(s.title || n?.title || '?')}</span>
+                    <span class="src">${esc(cvKind(s.kind).label.toLowerCase())}</span>
+                    <span class="time num">step ${s.no}</span>
+                </div>
+                <div class="event-body">${body}</div>
+            </div>
+        </div>`
+    }).join('')
 
-    const actions = (res.actions || []).map(a => `<div class="row gap2 wrap">
-        ${tkResultBadge(a.result, true)}
-        <span><b>${esc(a.rule_name)}</b> · ${tkActionLabel(a.kind)}${tkActionSummary(a.kind, a.output)}${a.reason ? ` <span class="muted">(${esc(a.reason)})</span>` : ''}${a.error ? ` <span class="cond-result err">${esc(a.error)}</span>` : ''}</span>
-    </div>`).join('') || '<span class="cell-sub">No actions would run</span>'
+    const none = !run.steps.length
+    let after = ''
+    if (done && !none) {
+        const recips = (res.recipients || []).map(r => `<div class="stack gap1">
+            <div class="row gap2 wrap">
+                ${r.error ? badgeTag('Error', 'bad') : badgeTag(r.recipient_type, '')}
+                <span>${r.error
+                    ? `<b>${esc(r.title)}</b>: ${esc(r.error)}`
+                    : `<b>${esc(r.recipient_name)}</b> <span class="muted">via ${esc(r.title)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
+            </div>
+            ${r.message ? `<pre class="code prewrap">${esc(r.message)}</pre>` : ''}
+        </div>`).join('') || '<span class="cell-sub">Nobody would be notified</span>'
+        after = `<div class="stack gap2" style="margin-top:var(--s4)"><div class="eyebrow">Would notify</div><div class="stack gap3">${recips}</div></div>`
+    }
 
-    const recips = (res.recipients || []).map(r => `<div class="stack gap1">
-        <div class="row gap2 wrap">
-            ${r.error ? badgeTag('Error', 'bad') : badgeTag(r.recipient_type, '')}
-            <span>${r.error
-                ? `<b>${esc(r.rule_name)}</b>: ${esc(r.error)}`
-                : `<b>${esc(r.recipient_name)}</b> <span class="muted">via ${esc(r.rule_name)}${r.forwarded_from?.length ? `, forwarded from ${esc(r.forwarded_from.join(' → '))}` : ''}</span>`}</span>
-        </div>
-        ${r.message ? `<pre class="code prewrap">${esc(r.message)}</pre>` : ''}
-    </div>`).join('') || '<span class="cell-sub">Nobody would be notified</span>'
+    const summary = none
+        ? 'no trigger accepts this event'
+        : (done ? `${run.steps.length} step${run.steps.length === 1 ? '' : 's'} · ${esc(res.source)} snapshot` : 'running…')
 
-    const section = (label, body) => `<div class="stack gap2">
-        <div class="eyebrow">${label}</div>${body}
-    </div>`
-
-    return `<div class="card" style="margin-top:var(--s4);background:var(--surface-2)">
+    return `<aside class="dock dock-r"><article class="card">
         <div class="card-head">
             <div>
-                <h3>Simulation for <a class="link" href="#tickets/${id}">#${id}</a></h3>
-                <p>${esc(res.source)} snapshot · nothing was sent or written</p>
+                <h3>Simulation</h3>
+                <p>Ticket <a class="link num" href="#tickets/${run.ticket}">#${run.ticket}</a> · ${run.asNew ? 'created' : 'updated'}</p>
             </div>
+            <button class="icon-btn" aria-label="Close the simulation trace" onclick="cvClearRun()">${icon('x')}</button>
         </div>
-        <div class="card-body stack gap5">
-            ${section('Rules', `<div class="row wrap gap3">${rules}</div>`)}
-            ${section('Actions', `<div class="stack gap2">${actions}</div>`)}
-            ${section('Would notify', `<div class="stack gap3">${recips}</div>`)}
+        <div class="card-body">
+            ${none ? `<div class="callout warn">${icon('alert')}<div>No trigger listens for a ${run.asNew ? 'created' : 'updated'} ticket, so nothing runs.</div></div>` : `<div class="events">${steps}</div>`}
+            ${after}
         </div>
-    </div>`
+        <div class="card-foot">
+            <span class="cell-sub">${summary}</span>
+            <span class="badge warn">nothing sent</span>
+        </div>
+    </article></aside>`
+}
+
+// cvStepText explains one step of the trace: a tone for the rail dot and a sentence.
+function cvStepText(s, n) {
+    if (s.skipped === 'joined') return ['', 'Already ran on another trigger’s path; this walk stops here.']
+    if (s.error) return ['bad', `Error: ${esc(s.error)}${s.kind === 'if' ? ' — took the else branch.' : ''}`]
+    switch (s.kind) {
+    case 'trigger':
+        return ['accent', `Accepted the ${esc(cv.run.asNew ? 'created' : 'updated')} event.`]
+    case 'if':
+        if (s.skipped === 'disabled') return ['warn', 'Disabled — took the else branch.']
+        return s.matched ? ['ok', 'Matched — took the match branch.'] : ['warn', 'Did not match — took the else branch.']
+    }
+    const a = (cv.run.res.actions || []).find(x => x.node_id === s.node_id && x.no === s.no) || {}
+    const what = `${tkActionLabel(s.kind)}${tkActionSummary(s.kind, a.output)}`
+    switch (a.result) {
+    case 'queued':    return ['ok', `Would ${s.kind === 'notify' ? 'notify' : 'run'}: ${what}.`]
+    case 'would_run': return ['ok', `Would write to ConnectWise: ${what}.`]
+    case 'ok':        return ['ok', s.kind === 'skip_notify' ? 'Later notify steps on this path are silenced.' : `Done: ${what}.`]
+    case 'skipped':   return ['', `Skipped${a.reason ? ` — ${esc(a.reason)}` : ''}.`]
+    case 'error':     return ['bad', `Error: ${esc(a.error || 'unknown')}`]
+    }
+    return ['', what]
 }
 
 // ── Save ─────────────────────────────────────────────────
+// wfClientValidate catches what the inspector can show before a round trip: an incomplete step.
+// Structural problems (loops, unreachable steps) come back from the server.
 function wfClientValidate() {
-    for (const [i, r] of wf.rules.entries()) {
-        if (!r.name.trim()) return { i, msg: 'Rule name is required' }
-        if (r._ui?.mode === 'builder') {
-            const c = wfCompile(r._ui)
-            if (c.errors.length) return { i, msg: c.errors[0] }
+    if (!wf.nodes.some(n => n.kind === 'trigger')) return { msg: 'A workflow needs at least one trigger' }
+    for (const n of wf.nodes) {
+        const name = n.title || cvKind(n.kind).label
+        const bad = msg => ({ id: n.id, msg: `${name}: ${msg}` })
+        switch (n.kind) {
+        case 'trigger':
+            if (!(n.events || []).length) return bad('pick at least one event')
+            break
+        case 'if':
+            if (n._ui?.mode === 'builder') {
+                const c = wfCompile(n._ui)
+                if (c.errors.length) return bad(c.errors[0])
+            }
+            break
+        case 'notify':
+            if (n.notify?.target !== 'resources_owner' && !n.notify?.recipient_id) return bad(`choose a ${n.notify?.target || 'room'}`)
+            break
+        case 'add_note':
+            if (!n.add_note?.text?.trim()) return bad('note text is required')
+            if (!n.add_note.internal && !n.add_note.discussion && !n.add_note.resolution) return bad('pick at least one note type')
+            break
+        case 'set_status':
+            if (!n.set_status?.status_id) return bad('choose a status')
+            break
+        case 'set_priority':
+            if (!n.set_priority?.priority_id) return bad('choose a priority')
+            break
+        case 'set_owner':
+        case 'add_resource':
+            if (!n[n.kind]?.member_id) return bad('choose a member')
+            break
+        case 'patch': {
+            const err = wfPatchOpsError(n.patch?.ops)
+            if (err) return bad(err)
+            break
         }
-        for (const [j, a] of r.actions.entries()) {
-            const n = j + 1
-            switch (a.kind) {
-            case 'notify':
-                if (a.notify.target !== 'resources_owner' && !a.notify.recipient_id) return { i, j, msg: `Action ${n}: choose a ${a.notify.target}` }
-                break
-            case 'add_note':
-                if (!a.add_note.text.trim()) return { i, j, msg: `Action ${n}: note text is required` }
-                if (!a.add_note.internal && !a.add_note.discussion && !a.add_note.resolution) return { i, j, msg: `Action ${n}: pick at least one note type` }
-                break
-            case 'set_status':
-                if (!a.set_status?.status_id) return { i, j, msg: `Action ${n}: choose a status` }
-                break
-            case 'set_priority':
-                if (!a.set_priority?.priority_id) return { i, j, msg: `Action ${n}: choose a priority` }
-                break
-            case 'set_owner':
-            case 'add_resource':
-                if (!a[a.kind]?.member_id) return { i, j, msg: `Action ${n}: choose a member` }
-                break
-            case 'patch': {
-                const err = wfPatchOpsError(a.patch?.ops)
-                if (err) return { i, j, msg: `Action ${n}: ${err}` }
-                break
-            }
-            }
         }
     }
     return null
@@ -797,53 +1516,77 @@ function wfPatchOpsError(ops) {
     return null
 }
 
-// wfPrepareForServer normalizes editor-only shapes into what the API expects. It mutates and
-// returns w; pass a copy when the editor state must be preserved.
-function wfPrepareForServer(w) {
-    for (const r of w.rules) delete r._ui
-    for (const r of w.rules) for (const a of r.actions) {
-        if (a.kind === 'notify') {
-            if (a.notify.recipient_id === null) delete a.notify.recipient_id   // server rejects null for resources_owner
-            if (!a.notify.message) delete a.notify.message
+// wfNodeForServer normalizes one node into what the API accepts: editor-only state dropped, empty
+// optional settings removed, patch ops parsed.
+function wfNodeForServer(n) {
+    const out = { id: n.id, kind: n.kind, title: n.title, enabled: !!n.enabled, x: Math.round(n.x || 0), y: Math.round(n.y || 0) }
+    if (n.kind === 'trigger') out.events = n.events || []
+    else if (n.kind === 'if') { if (n.condition) out.condition = n.condition }
+    else if (n[n.kind]) {
+        const s = JSON.parse(JSON.stringify(n[n.kind]))
+        if (n.kind === 'notify') {
+            if (s.recipient_id === null || s.recipient_id === undefined) delete s.recipient_id   // server rejects null for resources_owner
+            if (!s.message) delete s.message
         }
-        if (a.kind === 'patch' && typeof a.patch?.ops === 'string') {
-            try { a.patch.ops = JSON.parse(a.patch.ops) } catch { /* server reports the syntax error */ }
+        if (n.kind === 'patch' && typeof s.ops === 'string') {
+            try { s.ops = JSON.parse(s.ops) } catch { /* server reports the syntax error */ }
         }
+        out[n.kind] = s
     }
+    return out
+}
+
+// wfPrepareForServer normalizes the whole document. It mutates and returns w; pass a copy when
+// the editor state must be preserved.
+function wfPrepareForServer(w) {
+    w.nodes = (w.nodes || []).map(wfNodeForServer)
+    w.edges = (w.edges || []).map(e => ({ id: e.id, from: e.from, to: e.to, port: e.port }))
     return w
+}
+
+// wfProblemFromDetail turns a server validation error into something the canvas can point at.
+function wfProblemFromDetail(d) {
+    if (d.node_id) {
+        const n = wfNode(d.node_id)
+        return { id: d.node_id, pos: d.pos, field: d.field, msg: `${n?.title || 'Step'}: ${d.field}: ${d.message}` }
+    }
+    if (d.edge_id) return { edge: d.edge_id, msg: `Wire: ${d.field}: ${d.message}` }
+    return { msg: `${d.field}: ${d.message}` }
+}
+
+// cvShowProblem selects the offending step or wire, marks it, and says what is wrong.
+function cvShowProblem(p) {
+    toast(p.msg, 'error')
+    if (p.edge) { cvSelectEdge(p.edge); return }
+    if (!p.id) return
+    cv.errNode = p.id
+    cvSelect(p.id)
+    if (p.field === 'condition' && typeof p.pos === 'number') {
+        const ta = document.getElementById(`cond-${p.id}`)
+        if (ta) { ta.focus(); ta.setSelectionRange(p.pos, p.pos) }
+    }
 }
 
 async function saveWorkflow() {
     const bad = wfClientValidate()
-    if (bad) {
-        toast(`Rule ${bad.i + 1}: ${bad.msg}`, 'error')
-        document.getElementById(`rule-${bad.i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        return
-    }
+    if (bad) { cvShowProblem(bad); return }
 
     const btn = document.getElementById('wf-save')
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…' }
     try {
         const saved = await api('PUT', `/workflows/${wf.id}`, wfPrepareForServer(JSON.parse(JSON.stringify(wf))))
-        const uis = wf.rules.map(r => r._ui)
+        const uis = Object.fromEntries(wf.nodes.map(n => [n.id, n._ui]))
         wf = wfNormalize(saved)
-        wf.rules.forEach((r, i) => { r._ui = uis[i] || wfDefaultUI() })
+        for (const n of wf.nodes) if (n.kind === 'if') n._ui = uis[n.id] || wfDefaultUI()
         wfOriginal = JSON.stringify(wfStrip(wf))
+        cv.errNode = null
+        if (cv.sel && !wfNode(cv.sel)) cv.sel = null
         renderWorkflowEditor()
         toast('Workflow saved', 'success')
     } catch (e) {
         const d = e.data?.details?.[0]
-        if (d) {
-            const where = `Rule ${d.rule_index + 1}${d.action_index != null ? `, action ${d.action_index + 1}` : ''}`
-            toast(`${where}: ${d.field}: ${d.message}`, 'error')
-            document.getElementById(`rule-${d.rule_index}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            if (d.field === 'condition' && typeof d.pos === 'number') {
-                const ta = document.getElementById(`cond-${d.rule_index}`)
-                if (ta) { ta.focus(); ta.setSelectionRange(d.pos, d.pos) }
-            }
-        } else {
-            toast(e.message, 'error')
-        }
+        if (d) cvShowProblem(wfProblemFromDetail(d))
+        else toast(e.message, 'error')
         if (btn) { btn.disabled = false; btn.textContent = 'Save' }
     }
 }

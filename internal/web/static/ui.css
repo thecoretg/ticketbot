@@ -89,6 +89,12 @@
   --chart-5: var(--c5);
   --chart-6: var(--c6);
 
+  /* ---- flow canvas: the trigger node's hue. A chart slot rather than the
+     accent so a trigger never reads as an if node; palettes whose --c5 is
+     teal (indigo, plum) would collide with their own accent, so they pick a
+     different slot below. ---- */
+  --trigger: var(--chart-5);
+
   /* ---- shadows, tinted to match the neutrals ---- */
   --sh: color-mix(in srgb, var(--tint) 55%, #000000);
   --shadow-sm: 0 1px 2px color-mix(in srgb, var(--sh) 7%, transparent);
@@ -113,6 +119,7 @@
 :root[data-palette="indigo"] {
   --seed: #3D45A8; --seed-dark: #8288E8; --tint: #6B6E86;
   --c2: #B4531F; --c3: #2E7D5B; --c4: #A8770F; --c5: #0E6F80; --c6: #8E90A0;
+  --trigger: var(--chart-2);
 }
 :root[data-palette="moss"] {
   --seed: #3E6B43; --seed-dark: #6FB277; --tint: #77806B;
@@ -121,6 +128,7 @@
 :root[data-palette="plum"] {
   --seed: #8E3A63; --seed-dark: #D97BA8; --tint: #7E6B78;
   --c2: #35618E; --c3: #2E7D5B; --c4: #A8770F; --c5: #0E6F80; --c6: #9B8F98;
+  --trigger: var(--chart-4);
 }
 :root[data-palette="graphite"] {
   --seed: #26251F; --seed-dark: #EDEAE0; --tint: #79766E;
@@ -1020,110 +1028,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .banner .btn { margin-left: auto; }
 .banner-sticky { position: sticky; top: calc(var(--topbar-h) + var(--s3)); z-index: 20; box-shadow: var(--shadow); }
 
-/* ---- ordered rule cards ---- */
-.section-head {
-  display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
-  margin: var(--s8) 0 var(--s4);
-}
-.section-head h3 { font-size: var(--text-md); font-weight: 600; letter-spacing: -0.01em; }
-.section-head p { font-size: var(--text-sm); color: var(--muted); }
-
-.rule-list { position: relative; }
-
-.rule-card {
-  position: relative;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
-  transition: opacity var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-/* room for the connector drawn in the gap by .rule-card + .rule-card::before */
-.rule-card + .rule-card { margin-top: 34px; }
-.rule-card + .rule-card::before {
-  content: ""; position: absolute; left: 26px; top: -34px;
-  width: 0; height: 28px; border-left: 1px solid var(--line);
-}
-.rule-card + .rule-card::after {
-  content: ""; position: absolute; left: 26px; top: -13px;
-  width: 7px; height: 7px;
-  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
-  transform: translateX(-50%) rotate(45deg);
-}
-.rule-card.is-disabled { opacity: .55; }
-.rule-card.is-disabled:hover { opacity: .8; }
-.rule-head {
-  display: flex; align-items: center; gap: var(--s3);
-  padding: var(--s3) var(--s4);
-  background: var(--bg-sunken);
-  border-bottom: 1px solid var(--line);
-  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
-}
-/* collapsed: the head is the whole card */
-.rule-card:not(.is-open) .rule-head { border-radius: inherit; border-bottom: 0; }
-.rule-card:not(.is-open) .rule-body { display: none; }
-.rule-index {
-  width: 22px; height: 22px; border-radius: var(--radius-sm); flex-shrink: 0;
-  display: grid; place-items: center;
-  background: var(--accent-soft); color: var(--accent-on-soft);
-  font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600;
-}
-
-/* summary of a collapsed rule: trigger, conditions, actions */
-.rule-sum {
-  margin-left: auto; max-width: 34ch;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.rule-card.is-open .rule-sum { display: none; }
-
-.rule-toggle { width: 28px; height: 28px; flex-shrink: 0; color: var(--muted); }
-.rule-toggle svg { width: 15px; height: 15px; transition: rotate var(--dur) var(--ease); }
-.rule-card.is-open .rule-toggle svg { rotate: 180deg; }
-.rule-name {
-  flex: 1; min-width: 0; border: 1px solid transparent; background: none;
-  padding: 4px var(--s2); border-radius: var(--radius-sm);
-  font-size: var(--text-base); font-weight: 500;
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
-}
-.rule-name:hover { border-color: var(--line); }
-.rule-name:focus { outline: none; border-color: var(--accent); background: var(--surface); }
-.rule-body { padding: var(--s4); display: flex; flex-direction: column; gap: var(--s4); }
-
-/* drag to reorder — behaviour lives in the optional assets/reorder.js */
-.rule-grip {
-  position: relative;   /* for the hit-target expansion below */
-  display: grid; place-items: center;
-  width: 20px; height: 26px; flex-shrink: 0;
-  border-radius: var(--radius-sm); color: var(--faint); cursor: grab;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.rule-grip svg { width: 16px; height: 16px; }
-.rule-grip:hover { background: var(--bg-sunken); color: var(--ink-2); }
-.rule-grip:active { cursor: grabbing; }
-/* the dots are small on purpose; the thing you can grab is not */
-.rule-grip::after {
-  content: ""; position: absolute; left: 50%; top: 50%; translate: -50% -50%;
-  width: max(100%, 28px); height: max(100%, 28px);
-}
-
-/* the item being carried stays in place, faded, so the list keeps its shape */
-.is-source { opacity: .4; box-shadow: none; }
-.is-source::before, .is-source::after { opacity: .3; }
-
-.drag-ghost {
-  position: absolute; z-index: 5; pointer-events: none;
-  background: var(--surface); border: 1px solid var(--accent-line);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-  rotate: -0.4deg;
-}
-.drop-line {
-  position: absolute; z-index: 4; left: 0; right: 0; height: 2px;
-  background: var(--accent); border-radius: 2px;
-}
-.drop-line::before {
-  content: ""; position: absolute; left: 0; top: 50%;
-  width: 8px; height: 8px; translate: -2px -50%;
-  border-radius: 99px; background: var(--accent);
-}
-
 /* ---- a pointer drag in progress ----
    Put .is-dragging on the shell for the length of the gesture. Without it the
    drag starts a text selection that runs through everything the pointer passes
@@ -1138,35 +1042,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .is-dragging.drag-link { cursor: crosshair; }
 .is-dragging.drag-copy { cursor: copy; }
 .is-dragging .dock, .is-dragging .dock-bar { pointer-events: none; }
-
-.order-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
-.order-btns button {
-  position: relative; width: 24px; height: 17px; display: grid; place-items: center;
-  border-radius: 4px; color: var(--muted);
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
-}
-.order-btns button svg { width: 13px; height: 13px; stroke-width: 2.2; }
-.order-btns button::after {
-  content: ""; position: absolute; left: 50%; top: 50%; translate: -50% -50%;
-  width: 24px; height: 24px;
-}
-.order-btns button:hover:not(:disabled) { background: var(--bg-sunken); color: var(--ink); }
-.order-btns button:disabled { color: var(--faint); cursor: not-allowed; }
-
-.action-row {
-  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap;
-  padding: var(--s3); border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--surface-2);
-}
-.action-row + .action-row { margin-top: var(--s2); }
-/* an action whose fields need more than one line: the extra content goes on
-   its own full-width line, indented under the action's type select, so
-   everything on the first line stays a single-height peer and align-items
-   centre still means what it says. */
-.action-row { --action-indent: 78px; }
-.action-row > .action-detail { flex-basis: 100%; margin-left: var(--action-indent); }
-.action-row.is-disabled { opacity: .5; }
-.action-flags { display: flex; gap: var(--s3); flex-wrap: wrap; }
 
 /* ---- condition builder ---- */
 .cond {
@@ -1503,3 +1378,127 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 [data-theme="dark"] [data-ramp="moss"] i:nth-child(1) { background: #6FB277; }
 [data-theme="dark"] [data-ramp="plum"] i:nth-child(1) { background: #D97BA8; }
 [data-theme="dark"] [data-ramp="graphite"] i:nth-child(1) { background: #EDEAE0; }
+
+/* ---- flow canvas ----
+   A free-positioned node graph: a pannable, zoomable .plane inside a .canvas,
+   wires drawn in one oversized SVG behind the cards, ports as real buttons on
+   top. Card heights are fixed per kind (88px, 136px for .isif) and the script
+   places ports from those constants: a card that sized itself from its content
+   would put every wire endpoint off by the difference. Overlays over the
+   canvas are .dock / .dock-bar; .is-dragging on the shell covers a gesture. */
+
+/* tone carriers: each node kind sets one pair the card and its icon chip use */
+.t-start { --nc: var(--trigger); --nc-soft: color-mix(in srgb, var(--trigger) 13%, var(--surface)); }
+.t-logic { --nc: var(--accent); --nc-soft: var(--accent-soft); }
+.t-notify{ --nc: var(--info);   --nc-soft: var(--info-soft); }
+.t-write { --nc: var(--warn);   --nc-soft: var(--warn-soft); }
+.t-stop  { --nc: var(--bad);    --nc-soft: var(--bad-soft); }
+
+.canvas {
+  position: relative; width: 100%; height: 620px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background-color: var(--bg-sunken);
+  overflow: hidden; touch-action: none; cursor: grab;
+}
+.canvas.panning { cursor: grabbing; }
+.plane { position: absolute; top: 0; left: 0; width: 1px; height: 1px; transform-origin: 0 0; }
+.wires { position: absolute; top: -4000px; left: -4000px; width: 8000px; height: 8000px; pointer-events: none; overflow: visible; }
+.wire { fill: none; stroke: color-mix(in srgb, var(--muted) 52%, transparent); stroke-width: 2; }
+.wire.hot { stroke: var(--accent); }
+.wire.pick { stroke: var(--accent); stroke-width: 3; }
+.wire.temp { stroke: var(--accent); stroke-dasharray: 5 5; }
+.wire.ran { stroke: var(--ok); stroke-width: 3; }
+.wire.dim { opacity: .3; }
+.wirehit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; cursor: pointer; }
+
+.node {
+  position: absolute; top: 0; left: 0; width: 248px; height: 88px;
+  display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); touch-action: none; cursor: grab;
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.node.isif { height: 136px; }
+/* the entry point reads as solid rather than tinted: a filled chip and a card
+   edge carrying its hue. Both give way to .sel / .hit / .now below. */
+.node.t-start { border-color: color-mix(in srgb, var(--trigger) 32%, var(--line)); }
+.node.t-start .node-ico { background: var(--nc); color: var(--accent-ink); }
+.node.sel { border-color: var(--nc); box-shadow: 0 0 0 3px var(--nc-soft), var(--shadow); }
+.node.off { opacity: .55; }
+.node.dim { opacity: .34; }
+.node.hit { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-soft); }
+.node.now { border-color: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft), var(--shadow); }
+.node.err { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }
+.node-top { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3) 0; }
+.node-ico { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 6px; background: var(--nc-soft); color: var(--nc); }
+.node-ico svg { width: 14px; height: 14px; }
+.node-kind { font-size: var(--text-2xs); font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--nc); }
+.node-body { flex: 1; min-height: 0; padding: 3px var(--s3) var(--s3); }
+.node-title { font-size: var(--text-sm); font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-sub { font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-cond {
+  margin: 0 var(--s3) var(--s3); padding: var(--s2); border-radius: var(--radius-sm);
+  background: var(--bg-sunken); border: 1px solid var(--line-soft);
+  font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.step-no {
+  position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--ok); color: var(--surface);
+  font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 600;
+}
+
+/* ports are real buttons: 24px hit target, 11px dot */
+.port {
+  position: absolute; width: 24px; height: 24px; padding: 0; border: 0; background: none;
+  transform: translate(-50%, -50%); display: grid; place-items: center; cursor: crosshair;
+}
+.port::before {
+  content: ''; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--surface); border: 2px solid color-mix(in srgb, var(--muted) 52%, transparent);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.port.wired::before { background: var(--accent); border-color: var(--accent); }
+.port:hover::before { border-color: var(--accent); transform: scale(1.25); }
+.port.inp { pointer-events: none; }
+.port.tgt::before { background: var(--accent); border-color: var(--accent); transform: scale(1.4); }
+
+.wlabel {
+  position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none;
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  padding: 1px 7px; border-radius: var(--radius-full);
+  background: var(--surface); border: 1px solid var(--line); color: var(--muted);
+}
+.wlabel.yes { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 36%, var(--surface)); }
+.wirex {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--bad); color: var(--bad); box-shadow: var(--shadow-sm);
+}
+.wirex svg { width: 12px; height: 12px; stroke-width: 2; }
+.wirex:hover { background: var(--bad); color: var(--bad-ink); }
+
+.ghost {
+  position: absolute; top: 0; left: 0; width: 248px; height: 88px;
+  border: 1.5px dashed var(--accent); border-radius: var(--radius); background: var(--accent-soft);
+  pointer-events: none; display: grid; place-items: center; font-size: var(--text-xs); color: var(--accent-on-soft);
+}
+
+/* the step list's draggable entries */
+.pal-list { display: flex; flex-direction: column; gap: 3px; }
+.pal {
+  display: flex; align-items: center; gap: var(--s2); width: 100%; text-align: left;
+  padding: 5px var(--s2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); font-size: var(--text-sm); color: var(--ink-2);
+  cursor: grab; touch-action: none;
+}
+.pal:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-on-soft); }
+.pal .swat { width: 8px; height: 8px; border-radius: 2px; background: var(--nc); flex: none; }
+
+/* zoom cluster and status line are .dock-bar corners; .pct is the zoom readout */
+.dock-bar .pct { min-width: 46px; text-align: center; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .wire.ran { stroke-dasharray: 7 6; animation: wire-dash 700ms linear infinite; }
+  @keyframes wire-dash { to { stroke-dashoffset: -26; } }
+}

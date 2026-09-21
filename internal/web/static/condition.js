@@ -1,14 +1,15 @@
 // ─────────────────────────────────────────────────────────
 // Condition builder
 //
-// A rule's condition is always stored as text (ConnectWise-style syntax evaluated by the server).
-// The builder is a view over that text: rows compile to text on every change, and text is parsed
-// back into rows (via /workflows/parse-condition) when a rule loads or the user switches modes.
-// Conditions the builder cannot represent (nested groups, "not", unknown paths, complex wildcards)
-// stay in advanced mode with a note saying why.
+// An if node's condition is always stored as text (ConnectWise-style syntax evaluated by the
+// server). The builder is a view over that text: rows compile to text on every change, and text is
+// parsed back into rows (via /workflows/parse-condition) when a node loads or the user switches
+// modes. Conditions the builder cannot represent (nested groups, "not", unknown paths, complex
+// wildcards) stay in advanced mode with a note saying why.
 //
-// Per-rule UI state lives on rule._ui = { mode: 'builder'|'advanced', join: 'and'|'or', rows, reason, open }.
-// It is stripped before save and before the dirty compare, so collapsing a rule is not an edit.
+// Per-node UI state lives on node._ui = { mode: 'builder'|'advanced', join: 'and'|'or', rows, reason }.
+// It is stripped before save and before the dirty compare. Every function here takes the node id
+// (i) where the old rule editor took a rule index; wfNode(i) resolves it.
 // ─────────────────────────────────────────────────────────
 let wfFields = []                    // /workflows/fields
 let wfBoards = []                    // /cw/boards
@@ -41,7 +42,7 @@ function wfFieldByPath(path) {
 }
 
 function wfDefaultUI() {
-    return { mode: 'builder', join: 'and', rows: [], reason: '', open: false }
+    return { mode: 'builder', join: 'and', rows: [], reason: '' }
 }
 
 function wfNewRow() {
@@ -170,8 +171,8 @@ function wfRowFromLeaf(n) {
     throw new Error(`operator "${n.op}" is not supported by the builder`)
 }
 
-// wfLoadRuleUI parses a rule's condition into builder state. Never throws; falls back to advanced.
-async function wfLoadRuleUI(rule) {
+// wfLoadNodeUI parses a node's condition into builder state. Never throws; falls back to advanced.
+async function wfLoadNodeUI(rule) {
     const ui = wfDefaultUI()
     if (!(rule.condition || '').trim()) { rule._ui = ui; return }
     try {
@@ -208,25 +209,26 @@ function wfLookupLabel(source, it) {
 }
 
 // ── Rendering ────────────────────────────────────────────
-function wfConditionHTML(r, i) {
+function wfConditionHTML(r) {
+    const i = r.id
     const ui = r._ui || (r._ui = wfDefaultUI())
     const advanced = ui.mode === 'advanced'
     const compiled = advanced ? null : wfCompile(ui)
     const count    = advanced ? '' : `${ui.rows.length} condition${ui.rows.length === 1 ? '' : 's'}`
 
-    // the join is one choice for the whole rule, so it lives in the header rather
+    // the join is one choice for the whole condition, so it lives in the header rather
     // than repeating as a cramped select on every row
     const join = !advanced && ui.rows.length > 1
         ? `<span class="cell-sub">Match</span>
            <div class="seg" role="group" aria-label="Match all or any condition">
-               <button class="${ui.join === 'and' ? 'on' : ''}" onclick="wfSetJoin(${i}, 'and')">all</button>
-               <button class="${ui.join === 'or' ? 'on' : ''}" onclick="wfSetJoin(${i}, 'or')">any</button>
+               <button class="${ui.join === 'and' ? 'on' : ''}" onclick="wfSetJoin('${i}', 'and')">all</button>
+               <button class="${ui.join === 'or' ? 'on' : ''}" onclick="wfSetJoin('${i}', 'or')">any</button>
            </div>`
         : ''
 
     const tabs = `<div class="cond-tabs">
-        <button class="${advanced ? '' : 'on'}" onclick="wfSetCondMode(${i}, 'builder')">Builder</button>
-        <button class="${advanced ? 'on' : ''}" onclick="wfSetCondMode(${i}, 'advanced')">Advanced</button>
+        <button class="${advanced ? '' : 'on'}" onclick="wfSetCondMode('${i}', 'builder')">Builder</button>
+        <button class="${advanced ? 'on' : ''}" onclick="wfSetCondMode('${i}', 'advanced')">Advanced</button>
         <span class="grow"></span>
         ${join}
         <span class="cell-sub">${count}</span>
@@ -239,15 +241,15 @@ function wfConditionHTML(r, i) {
             </div></div>` : ''}
             <textarea class="textarea mono" id="cond-${i}" rows="2" spellcheck="false" aria-label="Condition"
                 placeholder="status/name = 'New' and summary contains 'vpn'  — empty always matches"
-                oninput="wfSetRule(${i}, 'condition', this.value)">${esc(r.condition)}</textarea>
+                oninput="wfSetNode('${i}', 'condition', this.value)">${esc(r.condition)}</textarea>
         </div>`
         : `<div class="cond-rows" id="cond-builder-${i}">
             ${ui.rows.map((row, k) => wfRowHTML(i, k, row, ui)).join('')}
-            <div><button class="btn btn-default btn-sm" onclick="wfAddRow(${i})">${icon('plus')}Add condition</button></div>
-            ${ui.rows.length ? '' : '<p class="cell-sub">No conditions: this rule matches every ticket its trigger allows.</p>'}
+            <div><button class="btn btn-default btn-sm" onclick="wfAddRow('${i}')">${icon('plus')}Add condition</button></div>
+            ${ui.rows.length ? '' : '<p class="cell-sub">No conditions: every ticket that reaches this step matches.</p>'}
         </div>`
 
-    return `<div class="field">
+    return `<div class="field" id="cond-wrap-${i}">
         <label>Condition</label>
         <div class="cond">
             ${tabs}
@@ -261,10 +263,10 @@ function wfConditionHTML(r, i) {
 function wfCondFootHTML(i, compiled) {
     return `<div class="cond-foot">
         <div class="grow" style="min-width:220px" id="cond-preview-${i}">${wfPreviewHTML(compiled)}</div>
-        <button class="btn btn-default btn-sm" onclick="wfValidate(${i})">Validate</button>
+        <button class="btn btn-default btn-sm" onclick="wfValidate('${i}')">Validate</button>
         <span id="cond-result-${i}" class="cond-result" role="status"></span>
         <input type="number" id="test-ticket-${i}" class="input" style="width:110px" placeholder="Ticket #" min="1" aria-label="Ticket number to test this condition against">
-        <button class="btn btn-default btn-sm" onclick="wfTest(${i})">Test</button>
+        <button class="btn btn-default btn-sm" onclick="wfTest('${i}')">Test</button>
         <span id="test-result-${i}" class="cond-result" role="status"></span>
     </div>`
 }
@@ -275,7 +277,7 @@ function wfPreviewHTML(compiled) {
     if (!compiled) return '<span class="cell-sub">Condition is edited as text.</span>'
     const code = compiled.text
         ? `<pre class="code prewrap">${esc(compiled.text)}</pre>`
-        : '<span class="cell-sub">Matches every ticket its trigger allows.</span>'
+        : '<span class="cell-sub">Matches every ticket that reaches this step.</span>'
     return compiled.errors.length
         ? `${code}<div class="cond-result err" style="margin-top:var(--s2)">${esc(compiled.errors[0])}</div>`
         : code
@@ -286,22 +288,22 @@ function wfRowHTML(i, k, row, ui) {
     const groups = {}
     for (const fd of wfFields) (groups[fd.group] = groups[fd.group] || []).push(fd)
 
-    // rows after the first are prefixed with the rule's join, set in the header
+    // rows after the first are prefixed with the join, set in the header
     const join = k === 0
         ? '<span class="cond-join-spacer"></span>'
         : `<span class="cond-join">${esc(ui.join)}</span>`
 
-    const fieldSel = `<select class="select" style="min-width:180px" aria-label="Field" onchange="wfSetRowField(${i}, ${k}, this.value)">${
+    const fieldSel = `<select class="select" style="min-width:180px" aria-label="Field" onchange="wfSetRowField('${i}', ${k}, this.value)">${
         Object.entries(groups).map(([g, fs]) => `<optgroup label="${esc(g)}">${fs.map(fd => `<option value="${esc(fd.path)}"${fd.path === f.path ? ' selected' : ''}>${esc(fd.label)}</option>`).join('')}</optgroup>`).join('')
     }</select>`
-    const opSel = `<select class="select" style="min-width:130px" aria-label="Operator" onchange="wfSetRowOp(${i}, ${k}, this.value)">${
+    const opSel = `<select class="select" style="min-width:130px" aria-label="Operator" onchange="wfSetRowOp('${i}', ${k}, this.value)">${
         wfOpsFor(f).map(([v, l]) => `<option value="${v}"${v === row.op ? ' selected' : ''}>${l}</option>`).join('')
     }</select>`
 
     return `<div class="cond-row" id="cond-row-${i}-${k}">
         ${join}${fieldSel}${opSel}
         <div class="row gap2 grow" style="min-width:200px">${wfValueHTML(i, k, row, f)}</div>
-        <button class="icon-btn hit-expand" style="width:26px;height:26px" aria-label="Remove condition ${k + 1}" onclick="wfRemoveRow(${i}, ${k})">${icon('trash')}</button>
+        <button class="icon-btn hit-expand" style="width:26px;height:26px" aria-label="Remove condition ${k + 1}" onclick="wfRemoveRow('${i}', ${k})">${icon('trash')}</button>
     </div>`
 }
 
@@ -317,16 +319,16 @@ function wfValueHTML(i, k, row, f) {
 
         if (!multi) {
             if (searchable) return wfTypeaheadHTML(i, k, f, row.value === null || row.value === '' ? '' : `${labelFor(row.value)}`)
-            return `<select class="select grow" aria-label="Value" onchange="wfSetRowValue(${i}, ${k}, this.value)">
+            return `<select class="select grow" aria-label="Value" onchange="wfSetRowValue('${i}', ${k}, this.value)">
                 <option value="">— choose —</option>${list.map(o => `<option value="${esc(String(o.value))}"${String(o.value) === String(row.value ?? '') ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}
             </select>`
         }
 
         const vals = Array.isArray(row.value) ? row.value : []
-        const chips = vals.map(v => `<span class="chip">${esc(labelFor(v))}<button class="chip-x hit-expand" type="button" aria-label="Remove ${esc(labelFor(v))}" onclick="wfRemoveRowValue(${i}, ${k}, '${esc(String(v))}')">${icon('x')}</button></span>`).join('')
+        const chips = vals.map(v => `<span class="chip">${esc(labelFor(v))}<button class="chip-x hit-expand" type="button" aria-label="Remove ${esc(labelFor(v))}" onclick="wfRemoveRowValue('${i}', ${k}, '${esc(String(v))}')">${icon('x')}</button></span>`).join('')
         const adder = searchable
             ? wfTypeaheadHTML(i, k, f, '', true)
-            : `<select class="select" style="width:auto" aria-label="Add a value" onchange="if (this.value) { wfAddRowValue(${i}, ${k}, this.value); this.value = '' }">
+            : `<select class="select" style="width:auto" aria-label="Add a value" onchange="if (this.value) { wfAddRowValue('${i}', ${k}, this.value); this.value = '' }">
                 <option value="">+ add…</option>${list.filter(o => !vals.map(String).includes(String(o.value))).map(o => `<option value="${esc(String(o.value))}">${esc(o.label)}</option>`).join('')}
             </select>`
         return `<div class="chips grow">${chips}${adder}</div>`
@@ -335,9 +337,9 @@ function wfValueHTML(i, k, row, f) {
     const type = f.type === 'number' ? 'number' : 'text'
     if (multi) {
         const text = Array.isArray(row.value) ? row.value.join(', ') : ''
-        return `<input class="input grow" type="text" aria-label="Values, comma separated" placeholder="value, value, …" value="${esc(text)}" oninput="wfSetRowValue(${i}, ${k}, this.value.split(',').map(s => s.trim()).filter(Boolean))">`
+        return `<input class="input grow" type="text" aria-label="Values, comma separated" placeholder="value, value, …" value="${esc(text)}" oninput="wfSetRowValue('${i}', ${k}, this.value.split(',').map(s => s.trim()).filter(Boolean))">`
     }
-    return `<input class="input grow" type="${type}" aria-label="Value" placeholder="value" value="${esc(row.value ?? '')}" oninput="wfSetRowValue(${i}, ${k}, this.value)">`
+    return `<input class="input grow" type="${type}" aria-label="Value" placeholder="value" value="${esc(row.value ?? '')}" oninput="wfSetRowValue('${i}', ${k}, this.value)">`
 }
 
 // wfListSelectHTML offers the admin lists whose item type matches the field.
@@ -348,7 +350,7 @@ function wfListSelectHTML(i, k, row, f) {
     const opts = lists.map(l => `<option value="${l.id}"${String(l.id) === current ? ' selected' : ''}>${esc(l.name)} (${l.item_count})</option>`).join('')
     const missing = current && !known ? `<option value="${esc(current)}" selected disabled>(missing list #${esc(current)})</option>` : ''
     const empty = lists.length ? '' : `<option value="" disabled>No ${esc(f.list_type)} lists yet — create one under Lists</option>`
-    return `<select class="select grow" aria-label="List" onchange="wfSetRowValue(${i}, ${k}, this.value === '' ? null : Number(this.value))">
+    return `<select class="select grow" aria-label="List" onchange="wfSetRowValue('${i}', ${k}, this.value === '' ? null : Number(this.value))">
         <option value="">— choose list —</option>${missing}${opts}${empty}
     </select>`
 }
@@ -358,7 +360,7 @@ function wfTypeaheadHTML(i, k, f, current, add = false) {
         <input class="input" type="text" autocomplete="off"
             aria-label="${add ? `Add a ${esc(f.source)}` : `Search ${esc(f.source)}`}"
             placeholder="${add ? '+ search…' : `search ${esc(f.source)}…`}" value="${esc(current)}"
-            oninput="wfTypeahead(${i}, ${k}, '${f.source}', this, ${add})">
+            oninput="wfTypeahead('${i}', ${k}, '${f.source}', this, ${add})">
     </span>`
 }
 
@@ -399,9 +401,9 @@ function wfTypeahead(i, k, source, input, add) {
     }, 250)
 }
 
-// wfSiblingCompany finds a "Company is X" row in the same rule, to scope contact searches.
+// wfSiblingCompany finds a "Company is X" row in the same condition, to scope contact searches.
 function wfSiblingCompany(i, k) {
-    for (const [j, row] of wf.rules[i]._ui.rows.entries()) {
+    for (const [j, row] of wfNode(i)._ui.rows.entries()) {
         if (j !== k && row.path === 'company/id' && row.op === 'eq' && row.value) return row.value
     }
     return null
@@ -409,53 +411,54 @@ function wfSiblingCompany(i, k) {
 
 // ── Mutations ────────────────────────────────────────────
 function wfSyncCondition(i) {
-    const r = wf.rules[i]
+    const r = wfNode(i)
     const compiled = wfCompile(r._ui)
     r.condition = compiled.text
     const el = document.getElementById(`cond-preview-${i}`)
     if (el) el.innerHTML = wfPreviewHTML(compiled)
+    cvRefreshNode(i)
     wfMarkDirty()
 }
 
 function wfRerenderCondition(i) {
     wfSyncCondition(i)
-    wfRerenderRule(i)
+    wfRerenderCondBlock(i)
 }
 
 async function wfSetCondMode(i, mode) {
-    const r = wf.rules[i]
+    const r = wfNode(i)
     if (mode === 'advanced') {
         r._ui.mode = 'advanced'
         r._ui.reason = ''
-        wfRerenderRule(i)
+        wfRerenderCondBlock(i)
         return
     }
-    await wfLoadRuleUI(r)
+    await wfLoadNodeUI(r)
     if (r._ui.mode !== 'builder') {
         toast(`Builder can't show this condition: ${r._ui.reason}`, 'error')
     } else {
         await wfResolveNames([r])
     }
-    wfRerenderRule(i)
+    wfRerenderCondBlock(i)
 }
 
 function wfSetJoin(i, join) {
-    wf.rules[i]._ui.join = join
+    wfNode(i)._ui.join = join
     wfRerenderCondition(i)
 }
 
 function wfAddRow(i) {
-    wf.rules[i]._ui.rows.push(wfNewRow())
+    wfNode(i)._ui.rows.push(wfNewRow())
     wfRerenderCondition(i)
 }
 
 function wfRemoveRow(i, k) {
-    wf.rules[i]._ui.rows.splice(k, 1)
+    wfNode(i)._ui.rows.splice(k, 1)
     wfRerenderCondition(i)
 }
 
 function wfSetRowField(i, k, path) {
-    const row = wf.rules[i]._ui.rows[k]
+    const row = wfNode(i)._ui.rows[k]
     const f = wfFieldByPath(path)
     row.path = f.path
     row.op = wfOpsFor(f)[0][0]
@@ -464,7 +467,7 @@ function wfSetRowField(i, k, path) {
 }
 
 function wfSetRowOp(i, k, op) {
-    const row = wf.rules[i]._ui.rows[k]
+    const row = wfNode(i)._ui.rows[k]
     const wasMulti = WF_MULTI_OPS.has(row.op), isMulti = WF_MULTI_OPS.has(op)
     const listChanged = WF_LIST_OPS.has(row.op) !== WF_LIST_OPS.has(op)  // a list id is not an entity id
     row.op = op
@@ -475,13 +478,13 @@ function wfSetRowOp(i, k, op) {
 }
 
 function wfSetRowValue(i, k, value, rerender = false) {
-    wf.rules[i]._ui.rows[k].value = value
+    wfNode(i)._ui.rows[k].value = value
     if (rerender) wfRerenderCondition(i)
     else wfSyncCondition(i)
 }
 
 function wfAddRowValue(i, k, value) {
-    const row = wf.rules[i]._ui.rows[k]
+    const row = wfNode(i)._ui.rows[k]
     const f = wfFieldByPath(row.path)
     const v = (f.type === 'ref' || f.type === 'number') ? Number(value) : value
     row.value = Array.isArray(row.value) ? row.value : []
@@ -491,7 +494,7 @@ function wfAddRowValue(i, k, value) {
 }
 
 function wfRemoveRowValue(i, k, value) {
-    const row = wf.rules[i]._ui.rows[k]
+    const row = wfNode(i)._ui.rows[k]
     row.value = (Array.isArray(row.value) ? row.value : []).filter(v => String(v) !== String(value))
     wfRerenderCondition(i)
 }
