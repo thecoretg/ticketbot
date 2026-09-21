@@ -32,7 +32,7 @@ notifications into `would_send`; a workflow's own `dry_run` does the same for th
 redirect room (`redirect_room_id`) sends every notification to one room with an "intended for"
 prefix and overrides dry run for sending, which is how the parallel run sees real messages.
 Operator alerts (`internal/service/alerts`: failed intake rows, write-cap blocks, no webhooks for
-`stale_alert_minutes` during 07:30 to 19:00 Central on weekdays) go to `ops_room_id` and the log.
+`stale_alert_minutes` during the configured business hours) go to `ops_room_id` and the log.
 
 ## Intake
 

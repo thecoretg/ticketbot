@@ -1722,6 +1722,10 @@ async function loadConfig() {
     }
 }
 
+// Business-hours pickers: the US zones plus UTC, and the week Monday first.
+const BIZ_ZONES = ['America/Chicago', 'America/New_York', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu', 'UTC']
+const BIZ_DAYS  = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']]
+
 function renderConfig(cfg, recipients = []) {
     // room pickers: "None" plus every synced room or person; the current value stays selectable
     // even if the recipient list failed to load
@@ -1764,8 +1768,19 @@ function renderConfig(cfg, recipients = []) {
             'While set, every notification goes to this room instead of its intended recipient, prefixed with who it was for, and is sent even under dry run. Use it for the parallel run; clear it at cutover.',
             roomSelect('c-redirect-room', cfg.redirect_room_id, 'Redirect room'))}
         ${row('Stale webhook alert',
-            'Minutes without a ticket webhook, during business hours (7:30am to 7pm Central, weekdays), before the ops room is alerted. 0 disables the check.',
+            'Minutes without a ticket webhook, during the business hours below, before the ops room is alerted. 0 disables the check.',
             numberInput('c-stale-minutes', cfg.stale_alert_minutes, 0))}
+        ${row('Business hours',
+            'When silence from ConnectWise counts. Outside these hours and days the stale alert never fires.',
+            `<div class="stack gap3">
+                <div class="row gap2 wrap">
+                    <input class="input" type="time" id="c-biz-open" value="${esc(cfg.business_open || '07:30')}" aria-label="Business hours open" style="width:130px">
+                    <span class="muted">to</span>
+                    <input class="input" type="time" id="c-biz-close" value="${esc(cfg.business_close || '19:00')}" aria-label="Business hours close" style="width:130px">
+                    <select class="select" id="c-biz-zone" aria-label="Time zone" style="max-width:220px">${BIZ_ZONES.map(z => `<option value="${z}"${z === (cfg.business_zone || 'America/Chicago') ? ' selected' : ''}>${esc(z.replace('America/', '').replace('_', ' '))}</option>`).join('')}</select>
+                </div>
+                <div class="row gap3 wrap">${BIZ_DAYS.map(([k, l]) => checkbox(l, `name="biz-day" value="${k}"`, (cfg.business_days || 'mon,tue,wed,thu,fri').split(',').includes(k))).join('')}</div>
+            </div>`)}
         ${row('Max concurrent syncs',
             'Limits parallel requests to ConnectWise.',
             numberInput('c-max-syncs', cfg.max_concurrent_syncs, 1))}
@@ -1813,6 +1828,10 @@ async function saveConfig() {
             redirect_room_id:           Number(document.getElementById('c-redirect-room').value),
             stale_alert_minutes:        num('c-stale-minutes', 'Stale webhook alert'),
             history_retention_days:     num('c-history-retention', 'History retention'),
+            business_open:              document.getElementById('c-biz-open').value,
+            business_close:             document.getElementById('c-biz-close').value,
+            business_zone:              document.getElementById('c-biz-zone').value,
+            business_days:              Array.from(document.querySelectorAll('input[name="biz-day"]:checked')).map(el => el.value).join(','),
             require_totp:               document.getElementById('c-require-totp').checked,
             debug_logging:              document.getElementById('c-debug-logging').checked,
             log_buffer_size:            num('c-log-buffer-size', 'Log buffer size'),

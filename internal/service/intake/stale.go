@@ -7,32 +7,9 @@ import (
 	"time"
 )
 
-// Business hours for the staleness check: ConnectWise is quiet outside them, so silence then is
-// not a signal.
-var (
-	businessZone     = mustZone("America/Chicago")
-	businessOpenMin  = 7*60 + 30 // 07:30
-	businessCloseMin = 19 * 60   // 19:00
-	staleCheckEvery  = time.Minute
-)
-
-func mustZone(name string) *time.Location {
-	loc, err := time.LoadLocation(name)
-	if err != nil {
-		return time.UTC
-	}
-	return loc
-}
-
-// inBusinessHours reports whether t falls on a weekday between open and close, Central time.
-func inBusinessHours(t time.Time) bool {
-	t = t.In(businessZone)
-	if wd := t.Weekday(); wd == time.Saturday || wd == time.Sunday {
-		return false
-	}
-	m := t.Hour()*60 + t.Minute()
-	return m >= businessOpenMin && m < businessCloseMin
-}
+// The business hours that bound the check come from app config (models.BusinessWindow):
+// ConnectWise is quiet outside them, so silence then is not a signal.
+const staleCheckEvery = time.Minute
 
 // staleWatch alerts when no webhook has arrived for the configured number of business-hours
 // minutes, and again when they resume. It is a method so it shares the repo, config and alerter.
@@ -84,14 +61,19 @@ func (w *staleWatch) check(ctx context.Context) {
 	now := s.now()
 	silence := now.Sub(last)
 	threshold := time.Duration(minutes) * time.Minute
+	window := s.Cfg.BusinessWindow()
+	loc := window.Loc
+	if loc == nil {
+		loc = time.UTC
+	}
 
 	switch {
 	case w.alerted && silence < threshold:
 		w.alerted = false
-		s.Alerter.Alert(ctx, "Ticket webhooks resumed", fmt.Sprintf("A webhook arrived at %s.", last.In(businessZone).Format("3:04pm MST")))
-	case !w.alerted && silence >= threshold && inBusinessHours(now):
+		s.Alerter.Alert(ctx, "Ticket webhooks resumed", fmt.Sprintf("A webhook arrived at %s.", last.In(loc).Format("3:04pm MST")))
+	case !w.alerted && silence >= threshold && window.Contains(now):
 		w.alerted = true
 		s.Alerter.Alert(ctx, fmt.Sprintf("No ticket webhooks for %d minutes", int(silence.Minutes())),
-			fmt.Sprintf("Last one arrived %s. Check that the app is reachable from ConnectWise and that its callback is still registered.", last.In(businessZone).Format("Mon 3:04pm MST")))
+			fmt.Sprintf("Last one arrived %s. Check that the app is reachable from ConnectWise and that its callback is still registered.", last.In(loc).Format("Mon 3:04pm MST")))
 	}
 }

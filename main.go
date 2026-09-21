@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	gooseMigrationVersion = 17
+	gooseMigrationVersion = 18
 	shutdownTimeout       = 10 * time.Second
 
 	// HTTP server timeouts. Webhook and dashboard requests are small and fast; anything slower is

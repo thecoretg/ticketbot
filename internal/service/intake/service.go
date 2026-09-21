@@ -30,6 +30,7 @@ type Alerter = alerts.Alerter
 type RetentionConfig interface {
 	GetLogRetentionDays() int
 	GetStaleAlertMinutes() int
+	BusinessWindow() models.BusinessWindow
 }
 
 // DefaultBackoff paces retries. Six attempts spread over about two hours cover a ConnectWise or

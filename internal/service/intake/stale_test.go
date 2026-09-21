@@ -12,6 +12,9 @@ type staleCfg int
 
 func (c staleCfg) GetLogRetentionDays() int  { return 7 }
 func (c staleCfg) GetStaleAlertMinutes() int { return int(c) }
+func (c staleCfg) BusinessWindow() models.BusinessWindow {
+	return (&models.Config{}).BusinessWindow() // the defaults: 07:30 to 19:00 Central, weekdays
+}
 
 type staleRepo struct {
 	fakeRepo
@@ -81,18 +84,16 @@ func TestStaleWatchDisabledAtZero(t *testing.T) {
 	}
 }
 
-func TestInBusinessHours(t *testing.T) {
-	cases := map[time.Time]bool{
-		tuesday10: true,
-		time.Date(2026, 9, 22, 12, 29, 0, 0, time.UTC): false, // 07:29 Central
-		time.Date(2026, 9, 22, 12, 30, 0, 0, time.UTC): true,  // 07:30 Central
-		time.Date(2026, 9, 22, 23, 59, 0, 0, time.UTC): true,  // 18:59 Central
-		time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC):   false, // 19:00 Central
-		time.Date(2026, 9, 26, 15, 0, 0, 0, time.UTC):  false, // Saturday
-	}
-	for at, want := range cases {
-		if got := inBusinessHours(at); got != want {
-			t.Errorf("inBusinessHours(%s) = %v, want %v", at.In(businessZone), got, want)
-		}
+func TestStaleWatchHonoursAConfiguredWindow(t *testing.T) {
+	// Saturday 10:00 Central is silent by default; a window that includes Saturday alerts.
+	repo, alerter := &staleRepo{}, &fakeAlerter{}
+	saturday := time.Date(2026, 9, 26, 15, 0, 0, 0, time.UTC)
+	cfg := &models.Config{StaleAlertMinutes: 60, BusinessOpen: "08:00", BusinessClose: "12:00", BusinessDays: "sat", BusinessZone: "America/Chicago"}
+	s := New(Params{Repo: repo, Processor: &fakeProcessor{}, Alerter: alerter, Cfg: cfg})
+	s.now = func() time.Time { return saturday }
+	w := &staleWatch{svc: s, started: saturday.Add(-3 * time.Hour)}
+	w.check(context.Background())
+	if len(alerter.subjects) != 1 {
+		t.Fatalf("alerts = %v, want one inside the configured Saturday window", alerter.subjects)
 	}
 }

@@ -73,6 +73,13 @@ type Config struct {
 	// HistoryRetentionDays is how long workflow run summaries and ticket history events are kept.
 	// They are the same story told twice, so they age out together. 0 keeps them forever.
 	HistoryRetentionDays int `json:"history_retention_days"`
+
+	// Business hours bound the stale-webhook alert: silence outside them is normal. Times are
+	// HH:MM in BusinessZone; BusinessDays is a comma-separated list of mon..sun.
+	BusinessOpen  string `json:"business_open"`
+	BusinessClose string `json:"business_close"`
+	BusinessDays  string `json:"business_days"`
+	BusinessZone  string `json:"business_zone"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
@@ -92,10 +99,14 @@ type ConfigUpdateParams struct {
 	NotePreviewLength       *int    `json:"note_preview_length"`
 	WriteCapPerTicket       *int    `json:"write_cap_per_ticket"`
 	// OpsRoomID and RedirectRoomID clear the setting when sent as 0.
-	OpsRoomID            *int `json:"ops_room_id"`
-	RedirectRoomID       *int `json:"redirect_room_id"`
-	StaleAlertMinutes    *int `json:"stale_alert_minutes"`
-	HistoryRetentionDays *int `json:"history_retention_days"`
+	OpsRoomID            *int    `json:"ops_room_id"`
+	RedirectRoomID       *int    `json:"redirect_room_id"`
+	StaleAlertMinutes    *int    `json:"stale_alert_minutes"`
+	HistoryRetentionDays *int    `json:"history_retention_days"`
+	BusinessOpen         *string `json:"business_open"`
+	BusinessClose        *string `json:"business_close"`
+	BusinessDays         *string `json:"business_days"`
+	BusinessZone         *string `json:"business_zone"`
 }
 
 var DefaultConfig = Config{
@@ -114,4 +125,8 @@ var DefaultConfig = Config{
 	WriteCapPerTicket:       20,
 	StaleAlertMinutes:       60,
 	HistoryRetentionDays:    90,
+	BusinessOpen:            "07:30",
+	BusinessClose:           "19:00",
+	BusinessDays:            "mon,tue,wed,thu,fri",
+	BusinessZone:            "America/Chicago",
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/repos"
@@ -60,6 +61,9 @@ func (s *Service) validate(c *models.Config) error {
 	}
 	if c.HistoryRetentionDays < 0 {
 		return ValidationError{ErrHistoryRetention}
+	}
+	if _, err := models.ParseBusinessWindow(c.BusinessOpen, c.BusinessClose, c.BusinessDays, c.BusinessZone); err != nil {
+		return ValidationError{err}
 	}
 	if c.SSOEnabled && !s.ssoConfigured {
 		return ValidationError{ErrSSONotConfigured}
@@ -132,6 +136,18 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.HistoryRetentionDays != nil {
 		merged.HistoryRetentionDays = *p.HistoryRetentionDays
 	}
+	if p.BusinessOpen != nil {
+		merged.BusinessOpen = strings.TrimSpace(*p.BusinessOpen)
+	}
+	if p.BusinessClose != nil {
+		merged.BusinessClose = strings.TrimSpace(*p.BusinessClose)
+	}
+	if p.BusinessDays != nil {
+		merged.BusinessDays = models.NormalizeBusinessDays(*p.BusinessDays)
+	}
+	if p.BusinessZone != nil {
+		merged.BusinessZone = strings.TrimSpace(*p.BusinessZone)
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -173,6 +189,7 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.RedirectRoomID = src.RedirectRoomID
 	cfg.StaleAlertMinutes = src.StaleAlertMinutes
 	cfg.HistoryRetentionDays = src.HistoryRetentionDays
+	cfg.BusinessOpen, cfg.BusinessClose, cfg.BusinessDays, cfg.BusinessZone = src.BusinessOpen, src.BusinessClose, src.BusinessDays, src.BusinessZone
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)

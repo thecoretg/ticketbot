@@ -49,6 +49,10 @@ type AppConfig struct {
 	RedirectRoomID          *int   `json:"redirect_room_id"`
 	StaleAlertMinutes       int    `json:"stale_alert_minutes"`
 	HistoryRetentionDays    int    `json:"history_retention_days"`
+	BusinessOpen            string `json:"business_open"`
+	BusinessClose           string `json:"business_close"`
+	BusinessDays            string `json:"business_days"`
+	BusinessZone            string `json:"business_zone"`
 }
 
 type AppLog struct {

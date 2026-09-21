@@ -76,6 +76,10 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		RedirectRoomID:          c.RedirectRoomID,
 		StaleAlertMinutes:       c.StaleAlertMinutes,
 		HistoryRetentionDays:    c.HistoryRetentionDays,
+		BusinessOpen:            c.BusinessOpen,
+		BusinessClose:           c.BusinessClose,
+		BusinessDays:            c.BusinessDays,
+		BusinessZone:            c.BusinessZone,
 	}
 }
 
@@ -99,5 +103,9 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		RedirectRoomID:          pg.RedirectRoomID,
 		StaleAlertMinutes:       pg.StaleAlertMinutes,
 		HistoryRetentionDays:    pg.HistoryRetentionDays,
+		BusinessOpen:            pg.BusinessOpen,
+		BusinessClose:           pg.BusinessClose,
+		BusinessDays:            pg.BusinessDays,
+		BusinessZone:            pg.BusinessZone,
 	}
 }

@@ -71,6 +71,7 @@ in a workflow's toolbar opens the list already filtered to that board.
    the panel lists who would be notified and with what message.
 3. When the history looks right, turn dry run off and save.
 
-An administrator can also put the whole instance in **master dry run** (Config), which overrides
+An administrator sets the business hours under Config; the "no webhooks" alert only fires inside
+them. An administrator can also put the whole instance in **master dry run** (Config), which overrides
 every workflow. While notifications are **redirected** to a test room (Config), you will see the
 real messages there instead of in their intended rooms.

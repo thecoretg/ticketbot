@@ -166,10 +166,11 @@ Decisions from the 2026-09-21 grilling of items 9 to 12. Order of work: 12, 11, 
 
 ### 10. Configurable business hours for the stale-webhook alert
 
-- [ ] App config: open time, close time, weekdays, time zone (select of US zones plus UTC).
-      Defaults 07:30, 19:00, Monday to Friday, America/Chicago, so nothing changes until edited.
-      Rows beside "Stale webhook alert" on the Config page; `stale.go` reads them instead of its
-      constants. User guide and CLAUDE.md sentence follow.
+Done. Migration 18 adds `business_open`, `business_close`, `business_days`, `business_zone` to
+app config (defaults 07:30, 19:00, mon..fri, America/Chicago). `models.ParseBusinessWindow`
+validates them on save; `Config.BusinessWindow` parses them for `intake.staleWatch`, falling back
+to the defaults if a stored row is somehow bad. Config page: two time inputs, a zone select (US
+zones plus UTC) and weekday checkboxes beside "Stale webhook alert".
 
 ### 11. Canvas context menu and multi-select
 
