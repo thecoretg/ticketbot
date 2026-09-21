@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/service/alerts"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
@@ -25,6 +26,8 @@ type Service struct {
 	Events    repos.TicketEventRepository
 	Engine    *workflow.Engine
 	Notifier  *notifier.Service
+	// Alerter receives the rate-cap alert. nil logs.
+	Alerter alerts.Alerter
 
 	locksMu sync.Mutex
 	locks   map[int]*ticketLock
@@ -53,10 +56,11 @@ type Params struct {
 	Events    repos.TicketEventRepository
 	Engine    *workflow.Engine
 	Notifier  *notifier.Service
+	Alerter   alerts.Alerter
 }
 
 func New(p Params) *Service {
-	return &Service{
+	s := &Service{
 		Cfg:       p.Cfg,
 		ConfigSvc: p.ConfigSvc,
 		CW:        p.CW,
@@ -64,8 +68,13 @@ func New(p Params) *Service {
 		Events:    p.Events,
 		Engine:    p.Engine,
 		Notifier:  p.Notifier,
+		Alerter:   p.Alerter,
 		now:       time.Now,
 	}
+	if s.Alerter == nil {
+		s.Alerter = alerts.Log{}
+	}
+	return s
 }
 
 // ProcessTicket ingests one ticket: fetch from ConnectWise, compare with what is stored, run the
@@ -206,6 +215,11 @@ func (s *Service) runWorkflow(ctx context.Context, run *run, f *cwsvc.Fetched, d
 	run.add(models.EventWorkflow, workflowPayload(wf, res))
 	for _, a := range res.Actions {
 		run.add(models.EventAction, a.Payload())
+	}
+	if res.RateCapped {
+		msg := fmt.Sprintf("ticket %d reached the write cap (%d writes in 15 minutes); its ConnectWise writes are blocked for an hour", f.Ticket.ID, s.Cfg.WriteCapPerTicket)
+		run.add(models.EventError, models.ErrorPayload{Stage: "rate_cap", Error: msg})
+		s.Alerter.Alert(ctx, "Write cap reached", msg+fmt.Sprintf("\nWorkflow: %s. Check it for a loop before the block lifts.", wf.Name))
 	}
 
 	if res.LearnedAPIMember != "" && strings.TrimSpace(s.Cfg.CWAPIMemberIdentifier) == "" && s.ConfigSvc != nil {

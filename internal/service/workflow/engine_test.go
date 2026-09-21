@@ -506,7 +506,9 @@ func TestLegacyDisabledRule(t *testing.T) {
 
 // --- actions ---
 
-func TestAddNotePostsRefetchesAndLaterNodesSeeNewState(t *testing.T) {
+// Notes are posted after the walks, so a ConnectWise-side effect of the note (here a status
+// change) is visible in the refetched result but not to later nodes of the same run.
+func TestAddNotePostsAfterTheWalksAndRefetches(t *testing.T) {
 	cw := &fakeCW{ticket: ticket(), apiMember: "ticketbot"}
 	cw.onPost = func(*psa.ServiceTicketNote) {
 		updated := ticket()
@@ -540,7 +542,7 @@ func TestAddNotePostsRefetchesAndLaterNodesSeeNewState(t *testing.T) {
 	if res.TriggerNote != trigger {
 		t.Error("trigger note must be preserved")
 	}
-	eq(t, "recipients", recipients(res), []int{1, 2})
+	eq(t, "recipients", recipients(res), []int{2})
 }
 
 func TestAddNoteDryRun(t *testing.T) {
@@ -617,18 +619,24 @@ func TestIsNewInConditions(t *testing.T) {
 }
 
 func TestSetStatusPatchesAndLaterNodesSeeIt(t *testing.T) {
-	cw := &fakeCW{ticket: ticket()}
+	original := ticket()
+	cw := &fakeCW{ticket: original}
 	cw.onPatch = func(ops []psa.PatchOp) {
 		updated := ticket()
 		updated.Status.ID, updated.Status.Name = 11, "Escalated"
 		updated.Info.UpdatedBy = "ticketbot"
 		cw.ticket = updated
 	}
+	// The later node sees the queued status (id and the action's name) before anything is written.
 	w := legacy(
 		rule("escalate", models.TriggerBoth, "", false, setStatus(11)),
-		rule("after", models.TriggerBoth, "status/name = 'Escalated'", false, notify(models.TargetRoom, rid(1))),
+		rule("after", models.TriggerBoth, "status/id = 11 and status/name = 'S'", false, notify(models.TargetRoom, rid(1))),
 	)
 	res := exec(t, cw, w, Input{})
+
+	if original.Status.ID != 10 {
+		t.Fatal("the caller's ticket must not be mutated by queued writes")
+	}
 
 	if len(cw.patchOps) != 1 || cw.patchOps[0][0].Path != "status/id" || cw.patchOps[0][0].Value != 11 {
 		t.Fatalf("patch ops = %+v", cw.patchOps)
@@ -699,12 +707,94 @@ func TestPatchActionAndDryRun(t *testing.T) {
 		t.Fatalf("dry run must not patch: %+v", res.Actions)
 	}
 
+	if cw.ticket.Status.ID != 10 {
+		t.Fatal("dry run must leave the caller's ticket untouched")
+	}
+
+	// Live: both actions merge into one PATCH, in canvas order.
 	res = exec(t, cw, w, Input{})
-	if res.Actions[0].Result != ResultOK || len(cw.patchOps) != 2 || len(cw.patchOps[0]) != 2 {
+	if res.Actions[0].Result != ResultOK || res.Actions[1].Result != ResultOK || len(cw.patchOps) != 1 || len(cw.patchOps[0]) != 3 {
 		t.Fatalf("live run: %+v ops=%+v", res.Actions, cw.patchOps)
 	}
-	if cw.patchOps[0][1].Op != "remove" || cw.patchOps[0][1].Path != "contact" {
+	if cw.patchOps[0][1].Op != "remove" || cw.patchOps[0][1].Path != "contact" || cw.patchOps[0][2].Path != "status/id" {
 		t.Errorf("ops = %+v", cw.patchOps[0])
+	}
+	if res.CWWrites != 1 {
+		t.Errorf("one batched PATCH is one write, got %d", res.CWWrites)
+	}
+}
+
+func TestConflictingWritesLastWinsAndIsRecorded(t *testing.T) {
+	cw := &fakeCW{ticket: ticket()}
+	w := legacy(rule("r", models.TriggerBoth, "", false, setStatus(11), setStatus(12)))
+	res := exec(t, cw, w, Input{})
+
+	if len(cw.patchOps) != 1 || len(cw.patchOps[0]) != 1 || cw.patchOps[0][0].Value != 12 {
+		t.Fatalf("ops = %+v, want one status/id=12", cw.patchOps)
+	}
+	if res.Actions[0].Result != ResultSuperseded || res.Actions[1].Result != ResultOK {
+		t.Errorf("results = %v", results(res))
+	}
+	if len(res.Conflicts) != 1 || res.Conflicts[0].Path != "status/id" {
+		t.Errorf("conflicts = %+v", res.Conflicts)
+	}
+}
+
+func TestTwoAddResourcesMergeWithoutConflict(t *testing.T) {
+	tk := ticket()
+	tk.Resources = "jdoe"
+	cw := &fakeCW{ticket: tk}
+	w := legacy(rule("r", models.TriggerBoth, "", false,
+		models.Action{Kind: models.ActionAddResource, Enabled: true, ActionSettings: models.ActionSettings{AddResource: &models.AddResourceAction{MemberID: 2, Identifier: "asmith"}}},
+		models.Action{Kind: models.ActionAddResource, Enabled: true, ActionSettings: models.ActionSettings{AddResource: &models.AddResourceAction{MemberID: 3, Identifier: "bkim"}}},
+	))
+	res := exec(t, cw, w, Input{})
+
+	if len(cw.patchOps) != 1 || len(cw.patchOps[0]) != 1 || cw.patchOps[0][0].Value != "asmith,jdoe,bkim" {
+		t.Fatalf("ops = %+v", cw.patchOps)
+	}
+	eq(t, "results", results(res), []string{ResultOK, ResultOK})
+	if len(res.Conflicts) != 0 {
+		t.Errorf("merging resources is not a conflict: %+v", res.Conflicts)
+	}
+}
+
+func TestPatchErrorRestoresTheTicketAndFailsEveryQueuedAction(t *testing.T) {
+	cw := &fakeCW{ticket: ticket(), patchErr: errors.New("cw down")}
+	w := legacy(rule("r", models.TriggerBoth, "", false, setStatus(11), notify(models.TargetRoom, rid(1))))
+	res := exec(t, cw, w, Input{})
+
+	if res.Actions[0].Result != ResultError || res.Actions[0].Err == nil {
+		t.Errorf("queued write should fail: %+v", res.Actions[0])
+	}
+	if res.Ticket.Status.ID != 10 {
+		t.Errorf("unwritten state must not leak into the result: %+v", res.Ticket.Status)
+	}
+	if len(res.Notifies) != 1 || res.CWWrites != 0 {
+		t.Errorf("notifies=%d writes=%d", len(res.Notifies), res.CWWrites)
+	}
+}
+
+type refuseLimiter struct{ calls int }
+
+func (l *refuseLimiter) Reserve(int, int) error { l.calls++; return errors.New("write cap reached") }
+
+func TestRateCapRefusesWritesAndFlagsTheRun(t *testing.T) {
+	cw := &fakeCW{ticket: ticket()}
+	lim := &refuseLimiter{}
+	e := NewEngine(cw)
+	e.Limiter = lim
+	w := legacy(rule("r", models.TriggerBoth, "", false, setStatus(11), addNote("hi")))
+	res, err := e.Run(context.Background(), w, Input{Ticket: cw.ticket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.RateCapped || len(cw.patchOps) != 0 || len(cw.posted) != 0 {
+		t.Fatalf("capped=%v patches=%d notes=%d", res.RateCapped, len(cw.patchOps), len(cw.posted))
+	}
+	eq(t, "results", results(res), []string{ResultError, ResultError})
+	if lim.calls != 2 {
+		t.Errorf("limiter asked %d times, want 2 (one PATCH, one note)", lim.calls)
 	}
 }
 

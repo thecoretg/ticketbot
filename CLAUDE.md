@@ -45,7 +45,14 @@ and v1 rows persist until their next save. Engine semantics (`internal/service/w
 every enabled trigger listening for the event fires, in canvas order; a walk follows the port an if
 node picks and ends at an unwired port; a node reached by a second walk is recorded as `joined` and
 not re-run; `skip_notify` silences only the notifies after it on its own walk; disabled nodes pass
-through (an if takes its `no` port). `Validate` in `service.go` owns the structural rules (one
+through (an if takes its `no` port). Ticket writes are batched: `set_*` and `patch` operations
+queue into one PATCH sent after every walk, the last node to set a path wins (the earlier action
+reports `superseded` and the workflow event lists the conflict), two `add_resource` nodes merge,
+and notes post after the PATCH. Queued operations are applied to a copy of the ticket so later if
+nodes see the intended state. `workflow.RateLimiter` caps writes per ticket (`write_cap_per_ticket`
+in app config, 15-minute window, one-hour block) and is the only loop protection until ticketbot
+has posted a note, because `loopGuard` learns its own member identifier from that first note.
+`Validate` in `service.go` owns the structural rules (one
 trigger minimum, one wire per port, nothing into a trigger, no cycles, everything reachable). The
 canvas (`internal/web/static/workflows.js`, `cv*` functions) is the only editor; node heights are
 fixed per kind and shared between `ui.css` and the script, so ports line up. Run history stores

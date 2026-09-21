@@ -83,7 +83,23 @@ const (
 	ResultQueued   = "queued"
 	ResultSkipped  = "skipped"
 	ResultError    = "error"
+	// ResultSuperseded marks a queued ticket write a later node in the same run replaced: the
+	// batched PATCH carries one operation per path, and the last node to set it wins.
+	ResultSuperseded = "superseded"
 )
+
+// WriteLimiter caps ConnectWise writes per ticket. Reserve records n writes for the ticket, or
+// returns an error naming when the ticket is unblocked. A nil limiter allows everything.
+type WriteLimiter interface {
+	Reserve(ticketID int, n int) error
+}
+
+// Conflict records two nodes in one run setting the same ticket field.
+type Conflict struct {
+	Path       string
+	Superseded StepRef
+	By         StepRef
+}
 
 // Step skip reasons.
 const (
@@ -164,7 +180,11 @@ type Result struct {
 	Steps    []StepOutcome
 	Actions  []ActionOutcome
 	Notifies []NotifyIntent
-	CWWrites int
+	// Conflicts lists fields two nodes set; the later node's value was written.
+	Conflicts []Conflict
+	CWWrites  int
+	// RateCapped is set when the write cap refused this run's ConnectWise writes.
+	RateCapped bool
 	// LearnedAPIMember is the member identifier ConnectWise attributed to a write the engine made.
 	LearnedAPIMember string
 }
@@ -173,6 +193,8 @@ type Engine struct {
 	CW CWClient
 	// Lists is optional; set it to make `in list` conditions see admin lists.
 	Lists ListLoader
+	// Limiter is optional; set it to cap writes per ticket.
+	Limiter WriteLimiter
 }
 
 func NewEngine(cw CWClient) *Engine {
@@ -191,14 +213,35 @@ type run struct {
 	visited map[string]bool
 	env     cwquery.Env
 	envOK   bool
+	// Ticket writes are collected during the walks and sent afterwards: one PATCH carrying every
+	// field operation, then each note. Later nodes still see the intended state because every
+	// queued operation is applied to the in-memory ticket as it is queued.
+	ops   []pendingOp
+	notes []pendingNote
+	dirty bool // the in-memory ticket changed since the document was last built
+}
+
+// pendingOp is one field operation waiting for the batched PATCH. actions index r.res.Actions:
+// usually one, more when add_resource nodes merged into a single resources value.
+type pendingOp struct {
+	op      psa.PatchOp
+	actions []int
+	step    StepRef
+}
+
+type pendingNote struct {
+	note   *models.AddNoteAction
+	action int
 }
 
 // Run walks the workflow graph for the ticket. Every enabled trigger listening for the intake's
 // event starts a walk, in canvas order; each walk follows the port its nodes select until a port
 // has no wire, a node another walk already ran is reached, or the step cap trips. Notify nodes are
-// collected as intents; ticket-mutating nodes are executed immediately (unless DryRun) and the
-// ticket is refreshed so later nodes see the new state. Errors inside a node are recorded, never
-// returned; only a nil workflow or ticket is an error.
+// collected as intents for the caller. Ticket-mutating nodes are queued: field operations merge
+// into one PATCH (the last node to set a path wins and the earlier one is marked superseded) and
+// notes follow it, all sent after the walks unless DryRun. Later nodes see the queued state because
+// each operation is applied to the in-memory ticket as it is queued. Errors inside a node are
+// recorded, never returned; only a nil workflow or ticket is an error.
 func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Result, error) {
 	if wf == nil {
 		return nil, errors.New("nil workflow")
@@ -207,11 +250,13 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 		return nil, errors.New("nil ticket")
 	}
 
+	// Queued writes are applied to a copy so the caller's ticket stays what ConnectWise holds.
+	local := *in.Ticket
 	r := &run{
 		wf: wf,
 		in: in,
 		res: &Result{
-			Ticket:      in.Ticket,
+			Ticket:      &local,
 			LatestNote:  in.TriggerNote,
 			TriggerNote: in.TriggerNote,
 			Event:       models.EventFor(in.IsNew),
@@ -242,6 +287,8 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 			break
 		}
 	}
+
+	e.flush(ctx, r)
 
 	return r.res, nil
 }
@@ -309,11 +356,11 @@ func (e *Engine) walk(ctx context.Context, r *run, trigger *models.Node) {
 			if !cur.Enabled {
 				st.Skipped = SkippedDisabled
 			}
-			writes := r.res.CWWrites
 			out := e.runAction(ctx, ref, st.No, cur.Action(), r, &suppressed)
 			r.res.Actions = append(r.res.Actions, out)
-			if r.res.CWWrites != writes {
+			if r.dirty {
 				r.doc = cwquery.NewDocument(r.res.Ticket, r.in.TriggerNote, r.changes)
+				r.dirty = false
 			}
 
 		default:
@@ -353,7 +400,7 @@ func (e *Engine) evalCondition(ctx context.Context, r *run, condition string) (b
 }
 
 func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Action, r *run, suppressed *bool) ActionOutcome {
-	in, res := r.in, r.res
+	res := r.res
 	out := ActionOutcome{Step: ref, No: no, Kind: a.Kind}
 
 	if !a.Enabled {
@@ -388,7 +435,14 @@ func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Ac
 		if a.AddNote == nil {
 			return missingSettings(out, "add_note")
 		}
-		e.addNote(ctx, a.AddNote, in, res, &out)
+		out.Output = map[string]any{
+			"text":       a.AddNote.Text,
+			"internal":   a.AddNote.Internal,
+			"discussion": a.AddNote.Discussion,
+			"resolution": a.AddNote.Resolution,
+		}
+		r.notes = append(r.notes, pendingNote{note: a.AddNote, action: len(res.Actions)})
+		out.Result = ResultQueued
 
 	case models.ActionSetStatus:
 		if a.SetStatus == nil {
@@ -400,7 +454,8 @@ func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Ac
 			out.Result, out.Reason = ResultSkipped, "already in this status"
 			return out
 		}
-		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "status/id", Value: s.StatusID}}, in, res, &out)
+		res.Ticket.Status.ID, res.Ticket.Status.Name = s.StatusID, s.StatusName
+		r.queue(ref, psa.PatchOp{Op: "replace", Path: "status/id", Value: s.StatusID}, &out)
 
 	case models.ActionSetPriority:
 		if a.SetPriority == nil {
@@ -412,7 +467,8 @@ func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Ac
 			out.Result, out.Reason = ResultSkipped, "already at this priority"
 			return out
 		}
-		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "priority/id", Value: p.PriorityID}}, in, res, &out)
+		res.Ticket.Priority.ID, res.Ticket.Priority.Name = p.PriorityID, p.PriorityName
+		r.queue(ref, psa.PatchOp{Op: "replace", Path: "priority/id", Value: p.PriorityID}, &out)
 
 	case models.ActionSetOwner:
 		if a.SetOwner == nil {
@@ -424,7 +480,8 @@ func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Ac
 			out.Result, out.Reason = ResultSkipped, "already the owner"
 			return out
 		}
-		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "owner/id", Value: o.MemberID}}, in, res, &out)
+		res.Ticket.Owner.ID, res.Ticket.Owner.Identifier = o.MemberID, o.Identifier
+		r.queue(ref, psa.PatchOp{Op: "replace", Path: "owner/id", Value: o.MemberID}, &out)
 
 	case models.ActionAddResource:
 		if a.AddResource == nil {
@@ -445,7 +502,8 @@ func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Ac
 		}
 		joined := strings.Join(append(current, ar.Identifier), ",")
 		out.Output["resources"] = joined
-		e.patch(ctx, []psa.PatchOp{{Op: "replace", Path: "resources", Value: joined}}, in, res, &out)
+		res.Ticket.Resources = joined
+		r.queue(ref, psa.PatchOp{Op: "replace", Path: "resources", Value: joined}, &out)
 
 	case models.ActionPatch:
 		if a.Patch == nil {
@@ -457,7 +515,9 @@ func (e *Engine) runAction(ctx context.Context, ref StepRef, no int, a models.Ac
 			return out
 		}
 		out.Output = map[string]any{"ops": ops}
-		e.patch(ctx, ops, in, res, &out)
+		for _, op := range ops {
+			r.queue(ref, op, &out)
+		}
 
 	default:
 		out.Result, out.Err = ResultError, fmt.Errorf("unknown action kind %q", a.Kind)
@@ -503,74 +563,142 @@ func DecodePatchOps(raw json.RawMessage) ([]psa.PatchOp, error) {
 	return ops, nil
 }
 
-// patch applies ops to the ticket and refreshes the local copy from the response.
-func (e *Engine) patch(ctx context.Context, ops []psa.PatchOp, in Input, res *Result, out *ActionOutcome) {
-	if in.DryRun {
-		out.Result = ResultWouldRun
-		return
-	}
+// queue adds one field operation to the run's PATCH. A second operation on the same path
+// replaces the first: the earlier action is marked superseded and the pair is recorded as a
+// conflict, unless both are add_resource, whose later value already includes the earlier member.
+func (r *run) queue(ref StepRef, op psa.PatchOp, out *ActionOutcome) {
+	out.Result = ResultQueued
+	r.dirty = true
+	idx := len(r.res.Actions)
 
-	t, err := e.CW.PatchTicket(ctx, res.Ticket.ID, ops)
-	if err != nil {
-		out.Result, out.Err = ResultError, fmt.Errorf("patching ticket: %w", err)
-		return
-	}
-
-	res.CWWrites++
-	out.Result = ResultOK
-
-	if t != nil && t.ID != 0 {
-		res.Ticket = t
-		if t.Info.UpdatedBy != "" {
-			res.LearnedAPIMember = t.Info.UpdatedBy
+	for i := range r.ops {
+		prev := &r.ops[i]
+		if prev.op.Path != op.Path {
+			continue
 		}
+		merge := op.Path == "resources" && out.Kind == models.ActionAddResource && r.res.Actions[prev.actions[0]].Kind == models.ActionAddResource
+		if !merge {
+			r.res.Conflicts = append(r.res.Conflicts, Conflict{Path: op.Path, Superseded: prev.step, By: ref})
+			for _, ai := range prev.actions {
+				a := &r.res.Actions[ai]
+				a.Result, a.Reason = ResultSuperseded, "overridden by "+ref.Title
+			}
+			slog.Warn("workflow: two nodes set the same field; the later one wins",
+				"workflow_id", r.wf.ID, "path", op.Path, "superseded", prev.step.Title, "by", ref.Title)
+			prev.actions = nil
+		}
+		prev.op, prev.step = op, ref
+		prev.actions = append(prev.actions, idx)
 		return
 	}
 
-	if err := e.refetch(ctx, res); err != nil {
-		// the write succeeded; a stale local copy is a warning, not an action failure
-		slog.Warn("workflow: refetching ticket after patch", "ticket_id", res.Ticket.ID, "error", err.Error())
+	r.ops = append(r.ops, pendingOp{op: op, actions: []int{idx}, step: ref})
+}
+
+// flush sends the queued writes: the PATCH first, then each note, then one refetch so the caller
+// stores what ConnectWise now holds. In a dry run every queued action reports would_run instead.
+func (e *Engine) flush(ctx context.Context, r *run) {
+	res := r.res
+	if len(r.ops) == 0 && len(r.notes) == 0 {
+		return
+	}
+
+	if r.in.DryRun {
+		for _, p := range r.ops {
+			for _, ai := range p.actions {
+				res.Actions[ai].Result = ResultWouldRun
+			}
+		}
+		for _, n := range r.notes {
+			res.Actions[n.action].Result = ResultWouldRun
+		}
+		res.Ticket = r.in.Ticket // nothing was written; hand back the real state
+		return
+	}
+
+	needRefetch := false
+	if len(r.ops) > 0 {
+		ops := make([]psa.PatchOp, 0, len(r.ops))
+		for _, p := range r.ops {
+			ops = append(ops, p.op)
+		}
+		err := e.reserve(res.Ticket.ID, 1)
+		if err == nil {
+			var t *psa.Ticket
+			t, err = e.CW.PatchTicket(ctx, res.Ticket.ID, ops)
+			if err != nil {
+				err = fmt.Errorf("patching ticket: %w", err)
+			} else {
+				res.CWWrites++
+				if t != nil && t.ID != 0 {
+					res.Ticket = t
+					if t.Info.UpdatedBy != "" {
+						res.LearnedAPIMember = t.Info.UpdatedBy
+					}
+				} else {
+					needRefetch = true
+				}
+			}
+		} else {
+			res.RateCapped = true
+		}
+		if err != nil {
+			res.Ticket = r.in.Ticket // the queued state was never written
+		}
+		for _, p := range r.ops {
+			for _, ai := range p.actions {
+				a := &res.Actions[ai]
+				if err != nil {
+					a.Result, a.Err = ResultError, err
+				} else {
+					a.Result = ResultOK
+				}
+			}
+		}
+	}
+
+	for _, pn := range r.notes {
+		a := &res.Actions[pn.action]
+		if err := e.reserve(res.Ticket.ID, 1); err != nil {
+			res.RateCapped = true
+			a.Result, a.Err = ResultError, err
+			continue
+		}
+		n := pn.note
+		posted, err := e.CW.PostServiceTicketNote(ctx, &psa.ServiceTicketNote{
+			Text:                  n.Text,
+			InternalAnalysisFlag:  n.Internal,
+			DetailDescriptionFlag: n.Discussion,
+			ResolutionFlag:        n.Resolution,
+		}, res.Ticket.ID)
+		if err != nil {
+			a.Result, a.Err = ResultError, fmt.Errorf("posting note: %w", err)
+			continue
+		}
+		res.CWWrites++
+		needRefetch = true
+		a.Result = ResultOK
+		if posted != nil {
+			a.Output["note_id"] = posted.ID
+			res.LearnedAPIMember = posted.Member.Identifier
+			res.LatestNote = posted
+		}
+	}
+
+	if needRefetch {
+		if err := e.refetch(ctx, res); err != nil {
+			// the writes succeeded; a stale local copy is a warning, not an action failure
+			slog.Warn("workflow: refetching ticket after writes", "ticket_id", res.Ticket.ID, "error", err.Error())
+		}
 	}
 }
 
-func (e *Engine) addNote(ctx context.Context, n *models.AddNoteAction, in Input, res *Result, out *ActionOutcome) {
-	out.Output = map[string]any{
-		"text":       n.Text,
-		"internal":   n.Internal,
-		"discussion": n.Discussion,
-		"resolution": n.Resolution,
+// reserve asks the limiter for n writes; without a limiter every write is allowed.
+func (e *Engine) reserve(ticketID, n int) error {
+	if e.Limiter == nil {
+		return nil
 	}
-
-	if in.DryRun {
-		out.Result = ResultWouldRun
-		return
-	}
-
-	note := &psa.ServiceTicketNote{
-		Text:                  n.Text,
-		InternalAnalysisFlag:  n.Internal,
-		DetailDescriptionFlag: n.Discussion,
-		ResolutionFlag:        n.Resolution,
-	}
-
-	posted, err := e.CW.PostServiceTicketNote(ctx, note, res.Ticket.ID)
-	if err != nil {
-		out.Result, out.Err = ResultError, fmt.Errorf("posting note: %w", err)
-		return
-	}
-
-	res.CWWrites++
-	out.Result = ResultOK
-	if posted != nil {
-		out.Output["note_id"] = posted.ID
-		res.LearnedAPIMember = posted.Member.Identifier
-		res.LatestNote = posted
-	}
-
-	if err := e.refetch(ctx, res); err != nil {
-		// the write succeeded; a stale local copy is a warning, not an action failure
-		slog.Warn("workflow: refetching ticket after note", "ticket_id", res.Ticket.ID, "error", err.Error())
-	}
+	return e.Limiter.Reserve(ticketID, n)
 }
 
 // refetch reloads the ticket and its most recent note after a ConnectWise write.

@@ -71,6 +71,7 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		SsoEnabled:              c.SSOEnabled,
 		PasswordLoginEnabled:    c.PasswordLoginEnabled,
 		NotePreviewLength:       c.NotePreviewLength,
+		WriteCapPerTicket:       c.WriteCapPerTicket,
 	}
 }
 
@@ -89,5 +90,6 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		SSOEnabled:              pg.SsoEnabled,
 		PasswordLoginEnabled:    pg.PasswordLoginEnabled,
 		NotePreviewLength:       pg.NotePreviewLength,
+		WriteCapPerTicket:       pg.WriteCapPerTicket,
 	}
 }

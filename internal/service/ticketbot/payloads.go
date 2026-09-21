@@ -18,6 +18,11 @@ func workflowPayload(wf *models.Workflow, res *workflow.Result) models.WorkflowP
 	for _, st := range res.Steps {
 		p.Steps = append(p.Steps, st.Payload())
 	}
+	for _, c := range res.Conflicts {
+		p.Conflicts = append(p.Conflicts, models.ConflictPayload{
+			Path: c.Path, SupersededID: c.Superseded.NodeID, SupersededTitle: c.Superseded.Title, ByID: c.By.NodeID, ByTitle: c.By.Title,
+		})
+	}
 
 	return p
 }

@@ -77,6 +77,17 @@ type WorkflowPayload struct {
 	Enabled      bool          `json:"enabled"`
 	Event        TriggerEvent  `json:"event,omitempty"`
 	Steps        []StepPayload `json:"steps,omitempty"`
+	// Conflicts lists fields two nodes set in this run; the later node's value was written.
+	Conflicts []ConflictPayload `json:"conflicts,omitempty"`
+}
+
+// ConflictPayload names the two nodes that set the same ticket field.
+type ConflictPayload struct {
+	Path            string `json:"path"`
+	SupersededID    string `json:"superseded_id"`
+	SupersededTitle string `json:"superseded_title"`
+	ByID            string `json:"by_id"`
+	ByTitle         string `json:"by_title"`
 }
 
 // StepPayload records one node the run visited. Via is the edge the walk arrived by and Port the
@@ -100,7 +111,7 @@ type ActionPayload struct {
 	Title  string         `json:"title"`
 	No     int            `json:"no"`
 	Kind   string         `json:"kind"`
-	Result string         `json:"result"` // ok | would_run | queued | skipped | error
+	Result string         `json:"result"` // ok | would_run | queued | skipped | superseded | error
 	Reason string         `json:"reason,omitempty"`
 	Error  string         `json:"error,omitempty"`
 	Output map[string]any `json:"output,omitempty"`

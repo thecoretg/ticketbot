@@ -12,6 +12,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/service/alerts"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
@@ -112,8 +113,10 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	ns := notifier.New(nr)
 	cfgSvc := config.New(r.Config, cfg, level, logBuf, e.Entra.Configured())
 	listSvc := lists.New(lists.Params{Lists: r.Lists, Companies: r.CW.Company, Contacts: r.CW.Contact, Workflows: r.Workflows})
+	alerter := alerts.Log{}
 	engine := workflow.NewEngine(cw)
 	engine.Lists = listSvc
+	engine.Limiter = workflow.NewRateLimiter(func() int { return cfg.WriteCapPerTicket })
 	tb := ticketbot.New(ticketbot.Params{
 		Cfg:       cfg,
 		ConfigSvc: cfgSvc,
@@ -122,10 +125,11 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		Events:    r.TicketEvents,
 		Engine:    engine,
 		Notifier:  ns,
+		Alerter:   alerter,
 	})
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
-	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg})
+	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter})
 
 	ssoSvc, ssoAuth, err := makeSSO(ctx, e, r, cfg)
 	if err != nil {

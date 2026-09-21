@@ -321,7 +321,11 @@ function tkEventHTML(ev) {
         title = p.found ? `Workflow: ${esc(p.workflow_name || '')}` : 'No workflow for this board'
         tone  = p.found && p.enabled ? 'accent' : ''
         if (p.found && !p.enabled) body = '<div class="event-detail">Workflow is disabled</div>'
-        else if (p.steps?.length) body = `<div class="row wrap gap3">${p.steps.map(tkStepChip).join('')}</div>`
+        else if (p.steps?.length) {
+            body = `<div class="row wrap gap3">${p.steps.map(tkStepChip).join('')}</div>`
+            if (p.conflicts?.length) body += p.conflicts.map(c =>
+                `<div class="event-detail">${icon('alert')} <b>${esc(c.superseded_title)}</b> and <b>${esc(c.by_title)}</b> both set <code class="code inline">${esc(c.path)}</code>; ${esc(c.by_title)} won.</div>`).join('')
+        }
         else if (p.steps) body = `<div class="event-detail">No trigger listens for a ${esc(p.event || '')} ticket</div>`
         else if (p.rules?.length) body = `<div class="row wrap gap3">${p.rules.map(tkRuleChip).join('')}</div>`
         break
@@ -439,6 +443,7 @@ function tkResultBadge(result, dryRun) {
     case 'would_run':  return badgeTag('Would run', 'warn')
     case 'would_send': return badgeTag('Would send', 'warn')
     case 'skipped':    return badgeTag('Skipped', '')
+    case 'superseded': return badgeTag('Superseded', 'warn')
     case 'error':      return badgeTag('Error', 'bad')
     default:           return badgeTag(result || '?', '')
     }

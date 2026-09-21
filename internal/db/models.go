@@ -44,6 +44,7 @@ type AppConfig struct {
 	SsoEnabled              bool   `json:"sso_enabled"`
 	PasswordLoginEnabled    bool   `json:"password_login_enabled"`
 	NotePreviewLength       int    `json:"note_preview_length"`
+	WriteCapPerTicket       int    `json:"write_cap_per_ticket"`
 }
 
 type AppLog struct {

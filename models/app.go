@@ -51,6 +51,10 @@ type Config struct {
 	// NotePreviewLength is how many characters of a new note are kept in the ticket history
 	// preview. It is applied when the event is recorded, so it only affects new events.
 	NotePreviewLength int `json:"note_preview_length"`
+
+	// WriteCapPerTicket is how many ConnectWise writes workflows may make to one ticket in a
+	// rolling 15 minutes before that ticket is blocked for an hour. 0 disables the cap.
+	WriteCapPerTicket int `json:"write_cap_per_ticket"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
@@ -68,6 +72,7 @@ type ConfigUpdateParams struct {
 	SSOEnabled              *bool   `json:"sso_enabled"`
 	PasswordLoginEnabled    *bool   `json:"password_login_enabled"`
 	NotePreviewLength       *int    `json:"note_preview_length"`
+	WriteCapPerTicket       *int    `json:"write_cap_per_ticket"`
 }
 
 var DefaultConfig = Config{
@@ -83,4 +88,5 @@ var DefaultConfig = Config{
 	SSOEnabled:              false,
 	PasswordLoginEnabled:    true,
 	NotePreviewLength:       200,
+	WriteCapPerTicket:       20,
 }

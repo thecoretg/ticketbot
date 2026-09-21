@@ -111,3 +111,20 @@ func TestLoadNormalizesRootURL(t *testing.T) {
 		}
 	}
 }
+
+func TestHookSignatureMode(t *testing.T) {
+	setRequired(t)
+	e, err := Load()
+	if err != nil || !e.HookSignatureEnforced {
+		t.Fatalf("default should enforce: %+v %v", e, err)
+	}
+	t.Setenv("HOOK_SIGNATURE_MODE", "log")
+	e, err = Load()
+	if err != nil || e.HookSignatureEnforced {
+		t.Fatalf("log mode should not enforce: %v", err)
+	}
+	t.Setenv("HOOK_SIGNATURE_MODE", "maybe")
+	if _, err := Load(); err == nil {
+		t.Fatal("unknown mode should be rejected")
+	}
+}

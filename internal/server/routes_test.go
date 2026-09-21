@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/thecoretg/ticketbot/internal/env"
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/sso"
@@ -14,7 +15,7 @@ import (
 // that unauthenticated requests are rejected while the health check is open.
 func TestNewHandlerRoutes(t *testing.T) {
 	// NewNotifierHandler copies the service by value, so it needs a non-nil pointer.
-	a := &App{Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}, SSO: &sso.Service{}}}
+	a := &App{Env: &env.Env{HookSignatureEnforced: true}, Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}, SSO: &sso.Service{}}}
 	h := NewHandler(a, func() {})
 
 	cases := []struct {
@@ -32,6 +33,8 @@ func TestNewHandlerRoutes(t *testing.T) {
 		{http.MethodDelete, "/sso/mappings/1", http.StatusUnauthorized},
 		{http.MethodGet, "/auth/sso/start", http.StatusNotFound},
 		{http.MethodGet, "/nope", http.StatusNotFound},
+		{http.MethodPost, "/hooks/cw/tickets", http.StatusUnauthorized}, // unsigned callback
+		{http.MethodGet, "/intake/stats", http.StatusUnauthorized},
 		{http.MethodGet, "/", http.StatusOK},
 		{http.MethodGet, "/app.js", http.StatusOK},
 	}

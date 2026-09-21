@@ -49,22 +49,24 @@ Done. `internal/service/intake` owns the queue; `webhook_intake` is the table (m
 
 ### 2. Write safety
 
-- [ ] `RequireConnectwiseSignature` returns 401 on a failed check. Add env `HOOK_SIGNATURE_MODE`
-      (`enforce` default, `log` fallback) in `env.Load` and `.env.example`. Remove the flag after
-      the first week of the parallel run.
-- [ ] Patch batching: the engine collects every `set_status`, `set_priority`, `set_owner`,
-      `add_resource` and `patch` operation from one run into a single PATCH. On conflict the last
-      node in canvas order wins and a `warning` event names both nodes. Run order: one PATCH,
-      then notes, then notifications.
-- [ ] Rate cap: 20 mutating writes per ticket per rolling 15 minutes (app config, default 20).
-      On hit, block writes to that ticket for one hour, record an `error` event, post to the ops
-      room. This is the only loop protection on a fresh instance until ticketbot has posted a
-      note, because `loopGuard` learns `cw_api_member_identifier` from that first note.
-- [ ] Editors may toggle a workflow's own `dry_run`. `master_dry_run`, rate cap, ops room and
-      redirect room are admin only.
+Done.
 
-CLAUDE.md: document batching and the conflict rule in the Workflows section; document the rate cap
-and that the loop guard is inert until the first note.
+- [x] `RequireConnectwiseSignature(enforce)` returns 401 on a failed check. `HOOK_SIGNATURE_MODE`
+      (`enforce` default, `log` fallback) in `env.Load` and `.env.example`. Remove the `log`
+      option after the first week of the parallel run.
+- [x] Patch batching in the engine: `set_*` and `patch` operations queue into one PATCH sent after
+      the walks; the last node to set a path wins, the earlier action reports `superseded`, and
+      the pair is listed under `conflicts` on the workflow event. Two `add_resource` nodes merge.
+      Queued operations are applied to a copy of the ticket so later `if` nodes see the intended
+      state; a dry run or a failed PATCH hands the caller's original ticket back. Notes post after
+      the PATCH, then one refetch; notifications follow as before.
+- [x] Rate cap: `write_cap_per_ticket` (app config, default 20) per rolling 15 minutes via
+      `workflow.RateLimiter`; on hit the ticket is blocked for an hour, every queued write reports
+      an error, the run records an `error` event with stage `rate_cap`, and `alerts.Alerter` fires
+      (log sink until item 3). This is the only loop protection on a fresh instance until ticketbot
+      has posted a note, because `loopGuard` learns `cw_api_member_identifier` from that first note.
+- [x] Editors may toggle a workflow's own `dry_run` (PUT /workflows is editor); `master_dry_run`,
+      the write cap and the coming ops and redirect rooms live on PUT /config, which is admin only.
 
 ### 3. Observability and the parallel run
 
@@ -73,7 +75,8 @@ and that the loop guard is inert until the first note.
       room, prefixed with the intended target. Then delete `MOCK_WEBEX` and `internal/mock`'s
       Webex stub, plus the `.env.example` line.
 - [ ] Ops alerts (intake failure, rate cap, staleness) post to the ops room, falling back to
-      `slog.Error` when unset.
+      `slog.Error` when unset. Implement `alerts.Alerter` in `internal/service/alerts` and pass
+      it where `server.go` currently passes `alerts.Log{}`.
 - [ ] Staleness: no webhook received for 60 minutes between 07:30 and 19:00 America/Chicago,
       Monday to Friday, posts one alert and one recovery message. Threshold is app config.
 - [ ] Dashboard: webhooks received per hour for the last seven days, so the threshold can be tuned

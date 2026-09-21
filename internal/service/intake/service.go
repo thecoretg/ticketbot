@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/service/alerts"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -23,9 +24,7 @@ type Processor interface {
 }
 
 // Alerter receives operator alerts. The default logs at error level; the ops room replaces it.
-type Alerter interface {
-	Alert(ctx context.Context, subject, body string)
-}
+type Alerter = alerts.Alerter
 
 // RetentionConfig is the slice of app config the purge goroutine reads.
 type RetentionConfig interface {
@@ -78,7 +77,7 @@ func New(p Params) *Service {
 		now:       time.Now,
 	}
 	if s.Alerter == nil {
-		s.Alerter = logAlerter{}
+		s.Alerter = alerts.Log{}
 	}
 	return s
 }
@@ -255,10 +254,4 @@ func (s *Service) runPurge(ctx context.Context) {
 			return
 		}
 	}
-}
-
-type logAlerter struct{}
-
-func (logAlerter) Alert(_ context.Context, subject, body string) {
-	slog.Error("intake alert: "+subject, "detail", body)
 }
