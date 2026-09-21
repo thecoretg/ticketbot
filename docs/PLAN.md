@@ -149,8 +149,8 @@ Done.
 
 ### 8. Backups
 
-- [ ] Easypanel nightly Postgres dump to object storage. Infrastructure task, not code; tick it
-      when it is configured on the new instance.
+- [x] Easypanel nightly Postgres dump to object storage. Danny owns this on the Easypanel side;
+      marked done 2026-09-21 on his word, nothing in the repo depends on it.
 
 ## Do last
 
