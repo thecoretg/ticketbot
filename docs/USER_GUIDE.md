@@ -7,7 +7,9 @@ editor.
 
 A workflow belongs to one ConnectWise board. Every ticket event on that board, a ticket being
 created or updated, enters the workflow at each **Trigger** that listens for that event and walks
-the wires from there. The canvas is the workflow: steps are cards, wires are the paths between
+the wires from there. A trigger can carry an **Only when** condition, built the same way as an
+If; when it does not hold, that lane does not run and the run's history says so. Give each rule
+its own trigger, a lane, rather than hanging rules off one another. The canvas is the workflow: steps are cards, wires are the paths between
 them.
 
 ## How a walk moves

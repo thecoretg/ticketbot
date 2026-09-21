@@ -168,7 +168,7 @@ func TestValidateStructure(t *testing.T) {
 		}(), []string{"id:duplicate node id"}},
 		{"trigger needs events", &models.Workflow{Nodes: []models.Node{{ID: "t", Kind: models.NodeTrigger, Title: "t", Enabled: true}}}, []string{"events:at least one event"}},
 		{"bad and duplicate events", &models.Workflow{Nodes: []models.Node{{ID: "t", Kind: models.NodeTrigger, Title: "t", Events: []models.TriggerEvent{"deleted", models.TriggerCreated, models.TriggerCreated}}}}, []string{"events:created or updated", "events:listed twice"}},
-		{"trigger with condition and settings", &models.Workflow{Nodes: []models.Node{{ID: "t", Kind: models.NodeTrigger, Title: "t", Events: []models.TriggerEvent{models.TriggerCreated}, Condition: "id = 1", ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{}}}}}, []string{"condition:no condition", "notify:no action settings"}},
+		{"trigger with a broken condition and settings", &models.Workflow{Nodes: []models.Node{{ID: "t", Kind: models.NodeTrigger, Title: "t", Events: []models.TriggerEvent{models.TriggerCreated}, Condition: "id = ", ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{}}}}}, []string{"condition:", "notify:no action settings"}},
 		{"if with events and settings", flow(models.Node{ID: "c", Kind: models.NodeIf, Title: "c", Events: []models.TriggerEvent{models.TriggerCreated}, ActionSettings: models.ActionSettings{AddNote: &models.AddNoteAction{}}}), []string{"events:only a trigger", "add_note:no action settings"}},
 		{"action with condition", flow(models.Node{ID: "n", Kind: "skip_notify", Title: "n", Condition: "id = 1"}), []string{"condition:only an if node"}},
 		{"unknown kind", flow(models.Node{ID: "x", Kind: "teleport", Title: "x"}), []string{"kind:unknown node kind"}},

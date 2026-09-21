@@ -395,7 +395,7 @@ function tkStepChip(s) {
     if (s.error)                     { variant = 'bad'; label = 'error' }
     else if (s.skipped === 'joined') { label = 'already ran' }
     else if (s.skipped)              { label = s.skipped }
-    else if (s.kind === 'trigger')   { variant = 'accent'; label = 'fired' }
+    else if (s.kind === 'trigger')   { variant = s.matched === false ? '' : 'accent'; label = s.matched === false ? 'did not fire' : 'fired' }
     else if (s.kind === 'if')        { variant = s.matched ? 'ok' : ''; label = s.matched ? 'match' : 'else' }
     else                             { variant = 'ok'; label = 'ran' }
     const tip = s.error ? ` data-tip="${esc(s.error)}"` : ''

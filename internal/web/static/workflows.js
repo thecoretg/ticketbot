@@ -249,7 +249,7 @@ async function loadWorkflowEditor(id) {
         wfStatuses   = (statuses || []).filter(s => !s.deleted && !s.inactive)
         wfPriorities = priorities || []
         wf = wfNormalize(w)
-        const ifs = wf.nodes.filter(n => n.kind === 'if')
+        const ifs = wf.nodes.filter(n => n.kind === 'if' || n.kind === 'trigger')
         await Promise.all(ifs.map(wfLoadNodeUI))
         await wfResolveNames(ifs)
         wfOriginal = JSON.stringify(wfStrip(wf))
@@ -269,7 +269,7 @@ function wfNormalize(w) {
     for (const n of w.nodes) {
         n.x = Math.round(n.x || 0)
         n.y = Math.round(n.y || 0)
-        if (n.kind === 'if') n.condition = n.condition || ''
+        if (n.kind === 'if' || n.kind === 'trigger') n.condition = n.condition || ''
         if (n.kind === 'trigger') n.events = n.events || []
     }
     return w
@@ -953,7 +953,11 @@ function cvNodeSub(n) {
     switch (n.kind) {
     case 'trigger': {
         const ev = n.events || []
-        return ev.length ? `on ticket ${ev.join(' or ')}` : 'no events — nothing enters'
+        if (!ev.length) return 'no events — nothing enters'
+        const base = `on ticket ${ev.join(' or ')}`
+        if (!(n.condition || '').trim()) return base
+        const rows = n._ui?.mode === 'builder' ? n._ui.rows?.length : 0
+        return `${base} · only when ${rows ? `${rows} condition${rows === 1 ? '' : 's'} hold${rows === 1 ? 's' : ''}` : n.condition.trim()}`
     }
     case 'if': {
         const ui = n._ui
@@ -1168,7 +1172,8 @@ function cvInspectorHTML(n) {
             </div>
             <span class="hint">A flow can have more than one trigger. Every trigger that accepts an event runs; a step two paths both reach runs once.</span>
         </div>
-        <div id="trigger-warn-${id}">${ev.length ? '' : `<div class="callout warn">${icon('alert')}<div>No events selected, so nothing ever enters here.</div></div>`}</div>`
+        <div id="trigger-warn-${id}">${ev.length ? '' : `<div class="callout warn">${icon('alert')}<div>No events selected, so nothing ever enters here.</div></div>`}</div>
+        ${wfConditionHTML(n)}`
         break
     }
     case 'if':
@@ -1414,7 +1419,7 @@ function wfShowHelp(section = '') {
     const h = (id, title) => `<h4 id="wf-help-${id}" style="margin-top:var(--s4)">${title}</h4>`
     openModal('How workflows run', `<div class="stack gap3" style="max-height:60vh;overflow-y:auto">
         ${h('flow', 'The flow')}
-        <p>A workflow belongs to one board. Every ticket event on that board (created, or updated) enters at each <b>Trigger</b> that listens for it, and walks the wires from there.</p>
+        <p>A workflow belongs to one board. Every ticket event on that board (created, or updated) enters at each <b>Trigger</b> that listens for it, and walks the wires from there. A trigger can carry an <b>Only when</b> condition; when it does not hold, that lane simply does not run.</p>
         <p>An <b>If</b> step sends the walk out of its <b>match</b> port when its condition holds and <b>else</b> when it does not. A port with nothing wired to it simply ends that path. A step that two paths both reach runs once.</p>
         <p><b>Skip notify</b> silences the Notify steps after it on its own path only. Other paths still notify.</p>
         <p>Right-click a step to duplicate, copy, disable or delete it. Shift-drag on empty canvas selects several steps; dragging any of them moves the group, and a copied group pastes into another workflow with its wires.</p>
@@ -1473,7 +1478,7 @@ function cvNewID() {
 function cvNewNode(kind, x, y) {
     const n = { id: cvNewID(), kind, title: cvKind(kind).label, enabled: true, x: Math.round(x), y: Math.round(y) }
     switch (kind) {
-    case 'trigger':      n.events = ['created', 'updated']; break
+    case 'trigger':      n.events = ['created', 'updated']; n.condition = ''; n._ui = wfDefaultUI(); break
     case 'if':           n.condition = ''; n._ui = wfDefaultUI(); break
     case 'notify':       n.notify       = { channel: 'webex_room', recipient_id: null }; break
     case 'add_note':     n.add_note     = { text: '', internal: true, discussion: false, resolution: false }; break
@@ -1793,7 +1798,8 @@ function cvStepText(s, n) {
     if (s.error) return ['bad', `Error: ${esc(s.error)}${s.kind === 'if' ? ' — took the else branch.' : ''}`]
     switch (s.kind) {
     case 'trigger':
-        return ['accent', `Accepted the ${esc(cv.run.asNew ? 'created' : 'updated')} event.`]
+        if (s.matched === false) return ['warn', 'Its condition did not hold, so this lane did not run.']
+        return ['accent', `Accepted the ${esc(cv.run.asNew ? 'created' : 'updated')} event${s.matched ? ' and its condition held' : ''}.`]
     case 'if':
         if (s.skipped === 'disabled') return ['warn', 'Disabled — took the else branch.']
         return s.matched ? ['ok', 'Matched — took the match branch.'] : ['warn', 'Did not match — took the else branch.']
@@ -1823,6 +1829,10 @@ function wfClientValidate() {
         switch (n.kind) {
         case 'trigger':
             if (!(n.events || []).length) return bad('pick at least one event')
+            if (n._ui?.mode === 'builder') {
+                const c = wfCompile(n._ui)
+                if (c.errors.length) return bad(c.errors[0])
+            }
             break
         case 'if':
             if (n._ui?.mode === 'builder') {
@@ -1878,7 +1888,7 @@ function wfPatchOpsError(ops) {
 // optional settings removed, patch ops parsed.
 function wfNodeForServer(n) {
     const out = { id: n.id, kind: n.kind, title: n.title, enabled: !!n.enabled, x: Math.round(n.x || 0), y: Math.round(n.y || 0) }
-    if (n.kind === 'trigger') out.events = n.events || []
+    if (n.kind === 'trigger') { out.events = n.events || []; if (n.condition) out.condition = n.condition }
     else if (n.kind === 'if') { if (n.condition) out.condition = n.condition }
     else if (n[n.kind]) {
         const s = JSON.parse(JSON.stringify(n[n.kind]))

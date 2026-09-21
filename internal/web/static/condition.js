@@ -260,6 +260,8 @@ function wfLookupLabel(source, it) {
 function wfConditionHTML(r) {
     const i = r.id
     const ui = r._ui || (r._ui = wfDefaultUI())
+    // a trigger's condition is a gate on its lane, an if's a fork; same builder, different words
+    const isTrigger = r.kind === 'trigger'
     const advanced = ui.mode === 'advanced'
     const compiled = advanced ? null : wfCompile(ui)
     const count    = advanced ? '' : `${ui.rows.length} condition${ui.rows.length === 1 ? '' : 's'}`
@@ -294,12 +296,12 @@ function wfConditionHTML(r) {
         : `<div class="cond-rows" id="cond-builder-${i}">
             ${ui.rows.map((row, k) => wfRowHTML(i, k, row, ui)).join('')}
             <div><button class="btn btn-default btn-sm" onclick="wfAddRow('${i}')">${icon('plus')}Add condition</button></div>
-            ${ui.rows.length ? '' : '<p class="cell-sub">No conditions: every ticket that reaches this step matches.</p>'}
+            ${ui.rows.length ? '' : `<p class="cell-sub">${isTrigger ? 'No conditions: this trigger fires on every event it listens for.' : 'No conditions: every ticket that reaches this step matches.'}</p>`}
         </div>`
 
     return `<div class="field" id="cond-wrap-${i}">
         <div class="row spread gap2">
-            <label>Condition</label>
+            <label>${isTrigger ? 'Only when' : 'Condition'}</label>
             <button class="icon-btn hit-expand" style="width:22px;height:22px" onclick="wfShowHelp('conditions')" aria-label="How conditions work">${icon('info')}</button>
         </div>
         <div class="cond">

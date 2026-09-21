@@ -353,8 +353,9 @@ func (s *Service) validateNode(ctx context.Context, boardID int, n *models.Node)
 			}
 			seen[ev] = true
 		}
-		if n.Condition != "" {
-			out = append(out, fieldMsg{field: "condition", text: "a trigger has no condition"})
+		// an optional "only when" condition gates the lane; empty fires on every event
+		if strings.TrimSpace(n.Condition) != "" {
+			out = append(out, s.validateCondition(ctx, n.Condition)...)
 		}
 		if settings != "" {
 			out = append(out, fieldMsg{field: settings, text: "a trigger has no action settings"})
@@ -367,24 +368,14 @@ func (s *Service) validateNode(ctx context.Context, boardID int, n *models.Node)
 		if settings != "" {
 			out = append(out, fieldMsg{field: settings, text: "a condition has no action settings"})
 		}
-		if expr, se := parseCondition(n.Condition); se != nil {
-			pos := se.Pos
-			out = append(out, fieldMsg{field: "condition", text: se.Msg, pos: &pos})
-		} else if problems, err := s.ValidateListRefs(ctx, expr); err != nil {
-			out = append(out, fieldMsg{field: "condition", text: err.Error()})
-		} else {
-			for _, p := range problems {
-				pos := p.Pos
-				out = append(out, fieldMsg{field: "condition", text: p.Msg, pos: &pos})
-			}
-		}
+		out = append(out, s.validateCondition(ctx, n.Condition)...)
 
 	case n.Kind.IsAction():
 		if len(n.Events) > 0 {
 			out = append(out, fieldMsg{field: "events", text: "only a trigger has events"})
 		}
 		if n.Condition != "" {
-			out = append(out, fieldMsg{field: "condition", text: "only an if node has a condition"})
+			out = append(out, fieldMsg{field: "condition", text: "only an if node or a trigger has a condition"})
 		}
 		a := n.Action()
 		out = append(out, s.validateAction(ctx, boardID, &a)...)
@@ -397,6 +388,23 @@ func (s *Service) validateNode(ctx context.Context, boardID int, n *models.Node)
 }
 
 // hasSettings names the first settings block that is set, or "".
+// validateCondition checks a condition's syntax and its list references.
+func (s *Service) validateCondition(ctx context.Context, condition string) []fieldMsg {
+	var out []fieldMsg
+	if expr, se := parseCondition(condition); se != nil {
+		pos := se.Pos
+		out = append(out, fieldMsg{field: "condition", text: se.Msg, pos: &pos})
+	} else if problems, err := s.ValidateListRefs(ctx, expr); err != nil {
+		out = append(out, fieldMsg{field: "condition", text: err.Error()})
+	} else {
+		for _, p := range problems {
+			pos := p.Pos
+			out = append(out, fieldMsg{field: "condition", text: p.Msg, pos: &pos})
+		}
+	}
+	return out
+}
+
 func hasSettings(st models.ActionSettings) string {
 	switch {
 	case st.Notify != nil:

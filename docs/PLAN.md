@@ -209,14 +209,14 @@ Done.
 
 ### 13. Conditional triggers
 
-Decisions from the 2026-09-21 grilling.
+Done.
 
-- [ ] A trigger node may carry a `condition` (the field an If already has). Empty fires on every
+- [x] A trigger node may carry a `condition` (the field an If already has). Empty fires on every
       event it listens for, as today. A failing condition, or one that errors at run time, does
       not start the walk; the run still records the trigger step as "did not fire" (with the error
       when there is one) so Results shows the lane dark but present. A run where no trigger fired
       keeps outcome `no_trigger`.
-- [ ] Inspector section "Only when" with the same builder as an If. The card keeps the short
+- [x] Inspector section "Only when" with the same builder as an If. The card keeps the short
       height and shows the condition in its subtitle. Validation applies the If's condition rules
       to triggers. Simulate honours it. Export, import and the results page need nothing.
 

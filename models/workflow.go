@@ -157,7 +157,7 @@ type Node struct {
 	Y float64 `json:"y"`
 
 	Events    []TriggerEvent `json:"events,omitempty"`    // trigger: which intakes enter here
-	Condition string         `json:"condition,omitempty"` // if: cwquery source; empty always matches
+	Condition string         `json:"condition,omitempty"` // if: cwquery source, empty always matches; trigger: optional "only when" gate
 	ActionSettings
 }
 

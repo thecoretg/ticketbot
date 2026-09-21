@@ -142,7 +142,7 @@ type StepOutcome struct {
 	Trigger string      // node id of the trigger whose walk this is
 	Via     string      // edge id the walk arrived by; empty for the trigger itself
 	Port    models.Port // output the walk left by; empty when the walk ended here
-	Matched *bool       // if nodes: the condition's verdict
+	Matched *bool       // if nodes, and triggers with a condition: the condition's verdict
 	Skipped string      // SkippedDisabled | SkippedJoined
 	Err     error
 }
@@ -334,6 +334,21 @@ func (e *Engine) walk(ctx context.Context, r *run, trigger *models.Node) {
 		switch {
 		case cur.Kind == models.NodeTrigger:
 			port = models.PortOut
+			// A trigger's own condition gates the lane: when it fails or errors the walk never
+			// starts, and the step is still recorded so the run shows the lane did not fire.
+			if strings.TrimSpace(cur.Condition) != "" {
+				matched, err := e.evalCondition(ctx, r, cur.Condition)
+				if err != nil {
+					st.Err = err
+					r.res.Steps = append(r.res.Steps, st)
+					return
+				}
+				st.Matched = &matched
+				if !matched {
+					r.res.Steps = append(r.res.Steps, st)
+					return
+				}
+			}
 
 		case cur.Kind == models.NodeIf:
 			port = models.PortNo
