@@ -156,40 +156,49 @@ Done.
 
 Polish noted during the 2026-09-21 review of items 1 to 7. None blocks the parallel run.
 
+Decisions from the 2026-09-21 grilling of items 9 to 12. Order of work: 12, 11, 10, 9.
+
 ### 9. Tooltip clipped on the ticket list
 
-- [ ] The "Open in ConnectWise" tooltip on a ticket id in the Tickets table is cut off at the
-      table's edge (`tickets.js`, the `data-tip` on the id link; `.table-wrap` clips overflow).
-      Flip the tooltip side near an edge or let it escape the wrap. Check light and dark.
+- [ ] Drop the `data-tip` on ticket ids in the Tickets table (a CSS `::after` cannot escape the
+      scrolling `.table-wrap`). Show a small external-link icon after the number with an
+      accessible label instead. Light and dark.
 
 ### 10. Configurable business hours for the stale-webhook alert
 
-- [ ] Replace the constants in `internal/service/intake/stale.go` (07:30 to 19:00, weekdays,
-      America/Chicago) with app config: open time, close time, time zone, days. Config page rows
-      beside "Stale webhook alert"; the user guide and CLAUDE.md sentence about business hours
-      follow.
+- [ ] App config: open time, close time, weekdays, time zone (select of US zones plus UTC).
+      Defaults 07:30, 19:00, Monday to Friday, America/Chicago, so nothing changes until edited.
+      Rows beside "Stale webhook alert" on the Config page; `stale.go` reads them instead of its
+      constants. User guide and CLAUDE.md sentence follow.
 
-### 11. Canvas context menu
+### 11. Canvas context menu and multi-select
 
-- [ ] Right-click on a node opens a menu (`openMenu` in `app.js` is the existing popover):
-      Duplicate, Copy, Delete, Enable/Disable, Open inspector. Right-click on empty canvas offers
-      Paste when the clipboard holds a copied node (keep an in-page clipboard, not the system
-      one), placing it at the pointer with a new id and no wires. Keyboard equivalents where
-      cheap (⌘C / ⌘V / Delete already handles removal).
+- [ ] Right-click on a step opens the app popover (`openMenu`) at the pointer: Open inspector,
+      Duplicate, Copy, Enable or disable, Delete. Right-click on empty canvas: Paste, Add step,
+      Fit to view. Shift plus right-click keeps the browser menu.
+- [ ] Shift-drag on empty canvas draws a selection box; Shift-click adds or removes one step.
+      Move, Copy, Duplicate, Delete, Enable or disable act on the whole selection.
+- [ ] Clipboard is in-memory for the browser session and works across workflows and boards;
+      save-time validation catches a status from another board. Paste keeps wires between the
+      copied steps, drops wires to anything outside, lands at the pointer with the relative
+      layout kept, new ids, offset when pasted onto the same canvas. Triggers copy like any step.
 
 ### 12. Workflow run results page
 
-- [ ] A "Results" tab beside the workflow list under Workflows: every workflow run, newest
-      first, filterable by board, workflow, event and outcome. Each run opens to show the ticket,
-      the trigger event, every step's outcome and notifications, and the path drawn on a read-only
-      copy of that workflow's canvas, the way Simulate highlights it today. The data already
-      exists: the `workflow` ticket event carries `steps` with `via` and `port` per node, and the
-      `action` and `notification` events share its `run_id`. A run listing needs a query over
-      `ticket_event` grouped by `run_id` (or a small `workflow_run` summary table written by the
-      ticketbot run), not a change to how runs execute.
-- [ ] A **Results** button in each workflow's editor toolbar opens that tab filtered to the board.
-- [ ] A related Config setting. Danny to define it when the item is picked up; the likely
-      candidate is how long run results are kept, separate from the log retention.
+- [ ] `workflow_run` summary table written at the end of each run where a workflow was found
+      and enabled (including runs where no trigger listened): run id, ticket, board, workflow,
+      event, source, dry run, started at, duration, step / action / write counts, notification
+      counts by result, error count, outcome (clean, errors, nobody_notified, no_trigger). The
+      migration backfills it from existing `ticket_event` rows grouped by run id.
+- [ ] Results tab beside the workflow list at `#workflows/results`: newest first, filters for
+      board, outcome, date range and ticket number carried in the hash, polling every 5 seconds
+      while open. Viewers may open it.
+- [ ] Run detail: ticket link, event, the path drawn on a read-only copy of the current canvas
+      the way Simulate highlights it, steps whose node no longer exists listed under the canvas,
+      then actions and notifications.
+- [ ] **Results** button in the editor toolbar opens the tab filtered to the board.
+- [ ] Config: `history_retention_days` (default 90, 0 keeps forever). Purges run summaries and
+      ticket history events together, hourly.
 
 ## Done## Done
 
