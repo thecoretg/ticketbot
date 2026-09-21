@@ -23,6 +23,22 @@ Ticketbot ingests ConnectWise PSA ticket webhooks, runs per-board workflows (con
 
 `queries/*.sql` → `internal/db` (generated) → `internal/postgres` (repo impls) → `internal/repos` (interfaces) → `internal/service/*` → `internal/handlers` → `internal/server/routes.go`. New repos are registered in `internal/postgres/all.go` and `internal/repos/all.go`; new services are wired in `internal/server/server.go`.
 
+## Workflows
+
+A workflow is a graph, not a rule list: `models.Workflow` holds `Nodes` (trigger / if / one node per
+`ActionKind`) and `Edges` (from node + port → to node). The `workflow.rules` JSONB column stores a
+`WorkflowDocument` (`{"version":2,"nodes":[],"edges":[]}`); a bare array is the v1 rule chain and
+`models.DecodeWorkflowDocument` upgrades it on read (`UpgradeRules`), so no SQL migration was needed
+and v1 rows persist until their next save. Engine semantics (`internal/service/workflow/engine.go`):
+every enabled trigger listening for the event fires, in canvas order; a walk follows the port an if
+node picks and ends at an unwired port; a node reached by a second walk is recorded as `joined` and
+not re-run; `skip_notify` silences only the notifies after it on its own walk; disabled nodes pass
+through (an if takes its `no` port). `Validate` in `service.go` owns the structural rules (one
+trigger minimum, one wire per port, nothing into a trigger, no cycles, everything reachable). The
+canvas (`internal/web/static/workflows.js`, `cv*` functions) is the only editor; node heights are
+fixed per kind and shared between `ui.css` and the script, so ports line up. Run history stores
+`steps` per run; rows from before the graph carry `rules`, and `tickets.js` renders both.
+
 ## Frontend
 
 `internal/web/static/ui.css` is the design system: tokens, component classes and six palettes
@@ -37,7 +53,8 @@ the top of `ui.css`. Spacing is the 4px scale (`--s1`…`--s12`). Text clears 4.
 actual background; never dim text with `opacity`. No other CSS frameworks or component libraries.
 
 Every change is checked in light **and** dark. `scripts/contrast-audit.js` pasted into the
-browser console lists contrast, hit-target and accessible-name failures on the page.
+browser console (then `uiAudit()`) lists contrast, hit-target and accessible-name failures on the page.
+Static files are embedded: `.claude/launch.json` starts `make run` for the in-app browser preview.
 
 ## Conventions
 
