@@ -51,9 +51,10 @@ SELECT * FROM oauth_token WHERE token_hash = $1;
 UPDATE oauth_token SET used_at = NOW() WHERE id = $1;
 
 -- name: ResolveOAuthAccessToken :one
-SELECT t.grant_id, t.expires_at, g.user_id, g.scopes
+SELECT t.grant_id, t.expires_at, g.user_id, g.scopes, c.name AS client_name
 FROM oauth_token t
 JOIN oauth_grant g ON g.id = t.grant_id
+JOIN oauth_client c ON c.id = g.client_id
 WHERE t.token_hash = $1 AND t.kind = 'access';
 
 -- name: DeleteExpiredOAuthCodes :execrows

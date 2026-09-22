@@ -146,7 +146,7 @@ func (f *fakeRepo) ResolveAccessToken(_ context.Context, hash []byte) (*models.O
 		return nil, models.ErrOAuthTokenNotFound
 	}
 	g := f.grants[t.GrantID]
-	return &models.OAuthAccess{GrantID: g.ID, UserID: g.UserID, Scopes: g.Scopes, ExpiresAt: t.ExpiresAt}, nil
+	return &models.OAuthAccess{GrantID: g.ID, UserID: g.UserID, ClientName: f.clients[g.ClientID].Name, Scopes: g.Scopes, ExpiresAt: t.ExpiresAt}, nil
 }
 
 func (f *fakeRepo) DeleteExpired(_ context.Context, now time.Time) (models.OAuthPurgeCounts, error) {

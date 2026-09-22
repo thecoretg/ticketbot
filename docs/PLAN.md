@@ -261,13 +261,16 @@ Done (migration 19).
 
 ### 15. MCP endpoint and read tools
 
-- [ ] `POST /mcp` via `github.com/modelcontextprotocol/go-sdk`, Streamable HTTP, stateless.
+Done. Simulate and evaluate moved from the handler into `internal/service/simulate` so both
+surfaces share them.
+
+- [x] `POST /mcp` via `github.com/modelcontextprotocol/go-sdk`, Streamable HTTP, stateless.
       Bearer resolves to a user through an OAuth access token or an API key; the 401 carries
       `WWW-Authenticate` with `resource_metadata`.
-- [ ] `internal/service/mcp` tool registry: each tool declares its minimum role; `tools/list`
+- [x] `internal/service/mcp` tool registry: each tool declares its minimum role; `tools/list`
       filters by the caller's effective permission. One structured log line per call (user,
       client, tool, argument summary).
-- [ ] Tools, all read-only, `limit` default 20 ceiling 100 with a continuation cursor:
+- [x] Tools, all read-only, `limit` default 20 ceiling 100 with a continuation cursor:
       `ticketbot_list_workflows`, `ticketbot_get_workflow` (readable lane walk, `raw` for the
       document), `ticketbot_list_runs`, `ticketbot_get_run`, `ticketbot_ticket_history`,
       `ticketbot_list_lists`, `ticketbot_list_forwards`, `ticketbot_get_config`,

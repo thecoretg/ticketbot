@@ -65,10 +65,11 @@ type OAuthToken struct {
 
 // OAuthAccess is what a bearer access token resolves to.
 type OAuthAccess struct {
-	GrantID   int
-	UserID    int
-	Scopes    []string
-	ExpiresAt time.Time
+	GrantID    int
+	UserID     int
+	ClientName string
+	Scopes     []string
+	ExpiresAt  time.Time
 }
 
 // OAuthPurgeCounts reports what the hourly sweep removed.

@@ -46,6 +46,15 @@ needed, then calls `GET /oauth/authorize/info` and `POST /oauth/authorize/decide
 `read` and `write`; only `read` is offered (`oauth.OfferedScopes`), and a caller's effective
 permission is the lower of their role and their granted scopes. Tokens and codes are stored as
 SHA-256 like sessions. The service and `authsvc.SessionPurger` run on the intake purge tick.
+`internal/service/mcp` is the endpoint: `auth.RequireBearerToken` from the go-sdk resolves an
+OAuth access token or an API key to a `Principal`, then a stateless Streamable HTTP server is
+built per request holding only the tools that principal's role and scopes allow, so
+`tools/list` is already filtered. Tools live in `tools.go` as `def(...)` entries with a role
+floor; every dependency is a narrow interface in `Deps`. Tool names carry the `ticketbot_`
+prefix so they never collide with the ConnectWise PSA connector's `cw_*` tools, and
+`ticketbot_get_workflow` renders the graph as lanes (`describe.go`) rather than dumping nodes
+and edges. Simulate and evaluate-condition logic is in `internal/service/simulate`, shared by
+the dashboard handlers and the MCP tools. One `mcp: tool call` log line per call is the audit trail.
 
 ## Intake
 

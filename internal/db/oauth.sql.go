@@ -265,17 +265,19 @@ func (q *Queries) MarkOAuthTokenUsed(ctx context.Context, id int) error {
 }
 
 const resolveOAuthAccessToken = `-- name: ResolveOAuthAccessToken :one
-SELECT t.grant_id, t.expires_at, g.user_id, g.scopes
+SELECT t.grant_id, t.expires_at, g.user_id, g.scopes, c.name AS client_name
 FROM oauth_token t
 JOIN oauth_grant g ON g.id = t.grant_id
+JOIN oauth_client c ON c.id = g.client_id
 WHERE t.token_hash = $1 AND t.kind = 'access'
 `
 
 type ResolveOAuthAccessTokenRow struct {
-	GrantID   int       `json:"grant_id"`
-	ExpiresAt time.Time `json:"expires_at"`
-	UserID    int       `json:"user_id"`
-	Scopes    []string  `json:"scopes"`
+	GrantID    int       `json:"grant_id"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	UserID     int       `json:"user_id"`
+	Scopes     []string  `json:"scopes"`
+	ClientName string    `json:"client_name"`
 }
 
 func (q *Queries) ResolveOAuthAccessToken(ctx context.Context, tokenHash []byte) (*ResolveOAuthAccessTokenRow, error) {
@@ -286,6 +288,7 @@ func (q *Queries) ResolveOAuthAccessToken(ctx context.Context, tokenHash []byte)
 		&i.ExpiresAt,
 		&i.UserID,
 		&i.Scopes,
+		&i.ClientName,
 	)
 	return &i, err
 }

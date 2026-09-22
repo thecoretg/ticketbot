@@ -114,6 +114,13 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.mux.Handle("GET "+oauth.ConsentPath, mcp(noCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, panelFS, "index.html")
 	}))))
+	// The MCP endpoint itself. Streamable HTTP is POST-only in stateless mode; the handler
+	// answers GET and DELETE with 405 itself. ServeMux needs the methods spelled out next to
+	// the GET / catch-all.
+	mcpHandler := mcp(a.Svc.MCP.Handler())
+	for _, m := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+		rt.mux.Handle(m+" "+oauth.MCPPath, mcpHandler)
+	}
 	// Connected apps exist whether or not MCP is on, so grants can be revoked after it is off.
 	rt.handle("GET /users/me/grants", oh.ListMyGrants, auth)
 	rt.handle("DELETE /users/me/grants/{grant_id}", oh.RevokeMyGrant, auth)
@@ -163,7 +170,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("PUT /notifiers/forwards/{id}", nh.UpdateUserForward, auth, editor)
 	rt.handle("DELETE /notifiers/forwards/{id}", nh.DeleteUserForward, auth, editor)
 
-	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW, a.Svc.Notifier, a.Svc.Lists)
+	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW, a.Svc.Notifier, a.Svc.Simulate)
 	rt.handle("GET /workflows", wfh.List, auth)
 	rt.handle("POST /workflows", wfh.Create, auth, editor)
 	rh := handlers.NewRunsHandler(a.Stores.WorkflowRuns, a.Stores.TicketEvents, a.Stores.CW.Board, a.Svc.Workflow)

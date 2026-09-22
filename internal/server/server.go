@@ -18,8 +18,10 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/intake"
 	"github.com/thecoretg/ticketbot/internal/service/lists"
+	"github.com/thecoretg/ticketbot/internal/service/mcp"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/oauth"
+	"github.com/thecoretg/ticketbot/internal/service/simulate"
 	"github.com/thecoretg/ticketbot/internal/service/sso"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
@@ -75,6 +77,8 @@ type Services struct {
 	Transfer  *transfer.Service
 	SSO       *sso.Service
 	OAuth     *oauth.Service
+	Simulate  *simulate.Service
+	MCP       *mcp.Service
 }
 
 func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.LevelVar, logBuf *logging.BufferHandler) (*App, *logging.Persister, error) {
@@ -159,6 +163,12 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		return nil, nil, fmt.Errorf("configuring sso: %w", err)
 	}
 
+	simSvc := &simulate.Service{Workflows: wfSvc, CW: cws, Notifier: ns, Lists: listSvc}
+	mcpSvc := mcp.New(mcp.Params{OAuth: oauthSvc, Keys: r.APIKey, Users: r.APIUser, Deps: mcp.Deps{
+		Workflows: wfSvc, Runs: r.WorkflowRuns, Events: r.TicketEvents, Tickets: cws, Lists: listSvc,
+		Forwards: ns, Config: cfgSvc, Simulator: simSvc, CW: cws, Webex: ws, Intake: intakeSvc, Logs: logBuf,
+	}})
+
 	return &App{
 		Env:           e,
 		Config:        cfg,
@@ -184,6 +194,8 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 			Transfer:  transfer.New(transfer.Params{Workflows: wfSvc, Lists: listSvc, Recipients: r.WebexRecipients, Boards: r.CW.Board}),
 			SSO:       ssoSvc,
 			OAuth:     oauthSvc,
+			Simulate:  simSvc,
+			MCP:       mcpSvc,
 		},
 	}, persister, nil
 }

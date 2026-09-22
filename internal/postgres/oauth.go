@@ -146,7 +146,7 @@ func (r *OAuthRepo) ResolveAccessToken(ctx context.Context, tokenHash []byte) (*
 		}
 		return nil, err
 	}
-	return &models.OAuthAccess{GrantID: d.GrantID, UserID: d.UserID, Scopes: d.Scopes, ExpiresAt: d.ExpiresAt}, nil
+	return &models.OAuthAccess{GrantID: d.GrantID, UserID: d.UserID, ClientName: d.ClientName, Scopes: d.Scopes, ExpiresAt: d.ExpiresAt}, nil
 }
 
 func (r *OAuthRepo) DeleteExpired(ctx context.Context, now time.Time) (models.OAuthPurgeCounts, error) {

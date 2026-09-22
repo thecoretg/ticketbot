@@ -3,9 +3,11 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/thecoretg/ticketbot/internal/repos"
+	"github.com/thecoretg/ticketbot/internal/service/mcp"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
 	"github.com/thecoretg/ticketbot/internal/service/oauth"
 	"github.com/thecoretg/ticketbot/internal/service/sso"
@@ -16,7 +18,8 @@ import (
 // that unauthenticated requests are rejected while the health check is open.
 func TestNewHandlerRoutes(t *testing.T) {
 	// NewNotifierHandler copies the service by value, so it needs a non-nil pointer.
-	a := &App{Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}, SSO: &sso.Service{}, OAuth: oauth.New(oauth.Params{Cfg: &models.Config{}})}}
+	oa := oauth.New(oauth.Params{Cfg: &models.Config{}})
+	a := &App{Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}, SSO: &sso.Service{}, OAuth: oa, MCP: mcp.New(mcp.Params{OAuth: oa})}}
 	h := NewHandler(a, func() {})
 
 	cases := []struct {
@@ -48,6 +51,7 @@ func TestNewHandlerRoutes(t *testing.T) {
 		{http.MethodGet, "/oauth/authorize", http.StatusNotFound},
 		{http.MethodPost, "/oauth/token", http.StatusNotFound},
 		{http.MethodGet, "/oauth/consent", http.StatusNotFound},
+		{http.MethodPost, "/mcp", http.StatusNotFound},
 		{http.MethodGet, "/", http.StatusOK},
 		{http.MethodGet, "/app.js", http.StatusOK},
 	}
@@ -78,7 +82,8 @@ func TestNewHandlerRoutes(t *testing.T) {
 // consent path serving the dashboard.
 func TestNewHandlerMCPEnabled(t *testing.T) {
 	cfg := &models.Config{MCPEnabled: true}
-	a := &App{Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}, SSO: &sso.Service{}, OAuth: oauth.New(oauth.Params{Cfg: cfg, RootURL: "https://tb.example.com"})}}
+	oa := oauth.New(oauth.Params{Cfg: cfg, RootURL: "https://tb.example.com"})
+	a := &App{Stores: &repos.AllRepos{}, Svc: &Services{Notifier: &notifier.Service{}, SSO: &sso.Service{}, OAuth: oa, MCP: mcp.New(mcp.Params{OAuth: oa})}}
 	h := NewHandler(a, func() {})
 
 	cases := []struct {
@@ -94,6 +99,7 @@ func TestNewHandlerMCPEnabled(t *testing.T) {
 		{http.MethodGet, "/oauth/authorize/info", http.StatusUnauthorized},
 		{http.MethodPost, "/oauth/authorize/decide", http.StatusUnauthorized},
 		{http.MethodGet, "/oauth/consent", http.StatusOK},
+		{http.MethodPost, "/mcp", http.StatusUnauthorized}, // no bearer
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -106,5 +112,11 @@ func TestNewHandlerMCPEnabled(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/oauth/consent", nil))
 	if ct := rec.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
 		t.Errorf("GET /oauth/consent Content-Type = %q, want text/html", ct)
+	}
+	// the 401 from /mcp points clients at the resource metadata, which is how they find OAuth
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/mcp", nil))
+	if wa := rec.Header().Get("WWW-Authenticate"); !strings.Contains(wa, "resource_metadata=") {
+		t.Errorf("POST /mcp WWW-Authenticate = %q, want resource_metadata", wa)
 	}
 }

@@ -1,17 +1,16 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 
-	"github.com/thecoretg/tctg-go/connectwise/psa"
 	"github.com/thecoretg/ticketbot/internal/cwquery"
 	"github.com/thecoretg/ticketbot/internal/msgtemplate"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/simulate"
 	"github.com/thecoretg/ticketbot/internal/service/workflow"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -20,11 +19,11 @@ type WorkflowHandler struct {
 	Service  *workflow.Service
 	CW       *cwsvc.Service
 	Notifier *notifier.Service
-	Lists    workflow.ListLoader // admin lists for `in list` conditions; may be nil
+	Sim      *simulate.Service
 }
 
-func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service, ns *notifier.Service, lists workflow.ListLoader) *WorkflowHandler {
-	return &WorkflowHandler{Service: svc, CW: cw, Notifier: ns, Lists: lists}
+func NewWorkflowHandler(svc *workflow.Service, cw *cwsvc.Service, ns *notifier.Service, sim *simulate.Service) *WorkflowHandler {
+	return &WorkflowHandler{Service: svc, CW: cw, Notifier: ns, Sim: sim}
 }
 
 // Fields handles GET /workflows/fields.
@@ -42,13 +41,6 @@ type simulateRequest struct {
 	AsNew    bool `json:"as_new"`
 	// Workflow, when present, is an unsaved draft to simulate instead of the stored workflow.
 	Workflow *models.Workflow `json:"workflow,omitempty"`
-}
-
-type simulateResponse struct {
-	Source     string                      `json:"source"` // stored | live
-	Workflow   models.WorkflowPayload      `json:"workflow"`
-	Actions    []models.ActionPayload      `json:"actions"`
-	Recipients []notifier.RecipientPreview `json:"recipients"`
 }
 
 // Simulate handles POST /workflows/:id/simulate. It runs the workflow (or a posted draft) against a
@@ -74,91 +66,20 @@ func (h *WorkflowHandler) Simulate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	wf, err := h.Service.Get(ctx, id)
+	out, err := h.Sim.Simulate(r.Context(), simulate.Request{WorkflowID: id, TicketID: req.TicketID, AsNew: req.AsNew, Draft: req.Workflow})
 	if err != nil {
-		h.workflowError(w, err)
-		return
-	}
-	if req.Workflow != nil {
-		draft := req.Workflow
-		draft.ID, draft.BoardID, draft.BoardName = wf.ID, wf.BoardID, wf.BoardName
-		if errs := h.Service.Validate(ctx, draft); len(errs) > 0 {
-			h.workflowError(w, errs)
-			return
-		}
-		wf = draft
-	}
-
-	t, note, live, err := h.CW.TicketSnapshot(ctx, req.TicketID)
-	if err != nil {
-		if errors.Is(err, models.ErrTicketNotFound) {
+		var bm *simulate.BoardMismatchError
+		switch {
+		case errors.Is(err, models.ErrTicketNotFound):
 			notFoundError(w, err)
-			return
+		case errors.As(err, &bm):
+			badPayloadError(w, err)
+		default:
+			h.workflowError(w, err)
 		}
-		internalServerError(w, err)
 		return
 	}
-	if t.Board.ID != wf.BoardID {
-		badPayloadError(w, fmt.Errorf("ticket %d is on board %d, not this workflow's board %d", req.TicketID, t.Board.ID, wf.BoardID))
-		return
-	}
-
-	engine := workflow.NewEngine(noopCW{})
-	engine.Lists = h.Lists
-	res, err := engine.Run(ctx, wf, workflow.Input{
-		Ticket:      t,
-		TriggerNote: note,
-		IsNew:       req.AsNew,
-		NewNote:     note != nil,
-		DryRun:      true,
-	})
-	if err != nil {
-		internalServerError(w, err)
-		return
-	}
-
-	out := simulateResponse{
-		Source:     map[bool]string{true: "live", false: "stored"}[live],
-		Workflow:   workflowRunPayload(wf, res),
-		Actions:    []models.ActionPayload{},
-		Recipients: []notifier.RecipientPreview{},
-	}
-	for _, a := range res.Actions {
-		out.Actions = append(out.Actions, a.Payload())
-	}
-
-	if len(res.Notifies) > 0 {
-		detail, err := h.CW.GetTicketDetail(ctx, req.TicketID)
-		if err != nil {
-			internalServerError(w, err)
-			return
-		}
-		ft := fullTicketFromDetail(detail)
-		recips, err := h.Notifier.PreviewRecipients(ctx, ft, req.AsNew, res.Notifies)
-		if err != nil {
-			internalServerError(w, err)
-			return
-		}
-		if recips != nil {
-			out.Recipients = recips
-		}
-	}
-
 	outputJSON(w, out)
-}
-
-func fullTicketFromDetail(detail *models.TicketDetail) *models.FullTicket {
-	return &models.FullTicket{
-		Ticket:     detail.Ticket.Ticket,
-		Board:      detail.Board,
-		Status:     detail.Status,
-		Company:    detail.Company,
-		Contact:    detail.Contact,
-		Owner:      detail.Owner,
-		LatestNote: detail.LatestNote,
-		Resources:  detail.Resources,
-	}
 }
 
 type previewMessageRequest struct {
@@ -193,38 +114,13 @@ func (h *WorkflowHandler) PreviewMessage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	rendered := msgtemplate.Render(req.Message, msgtemplate.Context{
-		Ticket:     fullTicketFromDetail(detail),
+		Ticket:     simulate.FullTicketFromDetail(detail),
 		StepTitle:  "Preview",
 		IsNew:      req.AsNew,
 		CompanyID:  h.Notifier.CWCompanyID,
 		MaxNoteLen: h.Notifier.Cfg.MaxMessageLength,
 	})
 	outputJSON(w, M{"rendered": rendered, "ticket_id": req.TicketID})
-}
-
-func workflowRunPayload(wf *models.Workflow, res *workflow.Result) models.WorkflowPayload {
-	p := models.WorkflowPayload{WorkflowID: &wf.ID, WorkflowName: wf.Name, Found: true, Enabled: wf.Enabled, Event: res.Event, Steps: []models.StepPayload{}}
-	for _, st := range res.Steps {
-		p.Steps = append(p.Steps, st.Payload())
-	}
-	return p
-}
-
-// noopCW satisfies workflow.CWClient for simulations; the engine never writes in dry run, and the
-// read methods are only reached after a write, so none of these should be called.
-type noopCW struct{}
-
-func (noopCW) GetTicket(context.Context, int, map[string]string) (*psa.Ticket, error) {
-	return nil, errors.New("simulation: connectwise reads are disabled")
-}
-func (noopCW) GetMostRecentTicketNote(context.Context, int) (*psa.ServiceTicketNote, error) {
-	return nil, errors.New("simulation: connectwise reads are disabled")
-}
-func (noopCW) PatchTicket(context.Context, int, []psa.PatchOp) (*psa.Ticket, error) {
-	return nil, errors.New("simulation: connectwise writes are disabled")
-}
-func (noopCW) PostServiceTicketNote(context.Context, *psa.ServiceTicketNote, int) (*psa.ServiceTicketNote, error) {
-	return nil, errors.New("simulation: connectwise writes are disabled")
 }
 
 func (h *WorkflowHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -426,12 +322,6 @@ func (h *WorkflowHandler) ParseCondition(w http.ResponseWriter, r *http.Request)
 	outputJSON(w, parseConditionResponse{Valid: true, Expr: cwquery.ToNode(expr)})
 }
 
-type evaluateConditionResponse struct {
-	Matches  bool           `json:"matches"`
-	Source   string         `json:"source"` // stored | live
-	Document map[string]any `json:"document"`
-}
-
 // EvaluateCondition handles POST /workflows/evaluate-condition: runs a condition against a stored
 // ticket so the dashboard can test rules before saving them.
 func (h *WorkflowHandler) EvaluateCondition(w http.ResponseWriter, r *http.Request) {
@@ -445,44 +335,20 @@ func (h *WorkflowHandler) EvaluateCondition(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	q, err := cwquery.Compile(req.Condition)
+	ev, err := h.Sim.Evaluate(r.Context(), req.Condition, req.TicketID)
 	if err != nil {
 		var se *cwquery.SyntaxError
-		if errors.As(err, &se) {
+		switch {
+		case errors.As(err, &se):
 			writeJSON(w, http.StatusBadRequest, M{"error": se.Error(), "pos": se.Pos})
-			return
-		}
-		badPayloadError(w, err)
-		return
-	}
-
-	t, note, live, err := h.CW.TicketSnapshot(r.Context(), req.TicketID)
-	if err != nil {
-		if errors.Is(err, models.ErrTicketNotFound) {
+		case errors.Is(err, models.ErrTicketNotFound):
 			notFoundError(w, err)
-			return
+		default:
+			internalServerError(w, err)
 		}
-		internalServerError(w, err)
 		return
 	}
-
-	env, err := workflow.LoadEnv(r.Context(), h.Lists, q.Expr)
-	if err != nil {
-		internalServerError(w, err)
-		return
-	}
-	doc := cwquery.NewDocument(t, note, cwquery.Changes{NewNote: note != nil})
-	matches, err := q.EvalEnv(doc, env)
-	if err != nil {
-		internalServerError(w, err)
-		return
-	}
-
-	source := "stored"
-	if live {
-		source = "live"
-	}
-	outputJSON(w, evaluateConditionResponse{Matches: matches, Source: source, Document: doc})
+	outputJSON(w, ev)
 }
 
 // bindWorkflow decodes a workflow body, rejecting unknown fields so the editor cannot store junk.
