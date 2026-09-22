@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="ui.css">
-    <link rel="stylesheet" href="app.css">
+    <link rel="stylesheet" href="/ui.css">
+    <link rel="stylesheet" href="/app.css">
     <script>
         // restore the reader's theme and palette before first paint
         const t = localStorage.getItem('theme')
@@ -99,6 +99,27 @@
     </div>
 </div>
 
+<!-- OAuth consent: the authorize endpoint forwards a Claude client here after sign-in -->
+<div id="consent" class="auth hidden">
+    <div class="auth-card">
+        <div class="auth-brand">
+            <div class="brand-mark">T</div>
+            <div class="brand-name">Ticketbot</div>
+        </div>
+        <div>
+            <h1>Connect to Ticketbot</h1>
+            <p id="consent-sub">Checking the request…</p>
+        </div>
+        <div id="consent-body" class="stack gap4"></div>
+        <div id="consent-actions" class="row gap2 hidden">
+            <button id="consent-allow" class="btn btn-primary btn-lg grow" onclick="consentDecide(true)">Allow</button>
+            <button id="consent-deny" class="btn btn-default btn-lg" onclick="consentDecide(false)">Deny</button>
+        </div>
+        <div id="consent-err" class="callout bad hidden" role="alert"></div>
+        <div id="consent-foot" class="auth-foot hidden"></div>
+    </div>
+</div>
+
 <!-- App -->
 <div id="app" class="app hidden">
     <aside class="sidebar">
@@ -150,15 +171,15 @@
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
 <script type="module">
-    import { icon } from './icons.js'
+    import { icon } from '/icons.js'
     window.icon = icon
 </script>
-<script src="app.js"></script>
-<script src="workflows.js"></script>
-<script src="condition.js"></script>
-<script src="tickets.js"></script>
-<script src="lists.js"></script>
-<script src="intake.js"></script>
-<script src="results.js"></script>
+<script src="/app.js"></script>
+<script src="/workflows.js"></script>
+<script src="/condition.js"></script>
+<script src="/tickets.js"></script>
+<script src="/lists.js"></script>
+<script src="/intake.js"></script>
+<script src="/results.js"></script>
 </body>
 </html>

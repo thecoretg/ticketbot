@@ -77,3 +77,26 @@ An administrator sets the business hours under Config; the "no webhooks" alert o
 them. An administrator can also put the whole instance in **master dry run** (Config), which overrides
 every workflow. While notifications are **redirected** to a test room (Config), you will see the
 real messages there instead of in their intended rooms.
+
+## Connecting Claude
+
+Ticketbot can be added to Claude (Claude.ai, Claude Desktop or Claude Code) as a connector. Claude
+then has tools to read your workflows, what each run did, the history ticketbot kept for a ticket,
+lists, forwards and settings, and to simulate a workflow or test a condition against a stored
+ticket. Every tool is read-only: Claude cannot change a workflow or write to ConnectWise or Webex
+through ticketbot.
+
+1. Open **Connected apps** in the account menu and copy the connector URL.
+2. In Claude, add a custom connector with that URL.
+3. Claude opens a Ticketbot sign-in. Sign in as usual (including Microsoft or your authenticator
+   code), read what the client is asking for and choose **Allow**.
+
+Claude only ever sees what your role already allows: a viewer's Claude cannot see the intake
+queue, an administrator's can. Each connection is listed under **Connected apps** with when it was
+made and last used; **Disconnect** revokes it at once, and connecting again from Claude restores
+it. An administrator can disconnect anyone's from the Users page, and turns the whole feature on
+or off with **MCP server** under Config.
+
+Ticketbot's tools are named `ticketbot_…` so they never collide with a ConnectWise connector's
+`cw_…` tools. Ask Claude about ticketbot's workflows and history here, and about live ticket data
+through ConnectWise; the ids are the same in both.

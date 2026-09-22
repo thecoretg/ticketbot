@@ -104,7 +104,11 @@ history events age out together on `history_retention_days`.
 ## Frontend
 
 `docs/USER_GUIDE.md` is the editor-facing explanation of how workflows run; the ⓘ buttons in the
-workflow editor (`wfShowHelp` in `workflows.js`) carry the same text, so change both together.
+workflow editor (`wfShowHelp` in `workflows.js`) and on Connected apps (`connectedShowHelp` in
+`app.js`) carry the same text, so change both together. `index.html` is also served at
+`/oauth/consent`, so its asset paths are absolute; `enterApp()` decides between the dashboard and
+the consent card after any sign-in, and `#connected` is a page without a sidebar entry
+(`EXTRA_TABS` names it in the trail).
 The condition builder (`condition.js`) is a view over the stored condition text, with "changed
 to" and "changed from" compiled from each field's `changed_path` and `old_path` companions.
 

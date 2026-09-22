@@ -175,4 +175,16 @@ func TestOAuthRepoDeleteExpired(t *testing.T) {
 	if _, err := repo.GetToken(ctx, []byte("oauth-test-live-token")); err != nil {
 		t.Fatalf("live token purged: %v", err)
 	}
+
+	// A client whose only grant is revoked goes on the next sweep once it is older than the
+	// registration window; the fixture's created_on is now, so sweep from far in the future.
+	if err := repo.DeleteGrant(ctx, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DeleteExpired(ctx, far); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetClient(ctx, kept.ID); !errors.Is(err, models.ErrOAuthClientNotFound) {
+		t.Fatalf("grantless client survived: %v", err)
+	}
 }

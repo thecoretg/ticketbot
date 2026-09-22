@@ -64,4 +64,8 @@ DELETE FROM oauth_code WHERE expires_at < $1;
 DELETE FROM oauth_token WHERE expires_at < $1;
 
 -- name: DeleteExpiredOAuthClients :execrows
-DELETE FROM oauth_client WHERE expires_at < sqlc.arg(now)::timestamptz;
+-- Abandoned registrations, and clients whose every grant has since been revoked.
+DELETE FROM oauth_client c
+WHERE c.expires_at < sqlc.arg(now)::timestamptz
+   OR (c.created_on < sqlc.arg(now)::timestamptz - interval '10 minutes'
+       AND NOT EXISTS (SELECT 1 FROM oauth_grant g WHERE g.client_id = c.id));

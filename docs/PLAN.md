@@ -281,10 +281,13 @@ surfaces share them.
 
 ### 16. Dashboard and docs
 
-- [ ] Login view honours `next`. Consent view. "Connected apps" section on the profile page
+Done. There is no profile page, so Connected apps is its own page (`#connected`, from the
+account menu); the Users page opens `#connected/<id>` for another user.
+
+- [x] Login view honours `next`. Consent view. "Connected apps" section on the profile page
       listing grants (client, scopes, created, last used) with revoke; Users page row action
       revokes another user's grants. Settings gets the `mcp_enabled` switch.
-- [ ] `docs/USER_GUIDE.md` "Connect Claude" section and the matching ⓘ on Connected apps, with
+- [x] `docs/USER_GUIDE.md` "Connect Claude" section and the matching ⓘ on Connected apps, with
       the connector URL and steps.
 
 ## Cutover

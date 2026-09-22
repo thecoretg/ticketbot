@@ -108,9 +108,13 @@ func (q *Queries) CreateOAuthToken(ctx context.Context, arg CreateOAuthTokenPara
 }
 
 const deleteExpiredOAuthClients = `-- name: DeleteExpiredOAuthClients :execrows
-DELETE FROM oauth_client WHERE expires_at < $1::timestamptz
+DELETE FROM oauth_client c
+WHERE c.expires_at < $1::timestamptz
+   OR (c.created_on < $1::timestamptz - interval '10 minutes'
+       AND NOT EXISTS (SELECT 1 FROM oauth_grant g WHERE g.client_id = c.id))
 `
 
+// Abandoned registrations, and clients whose every grant has since been revoked.
 func (q *Queries) DeleteExpiredOAuthClients(ctx context.Context, now time.Time) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteExpiredOAuthClients, now)
 	if err != nil {

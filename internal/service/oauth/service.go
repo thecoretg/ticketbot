@@ -623,7 +623,7 @@ func (s *Service) RevokeGrant(ctx context.Context, userID, grantID int) error {
 }
 
 // Purge implements intake.Purger: expired codes and tokens go, and so do registrations that
-// never reached a grant.
+// never reached a grant or whose every grant has been revoked.
 func (s *Service) Purge(ctx context.Context, now time.Time) {
 	c, err := s.repo.DeleteExpired(ctx, now)
 	if err != nil {
