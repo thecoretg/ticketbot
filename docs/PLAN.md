@@ -220,6 +220,64 @@ Done.
       height and shows the condition in its subtitle. Validation applies the If's condition rules
       to triggers. Simulate honours it. Export, import and the results page need nothing.
 
+## Read-only MCP server
+
+Decisions from the 2026-09-22 design review. Ships to the v2 instance during the parallel run
+behind `mcp_enabled` (app config, default off); does not gate cutover. Write tools are a later
+project, after cutover is stable.
+
+Settled: remote MCP only (ticketbot never calls Anthropic); OAuth 2.1 hand-rolled, PKCE, public
+clients, Dynamic Client Registration with spec-permissive redirect URIs; opaque tokens stored as
+SHA-256, access 1h, refresh 30d rotated with replay revocation; scopes `read` and `write` where
+the effective permission is the lower of the user's role and the granted scope, only `read`
+offered now; existing API-key bearer also accepted at `/mcp`; tools the caller's role cannot use
+are hidden from `tools/list`; tool names carry a `ticketbot_` prefix so they never collide with
+the `cw_*` ConnectWise PSA connector.
+
+### 14. OAuth authorization server
+
+- [ ] Migration: `oauth_client` (DCR rows, expire after ten minutes without a grant),
+      `oauth_code`, `oauth_grant` (user, client, scopes, created, last used) and `oauth_token`
+      (access and refresh hashes, expiry, grant). `mcp_enabled` column on `app_config`.
+- [ ] `internal/service/oauth`: `/.well-known/oauth-protected-resource`,
+      `/.well-known/oauth-authorization-server`, `POST /oauth/register`, `GET /oauth/authorize`
+      (redirects to the SPA login with `next` when there is no session, else to the consent view),
+      `POST /oauth/token` (code with PKCE, refresh with rotation), `POST /oauth/revoke`. Every
+      endpoint 404s while `mcp_enabled` is off.
+- [ ] Consent JSON endpoints: `GET /oauth/authorize/info` and `POST /oauth/authorize/decide`
+      (approve or deny). Consent is always shown; it names the client and its redirect host.
+- [ ] `GET/DELETE /users/me/grants` and admin `DELETE /users/{id}/grants/{grant_id}`.
+- [ ] Hourly sweeper purges expired codes, tokens, abandoned clients and expired `session` rows
+      (nothing purges sessions today).
+- [ ] Entra `GET /auth/sso/start` and the password login accept `next` (same-origin paths only).
+- CLAUDE.md: add an "MCP" section describing the two switches (`mcp_enabled`, scopes) and the
+  layering of `internal/service/oauth` and `internal/service/mcp`.
+
+### 15. MCP endpoint and read tools
+
+- [ ] `POST /mcp` via `github.com/modelcontextprotocol/go-sdk`, Streamable HTTP, stateless.
+      Bearer resolves to a user through an OAuth access token or an API key; the 401 carries
+      `WWW-Authenticate` with `resource_metadata`.
+- [ ] `internal/service/mcp` tool registry: each tool declares its minimum role; `tools/list`
+      filters by the caller's effective permission. One structured log line per call (user,
+      client, tool, argument summary).
+- [ ] Tools, all read-only, `limit` default 20 ceiling 100 with a continuation cursor:
+      `ticketbot_list_workflows`, `ticketbot_get_workflow` (readable lane walk, `raw` for the
+      document), `ticketbot_list_runs`, `ticketbot_get_run`, `ticketbot_ticket_history`,
+      `ticketbot_list_lists`, `ticketbot_list_forwards`, `ticketbot_get_config`,
+      `ticketbot_simulate`, `ticketbot_evaluate_condition`, `ticketbot_lookup_ids` (cached
+      boards, statuses, members, priorities, companies, contacts; description points at the
+      ConnectWise connector for live ticket data), `ticketbot_list_webex_rooms`; admin only:
+      `ticketbot_intake_status` (stats and failed rows), `ticketbot_tail_logs` (default 200).
+
+### 16. Dashboard and docs
+
+- [ ] Login view honours `next`. Consent view. "Connected apps" section on the profile page
+      listing grants (client, scopes, created, last used) with revoke; Users page row action
+      revokes another user's grants. Settings gets the `mcp_enabled` switch.
+- [ ] `docs/USER_GUIDE.md` "Connect Claude" section and the matching ⓘ on Connected apps, with
+      the connector URL and steps.
+
 ## Cutover
 
 The steps that end the parallel run, as boxes so the delete rule below holds.
