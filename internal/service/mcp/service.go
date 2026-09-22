@@ -7,6 +7,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -87,7 +88,8 @@ func New(p Params) *Service {
 // Handler is the /mcp endpoint: bearer auth, then a stateless Streamable HTTP server built for
 // the caller. The 401 carries the resource metadata URL so clients discover the OAuth server.
 func (s *Service) Handler() http.Handler {
-	h := sdk.NewStreamableHTTPHandler(s.serverFor, &sdk.StreamableHTTPOptions{Stateless: true})
+	// JSONResponse: tools answer quickly and never stream, so plain JSON bodies beat SSE framing.
+	h := sdk.NewStreamableHTTPHandler(s.serverFor, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	return auth.RequireBearerToken(s.verify, &auth.RequireBearerTokenOptions{
 		ResourceMetadataURL: s.oauth.ResourceURL() + "/.well-known/oauth-protected-resource",
 		Scopes:              []string{oauth.ScopeRead},
@@ -166,7 +168,7 @@ func (s *Service) logCalls(p *Principal) sdk.Middleware {
 			if method != "tools/call" {
 				return next(ctx, method, req)
 			}
-			ctp, _ := req.GetParams().(*sdk.CallToolParams)
+			ctp, _ := req.GetParams().(*sdk.CallToolParamsRaw)
 			start := time.Now()
 			res, err := next(ctx, method, req)
 			attrs := []any{"user_id", p.User.ID, "user", p.User.EmailAddress, "client", p.Client, "duration_ms", time.Since(start).Milliseconds()}
@@ -185,12 +187,8 @@ func (s *Service) logCalls(p *Principal) sdk.Middleware {
 }
 
 // summarizeArgs keeps the audit line short: raw argument JSON, capped.
-func summarizeArgs(args any) string {
-	b, ok := args.([]byte)
-	if !ok {
-		return fmt.Sprint(args)
-	}
-	s := strings.TrimSpace(string(b))
+func summarizeArgs(args json.RawMessage) string {
+	s := strings.TrimSpace(string(args))
 	if len(s) > 300 {
 		s = s[:300] + "…"
 	}
