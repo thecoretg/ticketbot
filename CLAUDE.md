@@ -34,6 +34,19 @@ prefix and overrides dry run for sending, which is how the parallel run sees rea
 Operator alerts (`internal/service/alerts`: failed intake rows, write-cap blocks, no webhooks for
 `stale_alert_minutes` during the configured business hours) go to `ops_room_id` and the log.
 
+## MCP and OAuth
+
+`internal/service/oauth` is the authorization server in front of the MCP endpoint (`/mcp`):
+OAuth 2.1 code flow with PKCE, public clients only, dynamic client registration, refresh
+rotation with replay revocation, and the RFC 8414 and RFC 9728 metadata documents. Every URL is
+built from `ROOT_URL`. `mcp_enabled` (app config) is the switch: off, all of it answers 404,
+while grants and tokens already issued are kept. `GET /oauth/authorize` only validates and
+forwards its query string to the dashboard at `/oauth/consent`; the SPA signs the user in if
+needed, then calls `GET /oauth/authorize/info` and `POST /oauth/authorize/decide`. Scopes are
+`read` and `write`; only `read` is offered (`oauth.OfferedScopes`), and a caller's effective
+permission is the lower of their role and their granted scopes. Tokens and codes are stored as
+SHA-256 like sessions. The service and `authsvc.SessionPurger` run on the intake purge tick.
+
 ## Intake
 
 `POST /hooks/cw/tickets` only inserts a `webhook_intake` row and returns 200. Workers in

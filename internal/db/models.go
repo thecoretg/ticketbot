@@ -53,6 +53,7 @@ type AppConfig struct {
 	BusinessClose           string `json:"business_close"`
 	BusinessDays            string `json:"business_days"`
 	BusinessZone            string `json:"business_zone"`
+	McpEnabled              bool   `json:"mcp_enabled"`
 }
 
 type AppLog struct {
@@ -179,6 +180,41 @@ type NotifierForward struct {
 	UpdatedOn          time.Time  `json:"updated_on"`
 	OnlyIfSoleResource bool       `json:"only_if_sole_resource"`
 	PublicOnly         bool       `json:"public_only"`
+}
+
+type OauthClient struct {
+	ID           string     `json:"id"`
+	Name         string     `json:"name"`
+	RedirectUris []string   `json:"redirect_uris"`
+	CreatedOn    time.Time  `json:"created_on"`
+	ExpiresAt    *time.Time `json:"expires_at"`
+}
+
+type OauthCode struct {
+	CodeHash      []byte    `json:"code_hash"`
+	GrantID       int       `json:"grant_id"`
+	RedirectUri   string    `json:"redirect_uri"`
+	CodeChallenge string    `json:"code_challenge"`
+	ExpiresAt     time.Time `json:"expires_at"`
+}
+
+type OauthGrant struct {
+	ID         int        `json:"id"`
+	UserID     int        `json:"user_id"`
+	ClientID   string     `json:"client_id"`
+	Scopes     []string   `json:"scopes"`
+	CreatedOn  time.Time  `json:"created_on"`
+	LastUsedAt *time.Time `json:"last_used_at"`
+}
+
+type OauthToken struct {
+	ID        int        `json:"id"`
+	GrantID   int        `json:"grant_id"`
+	Kind      string     `json:"kind"`
+	TokenHash []byte     `json:"token_hash"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	CreatedOn time.Time  `json:"created_on"`
+	UsedAt    *time.Time `json:"used_at"`
 }
 
 type Session struct {

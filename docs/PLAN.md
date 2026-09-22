@@ -236,21 +236,27 @@ the `cw_*` ConnectWise PSA connector.
 
 ### 14. OAuth authorization server
 
-- [ ] Migration: `oauth_client` (DCR rows, expire after ten minutes without a grant),
+Done (migration 19).
+
+- [x] Migration: `oauth_client` (DCR rows, expire after ten minutes without a grant),
       `oauth_code`, `oauth_grant` (user, client, scopes, created, last used) and `oauth_token`
       (access and refresh hashes, expiry, grant). `mcp_enabled` column on `app_config`.
-- [ ] `internal/service/oauth`: `/.well-known/oauth-protected-resource`,
+- [x] `internal/service/oauth`: `/.well-known/oauth-protected-resource`,
       `/.well-known/oauth-authorization-server`, `POST /oauth/register`, `GET /oauth/authorize`
-      (redirects to the SPA login with `next` when there is no session, else to the consent view),
+      (validates, then forwards its query string to `/oauth/consent`, which serves the dashboard;
+      the SPA signs the user in first when there is no session),
       `POST /oauth/token` (code with PKCE, refresh with rotation), `POST /oauth/revoke`. Every
       endpoint 404s while `mcp_enabled` is off.
-- [ ] Consent JSON endpoints: `GET /oauth/authorize/info` and `POST /oauth/authorize/decide`
+- [x] Consent JSON endpoints: `GET /oauth/authorize/info` and `POST /oauth/authorize/decide`
       (approve or deny). Consent is always shown; it names the client and its redirect host.
-- [ ] `GET/DELETE /users/me/grants` and admin `DELETE /users/{id}/grants/{grant_id}`.
-- [ ] Hourly sweeper purges expired codes, tokens, abandoned clients and expired `session` rows
+- [x] `GET /users/me/grants`, `DELETE /users/me/grants/{grant_id}` and, for admins,
+      `GET /users/grants/{id}` and `DELETE /users/grants/{id}/{grant_id}` (the `/users/keys`
+      shape, since `/users/{id}/grants` conflicts with `/users/keys/{id}`).
+- [x] Hourly sweeper purges expired codes, tokens, abandoned clients and expired `session` rows
       (nothing purges sessions today).
-- [ ] Entra `GET /auth/sso/start` and the password login accept `next` (same-origin paths only).
-- CLAUDE.md: add an "MCP" section describing the two switches (`mcp_enabled`, scopes) and the
+- [x] Entra `GET /auth/sso/start` already accepts `?next=` (tctg-go/entra `safeNext`); the password
+      login is a same-page SPA form, so only the dashboard needs to carry the path (item 16).
+- [x] CLAUDE.md: "MCP and OAuth" section describing the two switches (`mcp_enabled`, scopes) and the
   layering of `internal/service/oauth` and `internal/service/mcp`.
 
 ### 15. MCP endpoint and read tools

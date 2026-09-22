@@ -80,6 +80,10 @@ type Config struct {
 	BusinessClose string `json:"business_close"`
 	BusinessDays  string `json:"business_days"`
 	BusinessZone  string `json:"business_zone"`
+
+	// MCPEnabled switches on the MCP server and its OAuth endpoints. Off, every one of them
+	// answers 404; grants and tokens already issued are kept for when it comes back.
+	MCPEnabled bool `json:"mcp_enabled"`
 }
 
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
@@ -107,6 +111,7 @@ type ConfigUpdateParams struct {
 	BusinessClose        *string `json:"business_close"`
 	BusinessDays         *string `json:"business_days"`
 	BusinessZone         *string `json:"business_zone"`
+	MCPEnabled           *bool   `json:"mcp_enabled"`
 }
 
 var DefaultConfig = Config{
@@ -129,4 +134,5 @@ var DefaultConfig = Config{
 	BusinessClose:           "19:00",
 	BusinessDays:            "mon,tue,wed,thu,fri",
 	BusinessZone:            "America/Chicago",
+	MCPEnabled:              false,
 }
