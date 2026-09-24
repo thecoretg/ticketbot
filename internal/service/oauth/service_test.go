@@ -182,7 +182,8 @@ func newService(t *testing.T) (*Service, *fakeRepo, *time.Time) {
 	return svc, repo, &now
 }
 
-func oauthErr(t *testing.T, err error, code string) *Error {
+// oauthErrOf asserts err is an *Error with the given code and returns it for further checks.
+func oauthErrOf(t *testing.T, err error, code string) *Error {
 	t.Helper()
 	var oe *Error
 	if !errors.As(err, &oe) {
@@ -192,6 +193,12 @@ func oauthErr(t *testing.T, err error, code string) *Error {
 		t.Fatalf("want error %s, got %s (%s)", code, oe.Code, oe.Description)
 	}
 	return oe
+}
+
+// oauthErr asserts err is an *Error with the given code.
+func oauthErr(t *testing.T, err error, code string) {
+	t.Helper()
+	_ = oauthErrOf(t, err, code)
 }
 
 func pkce(verifier string) string {
@@ -301,21 +308,21 @@ func TestParseAuthorize(t *testing.T) {
 
 	t.Run("unknown client is not redirected", func(t *testing.T) {
 		q := authorizeQuery("nope", "https://claude.ai/cb", challenge)
-		oe := oauthErr(t, mustErr(svc.ParseAuthorize(ctx, q)), "invalid_request")
+		oe := oauthErrOf(t, mustErr(svc.ParseAuthorize(ctx, q)), "invalid_request")
 		if oe.RedirectTo != "" {
 			t.Fatal("redirected to an unverified client")
 		}
 	})
 	t.Run("unregistered redirect is not redirected", func(t *testing.T) {
 		q := authorizeQuery(c.ClientID, "https://evil.example/cb", challenge)
-		oe := oauthErr(t, mustErr(svc.ParseAuthorize(ctx, q)), "invalid_request")
+		oe := oauthErrOf(t, mustErr(svc.ParseAuthorize(ctx, q)), "invalid_request")
 		if oe.RedirectTo != "" {
 			t.Fatal("redirected to an unregistered uri")
 		}
 	})
 	t.Run("missing pkce redirects with error", func(t *testing.T) {
 		q := authorizeQuery(c.ClientID, "https://claude.ai/cb", "")
-		oe := oauthErr(t, mustErr(svc.ParseAuthorize(ctx, q)), "invalid_request")
+		oe := oauthErrOf(t, mustErr(svc.ParseAuthorize(ctx, q)), "invalid_request")
 		u, _ := url.Parse(oe.RedirectTo)
 		if u.Host != "claude.ai" || u.Query().Get("error") != "invalid_request" || u.Query().Get("state") != "xyz" {
 			t.Fatalf("redirect: %s", oe.RedirectTo)

@@ -148,7 +148,7 @@ func TestHandlerRequiresBearer(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res.Body.Close()
+		_ = res.Body.Close()
 		if res.StatusCode != http.StatusUnauthorized {
 			t.Fatalf("token %q: status %d, want 401", token, res.StatusCode)
 		}

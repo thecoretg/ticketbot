@@ -54,8 +54,6 @@ func (p Principal) permitted(minRole models.Role, scope string) bool {
 	return p.User.Role.AtLeast(minRole) && slices.Contains(p.Scopes, scope)
 }
 
-type principalKey struct{}
-
 // TokenAuth is the slice of oauth.Service the endpoint needs.
 type TokenAuth interface {
 	Authenticate(ctx context.Context, token string) (*models.OAuthAccess, error)

@@ -139,10 +139,6 @@ func jsonResult(v any) (*sdk.CallToolResult, any, error) {
 
 type empty struct{}
 
-type idInput struct {
-	ID int `json:"id" jsonschema:"the ticketbot id"`
-}
-
 type workflowInput struct {
 	ID  int  `json:"id" jsonschema:"workflow id, from ticketbot_list_workflows"`
 	Raw bool `json:"raw,omitempty" jsonschema:"return the stored workflow document as JSON instead of the readable walk"`
