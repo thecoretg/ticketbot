@@ -80,6 +80,7 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		BusinessClose:           c.BusinessClose,
 		BusinessDays:            c.BusinessDays,
 		BusinessZone:            c.BusinessZone,
+		McpEnabled:              c.MCPEnabled,
 	}
 }
 
@@ -107,5 +108,6 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		BusinessClose:           pg.BusinessClose,
 		BusinessDays:            pg.BusinessDays,
 		BusinessZone:            pg.BusinessZone,
+		MCPEnabled:              pg.McpEnabled,
 	}
 }

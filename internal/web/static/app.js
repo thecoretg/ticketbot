@@ -270,8 +270,8 @@ async function login() {
         } else {
             // showApp prompts for 2FA setup itself when config requires it; only fall back to the
             // login response's flag if it could not (config fetch failed), or the modal opens twice
-            const prompted = await showApp()
-            if (res?.totp_setup_required && !prompted) showTOTPSetupModal(true)
+            const prompted = await enterApp()
+            if (res?.totp_setup_required && !prompted && !onConsentPath()) showTOTPSetupModal(true)
         }
     } catch (e) {
         // 401 is a bad password; anything else (server down, 500, password sign-in off) deserves
@@ -303,6 +303,10 @@ async function loadAuthMethods() {
     document.getElementById('login-sub').textContent = sso && !password
         ? 'Use your Microsoft account to continue'
         : 'Enter your credentials to continue'
+    // On the consent page Microsoft sign-in must come back here, not to the dashboard.
+    document.getElementById('sso-btn').href = onConsentPath()
+        ? `/auth/sso/start?next=${encodeURIComponent(window.location.pathname + window.location.search)}`
+        : '/auth/sso/start'
 }
 
 // showPasswordForm reveals the password form under the Microsoft button.
@@ -381,7 +385,7 @@ async function submitTOTPVerify() {
             document.getElementById('totp-verify').classList.add('hidden')
             showPasswordReset()
         } else {
-            showApp()
+            enterApp()
             if (res.recovery_code_used) {
                 toast('You logged in with a recovery code. Check your 2FA setup in the account menu.', 'error')
             }
@@ -437,7 +441,7 @@ async function submitPasswordReset() {
         document.getElementById('reset-current').value = ''
         document.getElementById('reset-new').value     = ''
         document.getElementById('reset-confirm').value = ''
-        showApp()
+        enterApp()
     } catch (e) {
         errEl.textContent = e.message || 'Failed to change password'
         errEl.classList.remove('hidden')
@@ -497,8 +501,9 @@ function toggleAccountMenu(e) {
     if (!currentUser?.sso) {
         items.push({ label: 'Change password', icon: 'key',    run: showChangePasswordModal })
         items.push({ label: totpMenuLabel(),   icon: 'shield', run: handleTOTPMenuClick })
-        items.push('-')
     }
+    items.push({ label: 'Connected apps', icon: 'external', run: () => { window.location.hash = 'connected' } })
+    items.push('-')
     if (isAdmin()) items.push({ label: 'Restart server', icon: 'bolt', danger: true, run: confirmRestart })
     items.push({ label: 'Log out', icon: 'logout', danger: true, run: logout })
     toggleMenu(e.currentTarget, items)
@@ -689,7 +694,7 @@ function showRestartBanner() {
 
 function checkSavedKey() {
     api('GET', '/authtest')
-        .then(showApp)
+        .then(enterApp)
         .catch(async () => {
             await showLogin()
             consumeSSOError()
@@ -700,8 +705,9 @@ function checkSavedKey() {
 // Tabs
 // ─────────────────────────────────────────────────────────
 const tabLoaders = {
-    forwards: loadForwards,
-    users:    loadUsers,
+    forwards:  loadForwards,
+    connected: loadConnected,
+    users:     loadUsers,
     keys:     loadKeys,
     sync:     loadSync,
     config:   loadConfig,
@@ -779,9 +785,12 @@ function setContent(html) {
 }
 
 // setCrumbs keeps the topbar trail and the document title in step with the route.
+// Pages reachable without a sidebar entry still need a name in the trail.
+const EXTRA_TABS = { connected: 'Connected apps' }
+
 function setCrumbs(tab, sub) {
     const item   = NAV_ITEMS.find(i => i.tab === tab)
-    const name   = item ? item.name : tab
+    const name   = item ? item.name : (EXTRA_TABS[tab] || tab)
     const here   = document.getElementById('crumb-here')
     const parent = document.getElementById('crumb-parent')
     if (sub) {
@@ -800,7 +809,7 @@ function setCrumbHere(text) {
     if (!text) return
     document.getElementById('crumb-here').textContent = text
     const item = NAV_ITEMS.find(i => i.tab === currentTab)
-    document.title = `${item ? item.name : currentTab} · ${text} · Ticketbot`
+    document.title = `${item ? item.name : (EXTRA_TABS[currentTab] || currentTab)} · ${text} · Ticketbot`
 }
 
 // skeletonPage is the loading state between routes: shaped like a page, so the
@@ -1094,6 +1103,184 @@ function toggle(attrs = '', checked = false, opts = {}) {
 }
 
 // ─────────────────────────────────────────────────────────
+// OAuth consent (/oauth/consent)
+//
+// GET /oauth/authorize validates a Claude client's request and forwards its query string here.
+// The page signs the user in if needed, describes the request and posts the answer; the server
+// replies with where to send the browser (the client's callback, with a code or a denial).
+// ─────────────────────────────────────────────────────────
+function onConsentPath() { return window.location.pathname === '/oauth/consent' }
+
+// enterApp is what a completed sign-in leads to: the dashboard, or the consent card when the
+// browser came here to connect a client. Returns showApp's "opened 2FA setup" flag.
+async function enterApp() {
+    if (onConsentPath()) {
+        await showConsent()
+        return false
+    }
+    return showApp()
+}
+
+const SCOPE_LABELS = {
+    read:  'Read',
+    write: 'Change',
+}
+
+async function showConsent() {
+    for (const id of ['login', 'totp-verify', 'password-reset', 'app']) document.getElementById(id).classList.add('hidden')
+    document.getElementById('consent').classList.remove('hidden')
+    const sub  = document.getElementById('consent-sub')
+    const body = document.getElementById('consent-body')
+    const err  = document.getElementById('consent-err')
+    err.classList.add('hidden')
+    try {
+        const [info, me] = await Promise.all([
+            api('GET', '/oauth/authorize/info' + window.location.search),
+            api('GET', '/users/me'),
+        ])
+        currentUser = me
+        sub.innerHTML = `<b>${esc(info.client_name)}</b> wants to use your Ticketbot account. It will send you back to <b>${esc(info.redirect_host)}</b> when you are done.`
+        body.innerHTML = `<div class="stack gap2">
+            <div class="eyebrow">It will be able to</div>
+            ${info.scopes.map(sc => checkbox(`<b>${esc(SCOPE_LABELS[sc.name] || sc.name)}</b> <span class="muted">${esc(sc.description)}</span>`,
+                `name="consent-scope" value="${esc(sc.name)}"`, true)).join('')}
+        </div>
+        <p class="muted" style="font-size:var(--text-xs)">Only what your role already allows. You can disconnect it any time under Connected apps in the account menu.</p>`
+        document.getElementById('consent-actions').classList.remove('hidden')
+        const foot = document.getElementById('consent-foot')
+        foot.innerHTML = `Signed in as <b>${esc(me.email_address)}</b> · <a href="#" class="link" onclick="consentSwitchAccount(event)">Not you?</a>`
+        foot.classList.remove('hidden')
+    } catch (e) {
+        if (e.status === 401) {
+            // No session yet: the login card takes over and comes back here through enterApp.
+            document.getElementById('consent').classList.add('hidden')
+            await showLogin()
+            consumeSSOError()
+            return
+        }
+        sub.textContent = 'This request cannot be completed.'
+        err.textContent = e.message || 'Invalid request'
+        err.classList.remove('hidden')
+    }
+}
+
+async function consentDecide(approve) {
+    const err = document.getElementById('consent-err')
+    const scopes = Array.from(document.querySelectorAll('input[name="consent-scope"]:checked')).map(el => el.value)
+    if (approve && !scopes.length) {
+        err.textContent = 'Tick at least one permission, or choose Deny.'
+        err.classList.remove('hidden')
+        return
+    }
+    for (const id of ['consent-allow', 'consent-deny']) document.getElementById(id).disabled = true
+    try {
+        const res = await api('POST', '/oauth/authorize/decide', { query: window.location.search, approve, scopes })
+        document.getElementById('consent-sub').textContent = approve ? 'Connected. Returning you to the app…' : 'Request denied. Returning you to the app…'
+        window.location.href = res.redirect
+    } catch (e) {
+        err.textContent = e.message || 'Could not record your answer'
+        err.classList.remove('hidden')
+        for (const id of ['consent-allow', 'consent-deny']) document.getElementById(id).disabled = false
+    }
+}
+
+async function consentSwitchAccount(e) {
+    e.preventDefault()
+    try { await api('POST', '/auth/logout') } catch {}
+    currentUser = null
+    document.getElementById('consent').classList.add('hidden')
+    await showLogin()
+}
+
+// ─────────────────────────────────────────────────────────
+// Connected apps: OAuth grants for the MCP server. #connected is your own; an admin opens
+// #connected/<user id> from the Users page to see and revoke someone else's.
+// ─────────────────────────────────────────────────────────
+async function loadConnected(sub = null) {
+    const userID = sub && isAdmin() && Number(sub) !== currentUser?.id ? Number(sub) : null
+    try {
+        const [grants, user] = await Promise.all([
+            api('GET', userID ? `/users/grants/${userID}` : '/users/me/grants'),
+            userID ? api('GET', `/users/${userID}`) : Promise.resolve(currentUser),
+        ])
+        renderConnected(grants || [], user, userID)
+    } catch (e) {
+        setContent(errorState(e.message))
+    }
+}
+
+function connectorURL() { return `${window.location.origin}/mcp` }
+
+function renderConnected(grants, user, userID) {
+    const own = !userID
+    const head = own
+        ? `<header class="page-head row spread wrap gap4">
+            <div><h1 class="page-title">Connected apps</h1><p class="page-sub">AI clients that can read ticketbot on your behalf.</p></div>
+            <button class="icon-btn" onclick="connectedShowHelp()" aria-label="How connecting Claude works" data-tip="How this works" data-tip-pos="bottom" data-tip-align="right">${icon('info')}</button>
+        </header>`
+        : backRow('users', 'Users', user?.email_address || `user ${userID}`) + `<header class="page-head row spread wrap gap4">
+            <div><h1 class="page-title">Connected apps</h1><p class="page-sub">Clients connected to <b>${esc(user?.email_address || '')}</b>. Revoking one signs that client out of ticketbot immediately.</p></div>
+        </header>`
+
+    const off = appConfig && !appConfig.mcp_enabled
+    const notice = off ? `<div class="banner info">${icon('info')}<div><b>The MCP server is switched off.</b> New connections cannot be made until an administrator turns on <b>MCP server</b> under Config. Existing connections keep their access for when it comes back.</div></div>` : ''
+
+    const connect = own ? `<article class="card">
+        <div class="card-head"><div><h3>Connect Claude</h3><p>Add ticketbot as a connector, then sign in here when Claude asks.</p></div></div>
+        <div class="card-body stack gap3">
+            <ol class="steps stack gap2">
+                <li>In Claude, add a custom connector (Claude.ai: Settings, Connectors, Add custom connector. Claude Code: <code class="code inline">claude mcp add --transport http ticketbot ${esc(connectorURL())}</code>).</li>
+                <li>Paste this URL:
+                    <div class="secret reveal" style="margin-top:var(--s2)">${esc(connectorURL())}<button class="icon-btn" onclick="copyText(connectorURL(), 'URL copied')" aria-label="Copy connector URL">${icon('copy')}</button></div>
+                </li>
+                <li>Claude opens a Ticketbot sign-in. Sign in as you would here, tick what it may do and choose <b>Allow</b>. The connection then appears in the table below.</li>
+            </ol>
+            <p class="muted" style="font-size:var(--text-xs)">Claude gets read access only, and only what your role already allows. Nothing it does writes to ConnectWise or Webex.</p>
+        </div>
+    </article>` : ''
+
+    const thead = '<th>Client</th><th>Can</th><th>Connected</th><th>Last used</th><th class="r">Actions</th>'
+    const rows = grants.map(g => `<tr>
+        <td><div class="cell-primary">${esc(g.client_name || 'Unnamed client')}</div><div class="cell-sub num">${esc(g.client_id.slice(0, 8))}</div></td>
+        <td><div class="row gap1 wrap">${(g.scopes || []).map(sc => `<span class="badge">${esc(SCOPE_LABELS[sc] || sc)}</span>`).join('')}</div></td>
+        <td class="muted nowrap">${fmtDateTime(g.created_on)}</td>
+        <td class="muted nowrap">${g.last_used_at ? fmtDateTime(g.last_used_at) : '<span class="muted">Never</span>'}</td>
+        <td class="r nowrap"><button class="btn btn-ghost btn-sm" onclick="revokeGrant(${g.id}, ${userID || 'null'})">${icon('ban')}Disconnect</button></td>
+    </tr>`)
+
+    // two cards in a column: the stack gives them the grid gap a single card never needs
+    setContent(head + `<div class="stack gap5">` + notice + connect + tableCard(thead, rows, {
+        empty: emptyState(own ? 'Nothing connected yet' : 'Nothing connected', own ? 'Connect Claude with the steps above and it will show up here.' : 'This user has not connected any client.', '', 'external'),
+        foot: `<span>${grants.length} connection${grants.length === 1 ? '' : 's'}</span>`,
+    }) + `</div>`)
+}
+
+function revokeGrant(id, userID) {
+    confirmModal({
+        title: 'Disconnect this app?',
+        body: '<b>It loses access immediately</b>Its tokens stop working on the next request. Connecting again from Claude restores it.',
+        confirmLabel: 'Disconnect',
+        onConfirm: async () => {
+            try {
+                await api('DELETE', userID ? `/users/grants/${userID}/${id}` : `/users/me/grants/${id}`)
+                toast('Disconnected', 'success')
+                loadConnected(userID ? String(userID) : null)
+            } catch (e) { toast(e.message, 'error') }
+        },
+    })
+}
+
+// connectedShowHelp mirrors the "Connecting Claude" section of docs/USER_GUIDE.md; change both.
+function connectedShowHelp() {
+    openModal('Connecting Claude', `<div class="stack gap3" style="max-height:60vh;overflow-y:auto">
+        <p>Ticketbot can be added to Claude (Claude.ai, Claude Desktop or Claude Code) as a connector. Claude then has tools to read your workflows, what each run did, the history ticketbot kept for a ticket, lists, forwards and settings, and to simulate a workflow or test a condition against a stored ticket. Every tool is read-only: Claude cannot change a workflow or write to ConnectWise or Webex through ticketbot.</p>
+        <p>When you add the connector, Claude opens a Ticketbot sign-in. Sign in as usual (including Microsoft or your authenticator code), read what the client is asking for and choose <b>Allow</b>. Claude only ever sees what your role already allows: a viewer's Claude cannot see the intake queue, an administrator's can.</p>
+        <p>Each connection is listed under <b>Connected apps</b> in the account menu, with when it was made and last used. <b>Disconnect</b> revokes it at once; connecting again from Claude restores it. An administrator can disconnect anyone's from the Users page.</p>
+        <p>Ticketbot's tools are named <code class="code inline">ticketbot_…</code> so they never collide with a ConnectWise connector's <code class="code inline">cw_…</code> tools. Ask Claude about ticketbot's workflows and history here, and about live ticket data through ConnectWise; the ids are the same in both.</p>
+    </div>`, async () => closeModal(), 'Got it')
+}
+
+// ─────────────────────────────────────────────────────────
 // Forwards
 // ─────────────────────────────────────────────────────────
 let forwardsCache = []
@@ -1290,11 +1477,13 @@ function renderUsers(users) {
         </td>
         <td>${roleCell(u)}</td>
         <td class="muted nowrap">${fmtDateTime(u.created_on)}</td>
-        <td class="r nowrap">${u.id === currentUser?.id
-            ? '<span class="badge outline">You</span>'
-            : u.break_glass
-                ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted." data-tip-align="right">Break-glass</span>`
-                : deleteButton(`deleteUser(${u.id})`)}</td>
+        <td class="r nowrap">
+            <a class="btn btn-ghost btn-sm" href="#connected${u.id === currentUser?.id ? '' : `/${u.id}`}">${icon('external')}Connected apps</a>
+            ${u.id === currentUser?.id
+                ? '<span class="badge outline">You</span>'
+                : u.break_glass
+                    ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted." data-tip-align="right">Break-glass</span>`
+                    : deleteButton(`deleteUser(${u.id})`)}</td>
     </tr>`)
 
     setContent(head + tableCard(thead, rows, {
@@ -1787,6 +1976,9 @@ function renderConfig(cfg, recipients = []) {
         ${row('Require 2FA',
             'All users must set up two-factor authentication to access the app.',
             toggle(`id="c-require-totp"`, cfg.require_totp, { tip: 'Require 2FA' }))}
+        ${row('MCP server',
+            'Let people connect Claude to ticketbot (Connected apps in the account menu). Off, the connector endpoints do not exist; connections already made keep their access for when it comes back. Needs ROOT_URL set on the server.',
+            toggle(`id="c-mcp-enabled"`, cfg.mcp_enabled, { tip: 'MCP server' }))}
         ${row('Debug logging',
             'Enable debug-level log output without a server restart.',
             toggle(`id="c-debug-logging"`, cfg.debug_logging, { tip: 'Debug logging' }))}
@@ -1833,6 +2025,7 @@ async function saveConfig() {
             business_zone:              document.getElementById('c-biz-zone').value,
             business_days:              Array.from(document.querySelectorAll('input[name="biz-day"]:checked')).map(el => el.value).join(','),
             require_totp:               document.getElementById('c-require-totp').checked,
+            mcp_enabled:                document.getElementById('c-mcp-enabled').checked,
             debug_logging:              document.getElementById('c-debug-logging').checked,
             log_buffer_size:            num('c-log-buffer-size', 'Log buffer size'),
             log_retention_days:         num('c-log-retention', 'Log retention'),

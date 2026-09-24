@@ -34,6 +34,28 @@ prefix and overrides dry run for sending, which is how the parallel run sees rea
 Operator alerts (`internal/service/alerts`: failed intake rows, write-cap blocks, no webhooks for
 `stale_alert_minutes` during the configured business hours) go to `ops_room_id` and the log.
 
+## MCP and OAuth
+
+`internal/service/oauth` is the authorization server in front of the MCP endpoint (`/mcp`):
+OAuth 2.1 code flow with PKCE, public clients only, dynamic client registration, refresh
+rotation with replay revocation, and the RFC 8414 and RFC 9728 metadata documents. Every URL is
+built from `ROOT_URL`. `mcp_enabled` (app config) is the switch: off, all of it answers 404,
+while grants and tokens already issued are kept. `GET /oauth/authorize` only validates and
+forwards its query string to the dashboard at `/oauth/consent`; the SPA signs the user in if
+needed, then calls `GET /oauth/authorize/info` and `POST /oauth/authorize/decide`. Scopes are
+`read` and `write`; only `read` is offered (`oauth.OfferedScopes`), and a caller's effective
+permission is the lower of their role and their granted scopes. Tokens and codes are stored as
+SHA-256 like sessions. The service and `authsvc.SessionPurger` run on the intake purge tick.
+`internal/service/mcp` is the endpoint: `auth.RequireBearerToken` from the go-sdk resolves an
+OAuth access token or an API key to a `Principal`, then a stateless Streamable HTTP server is
+built per request holding only the tools that principal's role and scopes allow, so
+`tools/list` is already filtered. Tools live in `tools.go` as `def(...)` entries with a role
+floor; every dependency is a narrow interface in `Deps`. Tool names carry the `ticketbot_`
+prefix so they never collide with the ConnectWise PSA connector's `cw_*` tools, and
+`ticketbot_get_workflow` renders the graph as lanes (`describe.go`) rather than dumping nodes
+and edges. Simulate and evaluate-condition logic is in `internal/service/simulate`, shared by
+the dashboard handlers and the MCP tools. One `mcp: tool call` log line per call is the audit trail.
+
 ## Intake
 
 `POST /hooks/cw/tickets` only inserts a `webhook_intake` row and returns 200. Workers in
@@ -82,7 +104,11 @@ history events age out together on `history_retention_days`.
 ## Frontend
 
 `docs/USER_GUIDE.md` is the editor-facing explanation of how workflows run; the ⓘ buttons in the
-workflow editor (`wfShowHelp` in `workflows.js`) carry the same text, so change both together.
+workflow editor (`wfShowHelp` in `workflows.js`) and on Connected apps (`connectedShowHelp` in
+`app.js`) carry the same text, so change both together. `index.html` is also served at
+`/oauth/consent`, so its asset paths are absolute; `enterApp()` decides between the dashboard and
+the consent card after any sign-in, and `#connected` is a page without a sidebar entry
+(`EXTRA_TABS` names it in the trail).
 The condition builder (`condition.js`) is a view over the stored condition text, with "changed
 to" and "changed from" compiled from each field's `changed_path` and `old_path` companions.
 

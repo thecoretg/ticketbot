@@ -148,6 +148,9 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.BusinessZone != nil {
 		merged.BusinessZone = strings.TrimSpace(*p.BusinessZone)
 	}
+	if p.MCPEnabled != nil {
+		merged.MCPEnabled = *p.MCPEnabled
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -190,6 +193,7 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.StaleAlertMinutes = src.StaleAlertMinutes
 	cfg.HistoryRetentionDays = src.HistoryRetentionDays
 	cfg.BusinessOpen, cfg.BusinessClose, cfg.BusinessDays, cfg.BusinessZone = src.BusinessOpen, src.BusinessClose, src.BusinessDays, src.BusinessZone
+	cfg.MCPEnabled = src.MCPEnabled
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)

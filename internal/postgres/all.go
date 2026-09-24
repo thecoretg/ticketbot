@@ -24,6 +24,7 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		Lists:               NewListRepo(pool),
 		SSO:                 NewSSOStore(pool),
 		SSORoleMappings:     NewSSORoleMappingRepo(pool),
+		OAuth:               NewOAuthRepo(pool),
 		CW: repos.CWRepos{
 			Board:        NewBoardRepo(pool),
 			TicketStatus: NewTicketStatusRepo(pool),

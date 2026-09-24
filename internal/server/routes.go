@@ -6,6 +6,7 @@ import (
 
 	"github.com/thecoretg/ticketbot/internal/handlers"
 	"github.com/thecoretg/ticketbot/internal/middleware"
+	"github.com/thecoretg/ticketbot/internal/service/oauth"
 	"github.com/thecoretg/ticketbot/internal/service/sso"
 	"github.com/thecoretg/ticketbot/internal/web"
 	"github.com/thecoretg/ticketbot/models"
@@ -35,6 +36,17 @@ func noCache(next http.Handler) http.Handler {
 func (a *App) requireSSOEnabled(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.Svc.SSO.Enabled() {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// requireMCPEnabled hides the MCP server's OAuth endpoints while the admin has it switched off.
+func (a *App) requireMCPEnabled(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !a.Svc.OAuth.Enabled() {
 			http.NotFound(w, r)
 			return
 		}
@@ -86,6 +98,37 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("PUT /auth/totp/setup", th.HandleConfirmSetup, auth)
 	rt.handle("DELETE /auth/totp", th.HandleDisable, auth)
 
+	// OAuth in front of the MCP endpoint (item 14). The consent screen is the dashboard at
+	// /oauth/consent, so that path serves index.html; the view reads the forwarded query.
+	mcp := a.requireMCPEnabled
+	oh := handlers.NewOAuthHandler(a.Svc.OAuth)
+	rt.handle("GET /.well-known/oauth-protected-resource", oh.ProtectedResourceMetadata, mcp)
+	rt.handle("GET /.well-known/oauth-protected-resource"+oauth.MCPPath, oh.ProtectedResourceMetadata, mcp)
+	rt.handle("GET /.well-known/oauth-authorization-server", oh.ServerMetadata, mcp)
+	rt.handle("POST /oauth/register", oh.Register, mcp)
+	rt.handle("GET /oauth/authorize", oh.Authorize, mcp)
+	rt.handle("GET /oauth/authorize/info", oh.ConsentInfo, mcp, auth)
+	rt.handle("POST /oauth/authorize/decide", oh.Decide, mcp, auth)
+	rt.handle("POST /oauth/token", oh.Token, mcp)
+	rt.handle("POST /oauth/revoke", oh.Revoke, mcp)
+	rt.mux.Handle("GET "+oauth.ConsentPath, mcp(noCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFileFS(w, r, panelFS, "index.html")
+	}))))
+	// The MCP endpoint itself. Streamable HTTP is POST-only in stateless mode; the handler
+	// answers GET and DELETE with 405 itself. ServeMux needs the methods spelled out next to
+	// the GET / catch-all.
+	mcpHandler := mcp(a.Svc.MCP.Handler())
+	for _, m := range []string{http.MethodPost, http.MethodGet, http.MethodDelete} {
+		rt.mux.Handle(m+" "+oauth.MCPPath, mcpHandler)
+	}
+	// Connected apps exist whether or not MCP is on, so grants can be revoked after it is off.
+	rt.handle("GET /users/me/grants", oh.ListMyGrants, auth)
+	rt.handle("DELETE /users/me/grants/{grant_id}", oh.RevokeMyGrant, auth)
+	// Admin paths sit under /users/grants like /users/keys, because /users/{id}/grants would
+	// conflict with /users/keys/{id} in ServeMux.
+	rt.handle("GET /users/grants/{id}", oh.ListUserGrants, auth, admin)
+	rt.handle("DELETE /users/grants/{id}/{grant_id}", oh.RevokeUserGrant, auth, admin)
+
 	sh := handlers.NewSyncHandler(a.Svc.Sync, a.Config)
 	rt.handle("POST /sync", sh.HandleSync, auth, admin)
 	rt.handle("GET /sync/status", sh.HandleSyncStatus, auth, admin)
@@ -127,7 +170,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("PUT /notifiers/forwards/{id}", nh.UpdateUserForward, auth, editor)
 	rt.handle("DELETE /notifiers/forwards/{id}", nh.DeleteUserForward, auth, editor)
 
-	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW, a.Svc.Notifier, a.Svc.Lists)
+	wfh := handlers.NewWorkflowHandler(a.Svc.Workflow, a.Svc.CW, a.Svc.Notifier, a.Svc.Simulate)
 	rt.handle("GET /workflows", wfh.List, auth)
 	rt.handle("POST /workflows", wfh.Create, auth, editor)
 	rh := handlers.NewRunsHandler(a.Stores.WorkflowRuns, a.Stores.TicketEvents, a.Stores.CW.Board, a.Svc.Workflow)

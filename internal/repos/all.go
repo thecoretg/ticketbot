@@ -18,6 +18,7 @@ type AllRepos struct {
 	Lists               ListRepository
 	SSO                 SSOStore
 	SSORoleMappings     SSORoleMappingRepository
+	OAuth               OAuthRepository
 	CW                  CWRepos
 }
 

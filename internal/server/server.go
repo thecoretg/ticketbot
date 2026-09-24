@@ -18,7 +18,10 @@ import (
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/intake"
 	"github.com/thecoretg/ticketbot/internal/service/lists"
+	"github.com/thecoretg/ticketbot/internal/service/mcp"
 	"github.com/thecoretg/ticketbot/internal/service/notifier"
+	"github.com/thecoretg/ticketbot/internal/service/oauth"
+	"github.com/thecoretg/ticketbot/internal/service/simulate"
 	"github.com/thecoretg/ticketbot/internal/service/sso"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/internal/service/ticketbot"
@@ -73,6 +76,9 @@ type Services struct {
 	Lists     *lists.Service
 	Transfer  *transfer.Service
 	SSO       *sso.Service
+	OAuth     *oauth.Service
+	Simulate  *simulate.Service
+	MCP       *mcp.Service
 }
 
 func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.LevelVar, logBuf *logging.BufferHandler) (*App, *logging.Persister, error) {
@@ -132,8 +138,16 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	})
 
 	persister := logging.NewPersister(r.Logs, logBuf, cfg)
+	oauthSvc := oauth.New(oauth.Params{Repo: r.OAuth, Cfg: cfg, RootURL: e.RootURL})
+	if cfg.MCPEnabled && e.RootURL == "" {
+		slog.Warn("mcp_enabled is on but ROOT_URL is not set; the MCP server stays off")
+	}
 	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter,
-		Purgers: []intake.Purger{&ticketbot.HistoryPurger{Runs: r.WorkflowRuns, Events: r.TicketEvents, Cfg: cfg}}})
+		Purgers: []intake.Purger{
+			&ticketbot.HistoryPurger{Runs: r.WorkflowRuns, Events: r.TicketEvents, Cfg: cfg},
+			&authsvc.SessionPurger{Sessions: r.Sessions},
+			oauthSvc,
+		}})
 
 	wfSvc := workflow.New(workflow.Params{
 		Workflows:  r.Workflows,
@@ -148,6 +162,12 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	if err != nil {
 		return nil, nil, fmt.Errorf("configuring sso: %w", err)
 	}
+
+	simSvc := &simulate.Service{Workflows: wfSvc, CW: cws, Notifier: ns, Lists: listSvc}
+	mcpSvc := mcp.New(mcp.Params{OAuth: oauthSvc, Keys: r.APIKey, Users: r.APIUser, Deps: mcp.Deps{
+		Workflows: wfSvc, Runs: r.WorkflowRuns, Events: r.TicketEvents, Tickets: cws, Lists: listSvc,
+		Forwards: ns, Config: cfgSvc, Simulator: simSvc, CW: cws, Webex: ws, Intake: intakeSvc, Logs: logBuf,
+	}})
 
 	return &App{
 		Env:           e,
@@ -173,6 +193,9 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 			Lists:     listSvc,
 			Transfer:  transfer.New(transfer.Params{Workflows: wfSvc, Lists: listSvc, Recipients: r.WebexRecipients, Boards: r.CW.Board}),
 			SSO:       ssoSvc,
+			OAuth:     oauthSvc,
+			Simulate:  simSvc,
+			MCP:       mcpSvc,
 		},
 	}, persister, nil
 }
