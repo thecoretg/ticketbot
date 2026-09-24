@@ -116,12 +116,13 @@ var ConditionFields = []ConditionField{
 	{"subType/name", "Subtype", groupTicket, "string", "", "", "", "", ""},
 	{"item/name", "Item", groupTicket, "string", "", "", "", "", ""},
 	{"closedFlag", "Closed", groupTicket, "bool", "", "", "", "", ""},
+	{"customerUpdatedFlag", "Customer updated", groupTicket, "bool", "", "The ticket's Customer Updated flag in ConnectWise, which ConnectWise sets and clears", "", "", ""},
 	{"_info/updatedBy", "Last updated by", groupTicket, "identifier", "members", "Member who made this update", "", "", ""},
 
 	// Latest note
 	{"newNote", "A new note arrived", groupNote, "bool", "", "True when this update added a note, not just a field change", "", "", ""},
 	{"latestNote/text", "Note text", groupNote, "string", "", "", "", "", ""},
-	{"latestNote/internalAnalysisFlag", "Note is internal", groupNote, "bool", "", "", "", "", ""},
+	{"latestNote/internalAnalysisFlag", "Note marked Internal", groupNote, "bool", "", "The note's Internal checkbox in ConnectWise, not who wrote it. For customer replies use Note author (contact) is not empty", "", "", ""},
 	{"latestNote/member/identifier", "Note author (member)", groupNote, "identifier", "members", "", "", "", ""},
 	{"latestNote/contact/id", "Note author (contact)", groupNote, "ref", "contacts", "Use \"is not empty\" for any customer reply", "", "", ""},
 
