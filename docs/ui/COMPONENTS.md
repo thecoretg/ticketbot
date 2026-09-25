@@ -123,7 +123,7 @@ dataTable({
   id: 'workflows',                                   // stable: keys the saved layout
   columns: [
     { key: 'board', label: 'Board', sort: w => w.board_name, cell: w => esc(w.board_name) },
-    { key: 'steps', label: 'Steps', align: 'r', cls: 'num', sort: w => w.nodes.length, cell: w => w.nodes.length },
+    { key: 'steps', label: 'Steps', cls: 'num', sort: w => w.nodes.length, cell: w => w.nodes.length },
     { key: 'updated', label: 'Updated', firstDir: 'desc', sort: w => tblTime(w.updated_on), cell: … },
   ],
   rows: list,
@@ -155,7 +155,7 @@ What it renders:
     <tbody>
       <tr class="clickable" onclick="…">
         <td><div class="cell-primary">Name</div><div class="cell-sub">sub</div></td>
-        <td class="r num">4</td>
+        <td class="num">4</td>
         <td class="td-menu"><button type="button" class="icon-btn" data-row-menu="0" aria-haspopup="menu" aria-label="Row actions">…</button></td>
       </tr>
     </tbody>
@@ -169,8 +169,9 @@ What it renders:
 - `.col-resize` is the column edge: drag to resize, double-click to fit the
   widest cell. Dragging a header moves the column. Both are mouse only; the
   table stays fully usable without them.
-- Headers are always left-aligned, even over right-aligned numbers or centred
-  badges, so a label never travels with the divider while its column resizes.
+- Headers and cells are all left-aligned, numbers and badges included, so a
+  label never travels with the divider while its column resizes and every cell
+  starts where its label does. Columns have no alignment option.
 - The trailing `.th-menu` column holds the header menu (also on right-click in
   the header): **Reset columns** clears the table's saved sort, widths and
   order.

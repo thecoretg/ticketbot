@@ -83,10 +83,10 @@ function renderWorkflowList(list) {
         { key: 'board', label: 'Board', sort: w => w.board_name || w.name,
           cell: w => `<div class="cell-primary">${esc(w.board_name || w.name)}</div>
             ${w.name && w.name !== w.board_name ? `<div class="cell-sub">${esc(w.name)}</div>` : ''}` },
-        { key: 'enabled', label: 'Enabled', align: 'c', sort: w => w.enabled,
+        { key: 'enabled', label: 'Status', sort: w => w.enabled,
           cell: w => w.enabled ? badgeTag('Enabled', 'ok') : badgeTag('Disabled', '') },
         { key: 'mode', label: 'Mode', sort: mode, cell: w => badgeTag(mode(w), mode(w) === 'Live' ? 'ok' : 'warn') },
-        { key: 'steps', label: 'Steps', align: 'r', cls: 'num', sort: w => (w.nodes || []).length, cell: w => (w.nodes || []).length },
+        { key: 'steps', label: 'Steps', cls: 'num', sort: w => (w.nodes || []).length, cell: w => (w.nodes || []).length },
     ]
     const menu = w => [
         { label: 'Open', icon: 'edit', run: () => openWorkflow(w.id) },

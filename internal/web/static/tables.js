@@ -12,7 +12,7 @@
 // tblGesture is set, and refreshContent holds a poll's markup back until the gesture is over.
 //
 // A column is
-//   { key, label, align?: 'r' | 'c', cls?: string | row => string, attrs?: row => string,
+//   { key, label, cls?: string | row => string, attrs?: row => string,
 //     cell: row => html, sort?: row => value | true, firstDir?: 'asc' | 'desc' }
 // sort is a function for a table sorted here; true marks a column the server sorts (the spec's
 // onSort then fetches). A column without sort has a plain label.
@@ -190,8 +190,9 @@ function tblTableWidth(keys, widths) {
     return `max(100%, calc(${sum}px + var(--tbl-menu-w)))`
 }
 
-// tblTH is a header cell. Headers are always left-aligned, whatever their cells do: a centred or
-// right-aligned label would travel with the divider while its column is resized.
+// tblTH is a header cell. Headers and cells are all left-aligned, numbers included: a centred or
+// right-aligned label would travel with the divider while its column is resized, and every cell
+// starts where its label does.
 function tblTH(c, sort) {
     const on    = sort && sort.key === c.key
     const aria  = on ? ` aria-sort="${sort.dir === 'desc' ? 'descending' : 'ascending'}"` : ''
@@ -209,7 +210,7 @@ function tblRowItems(spec, r) {
 }
 
 function tblCellAttrs(c, r) {
-    const cls = [c.align, typeof c.cls === 'function' ? c.cls(r) : c.cls].filter(Boolean).join(' ')
+    const cls = typeof c.cls === 'function' ? c.cls(r) : c.cls
     return `${cls ? ` class="${cls}"` : ''}${c.attrs ? ` ${c.attrs(r)}` : ''}`
 }
 

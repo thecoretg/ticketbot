@@ -1344,7 +1344,7 @@ function renderForwards(fwds) {
     const head = pageActions(
         editOnly(`<button class="btn btn-primary" onclick="showForwardModal()">${icon('plus')}New forward</button>`))
 
-    const flag = (key, label, field) => ({ key, label, align: 'c', sort: f => f[field], cell: f => badge(f[field]) })
+    const flag = (key, label, field) => ({ key, label, sort: f => f[field], cell: f => badge(f[field]) })
     const columns = [
         { key: 'source', label: 'Source', sort: f => f.source_name,
           cell: f => `<div class="cell-primary">${esc(f.source_name)}</div><div class="cell-sub">${esc(f.source_type)}</div>` },
@@ -1511,7 +1511,7 @@ function renderUsers(users) {
     const head = pageActions(`<button class="btn btn-primary" onclick="showNewUserModal()">${icon('plus')}New user</button>`)
 
     const columns = [
-        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: u => u.id, cell: u => u.id },
+        { key: 'id', label: 'ID', cls: 'num muted', sort: u => u.id, cell: u => u.id },
         { key: 'email', label: 'Email', sort: u => u.email_address,
           cell: u => `<div class="row gap3">
                 <span class="avatar sm">${esc(emailInitials(u.email_address))}</span>
@@ -1642,7 +1642,7 @@ function renderKeys(keys, users) {
 
     const owner = k => userMap[k.user_id] || `User #${k.user_id}`
     const columns = [
-        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: k => k.id, cell: k => k.id },
+        { key: 'id', label: 'ID', cls: 'num muted', sort: k => k.id, cell: k => k.id },
         { key: 'user', label: 'User', cls: 'cell-primary', sort: owner, cell: k => esc(owner(k)) },
         { key: 'key', label: 'Key', cls: 'num muted', sort: k => k.key_hint, cell: k => k.key_hint ? `••••${esc(k.key_hint)}` : '—' },
         { key: 'created', label: 'Created', cls: 'muted nowrap', firstDir: 'desc', sort: k => tblTime(k.created_on),

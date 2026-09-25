@@ -90,9 +90,9 @@ function renderWorkflowResults(paint = setContent) {
         { key: 'ticket',   label: 'Ticket',   cell: r => `<a class="link num" href="#tickets/${r.ticket_id}" onclick="event.stopPropagation()">#${r.ticket_id}</a>` },
         { key: 'board',    label: 'Board',    cls: 'cell-primary', cell: r => esc(r.board_name || r.workflow_name || `Board ${r.board_id}`) },
         { key: 'event',    label: 'Event',    cell: r => esc(r.event) },
-        { key: 'steps',    label: 'Steps',    align: 'r', cls: 'num', cell: r => r.steps },
+        { key: 'steps',    label: 'Steps',    cls: 'num', cell: r => r.steps },
         { key: 'notified', label: 'Notified', cls: 'muted', cell: r => rsNotifSummary(r) },
-        { key: 'writes',   label: 'Writes',   align: 'r', cls: 'num', cell: r => r.writes },
+        { key: 'writes',   label: 'Writes',   cls: 'num', cell: r => r.writes },
         { key: 'outcome',  label: 'Outcome',  cell: r => `<div class="row gap2 wrap">${rsOutcomeBadge(r.outcome)}${r.dry_run ? badgeTag('Dry run', 'warn') : ''}</div>` },
     ]
 

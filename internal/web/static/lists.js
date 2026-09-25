@@ -52,7 +52,7 @@ function renderListIndex(lists) {
         { key: 'name', label: 'Name', cls: 'cell-primary', sort: l => l.name, cell: l => esc(l.name) },
         { key: 'type', label: 'Type', sort: l => lsTypeInfo(l.item_type).plural,
           cell: l => badgeTag(lsTypeInfo(l.item_type).plural, 'outline') },
-        { key: 'items', label: 'Items', align: 'r', cls: 'num', sort: l => l.item_count, cell: l => l.item_count },
+        { key: 'items', label: 'Items', cls: 'num', sort: l => l.item_count, cell: l => l.item_count },
         { key: 'description', label: 'Description', cls: 'cell-ellipsis muted', sort: l => l.description,
           cell: l => esc(l.description || '') },
     ]
@@ -174,7 +174,7 @@ function renderListDetail(d) {
           cell: it => `${esc(it.label)}${it.missing ? ' ' + badgeTag('Not synced', 'warn') : ''}` },
         ...(detail ? [{ key: 'detail', label: info.detail_label, cls: 'muted', sort: it => it.detail,
           cell: it => esc(it.detail || '—') }] : []),
-        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: it => it.item_id, cell: it => `#${it.item_id}` },
+        { key: 'id', label: 'ID', cls: 'num muted', sort: it => it.item_id, cell: it => `#${it.item_id}` },
         { key: 'added', label: 'Added', cls: 'muted nowrap', firstDir: 'desc', sort: it => tblTime(it.added_on),
           cell: it => fmtDateTime(it.added_on) },
     ]
