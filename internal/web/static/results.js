@@ -3,7 +3,7 @@
 //
 // Every intake that found an enabled workflow leaves a run summary (workflow_run) and its history
 // events. The Results tab lists the summaries with filters carried in the hash
-// (#workflows/results?board=..&outcome=..&from=..&to=..&ticket=..), and a run opens as the
+// (#results?board=..&outcome=..&from=..&to=..&ticket=..), and a run (#results/<run_id>) opens as the
 // workflow's canvas in replay mode with the recorded path lit, the way Simulate draws it, plus the
 // run's events underneath. Nothing here edits anything.
 // ─────────────────────────────────────────────────────────
@@ -42,6 +42,14 @@ function rsApiQuery(f, extra = {}) {
     return `/workflows/runs?${p}`
 }
 
+// loadResults routes #results?… to the list and #results/<run_id> to a run.
+async function loadResults(sub) {
+    const q  = (sub || '').indexOf('?')
+    const id = q < 0 ? sub : sub.slice(0, q)
+    if (id) await loadWorkflowRun(id)
+    else await loadWorkflowResults(q < 0 ? '' : sub.slice(q + 1))
+}
+
 async function loadWorkflowResults(query) {
     rsFilter = rsParseQuery(query)
     try {
@@ -56,14 +64,6 @@ async function loadWorkflowResults(query) {
     } catch (e) {
         setContent(errorState(e.message))
     }
-}
-
-// wfTabs is the Workflows / Results switch at the top of both list pages.
-function wfTabs(on) {
-    return `<div class="tabs" role="tablist" style="margin-bottom:var(--s5)">
-        <button role="tab" class="${on === 'workflows' ? 'on' : ''}" aria-selected="${on === 'workflows'}" onclick="switchTab('workflows')">Workflows</button>
-        <button role="tab" class="${on === 'results' ? 'on' : ''}" aria-selected="${on === 'results'}" onclick="switchTab('workflows', 'results')">Results</button>
-    </div>`
 }
 
 function rsOutcomeBadge(o) {
@@ -84,7 +84,7 @@ function renderWorkflowResults(paint = setContent) {
         ${Object.keys(f).length ? `<button class="btn btn-ghost btn-sm" onclick="rsClearFilters()">${icon('x')}Clear</button>` : ''}`
 
     const thead = '<th>Started</th><th>Ticket</th><th>Board</th><th>Event</th><th class="r">Steps</th><th>Notified</th><th class="r">Writes</th><th>Outcome</th>'
-    const rows = rsRuns.map(r => `<tr class="clickable" onclick="switchTab('workflows', 'results/${r.run_id}')">
+    const rows = rsRuns.map(r => `<tr class="clickable" onclick="switchTab('results', '${r.run_id}')">
         <td class="muted nowrap">${fmtDateTime(r.started_at)}</td>
         <td><a class="link num" href="#tickets/${r.ticket_id}" onclick="event.stopPropagation()">#${r.ticket_id}</a></td>
         <td class="cell-primary">${esc(r.board_name || r.workflow_name || `Board ${r.board_id}`)}</td>
@@ -99,7 +99,7 @@ function renderWorkflowResults(paint = setContent) {
     const more = rsRuns.length >= 50 && last
         ? `<button class="btn btn-default btn-sm" onclick="rsLoadMore()">Load older runs</button>` : ''
 
-    paint(wfTabs('results') + tableCard(thead, rows, {
+    paint(tableCard(thead, rows, {
         toolbar,
         empty: emptyState('No runs match', Object.keys(f).length ? 'Loosen a filter or clear them.' : 'Runs appear here once a ticket event reaches an enabled workflow.', '', 'bolt'),
         foot: `<span>${rsRuns.length} run${rsRuns.length === 1 ? '' : 's'} shown · refreshes every few seconds</span>${more}`,
@@ -119,10 +119,10 @@ function rsNotifSummary(r) {
 function rsSetFilter(key, value) {
     const f = { ...rsFilter }
     if (value) f[key] = value; else delete f[key]
-    switchTab('workflows', `results${rsQuery(f)}`)
+    switchTab('results', rsQuery(f) || null)
 }
 
-function rsClearFilters() { switchTab('workflows', 'results') }
+function rsClearFilters() { switchTab('results') }
 
 async function rsLoadMore() {
     const last = rsRuns[rsRuns.length - 1]
@@ -136,7 +136,7 @@ async function rsLoadMore() {
 
 function rsStartPoll() {
     rsStopPoll()
-    const onList = () => currentTab === 'workflows' && currentHash.startsWith('workflows/results') && !currentHash.includes('results/')
+    const onList = () => currentTab === 'results' && !currentHash.startsWith('results/')
     rsPollTimer = setInterval(async () => {
         if (!onList()) { rsStopPoll(); return }
         if (document.getElementById('modal')?.classList.contains('on')) return
@@ -165,7 +165,6 @@ async function loadWorkflowRun(runID) {
         const wfEvent = (d.events || []).find(e => e.kind === 'workflow')
         const steps = wfEvent?.payload?.steps || []
         const actions = (d.events || []).filter(e => e.kind === 'action').map(e => e.payload)
-        const back = `#workflows/results${rsQuery(rsFilter)}`
 
         let canvas = ''
         if (d.workflow) {
@@ -211,7 +210,7 @@ async function loadWorkflowRun(runID) {
         </div>`
 
         setContent(`<div class="stack gap5">
-            ${backRow(`workflows/results${rsQuery(rsFilter)}`, 'Results', run.run_id.slice(0, 8))}
+            ${backRow(`results${rsQuery(rsFilter)}`, 'Results', run.run_id.slice(0, 8))}
             <div class="row spread wrap gap3">
                 <div class="row gap3 wrap">
                     <h3 style="margin:0">${esc(run.board_name || run.workflow_name || `Board ${run.board_id}`)}</h3>
@@ -238,6 +237,8 @@ async function loadWorkflowRun(runID) {
             cvFit()
         }
     } catch (e) {
-        setContent(backRow('workflows/results', 'Results') + errorState(e.message))
+        setContent(backRow('results', 'Results') + errorState(e.message))
     }
 }
+
+tabLoaders.results = loadResults
