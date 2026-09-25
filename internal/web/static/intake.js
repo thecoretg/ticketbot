@@ -85,23 +85,23 @@ function renderIntake(stats, rows, hourly = [], paint = setContent) {
             ${INTAKE_STATUSES.map(s => `<option value="${s.value}" ${s.value === intakeFilter ? 'selected' : ''}>${s.label}</option>`).join('')}
         </select></label>`
 
-    const thead = '<th class="r">ID</th><th>Ticket</th><th>Action</th><th>Status</th><th class="r">Attempts</th><th>Received</th><th>Last error</th><th class="r">Actions</th>'
-    const trs = rows.map(r => {
-        const st = INTAKE_STATUSES.find(s => s.value === r.status) || { label: r.status, variant: '' }
-        const failed = r.status === 'failed'
-        return `<tr>
-            <td class="r num muted">${r.id}</td>
-            <td class="cell-primary"><a href="#tickets/${r.ticket_id}" class="num">#${r.ticket_id}</a></td>
-            <td>${esc(r.action)}</td>
-            <td>${badgeTag(st.label, st.variant)}</td>
-            <td class="r num">${r.attempts}</td>
-            <td class="muted nowrap">${fmtDateTime(r.received_at)}</td>
-            <td class="muted" style="max-width:360px;overflow-wrap:anywhere">${esc(r.last_error || '—')}</td>
-            <td class="r nowrap">${failed ? `
+    const status = r => INTAKE_STATUSES.find(s => s.value === r.status) || { label: r.status, variant: '' }
+    const columns = [
+        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: r => r.id, cell: r => r.id },
+        { key: 'ticket', label: 'Ticket', cls: 'cell-primary', sort: r => r.ticket_id,
+          cell: r => `<a href="#tickets/${r.ticket_id}" class="num">#${r.ticket_id}</a>` },
+        { key: 'action', label: 'Action', sort: r => r.action, cell: r => esc(r.action) },
+        { key: 'status', label: 'Status', sort: r => status(r).label, cell: r => badgeTag(status(r).label, status(r).variant) },
+        { key: 'attempts', label: 'Attempts', align: 'r', cls: 'num', sort: r => r.attempts, cell: r => r.attempts },
+        { key: 'received', label: 'Received', cls: 'muted nowrap', firstDir: 'desc', sort: r => tblTime(r.received_at),
+          cell: r => fmtDateTime(r.received_at) },
+        { key: 'last_error', label: 'Last error', cls: 'muted', attrs: () => 'style="max-width:360px;overflow-wrap:anywhere"',
+          sort: r => r.last_error, cell: r => esc(r.last_error || '—') },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
+          cell: r => r.status === 'failed' ? `
                 <button class="btn btn-default btn-sm" onclick="intakeRetry(${r.id})">${icon('undo')}Retry</button>
-                <button class="btn btn-ghost btn-sm" onclick="intakeDiscard(${r.id})">${icon('trash')}Discard</button>` : ''}</td>
-        </tr>`
-    })
+                <button class="btn btn-ghost btn-sm" onclick="intakeDiscard(${r.id})">${icon('trash')}Discard</button>` : '' },
+    ]
 
     const emptyCopy = {
         failed:     ['Nothing has failed', 'A webhook lands here only after every retry failed. Retries run for about two hours before giving up.'],
@@ -115,7 +115,8 @@ function renderIntake(stats, rows, hourly = [], paint = setContent) {
         <div class="grid g4">${tiles}</div>
         ${intakeChart(hourly)}
         <p class="muted">${esc(last)} The table refreshes every few seconds.</p>
-        ${tableCard(thead, trs, {
+        ${dataTable({
+            id: 'intake', columns, rows,
             toolbar: filter,
             empty: emptyState(emptyCopy[0], emptyCopy[1], '', 'inbox'),
             foot: `<span>${rows.length} row${rows.length === 1 ? '' : 's'}</span>`,

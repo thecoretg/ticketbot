@@ -798,14 +798,19 @@ window.addEventListener('beforeunload', e => {
 function setContent(html) {
     renderSeq++
     document.getElementById('content').innerHTML = html
+    tableStickHeads()
 }
 
 // refreshContent redraws the current page in place for a poll. Replacing the view would restart
 // the .view entry fade on every tick and drop focus, an open select and any text selection, so
 // the new markup is patched onto the nodes already there and only what differs is touched.
+// While a table column is being dragged the markup waits (tables.js paints it when the drag
+// ends): the morph would undo the drag's live widths and drop the dragged header's state.
 function refreshContent(html) {
+    if (tableGestureActive()) { tableGestureDefer(html); return }
     renderSeq++
     morphInto(document.getElementById('content'), html)
+    tableStickHeads()
 }
 
 // morphInto patches html onto el's existing children; see refreshContent.
@@ -1110,21 +1115,6 @@ function errorState(msg, retry = `<button class="btn btn-default btn-sm" onclick
     </div></div>`
 }
 
-// tableCard wraps a table in a card, with an empty state when there are no rows
-// and an optional footer (row count, pagination).
-function tableCard(thead, rows, opts = {}) {
-    const { empty = emptyState('Nothing here yet', 'Items you create will show up in this table.'), foot = '', toolbar = '' } = opts
-    if (!rows.length) return `<div class="card">${toolbar ? `<div class="toolbar">${toolbar}</div>` : ''}${empty}</div>`
-    return `<div class="card">
-        ${toolbar ? `<div class="toolbar">${toolbar}</div>` : ''}
-        <div class="table-wrap"><table class="tbl">
-            <thead><tr>${thead}</tr></thead>
-            <tbody>${rows.join('')}</tbody>
-        </table></div>
-        ${foot ? `<div class="card-foot">${foot}</div>` : ''}
-    </div>`
-}
-
 // deleteButton is the destructive action in a table row: a word, not a colour.
 function deleteButton(onclick, label = 'Delete') {
     return editOnly(`<button class="btn btn-ghost btn-sm" onclick="${onclick}">${icon('trash')}${esc(label)}</button>`)
@@ -1288,17 +1278,23 @@ function renderConnected(grants, user, userID) {
         </div>
     </article>` : ''
 
-    const thead = '<th>Client</th><th>Can</th><th>Connected</th><th>Last used</th><th class="r">Actions</th>'
-    const rows = grants.map(g => `<tr>
-        <td><div class="cell-primary">${esc(g.client_name || 'Unnamed client')}</div><div class="cell-sub num">${esc(g.client_id.slice(0, 8))}</div></td>
-        <td><div class="row gap1 wrap">${(g.scopes || []).map(sc => `<span class="badge">${esc(SCOPE_LABELS[sc] || sc)}</span>`).join('')}</div></td>
-        <td class="muted nowrap">${fmtDateTime(g.created_on)}</td>
-        <td class="muted nowrap">${g.last_used_at ? fmtDateTime(g.last_used_at) : '<span class="muted">Never</span>'}</td>
-        <td class="r nowrap"><button class="btn btn-ghost btn-sm" onclick="revokeGrant(${g.id}, ${userID || 'null'})">${icon('ban')}Disconnect</button></td>
-    </tr>`)
+    const scopeNames = g => (g.scopes || []).map(sc => SCOPE_LABELS[sc] || sc)
+    const columns = [
+        { key: 'client', label: 'Client', sort: g => g.client_name || 'Unnamed client',
+          cell: g => `<div class="cell-primary">${esc(g.client_name || 'Unnamed client')}</div><div class="cell-sub num">${esc(g.client_id.slice(0, 8))}</div>` },
+        { key: 'can', label: 'Can', sort: g => scopeNames(g).join(' '),
+          cell: g => `<div class="row gap1 wrap">${scopeNames(g).map(n => `<span class="badge">${esc(n)}</span>`).join('')}</div>` },
+        { key: 'connected', label: 'Connected', cls: 'muted nowrap', firstDir: 'desc', sort: g => tblTime(g.created_on),
+          cell: g => fmtDateTime(g.created_on) },
+        { key: 'last_used', label: 'Last used', cls: 'muted nowrap', firstDir: 'desc', sort: g => tblTime(g.last_used_at),
+          cell: g => g.last_used_at ? fmtDateTime(g.last_used_at) : '<span class="muted">Never</span>' },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
+          cell: g => `<button class="btn btn-ghost btn-sm" onclick="revokeGrant(${g.id}, ${userID || 'null'})">${icon('ban')}Disconnect</button>` },
+    ]
 
     // two cards in a column: the stack gives them the grid gap a single card never needs
-    setContent(head + `<div class="stack gap5">` + notice + connect + tableCard(thead, rows, {
+    setContent(head + `<div class="stack gap5">` + notice + connect + dataTable({
+        id: 'connected', columns, rows: grants,
         empty: emptyState(own ? 'Nothing connected yet' : 'Nothing connected', own ? 'Connect Claude with the steps above and it will show up here.' : 'This user has not connected any client.', '', 'external'),
         foot: `<span>${grants.length} connection${grants.length === 1 ? '' : 's'}</span>`,
     }) + `</div>`)
@@ -1349,23 +1345,25 @@ function renderForwards(fwds) {
     const head = pageActions(
         editOnly(`<button class="btn btn-primary" onclick="showForwardModal()">${icon('plus')}New forward</button>`))
 
-    const thead = `<th>Source</th><th>Destination</th><th>Dates</th><th class="c">Enabled</th>
-        <th class="c">Keeps copy</th><th class="c">Sole only</th><th class="c">Public only</th><th class="r">Actions</th>`
-    const rows  = fwds.map(f => `<tr>
-        <td><div class="cell-primary">${esc(f.source_name)}</div><div class="cell-sub">${esc(f.source_type)}</div></td>
-        <td><div class="cell-primary">${esc(f.destination_name)}</div><div class="cell-sub">${esc(f.destination_type)}</div></td>
-        <td class="nowrap muted">${fmtDateRange(f.start_date, f.end_date)}</td>
-        <td class="c">${badge(f.enabled)}</td>
-        <td class="c">${badge(f.user_keeps_copy)}</td>
-        <td class="c">${badge(f.only_if_sole_resource)}</td>
-        <td class="c">${badge(f.public_only)}</td>
-        <td class="r nowrap">
-            <button class="btn btn-ghost btn-sm" onclick="editForward(${f.id})">${icon('edit')}Edit</button>
-            ${deleteButton(`deleteForward(${f.id})`)}
-        </td>
-    </tr>`)
+    const flag = (key, label, field) => ({ key, label, align: 'c', sort: f => f[field], cell: f => badge(f[field]) })
+    const columns = [
+        { key: 'source', label: 'Source', sort: f => f.source_name,
+          cell: f => `<div class="cell-primary">${esc(f.source_name)}</div><div class="cell-sub">${esc(f.source_type)}</div>` },
+        { key: 'destination', label: 'Destination', sort: f => f.destination_name,
+          cell: f => `<div class="cell-primary">${esc(f.destination_name)}</div><div class="cell-sub">${esc(f.destination_type)}</div>` },
+        { key: 'dates', label: 'Dates', cls: 'nowrap muted', sort: f => tblTime(f.start_date),
+          cell: f => fmtDateRange(f.start_date, f.end_date) },
+        flag('enabled', 'Enabled', 'enabled'),
+        flag('keeps_copy', 'Keeps copy', 'user_keeps_copy'),
+        flag('sole_only', 'Sole only', 'only_if_sole_resource'),
+        flag('public_only', 'Public only', 'public_only'),
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
+          cell: f => `<button class="btn btn-ghost btn-sm" onclick="editForward(${f.id})">${icon('edit')}Edit</button>
+            ${deleteButton(`deleteForward(${f.id})`)}` },
+    ]
 
-    setContent(head + tableCard(thead, rows, {
+    setContent(head + dataTable({
+        id: 'forwards', columns, rows: fwds,
         empty: emptyState('No forwards yet',
             'A forward re-routes one person\u2019s ticket notifications to someone else while they are away.',
             editOnly(`<button class="btn btn-primary btn-sm" onclick="showForwardModal()">${icon('plus')}New forward</button>`), 'mail'),
@@ -1512,30 +1510,30 @@ async function loadUsers() {
 function renderUsers(users) {
     const head = pageActions(`<button class="btn btn-primary" onclick="showNewUserModal()">${icon('plus')}New user</button>`)
 
-    const thead = '<th class="r">ID</th><th>Email</th><th>Role</th><th>Created</th><th class="r">Actions</th>'
-    const rows  = users.map(u => `<tr>
-        <td class="r num muted">${u.id}</td>
-        <td>
-            <div class="row gap3">
+    const columns = [
+        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: u => u.id, cell: u => u.id },
+        { key: 'email', label: 'Email', sort: u => u.email_address,
+          cell: u => `<div class="row gap3">
                 <span class="avatar sm">${esc(emailInitials(u.email_address))}</span>
                 <div>
                     <div class="cell-primary">${esc(u.email_address)}</div>
                     ${u.id === currentUser?.id ? '<div class="cell-sub">Signed in as this account</div>' : ''}
                 </div>
-            </div>
-        </td>
-        <td>${roleCell(u)}</td>
-        <td class="muted nowrap">${fmtDateTime(u.created_on)}</td>
-        <td class="r nowrap">
-            <a class="btn btn-ghost btn-sm" href="#connected${u.id === currentUser?.id ? '' : `/${u.id}`}">${icon('external')}Connected apps</a>
+            </div>` },
+        { key: 'role', label: 'Role', sort: u => ROLES.findIndex(r => r.value === u.role), cell: u => roleCell(u) },
+        { key: 'created', label: 'Created', cls: 'muted nowrap', firstDir: 'desc', sort: u => tblTime(u.created_on),
+          cell: u => fmtDateTime(u.created_on) },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
+          cell: u => `<a class="btn btn-ghost btn-sm" href="#connected${u.id === currentUser?.id ? '' : `/${u.id}`}">${icon('external')}Connected apps</a>
             ${u.id === currentUser?.id
                 ? '<span class="badge outline">You</span>'
                 : u.break_glass
                     ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted." data-tip-align="right">Break-glass</span>`
-                    : deleteButton(`deleteUser(${u.id})`)}</td>
-    </tr>`)
+                    : deleteButton(`deleteUser(${u.id})`)}` },
+    ]
 
-    setContent(head + tableCard(thead, rows, {
+    setContent(head + dataTable({
+        id: 'users', columns, rows: users,
         empty: emptyState('No users yet', 'Create a user so someone can sign in.',
             `<button class="btn btn-primary btn-sm" onclick="showNewUserModal()">${icon('plus')}New user</button>`, 'users'),
         foot: `<span>${users.length} user${users.length === 1 ? '' : 's'}</span>`,
@@ -1643,16 +1641,18 @@ function renderKeys(keys, users) {
 
     const head = pageActions(`<button class="btn btn-primary" onclick="showNewKeyModal()">${icon('plus')}New key</button>`)
 
-    const thead = '<th class="r">ID</th><th>User</th><th>Key</th><th>Created</th><th class="r">Actions</th>'
-    const rows  = keys.map(k => `<tr>
-        <td class="r num muted">${k.id}</td>
-        <td class="cell-primary">${esc(userMap[k.user_id] || `User #${k.user_id}`)}</td>
-        <td class="num muted">${k.key_hint ? `••••${esc(k.key_hint)}` : '—'}</td>
-        <td class="muted nowrap">${fmtDateTime(k.created_on)}</td>
-        <td class="r nowrap">${deleteButton(`deleteKey(${k.id})`, 'Revoke')}</td>
-    </tr>`)
+    const owner = k => userMap[k.user_id] || `User #${k.user_id}`
+    const columns = [
+        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: k => k.id, cell: k => k.id },
+        { key: 'user', label: 'User', cls: 'cell-primary', sort: owner, cell: k => esc(owner(k)) },
+        { key: 'key', label: 'Key', cls: 'num muted', sort: k => k.key_hint, cell: k => k.key_hint ? `••••${esc(k.key_hint)}` : '—' },
+        { key: 'created', label: 'Created', cls: 'muted nowrap', firstDir: 'desc', sort: k => tblTime(k.created_on),
+          cell: k => fmtDateTime(k.created_on) },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', cell: k => deleteButton(`deleteKey(${k.id})`, 'Revoke') },
+    ]
 
-    setContent(head + tableCard(thead, rows, {
+    setContent(head + dataTable({
+        id: 'keys', columns, rows: keys,
         empty: emptyState('No API keys', 'Create a key to let a script or integration call the ticketbot API.',
             `<button class="btn btn-primary btn-sm" onclick="showNewKeyModal()">${icon('plus')}New key</button>`, 'key'),
         foot: `<span>${keys.length} key${keys.length === 1 ? '' : 's'}</span>`,
@@ -1832,11 +1832,13 @@ function renderSSO(st) {
         ? badgeTag('Configured', 'ok')
         : badgeTag('Not configured', 'warn')
 
-    const mappingRows = (st.mappings || []).map(m => `<tr>
-        <td><code class="code inline">${esc(m.entra_role)}</code></td>
-        <td><select class="select" aria-label="Ticketbot role for ${esc(m.entra_role)}" onchange="ssoSaveMapping(${JSON.stringify(m.entra_role)}, this.value, this)">${roleOptions(m.role)}</select></td>
-        <td class="r nowrap">${deleteButton(`ssoDeleteMapping(${m.id})`, 'Remove')}</td>
-    </tr>`)
+    const mappingColumns = [
+        { key: 'entra_role', label: 'Entra app role', sort: m => m.entra_role,
+          cell: m => `<code class="code inline">${esc(m.entra_role)}</code>` },
+        { key: 'role', label: 'Ticketbot role', sort: m => ROLES.findIndex(r => r.value === m.role),
+          cell: m => `<select class="select" aria-label="Ticketbot role for ${esc(m.entra_role)}" onchange="ssoSaveMapping(${esc(JSON.stringify(m.entra_role))}, this.value, this)">${roleOptions(m.role)}</select>` },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', cell: m => deleteButton(`ssoDeleteMapping(${m.id})`, 'Remove') },
+    ]
 
     setContent(
     `<div class="stack gap5">
@@ -1866,7 +1868,8 @@ function renderSSO(st) {
         </div>
 
         <div class="section-head"><div><h3>Role mappings</h3><p class="muted">Entra app role value → ticketbot role. A person gets the highest role any of their app roles maps to; with no match, sign-in is refused.</p></div></div>
-        ${tableCard('<th>Entra app role</th><th>Ticketbot role</th><th class="r">Actions</th>', mappingRows, {
+        ${dataTable({
+            id: 'sso-mappings', columns: mappingColumns, rows: st.mappings || [],
             toolbar: `<div class="row gap2 wrap grow">
                 <input class="input" id="sso-new-role" placeholder="e.g. TicketBot.Admin" aria-label="Entra app role value" style="max-width:260px">
                 <select class="select" id="sso-new-map" aria-label="Ticketbot role" style="max-width:160px">${roleOptions('viewer')}</select>

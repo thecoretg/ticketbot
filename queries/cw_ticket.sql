@@ -44,6 +44,9 @@ ON CONFLICT (id) DO UPDATE SET
 RETURNING *;
 
 -- name: ListTicketsPaged :many
+-- ListTicketsPaged orders by sort_key, which models.TicketSort whitelists. One CASE per key and
+-- direction keeps each branch a single type; an inactive branch is NULL on every row, and id
+-- breaks ties in the same direction.
 SELECT
     t.id, t.summary, t.board_id, t.status_id, t.owner_id, t.company_id, t.contact_id, t.resources,
     t.updated_by, t.updated_on, t.added_on, t.deleted, t.priority_id, t.priority_name, t.type_id,
@@ -65,7 +68,25 @@ WHERE (sqlc.narg('board_id')::int IS NULL OR t.board_id = sqlc.narg('board_id'):
   AND (sqlc.narg('search')::text IS NULL
        OR t.summary ILIKE '%' || sqlc.narg('search')::text || '%'
        OR t.id::text = sqlc.narg('search')::text)
-ORDER BY t.updated_on DESC, t.id DESC
+ORDER BY
+    CASE WHEN sqlc.arg('sort_key')::text = 'id'      AND NOT sqlc.arg('sort_desc')::bool THEN t.id END ASC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'id'      AND sqlc.arg('sort_desc')::bool     THEN t.id END DESC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'summary' AND NOT sqlc.arg('sort_desc')::bool THEN lower(t.summary) END ASC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'summary' AND sqlc.arg('sort_desc')::bool     THEN lower(t.summary) END DESC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'board'   AND NOT sqlc.arg('sort_desc')::bool THEN lower(b.name) END ASC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'board'   AND sqlc.arg('sort_desc')::bool     THEN lower(b.name) END DESC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'status'  AND NOT sqlc.arg('sort_desc')::bool THEN lower(s.name) END ASC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'status'  AND sqlc.arg('sort_desc')::bool     THEN lower(s.name) END DESC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'company' AND NOT sqlc.arg('sort_desc')::bool THEN lower(c.name) END ASC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'company' AND sqlc.arg('sort_desc')::bool     THEN lower(c.name) END DESC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'owner'   AND NOT sqlc.arg('sort_desc')::bool
+         THEN NULLIF(lower(concat_ws(' ', m.first_name, m.last_name)), '') END ASC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_key')::text = 'owner'   AND sqlc.arg('sort_desc')::bool
+         THEN NULLIF(lower(concat_ws(' ', m.first_name, m.last_name)), '') END DESC NULLS LAST,
+    CASE WHEN sqlc.arg('sort_key')::text = 'updated' AND NOT sqlc.arg('sort_desc')::bool THEN t.updated_on END ASC,
+    CASE WHEN sqlc.arg('sort_key')::text = 'updated' AND sqlc.arg('sort_desc')::bool     THEN t.updated_on END DESC,
+    CASE WHEN NOT sqlc.arg('sort_desc')::bool THEN t.id END ASC,
+    t.id DESC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
 -- name: CountTicketsPaged :one
