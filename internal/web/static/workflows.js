@@ -70,7 +70,7 @@ async function loadWorkflowList() {
     }
 }
 
-let wfList = []   // last-loaded /workflows, for delete confirmations
+let wfList = []   // last-loaded /workflows, for delete confirmations and the page kebab
 
 function renderWorkflowList(list) {
     wfList = list
@@ -87,23 +87,32 @@ function renderWorkflowList(list) {
           cell: w => w.enabled ? badgeTag('Enabled', 'ok') : badgeTag('Disabled', '') },
         { key: 'mode', label: 'Mode', sort: mode, cell: w => badgeTag(mode(w), mode(w) === 'Live' ? 'ok' : 'warn') },
         { key: 'steps', label: 'Steps', align: 'r', cls: 'num', sort: w => (w.nodes || []).length, cell: w => (w.nodes || []).length },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', attrs: () => 'onclick="event.stopPropagation()"',
-          cell: w => `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})">${icon('edit')}Open</button>
-            ${deleteButton(`deleteWorkflow(${w.id})`)}` },
+    ]
+    const menu = w => [
+        { label: 'Open', icon: 'edit', run: () => openWorkflow(w.id) },
+        { label: 'Delete', icon: 'trash', danger: true, edit: true, run: () => deleteWorkflow(w.id) },
     ]
 
     setContent(pageActions(
-        (list.length ? `<button class="btn btn-default" onclick="wfExportAll()">${icon('download')}Export</button>` : '') +
-        editOnly(`<button class="btn btn-default" onclick="wfImportPick()">${icon('up')}Import</button>`) +
-        editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
+        editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`) +
+        (wfPageMenuItems().length ? `<button type="button" class="icon-btn" aria-haspopup="menu" aria-label="More workflow actions" onclick="toggleMenu(this, wfPageMenuItems())">${icon('dots')}</button>` : '')) +
     banner +
     dataTable({
-        id: 'workflows', columns, rows: list, tr: w => `class="clickable" onclick="openWorkflow(${w.id})"`,
+        id: 'workflows', columns, rows: list, menu, tr: w => `class="clickable" onclick="openWorkflow(${w.id})"`,
         empty: emptyState('No workflows yet',
             'Create a workflow for a board and ticketbot will start acting on its tickets.',
             editOnly(`<button class="btn btn-primary btn-sm" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`), 'bolt'),
         foot: `<span>${list.length} workflow${list.length === 1 ? '' : 's'}</span>`,
     }))
+}
+
+// wfPageMenuItems is the kebab beside New workflow: export needs something to export, import
+// needs edit rights.
+function wfPageMenuItems() {
+    return [
+        ...(wfList.length ? [{ label: 'Export', icon: 'download', run: wfExportAll }] : []),
+        ...(canEdit() ? [{ label: 'Import', icon: 'up', run: wfImportPick }] : []),
+    ]
 }
 
 // ── Export / import ──────────────────────────────────────

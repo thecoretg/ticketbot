@@ -1288,13 +1288,12 @@ function renderConnected(grants, user, userID) {
           cell: g => fmtDateTime(g.created_on) },
         { key: 'last_used', label: 'Last used', cls: 'muted nowrap', firstDir: 'desc', sort: g => tblTime(g.last_used_at),
           cell: g => g.last_used_at ? fmtDateTime(g.last_used_at) : '<span class="muted">Never</span>' },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
-          cell: g => `<button class="btn btn-ghost btn-sm" onclick="revokeGrant(${g.id}, ${userID || 'null'})">${icon('ban')}Disconnect</button>` },
     ]
+    const menu = g => [{ label: 'Disconnect', icon: 'ban', danger: true, run: () => revokeGrant(g.id, userID || null) }]
 
     // two cards in a column: the stack gives them the grid gap a single card never needs
     setContent(head + `<div class="stack gap5">` + notice + connect + dataTable({
-        id: 'connected', columns, rows: grants,
+        id: 'connected', columns, rows: grants, menu,
         empty: emptyState(own ? 'Nothing connected yet' : 'Nothing connected', own ? 'Connect Claude with the steps above and it will show up here.' : 'This user has not connected any client.', '', 'external'),
         foot: `<span>${grants.length} connection${grants.length === 1 ? '' : 's'}</span>`,
     }) + `</div>`)
@@ -1357,13 +1356,14 @@ function renderForwards(fwds) {
         flag('keeps_copy', 'Keeps copy', 'user_keeps_copy'),
         flag('sole_only', 'Sole only', 'only_if_sole_resource'),
         flag('public_only', 'Public only', 'public_only'),
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
-          cell: f => `<button class="btn btn-ghost btn-sm" onclick="editForward(${f.id})">${icon('edit')}Edit</button>
-            ${deleteButton(`deleteForward(${f.id})`)}` },
+    ]
+    const menu = f => [
+        { label: 'Edit', icon: 'edit', edit: true, run: () => editForward(f.id) },
+        { label: 'Delete', icon: 'trash', danger: true, edit: true, run: () => deleteForward(f.id) },
     ]
 
     setContent(head + dataTable({
-        id: 'forwards', columns, rows: fwds,
+        id: 'forwards', columns, rows: fwds, menu,
         empty: emptyState('No forwards yet',
             'A forward re-routes one person\u2019s ticket notifications to someone else while they are away.',
             editOnly(`<button class="btn btn-primary btn-sm" onclick="showForwardModal()">${icon('plus')}New forward</button>`), 'mail'),
@@ -1516,24 +1516,23 @@ function renderUsers(users) {
           cell: u => `<div class="row gap3">
                 <span class="avatar sm">${esc(emailInitials(u.email_address))}</span>
                 <div>
-                    <div class="cell-primary">${esc(u.email_address)}</div>
+                    <div class="row gap2"><span class="cell-primary">${esc(u.email_address)}</span>${u.break_glass
+                        ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted." data-tip-align="left">Break-glass</span>` : ''}</div>
                     ${u.id === currentUser?.id ? '<div class="cell-sub">Signed in as this account</div>' : ''}
                 </div>
             </div>` },
         { key: 'role', label: 'Role', sort: u => ROLES.findIndex(r => r.value === u.role), cell: u => roleCell(u) },
         { key: 'created', label: 'Created', cls: 'muted nowrap', firstDir: 'desc', sort: u => tblTime(u.created_on),
           cell: u => fmtDateTime(u.created_on) },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
-          cell: u => `<a class="btn btn-ghost btn-sm" href="#connected${u.id === currentUser?.id ? '' : `/${u.id}`}">${icon('external')}Connected apps</a>
-            ${u.id === currentUser?.id
-                ? '<span class="badge outline">You</span>'
-                : u.break_glass
-                    ? `<span class="badge outline" data-tip="Set by INITIAL_ADMIN_EMAIL. Always able to sign in with a password, so it cannot be deleted." data-tip-align="right">Break-glass</span>`
-                    : deleteButton(`deleteUser(${u.id})`)}` },
+    ]
+    // your own account and the break-glass admin cannot be deleted, so their menus stop at Connected apps
+    const menu = u => [
+        { label: 'Connected apps', icon: 'external', run: () => switchTab('connected', u.id === currentUser?.id ? null : String(u.id)) },
+        ...(u.id === currentUser?.id || u.break_glass ? [] : [{ label: 'Delete', icon: 'trash', danger: true, edit: true, run: () => deleteUser(u.id) }]),
     ]
 
     setContent(head + dataTable({
-        id: 'users', columns, rows: users,
+        id: 'users', columns, rows: users, menu,
         empty: emptyState('No users yet', 'Create a user so someone can sign in.',
             `<button class="btn btn-primary btn-sm" onclick="showNewUserModal()">${icon('plus')}New user</button>`, 'users'),
         foot: `<span>${users.length} user${users.length === 1 ? '' : 's'}</span>`,
@@ -1648,11 +1647,11 @@ function renderKeys(keys, users) {
         { key: 'key', label: 'Key', cls: 'num muted', sort: k => k.key_hint, cell: k => k.key_hint ? `••••${esc(k.key_hint)}` : '—' },
         { key: 'created', label: 'Created', cls: 'muted nowrap', firstDir: 'desc', sort: k => tblTime(k.created_on),
           cell: k => fmtDateTime(k.created_on) },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', cell: k => deleteButton(`deleteKey(${k.id})`, 'Revoke') },
     ]
+    const menu = k => [{ label: 'Revoke', icon: 'trash', danger: true, edit: true, run: () => deleteKey(k.id) }]
 
     setContent(head + dataTable({
-        id: 'keys', columns, rows: keys,
+        id: 'keys', columns, rows: keys, menu,
         empty: emptyState('No API keys', 'Create a key to let a script or integration call the ticketbot API.',
             `<button class="btn btn-primary btn-sm" onclick="showNewKeyModal()">${icon('plus')}New key</button>`, 'key'),
         foot: `<span>${keys.length} key${keys.length === 1 ? '' : 's'}</span>`,
@@ -1837,8 +1836,8 @@ function renderSSO(st) {
           cell: m => `<code class="code inline">${esc(m.entra_role)}</code>` },
         { key: 'role', label: 'Ticketbot role', sort: m => ROLES.findIndex(r => r.value === m.role),
           cell: m => `<select class="select" aria-label="Ticketbot role for ${esc(m.entra_role)}" onchange="ssoSaveMapping(${esc(JSON.stringify(m.entra_role))}, this.value, this)">${roleOptions(m.role)}</select>` },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', cell: m => deleteButton(`ssoDeleteMapping(${m.id})`, 'Remove') },
     ]
+    const mappingMenu = m => [{ label: 'Remove', icon: 'trash', danger: true, edit: true, run: () => ssoDeleteMapping(m.id) }]
 
     setContent(
     `<div class="stack gap5">
@@ -1869,7 +1868,7 @@ function renderSSO(st) {
 
         <div class="section-head"><div><h3>Role mappings</h3><p class="muted">Entra app role value → ticketbot role. A person gets the highest role any of their app roles maps to; with no match, sign-in is refused.</p></div></div>
         ${dataTable({
-            id: 'sso-mappings', columns: mappingColumns, rows: st.mappings || [],
+            id: 'sso-mappings', columns: mappingColumns, menu: mappingMenu, rows: st.mappings || [],
             toolbar: `<div class="row gap2 wrap grow">
                 <input class="input" id="sso-new-role" placeholder="e.g. TicketBot.Admin" aria-label="Entra app role value" style="max-width:260px">
                 <select class="select" id="sso-new-map" aria-label="Ticketbot role" style="max-width:160px">${roleOptions('viewer')}</select>

@@ -125,10 +125,13 @@ dataTable({
     { key: 'board', label: 'Board', sort: w => w.board_name, cell: w => esc(w.board_name) },
     { key: 'steps', label: 'Steps', align: 'r', cls: 'num', sort: w => w.nodes.length, cell: w => w.nodes.length },
     { key: 'updated', label: 'Updated', firstDir: 'desc', sort: w => tblTime(w.updated_on), cell: … },
-    { key: 'actions', label: 'Actions', align: 'r', attrs: () => 'onclick="event.stopPropagation()"', cell: … },
   ],
   rows: list,
   tr: w => `class="clickable" onclick="openWorkflow(${w.id})"`,
+  menu: w => [                                       // the row's kebab; no Actions column
+    { label: 'Open', icon: 'edit', run: () => openWorkflow(w.id) },
+    { label: 'Delete', icon: 'trash', danger: true, edit: true, run: () => deleteWorkflow(w.id) },  // edit: hidden from viewers
+  ],
   sort: { key: 'board', dir: 'asc' },                // optional default
   onSort: sort => refetch(),                         // server-sorted: set sort: true on the columns
   toolbar, empty, foot,
@@ -140,20 +143,20 @@ What it renders:
 ```html
 <div class="table-wrap" data-table="workflows">
   <table class="tbl is-sized" style="width:max(100%, calc(560px + var(--tbl-menu-w)))">  <!-- is-sized + style only with a saved layout -->
-    <colgroup><col data-col="board" style="width:240px">…<col data-col="actions"><col class="col-menu"></colgroup>
+    <colgroup><col data-col="board" style="width:240px">…<col data-col="steps"><col class="col-menu"></colgroup>
     <thead><tr>
       <th data-col="board" aria-sort="ascending">
         <button type="button" class="th-sort" data-sort="board">Board<span class="sort" aria-hidden="true">↑</span></button>
         <span class="col-resize" aria-hidden="true"></span>
       </th>
-      <th class="r" data-col="actions">Actions<span class="col-resize" aria-hidden="true"></span></th>
+      <th data-col="steps">…</th>
       <th class="th-menu"><button type="button" class="icon-btn" data-table-menu aria-haspopup="menu" aria-label="Column options">…</button></th>
     </tr></thead>
     <tbody>
       <tr class="clickable" onclick="…">
         <td><div class="cell-primary">Name</div><div class="cell-sub">sub</div></td>
-        <td class="r nowrap" onclick="event.stopPropagation()">…</td>
-        <td class="td-menu"></td>
+        <td class="r num">4</td>
+        <td class="td-menu"><button type="button" class="icon-btn" data-row-menu="0" aria-haspopup="menu" aria-label="Row actions">…</button></td>
       </tr>
     </tbody>
   </table>
@@ -166,9 +169,15 @@ What it renders:
 - `.col-resize` is the column edge: drag to resize, double-click to fit the
   widest cell. Dragging a header moves the column. Both are mouse only; the
   table stays fully usable without them.
+- Headers are always left-aligned, even over right-aligned numbers or centred
+  badges, so a label never travels with the divider while its column resizes.
 - The trailing `.th-menu` column holds the header menu (also on right-click in
   the header): **Reset columns** clears the table's saved sort, widths and
   order.
+- A row's actions live in a kebab in that same trailing column (`menu`), not in
+  an Actions column. The kebab is caught before the row's own `onclick`, a row
+  whose `menu` returns no items has none, and items marked `edit: true` are
+  dropped for viewers.
 - The first resize snapshots every column's width, and from then on the table
   is `.is-sized`: fixed layout, widths from the `<col>`s, the last column
   takes what is left so the table still fills the card, and a cell narrower

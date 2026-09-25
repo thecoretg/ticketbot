@@ -97,11 +97,12 @@ function renderIntake(stats, rows, hourly = [], paint = setContent) {
           cell: r => fmtDateTime(r.received_at) },
         { key: 'last_error', label: 'Last error', cls: 'muted', attrs: () => 'style="max-width:360px;overflow-wrap:anywhere"',
           sort: r => r.last_error, cell: r => esc(r.last_error || '—') },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap',
-          cell: r => r.status === 'failed' ? `
-                <button class="btn btn-default btn-sm" onclick="intakeRetry(${r.id})">${icon('undo')}Retry</button>
-                <button class="btn btn-ghost btn-sm" onclick="intakeDiscard(${r.id})">${icon('trash')}Discard</button>` : '' },
     ]
+    // only a failed row can be retried or discarded; every other row has no kebab
+    const menu = r => r.status === 'failed' ? [
+        { label: 'Retry', icon: 'undo', run: () => intakeRetry(r.id) },
+        { label: 'Discard', icon: 'trash', danger: true, run: () => intakeDiscard(r.id) },
+    ] : []
 
     const emptyCopy = {
         failed:     ['Nothing has failed', 'A webhook lands here only after every retry failed. Retries run for about two hours before giving up.'],
@@ -116,7 +117,7 @@ function renderIntake(stats, rows, hourly = [], paint = setContent) {
         ${intakeChart(hourly)}
         <p class="muted">${esc(last)} The table refreshes every few seconds.</p>
         ${dataTable({
-            id: 'intake', columns, rows,
+            id: 'intake', columns, rows, menu,
             toolbar: filter,
             empty: emptyState(emptyCopy[0], emptyCopy[1], '', 'inbox'),
             foot: `<span>${rows.length} row${rows.length === 1 ? '' : 's'}</span>`,
