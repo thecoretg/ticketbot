@@ -26,7 +26,7 @@ const WF_PATCH_EXAMPLE = '[\n  { "op": "replace", "path": "severity", "value": "
 // Node geometry, shared with ui.css: cards are 248 wide and a fixed height per kind, so the
 // ports can be placed from constants. A card that sized itself from its content would put every
 // wire endpoint off by the difference.
-const CV_W = 248, CV_H = 88, CV_IF_H = 136
+const CV_W = 248, CV_H = 88
 const CV_ZOOM_MIN = 0.3, CV_ZOOM_MAX = 1.8
 
 // CV_KINDS is what the canvas knows about each node kind: its label, tone, icon and where it sits
@@ -387,12 +387,10 @@ function cvClearTimers() {
     cv.timers = []
 }
 
-function cvH(n) { return n.kind === 'if' ? CV_IF_H : CV_H }
 function cvPorts(n) { return n.kind === 'if' ? ['yes', 'no'] : ['out'] }
 function cvOutPt(n, port) {
-    const h = cvH(n)
-    if (n.kind !== 'if') return { x: n.x + CV_W / 2, y: n.y + h }
-    return port === 'yes' ? { x: n.x + 62, y: n.y + h } : { x: n.x + 186, y: n.y + h }
+    if (n.kind !== 'if') return { x: n.x + CV_W / 2, y: n.y + CV_H }
+    return port === 'yes' ? { x: n.x + 62, y: n.y + CV_H } : { x: n.x + 186, y: n.y + CV_H }
 }
 function cvInPt(n) { return { x: n.x + CV_W / 2, y: n.y } }
 function cvCurve(p, q) {
@@ -409,7 +407,7 @@ function cvPt(e) {
 function cvHitNode(p) {
     for (let i = wf.nodes.length - 1; i >= 0; i--) {
         const n = wf.nodes[i]
-        if (p.x >= n.x && p.x <= n.x + CV_W && p.y >= n.y && p.y <= n.y + cvH(n)) return n
+        if (p.x >= n.x && p.x <= n.x + CV_W && p.y >= n.y && p.y <= n.y + CV_H) return n
     }
     return null
 }
@@ -643,7 +641,7 @@ async function cvPlace(snap, at) {
     const added = snap.nodes.map(n => ({ ...JSON.parse(JSON.stringify(n)), id: ids[n.id], x: n.x + dx, y: n.y + dy }))
     for (const e of snap.edges) wf.edges.push({ id: cvNewID(), from: ids[e.from], to: ids[e.to], port: e.port })
     wf.nodes.push(...added)
-    const ifs = added.filter(n => n.kind === 'if')
+    const ifs = added.filter(n => n.kind === 'if' || n.kind === 'trigger')
     await Promise.all(ifs.map(wfLoadNodeUI))
     await wfResolveNames(ifs)
     cvSetSelection(added.map(n => n.id))
@@ -778,7 +776,7 @@ function cvOnUp(e) {
     }
     if (d.type === 'box') {
         const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1)
-        const hit = wf.nodes.filter(n => n.x < x1 && n.x + CV_W > x0 && n.y < y1 && n.y + cvH(n) > y0).map(n => n.id)
+        const hit = wf.nodes.filter(n => n.x < x1 && n.x + CV_W > x0 && n.y < y1 && n.y + CV_H > y0).map(n => n.id)
         document.querySelector('#cv-nodes .marquee')?.remove()
         cvSetSelection(hit)
         return
@@ -841,7 +839,7 @@ function cvFit() {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
     for (const n of wf.nodes) {
         x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y)
-        x1 = Math.max(x1, n.x + CV_W); y1 = Math.max(y1, n.y + cvH(n))
+        x1 = Math.max(x1, n.x + CV_W); y1 = Math.max(y1, n.y + CV_H)
     }
     const left = (cv.rail ? 190 + 12 : 12) + 24
     const right = (cv.sel || cv.run ? 330 + 12 : 12) + 24
@@ -904,7 +902,6 @@ function cvRenderGraph() {
     let html = ''
     for (const n of wf.nodes) {
         let cls = ''
-        if (n.kind === 'if') cls += 'isif '
         if (n.id === cv.sel || cv.multi.has(n.id)) cls += 'sel '
         if (!n.enabled) cls += 'off '
         if (n.id === cv.errNode) cls += 'err '
@@ -925,6 +922,8 @@ function cvRenderGraph() {
             if (n.kind === 'if') html += `<span class="wlabel${p === 'yes' ? ' yes' : ''}" data-label-of="${n.id}" data-port="${p}" style="left:${pt.x}px;top:${pt.y + 24}px">${what}</span>`
         }
     }
+    cvCondPopHide()
+    cvCondPopBind(host)
     host.innerHTML = html
     cvRenderWires()
     cvRenderGhost()
@@ -938,14 +937,128 @@ function cvNodeHTML(n, cls, stepNo) {
         <div class="node-top">
             <span class="node-ico">${icon(k.icon)}</span>
             <span class="node-kind grow">${esc(k.label)}</span>
+            ${cvCondBadgeHTML(n)}
             ${n.enabled ? '' : '<span class="badge outline">off</span>'}
         </div>
         <div class="node-body">
             <div class="node-title">${esc(n.title || k.label)}</div>
             <div class="node-sub">${esc(cvNodeSub(n))}</div>
         </div>
-        ${n.kind === 'if' ? `<div class="node-cond">${esc((n.condition || '').trim() || 'always matches')}</div>` : ''}
     </article>`
+}
+
+// cvCondInfo describes a trigger or if node's condition for its card: null when there is none,
+// { advanced } when it is hand-written text, else the builder's join and rows.
+function cvCondInfo(n) {
+    if (n.kind !== 'trigger' && n.kind !== 'if') return null
+    const text = (n.condition || '').trim()
+    if (!text) return null
+    const ui = n._ui
+    const rows = ui?.mode === 'builder' ? (ui.rows || []).filter(r => !wfCompileRow(r).error) : []
+    if (!rows.length) return { advanced: true, text }
+    return { join: ui.join, rows }
+}
+
+// cvCondBadgeHTML is the condition count on a card; hovering or focusing it opens cvCondPop.
+function cvCondBadgeHTML(n) {
+    const c = cvCondInfo(n)
+    if (!c) return ''
+    const what = c.advanced ? 'Advanced condition' : `${c.rows.length} condition${c.rows.length === 1 ? '' : 's'}`
+    return `<button class="node-cbadge hit-expand${c.advanced ? ' adv' : ''}" type="button" data-cond-of="${n.id}" aria-label="${what}, show">${icon('filter')}${c.advanced ? 'adv' : c.rows.length}</button>`
+}
+
+// cvCondValue names a row's value the way the builder's pickers do.
+function cvCondValue(f, v) {
+    if (!f?.source) return String(v)
+    if (f.source === 'companies' || f.source === 'contacts') return wfNames[f.source][v] || `#${v}`
+    return wfSourceList(f).find(o => String(o.value) === String(v))?.label ?? String(v)
+}
+
+// cvCondRowText is one builder row in words, for the card's sub line and the popover.
+function cvCondRowText(row) {
+    const f = wfFieldByPath(row.path)
+    const label = f?.label || row.path
+    if (row.op === 'true') return label
+    if (row.op === 'false') return `not ${label}`
+    const op = (f ? wfOpsFor(f) : []).find(([v]) => v === row.op)?.[1] || row.op
+    if (WF_NO_VALUE_OPS.has(row.op)) return `${label} ${op}`
+    if (WF_LIST_OPS.has(row.op)) return `${label} ${op} ${wfLists.find(l => String(l.id) === String(row.value))?.name || `#${row.value}`}`
+    const vals = [].concat(row.value ?? [])
+    return `${label} ${op} ${vals.map(v => cvCondValue(f, v)).join(', ')}`
+}
+
+const CV_POP_CHIPS = 8
+
+function cvCondRowHTML(row) {
+    const f = wfFieldByPath(row.path)
+    const label = esc(f?.label || row.path)
+    if (row.op === 'true') return `<div class="cond-pop-row flag">${icon('check')}<span class="cond-pop-field">${label}</span></div>`
+    if (row.op === 'false') return `<div class="cond-pop-row flag no">${icon('x')}<span><span class="cond-pop-op">not</span> <span class="cond-pop-field">${label}</span></span></div>`
+    if (!WF_MULTI_OPS.has(row.op)) {
+        const text = cvCondRowText(row).slice((f?.label || row.path).length)
+        return `<div class="cond-pop-row"><span class="cond-pop-field">${label}</span><span class="cond-pop-op">${esc(text)}</span></div>`
+    }
+    const op = wfOpsFor(f).find(([v]) => v === row.op)?.[1] || row.op
+    const vals = [].concat(row.value ?? [])
+    const shown = vals.length > CV_POP_CHIPS ? vals.slice(0, CV_POP_CHIPS - 1) : vals
+    const more = vals.length - shown.length
+    return `<div class="cond-pop-row">
+        <span><span class="cond-pop-field">${label}</span> <span class="cond-pop-op">${esc(op)}</span></span>
+        <span class="chips">${shown.map(v => `<span class="chip">${esc(cvCondValue(f, v))}</span>`).join('')}${more ? `<span class="chip more">+${more} more</span>` : ''}</span>
+    </div>`
+}
+
+// cvCondPopShow opens the condition popover beside the card that owns badge b. It is fixed to
+// the viewport rather than placed in the plane, so it stays readable at any zoom.
+function cvCondPopShow(b) {
+    const n = wfNode(b.dataset.condOf)
+    const c = n && cvCondInfo(n)
+    if (!c) return
+    let pop = document.getElementById('cv-condpop')
+    if (!pop) {
+        pop = document.createElement('div')
+        pop.id = 'cv-condpop'
+        pop.className = 'cond-pop'
+        pop.setAttribute('role', 'tooltip')
+        document.body.appendChild(pop)
+    }
+    const head = c.advanced ? 'Advanced condition'
+        : c.rows.length === 1 ? '1 condition'
+        : c.join === 'or' ? `Match any of ${c.rows.length}` : `Match all ${c.rows.length}`
+    pop.innerHTML = `<div class="cond-pop-head">${head}</div>${c.advanced
+        ? `<div class="cond-pop-code">${esc(c.text)}</div>`
+        : c.rows.map(cvCondRowHTML).join('')}`
+    pop.hidden = false
+    b.setAttribute('aria-describedby', 'cv-condpop')
+
+    const card = b.closest('.node').getBoundingClientRect()
+    const gap = 12
+    const w = pop.offsetWidth, h = pop.offsetHeight
+    let left = card.right + gap
+    if (left + w > innerWidth - gap) left = Math.max(gap, card.left - gap - w)
+    pop.style.left = `${left}px`
+    pop.style.top = `${Math.max(gap, Math.min(card.top, innerHeight - gap - h))}px`
+}
+
+function cvCondPopHide() {
+    const pop = document.getElementById('cv-condpop')
+    if (pop) pop.hidden = true
+    document.querySelectorAll('.node-cbadge[aria-describedby]').forEach(b => b.removeAttribute('aria-describedby'))
+}
+
+// cvCondPopBind wires the badges once per canvas host; the handlers are delegated, so
+// re-rendered cards need nothing.
+function cvCondPopBind(host) {
+    if (host.dataset.condPop) return
+    host.dataset.condPop = '1'
+    const badge = e => e.target.closest?.('.node-cbadge')
+    host.addEventListener('mouseover', e => { const b = badge(e); if (b && !cv.drag) cvCondPopShow(b) })
+    host.addEventListener('mouseout', e => { const b = badge(e); if (b && !b.contains(e.relatedTarget)) cvCondPopHide() })
+    host.addEventListener('focusin', e => { const b = badge(e); if (b) cvCondPopShow(b) })
+    host.addEventListener('focusout', e => { if (badge(e)) cvCondPopHide() })
+    host.addEventListener('pointerdown', cvCondPopHide)
+    host.addEventListener('keydown', e => { if (e.key === 'Escape') cvCondPopHide() })
+    document.addEventListener('wheel', cvCondPopHide, { passive: true })
 }
 
 // cvNodeSub is the one line a card says about its settings.
@@ -954,16 +1067,14 @@ function cvNodeSub(n) {
     case 'trigger': {
         const ev = n.events || []
         if (!ev.length) return 'no events — nothing enters'
-        const base = `on ticket ${ev.join(' or ')}`
-        if (!(n.condition || '').trim()) return base
-        const rows = n._ui?.mode === 'builder' ? n._ui.rows?.length : 0
-        return `${base} · only when ${rows ? `${rows} condition${rows === 1 ? '' : 's'} hold${rows === 1 ? 's' : ''}` : n.condition.trim()}`
+        return `on ticket ${ev.join(' or ')}`
     }
     case 'if': {
-        const ui = n._ui
-        if (ui?.mode === 'advanced') return (n.condition || '').trim() ? 'advanced condition' : 'no conditions'
-        const rows = ui?.rows?.length || 0
-        return rows ? `${rows} condition${rows === 1 ? '' : 's'}` : 'no conditions'
+        const c = cvCondInfo(n)
+        if (!c) return 'always matches'
+        if (c.advanced) return 'advanced condition'
+        if (c.rows.length === 1) return cvCondRowText(c.rows[0])
+        return c.join === 'or' ? 'Match any' : 'Match all'
     }
     case 'notify': {
         const s = n.notify || {}
@@ -1011,8 +1122,8 @@ function cvRefreshNode(id) {
     el.classList.toggle('off', !n.enabled)
     el.querySelector('.node-title').textContent = n.title || k.label
     el.querySelector('.node-sub').textContent = cvNodeSub(n)
-    const cond = el.querySelector('.node-cond')
-    if (cond) cond.textContent = (n.condition || '').trim() || 'always matches'
+    el.querySelector('.node-cbadge')?.remove()
+    el.querySelector('.node-kind').insertAdjacentHTML('afterend', cvCondBadgeHTML(n))
     const badge = el.querySelector('.node-top .badge')
     if (!n.enabled && !badge) el.querySelector('.node-top').insertAdjacentHTML('beforeend', '<span class="badge outline">off</span>')
     if (n.enabled && badge) badge.remove()
@@ -1509,13 +1620,13 @@ function cvDrop(kind, x, y) {
 function cvAppend(kind) {
     const anchor = wfNode(cv.sel) || wf.nodes.reduce((a, n) => (!a || n.y > a.y ? n : a), null)
     if (!anchor) { cvDrop(kind, 0, 0); return }
-    cvDrop(kind, anchor.x, anchor.y + cvH(anchor) + 56)
+    cvDrop(kind, anchor.x, anchor.y + CV_H + 56)
 }
 
 function cvNearestFree(y, x) {
     let best = null
     for (const n of wf.nodes) {
-        const bottom = n.y + cvH(n)
+        const bottom = n.y + CV_H
         if (bottom > y) continue
         for (const p of cvPorts(n)) {
             if (wf.edges.some(e => e.from === n.id && e.port === p)) continue
@@ -1581,8 +1692,7 @@ function cvArrange() {
     let cur = 24
     for (let d = 0; d <= maxD; d++) {
         y[d] = cur
-        const tall = (levels[d] || []).reduce((a, id) => Math.max(a, cvH(wfNode(id))), CV_H)
-        cur += tall + VGAP
+        cur += CV_H + VGAP
     }
 
     // x: each node starts under the average of its parents, then siblings on the level are
