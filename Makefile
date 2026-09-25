@@ -36,11 +36,20 @@ else
 endif
 
 # ── Full stack in Docker ─────────────────────────────────────────────────────
+# compose.yaml lists the app's variables by name and takes their values from compose's own
+# environment: op run's with OP_ENVIRONMENT set (/dev/null stops compose reading the .env pipe
+# for interpolation), otherwise ENV_FILE's.
+ifneq ($(OP_ENVIRONMENT),)
+COMPOSE_ENV = op run --environment $(OP_ENVIRONMENT) -- $(COMPOSE) --env-file /dev/null
+else
+COMPOSE_ENV = $(COMPOSE) --env-file $(ENV_FILE)
+endif
+
 docker-up:
-	VERSION=$(VERSION) $(COMPOSE) --env-file $(ENV_FILE) up --build
+	VERSION=$(VERSION) $(COMPOSE_ENV) up --build
 
 docker-down:
-	$(COMPOSE) --env-file $(ENV_FILE) down
+	$(COMPOSE_ENV) down
 
 docker-build:
 	docker buildx build --platform=linux/amd64 --build-arg VERSION=$(VERSION) -t ticketbot:$(VERSION) --load .

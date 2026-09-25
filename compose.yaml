@@ -1,4 +1,4 @@
-# Local stack. The app reads its env from the repo-root .env (a 1Password-mounted file works).
+# Local stack. Start it with `make docker-up`, which supplies the app's env through `op run`.
 # The db service needs no env file: it uses the DB_* defaults below unless you override them.
 services:
   db:
@@ -32,10 +32,27 @@ services:
     ports:
       - "${PORT:-8080}:8080"
     restart: unless-stopped
-    env_file: .env
+    # Names only: each value comes from the environment compose runs in, which is `op run`
+    # under `make docker-up`, or the --env-file it is given. Keep in step with .env.example.
     environment:
       # inside the compose network the app must reach the db service, not localhost
       POSTGRES_DSN: "postgres://${DB_USER:-testuser}:${DB_PASSWORD:-testpass}@db:5432/${DB_NAME:-testdb}?sslmode=disable"
+      POSTGRES_MAX_CONNS:
+      PORT:
+      INITIAL_ADMIN_EMAIL:
+      INITIAL_ADMIN_PASSWORD:
+      ROOT_URL:
+      CW_PUB_KEY:
+      CW_PRIV_KEY:
+      CW_CLIENT_ID:
+      CW_COMPANY_ID:
+      WEBEX_SECRET:
+      ENTRA_TENANT_ID:
+      ENTRA_CLIENT_ID:
+      ENTRA_CLIENT_SECRET:
+      SKIP_HOOKS:
+      DEBUG:
+      STORE_TTL_SECONDS:
 
 volumes:
   db_data:
