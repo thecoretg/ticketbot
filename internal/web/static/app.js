@@ -789,9 +789,14 @@ function setContent(html) {
 // the new markup is patched onto the nodes already there and only what differs is touched.
 function refreshContent(html) {
     renderSeq++
+    morphInto(document.getElementById('content'), html)
+}
+
+// morphInto patches html onto el's existing children; see refreshContent.
+function morphInto(el, html) {
     const next = document.createElement('template')
     next.innerHTML = html
-    morphChildren(document.getElementById('content'), next.content)
+    morphChildren(el, next.content)
 }
 
 function morphChildren(from, to) {
@@ -1706,10 +1711,10 @@ async function loadSync() {
     }
 }
 
-function renderSync(status) {
+function renderSync(status, paint = setContent) {
     const running = status?.status === true
 
-    setContent(pageActions(
+    paint(pageActions(
         // while a sync runs the button is disabled, so it drops the accent: a dimmed
         // accent fill does not hold its contrast
         `<button class="btn ${running ? 'btn-default' : 'btn-primary'}" onclick="showNewSyncModal()" ${running ? 'disabled' : ''}>${icon('globe')}Run sync</button>`) +
@@ -1773,7 +1778,8 @@ function startSyncPoll() {
         if (currentTab !== 'sync') { stopSyncPoll(); return }
         try {
             const status = await api('GET', '/sync/status')
-            renderSync(status)
+            if (currentTab !== 'sync') return   // the user left while the fetch was out
+            renderSync(status, refreshContent)
             if (!status?.status) stopSyncPoll()
         } catch { stopSyncPoll() }
     }, 3000)
@@ -2164,10 +2170,11 @@ function renderLogs(entries, full = false) {
 
     // The poll re-renders every few seconds. Redrawing the filter bar with it would close an
     // open dropdown or popover under the user's cursor, so once the frame exists only the
-    // list and the streaming status are replaced; `full` forces a redraw after a filter reset.
+    // list and the streaming status are patched in place, which also keeps the list's scroll,
+    // a text selection and the pulse's rhythm; `full` forces a redraw after a filter reset.
     if (!full && document.getElementById('logs-frame')) {
-        document.getElementById('logs-status').innerHTML = status
-        document.getElementById('logs-body').innerHTML   = body
+        morphInto(document.getElementById('logs-status'), status)
+        morphInto(document.getElementById('logs-body'), body)
         return
     }
 
@@ -2246,6 +2253,7 @@ function startLogsPoll() {
         if (logsFrozen) { stopLogsPoll(); return }
         try {
             const entries = await api('GET', '/logs')
+            if (currentTab !== 'logs' || logsFrozen) return   // left or froze while the fetch was out
             logsLastEntries = entries || []
             renderLogs(logsLastEntries)
         } catch { stopLogsPoll() }
