@@ -93,8 +93,9 @@ Documents that still say `target` are upgraded on read by `NotifyAction.Normaliz
 Webex id) and lists (by name) and rewrites those references on import; ConnectWise ids are the
 same on every instance and travel as they are. `Validate` in `service.go` owns the structural rules (one
 trigger minimum, one wire per port, nothing into a trigger, no cycles, everything reachable). The
-canvas (`internal/web/static/workflows.js`, `cv*` functions) is the only editor; node heights are
-fixed per kind and shared between `ui.css` and the script, so ports line up. Run history stores
+canvas (`internal/web/static/workflows.js`, `cv*` functions) is the only editor; every card is 88px
+tall (`CV_H`, shared between `ui.css` and the script) so ports line up, and a trigger or if card
+shows its condition as a count badge (`cvCondBadgeHTML`) with a hover card, never as text. Run history stores
 `steps` per run; rows from before the graph carry `rules`, and `tickets.js` renders both. Every run
 that found an enabled workflow also leaves a `workflow_run` summary row (written in `run.flush`)
 that the Results tab lists; its detail replays the recorded path on the editor canvas with

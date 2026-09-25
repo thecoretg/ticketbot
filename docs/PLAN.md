@@ -219,6 +219,8 @@ Done.
 - [x] Inspector section "Only when" with the same builder as an If. The card keeps the short
       height and shows the condition in its subtitle. Validation applies the If's condition rules
       to triggers. Simulate honours it. Export, import and the results page need nothing.
+      (Since 2026-09-25 every card is 88px and shows its condition as a count badge with a hover
+      card listing the rows, rather than as subtitle text.)
 
 ## Read-only MCP server
 
@@ -292,16 +294,27 @@ account menu); the Users page opens `#connected/<id>` for another user.
 
 ## Cutover
 
-The steps that end the parallel run, as boxes so the delete rule below holds.
+The steps that end the parallel run, as boxes so the delete rule below holds. The gate is Danny's
+comparison of the run history against what Rewst did; nothing below starts before he says
+"start cutover".
 
 - [x] Removed the `HOOK_SIGNATURE_MODE=log` fallback (2026-09-21): signatures are always enforced.
+- [ ] Confirm Dallas Help Desk lane 3 ("Customer Responded") since its 2026-09-24 fix
+      (`newNote = true and customerUpdatedFlag = true and status/id in (664, 668, 734, 689, 681)`):
+      compare its matches on board 34 with Rewst's 668 → 667 status changes (`ticketbot_list_runs`
+      with `board_id` 34, then `ticketbot_ticket_history`; Rewst's writes show `updated_by: Rewst`).
+      A customer reply the lane misses while Rewst acts is a regression.
 - [ ] Change the deploy branch to `main` in `.github/workflows/ci.yml` and in Easypanel, in one
       change. Push `v2-main` to `main`.
 - [ ] On the instance: disable v1's ConnectWise callbacks, clear the redirect room, turn master
       dry run off. Retire the Lightsail v1 instance.
-- [ ] Remove `MOCK_WEBEX` from every `.env` that still has it.
+- [ ] In the same change as master dry run going off, turn off Rewst's "customer responded →
+      Action Required" automation for Dallas Help Desk, or both systems write the same status.
+      Check with Danny whether any other Rewst automation overlaps a v2 workflow the same way.
+- [ ] Remove `MOCK_WEBEX` from the 1Password Environment "Ticketbot Testing" (which serves the
+      local `.env` and `make run`) and from Easypanel's env. The code ignores it.
 
-## Done## Done
+## Done
 
 Every box above ticked, including Do last: delete this file, remove its pointer from CLAUDE.md, and confirm every
 CLAUDE.md edit listed here has landed.
