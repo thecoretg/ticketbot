@@ -108,6 +108,8 @@ async function refreshTicketTable() {
     for (const [k, v] of Object.entries(tkFilters)) {
         if (v !== '' && v !== null && v !== undefined) params.set(k, v)
     }
+    const sort = tableSortState(tkTableSpec([]))
+    if (sort) { params.set('sort', sort.key); params.set('dir', sort.dir) }
 
     const seq = ++tkRequestSeq
     let page
@@ -125,25 +127,9 @@ async function refreshTicketTable() {
     }
     if (seq !== tkRequestSeq || !document.getElementById('tk-table')) return
 
-    const items = page?.items || []
-    const thead = `<th class="r">ID</th><th>Summary</th><th>Board</th><th>Status</th><th>Company</th><th>Owner</th><th>Updated</th>`
-    const rows  = items.map(t => `<tr class="clickable" onclick="openTicket(${t.id})">
-        <td class="r nowrap"><a class="link num ext" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Ticket ${t.id}, opens in ConnectWise">#${t.id}${icon('external')}</a></td>
-        <td class="cell-ellipsis cell-primary" title="${esc(t.summary)}">${esc(t.summary)}${t.deleted ? ' ' + badgeTag('Deleted', 'bad') : ''}</td>
-        <td class="nowrap">${esc(t.board_name)}</td>
-        <td class="nowrap">${esc(t.status_name)}${t.closed_flag ? ' ' + badgeTag('Closed', '') : ''}</td>
-        <td>${esc(t.company_name)}</td>
-        <td>${esc(t.owner_name || '—')}</td>
-        <td class="nowrap muted">${fmtDateTime(t.updated_on)}</td>
-    </tr>`)
-
-    table.innerHTML = rows.length
-        ? `<div class="table-wrap"><table class="tbl">
-            <thead><tr>${thead}</tr></thead><tbody>${rows.join('')}</tbody>
-        </table></div>`
-        : emptyState('No tickets match these filters',
-            'Tickets appear here once ConnectWise sends a webhook, or after a ticket sync.',
-            `<button class="btn btn-default btn-sm" onclick="tkClearFilters()">Clear filters</button>`, 'inbox')
+    // patched rather than replaced, so a sort keeps focus on the header that was pressed
+    morphInto(table, tableWrap(tkTableSpec(page?.items || [])))
+    tableStickHeads()
 
     const total    = page?.total || 0
     const size     = page?.page_size || tkFilters.page_size
@@ -160,6 +146,33 @@ async function refreshTicketTable() {
             <span class="muted" style="padding:0 var(--s2)">Page <span class="num">${current}</span> of <span class="num">${lastPage}</span></span>
             <button onclick="tkPage(1)" ${current >= lastPage ? 'disabled' : ''} aria-label="Next page">${icon('arrowR')}</button>
         </div>` : ''
+}
+
+// The ticket list is paged on the server, so the server sorts it: every column's key is a
+// sort value GET /tickets accepts (models.TicketSorts), and a new sort goes back to page 1.
+const TK_COLUMNS = [
+    { key: 'id', label: 'ID', align: 'r', cls: 'nowrap', sort: true,
+      cell: t => `<a class="link num ext" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Ticket ${t.id}, opens in ConnectWise">#${t.id}${icon('external')}</a>` },
+    { key: 'summary', label: 'Summary', cls: 'cell-ellipsis cell-primary', attrs: t => `title="${esc(t.summary)}"`, sort: true,
+      cell: t => `${esc(t.summary)}${t.deleted ? ' ' + badgeTag('Deleted', 'bad') : ''}` },
+    { key: 'board', label: 'Board', cls: 'nowrap', sort: true, cell: t => esc(t.board_name) },
+    { key: 'status', label: 'Status', cls: 'nowrap', sort: true,
+      cell: t => `${esc(t.status_name)}${t.closed_flag ? ' ' + badgeTag('Closed', '') : ''}` },
+    { key: 'company', label: 'Company', sort: true, cell: t => esc(t.company_name) },
+    { key: 'owner', label: 'Owner', sort: true, cell: t => esc(t.owner_name || '—') },
+    { key: 'updated', label: 'Updated', cls: 'nowrap muted', sort: true, firstDir: 'desc', cell: t => fmtDateTime(t.updated_on) },
+]
+
+function tkTableSpec(items) {
+    return {
+        id: 'tickets', columns: TK_COLUMNS, rows: items,
+        sort: { key: 'updated', dir: 'desc' },
+        onSort: () => { tkFilters.page = 1; refreshTicketTable() },
+        tr: t => `class="clickable" onclick="openTicket(${t.id})"`,
+        empty: emptyState('No tickets match these filters',
+            'Tickets appear here once ConnectWise sends a webhook, or after a ticket sync.',
+            `<button class="btn btn-default btn-sm" onclick="tkClearFilters()">Clear filters</button>`, 'inbox'),
+    }
 }
 
 // tkClearFilters resets the toolbar to "everything", from the empty state.
