@@ -423,6 +423,8 @@ function cvMount() {
     cv.el.addEventListener('click', cvOnClick)
     cv.el.addEventListener('dblclick', cvOnDblClick)
     cv.el.addEventListener('contextmenu', cvOnContext)
+    // Windows and Linux start autoscroll on the middle button's mousedown
+    cv.el.addEventListener('mousedown', e => { if (e.button === 1 && !cvInChrome(e.target)) e.preventDefault() })
     window.addEventListener('pointermove', cvOnMove)
     window.addEventListener('pointerup', cvOnUp)
     window.addEventListener('pointercancel', cvOnUp)
@@ -441,6 +443,7 @@ function cvUnmounted() {
 }
 
 function cvOnDown(e) {
+    if (e.button === 1) { cvMiddlePan(e); return }
     if (e.button !== 0) return
     const t = e.target
     if (cvInChrome(t)) return
@@ -467,6 +470,16 @@ function cvOnDown(e) {
         return
     }
     cv.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false }
+    cv.el.classList.add('panning')
+    cvDragClass('drag-pan')
+}
+
+// cvMiddlePan pans from wherever the middle button goes down, a card, port or wire included, and
+// leaves the selection alone even when the pointer never moves.
+function cvMiddlePan(e) {
+    if (cv.drag || cvInChrome(e.target)) return
+    e.preventDefault()
+    cv.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false, keepSel: true }
     cv.el.classList.add('panning')
     cvDragClass('drag-pan')
 }
@@ -584,7 +597,7 @@ function cvGrabNode(id, e) {
     for (const i of ids) { const m = wfNode(i); if (m) orig[i] = { x: m.x, y: m.y } }
     cv.drag = cvEditable()
         ? { type: 'node', id, ids, orig, sx: e.clientX, sy: e.clientY, moved: false }
-        : { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false, fromNode: true }
+        : { type: 'pan', sx: e.clientX, sy: e.clientY, otx: cv.tx, oty: cv.ty, moved: false, keepSel: true }
     cvRenderGraph()
     cvRenderSide()
     cvDragClass(cv.drag.type === 'node' ? 'drag-node' : 'drag-pan')
@@ -694,7 +707,7 @@ function cvGrabPort(id, port, e) {
 // No preventDefault here: it would also cancel the click and dblclick the same press produces,
 // and double-clicking a step is how it gets appended. .is-dragging keeps text unselected instead.
 function cvGrabPal(kind, e) {
-    if (!canEdit()) return
+    if (!canEdit() || e.button !== 0) return
     cv.drag = { type: 'pal', kind, started: false }
     cv.ghost = null
 }
@@ -781,7 +794,7 @@ function cvOnUp(e) {
         cvSetSelection(hit)
         return
     }
-    if (d.type === 'pan' && !d.moved && !d.fromNode) {
+    if (d.type === 'pan' && !d.moved && !d.keepSel) {
         cvDeselect()
     }
 }
