@@ -15,18 +15,29 @@ const INTAKE_STATUSES = [
 let intakeFilter    = 'failed'
 let intakePollTimer = null
 
+function fetchIntake() {
+    return Promise.all([
+        api('GET', '/intake/stats'),
+        api('GET', `/intake?status=${encodeURIComponent(intakeFilter)}&limit=200`),
+        api('GET', '/intake/hourly?days=7').catch(() => []),
+    ])
+}
+
 async function loadIntake() {
     try {
-        const [stats, rows, hourly] = await Promise.all([
-            api('GET', '/intake/stats'),
-            api('GET', `/intake?status=${encodeURIComponent(intakeFilter)}&limit=200`),
-            api('GET', '/intake/hourly?days=7').catch(() => []),
-        ])
+        const [stats, rows, hourly] = await fetchIntake()
         renderIntake(stats, rows || [], hourly || [])
         startIntakePoll()
     } catch (e) {
         setContent(errorState(e.message))
     }
+}
+
+// refreshIntake redraws the page in place, for the poll and after a retry or discard.
+async function refreshIntake() {
+    const [stats, rows, hourly] = await fetchIntake()
+    if (currentTab !== 'intake') return   // the user left while the fetch was out
+    renderIntake(stats, rows || [], hourly || [], refreshContent)
 }
 
 // intakeChart draws webhooks per hour for the last seven days as an inline SVG bar chart. It is
@@ -58,7 +69,7 @@ function intakeChart(hourly) {
     </div>`
 }
 
-function renderIntake(stats, rows, hourly = []) {
+function renderIntake(stats, rows, hourly = [], paint = setContent) {
     const counts = stats?.counts || {}
     const tiles = INTAKE_STATUSES.filter(s => s.value !== 'discarded').map(s => `
         <article class="card stat">
@@ -100,7 +111,7 @@ function renderIntake(stats, rows, hourly = []) {
         discarded:  ['Nothing discarded', 'Failed webhooks an admin dropped are kept here until purged.'],
     }[intakeFilter] || ['Nothing here', '']
 
-    setContent(`<div class="stack gap6">
+    paint(`<div class="stack gap6">
         <div class="grid g4">${tiles}</div>
         ${intakeChart(hourly)}
         <p class="muted">${esc(last)} The table refreshes every few seconds.</p>
@@ -121,7 +132,7 @@ async function intakeRetry(id) {
     try {
         await api('POST', `/intake/${id}/retry`)
         toast('Webhook re-queued', 'success')
-        loadIntake()
+        refreshIntake().catch(e => toast(e.message, 'error'))
     } catch (e) { toast(e.message, 'error') }
 }
 
@@ -134,7 +145,7 @@ function intakeDiscard(id) {
             try {
                 await api('POST', `/intake/${id}/discard`)
                 toast('Webhook discarded', 'success')
-                loadIntake()
+                refreshIntake().catch(e => toast(e.message, 'error'))
             } catch (e) { toast(e.message, 'error') }
         },
     })
@@ -145,14 +156,7 @@ function startIntakePoll() {
     intakePollTimer = setInterval(async () => {
         if (currentTab !== 'intake') { stopIntakePoll(); return }
         if (document.getElementById('modal')?.classList.contains('on')) return
-        try {
-            const [stats, rows, hourly] = await Promise.all([
-                api('GET', '/intake/stats'),
-                api('GET', `/intake?status=${encodeURIComponent(intakeFilter)}&limit=200`),
-                api('GET', '/intake/hourly?days=7').catch(() => []),
-            ])
-            renderIntake(stats, rows || [], hourly || [])
-        } catch { stopIntakePoll() }
+        try { await refreshIntake() } catch { stopIntakePoll() }
     }, 5000)
 }
 

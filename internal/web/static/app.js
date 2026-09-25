@@ -784,6 +784,38 @@ function setContent(html) {
     document.getElementById('content').innerHTML = html
 }
 
+// refreshContent redraws the current page in place for a poll. Replacing the view would restart
+// the .view entry fade on every tick and drop focus, an open select and any text selection, so
+// the new markup is patched onto the nodes already there and only what differs is touched.
+function refreshContent(html) {
+    renderSeq++
+    morphInto(document.getElementById('content'), html)
+}
+
+// morphInto patches html onto el's existing children; see refreshContent.
+function morphInto(el, html) {
+    const next = document.createElement('template')
+    next.innerHTML = html
+    morphChildren(el, next.content)
+}
+
+function morphChildren(from, to) {
+    const have = [...from.childNodes], want = [...to.childNodes]
+    want.forEach((n, i) => i < have.length ? morphNode(have[i], n) : from.appendChild(n))
+    have.slice(want.length).forEach(n => n.remove())
+}
+
+function morphNode(from, to) {
+    if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) { from.replaceWith(to); return }
+    if (from.nodeType !== Node.ELEMENT_NODE) {
+        if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue
+        return
+    }
+    for (const a of [...from.attributes]) if (!to.hasAttribute(a.name)) from.removeAttribute(a.name)
+    for (const a of to.attributes) if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value)
+    morphChildren(from, to)
+}
+
 // setCrumbs keeps the topbar trail and the document title in step with the route.
 // Pages reachable without a sidebar entry still need a name in the trail.
 const EXTRA_TABS = { connected: 'Connected apps' }
@@ -1679,10 +1711,10 @@ async function loadSync() {
     }
 }
 
-function renderSync(status) {
+function renderSync(status, paint = setContent) {
     const running = status?.status === true
 
-    setContent(pageActions(
+    paint(pageActions(
         // while a sync runs the button is disabled, so it drops the accent: a dimmed
         // accent fill does not hold its contrast
         `<button class="btn ${running ? 'btn-default' : 'btn-primary'}" onclick="showNewSyncModal()" ${running ? 'disabled' : ''}>${icon('globe')}Run sync</button>`) +
@@ -1746,7 +1778,8 @@ function startSyncPoll() {
         if (currentTab !== 'sync') { stopSyncPoll(); return }
         try {
             const status = await api('GET', '/sync/status')
-            renderSync(status)
+            if (currentTab !== 'sync') return   // the user left while the fetch was out
+            renderSync(status, refreshContent)
             if (!status?.status) stopSyncPoll()
         } catch { stopSyncPoll() }
     }, 3000)
@@ -2137,10 +2170,11 @@ function renderLogs(entries, full = false) {
 
     // The poll re-renders every few seconds. Redrawing the filter bar with it would close an
     // open dropdown or popover under the user's cursor, so once the frame exists only the
-    // list and the streaming status are replaced; `full` forces a redraw after a filter reset.
+    // list and the streaming status are patched in place, which also keeps the list's scroll,
+    // a text selection and the pulse's rhythm; `full` forces a redraw after a filter reset.
     if (!full && document.getElementById('logs-frame')) {
-        document.getElementById('logs-status').innerHTML = status
-        document.getElementById('logs-body').innerHTML   = body
+        morphInto(document.getElementById('logs-status'), status)
+        morphInto(document.getElementById('logs-body'), body)
         return
     }
 
@@ -2219,6 +2253,7 @@ function startLogsPoll() {
         if (logsFrozen) { stopLogsPoll(); return }
         try {
             const entries = await api('GET', '/logs')
+            if (currentTab !== 'logs' || logsFrozen) return   // left or froze while the fetch was out
             logsLastEntries = entries || []
             renderLogs(logsLastEntries)
         } catch { stopLogsPoll() }
