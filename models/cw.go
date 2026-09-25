@@ -3,6 +3,8 @@ package models
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"time"
 )
 
@@ -107,15 +109,61 @@ type TicketListItem struct {
 	CWURL       string `json:"cw_url"`
 }
 
-// TicketFilter narrows a paged ticket listing. Nil pointers mean "no filter".
+// TicketFilter narrows a paged ticket listing. Nil pointers mean "no filter". A zero Sort is
+// TicketSortUpdated, newest first.
 type TicketFilter struct {
 	BoardID        *int
 	StatusID       *int
 	Closed         *bool
 	IncludeDeleted bool
 	Search         string
+	Sort           TicketSort
+	SortDesc       bool
 	Page           int
 	PageSize       int
+}
+
+// TicketSort is a column the ticket list can be ordered by. Each one is backed by a stored
+// column, so the database sorts the whole result before it is paged.
+type TicketSort string
+
+const (
+	TicketSortID      TicketSort = "id"
+	TicketSortSummary TicketSort = "summary"
+	TicketSortBoard   TicketSort = "board"
+	TicketSortStatus  TicketSort = "status"
+	TicketSortCompany TicketSort = "company"
+	TicketSortOwner   TicketSort = "owner"
+	TicketSortUpdated TicketSort = "updated"
+)
+
+// TicketSorts is the whitelist ParseTicketSort accepts.
+var TicketSorts = []TicketSort{
+	TicketSortID, TicketSortSummary, TicketSortBoard, TicketSortStatus,
+	TicketSortCompany, TicketSortOwner, TicketSortUpdated,
+}
+
+// ParseTicketSort reads the sort and dir query values. An empty sort is updated, newest first;
+// an empty dir is descending for updated and ascending for every other column. Anything outside
+// the whitelist is an error.
+func ParseTicketSort(sort, dir string) (TicketSort, bool, error) {
+	key := TicketSort(sort)
+	if key == "" {
+		key = TicketSortUpdated
+	}
+	if !slices.Contains(TicketSorts, key) {
+		return "", false, fmt.Errorf("sort must be one of %v", TicketSorts)
+	}
+	switch dir {
+	case "":
+		return key, key == TicketSortUpdated, nil
+	case "asc":
+		return key, false, nil
+	case "desc":
+		return key, true, nil
+	default:
+		return "", false, errors.New("dir must be asc or desc")
+	}
 }
 
 type TicketPage struct {

@@ -96,6 +96,50 @@ func TestTicketRepoListPaged(t *testing.T) {
 	}
 }
 
+func TestTicketRepoListPagedSort(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	seedTicket(t, pool, 900006, "Integration sort beta")
+	seedTicket(t, pool, 900007, "integration sort Alpha")
+	seedTicket(t, pool, 900008, "Integration sort gamma")
+
+	repo := NewTicketRepo(pool)
+	ids := func(f models.TicketFilter) []int {
+		t.Helper()
+		f.Search = "Integration sort"
+		items, _, err := repo.ListPaged(ctx, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []int
+		for _, it := range items {
+			out = append(out, it.ID)
+		}
+		return out
+	}
+	eq := func(name string, got, want []int) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Fatalf("%s: got %v, want %v", name, got, want)
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Fatalf("%s: got %v, want %v", name, got, want)
+			}
+		}
+	}
+
+	eq("summary asc, case-insensitive", ids(models.TicketFilter{Sort: models.TicketSortSummary}), []int{900007, 900006, 900008})
+	eq("summary desc", ids(models.TicketFilter{Sort: models.TicketSortSummary, SortDesc: true}), []int{900008, 900006, 900007})
+	eq("id asc", ids(models.TicketFilter{Sort: models.TicketSortID}), []int{900006, 900007, 900008})
+	// every row shares a board, so the id tiebreak decides, in the same direction
+	eq("board desc ties", ids(models.TicketFilter{Sort: models.TicketSortBoard, SortDesc: true}), []int{900008, 900007, 900006})
+	eq("board asc ties", ids(models.TicketFilter{Sort: models.TicketSortBoard}), []int{900006, 900007, 900008})
+	if got := ids(models.TicketFilter{Sort: models.TicketSortOwner, PageSize: 2, Page: 2}); len(got) != 1 {
+		t.Errorf("owner sort, page 2 of 2: got %v", got)
+	}
+}
+
 func TestTicketEventRepo(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()

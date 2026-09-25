@@ -49,6 +49,10 @@ func (p *TicketRepo) ListPaged(ctx context.Context, f models.TicketFilter) ([]*m
 	}
 
 	includeDeleted := f.IncludeDeleted
+	sortKey, sortDesc := f.Sort, f.SortDesc
+	if sortKey == "" {
+		sortKey, sortDesc = models.TicketSortUpdated, true
+	}
 	page := max(f.Page, 1)
 	size := f.PageSize
 	if size <= 0 {
@@ -61,6 +65,8 @@ func (p *TicketRepo) ListPaged(ctx context.Context, f models.TicketFilter) ([]*m
 		Closed:         f.Closed,
 		IncludeDeleted: &includeDeleted,
 		Search:         search,
+		SortKey:        string(sortKey),
+		SortDesc:       sortDesc,
 		Lim:            int32(size),
 		Off:            int32((page - 1) * size),
 	})

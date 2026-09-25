@@ -18,34 +18,10 @@ func NewTicketsHandler(svc *cwsvc.Service) *TicketsHandler {
 	return &TicketsHandler{Service: svc}
 }
 
-// List handles GET /tickets?board_id=&status_id=&closed=&deleted=&q=&page=&page_size=
+// List handles GET /tickets?board_id=&status_id=&closed=&deleted=&q=&sort=&dir=&page=&page_size=
 func (h *TicketsHandler) List(w http.ResponseWriter, r *http.Request) {
-	f := models.TicketFilter{Search: r.URL.Query().Get("q")}
-
-	var err error
-	if f.BoardID, err = optionalIntQuery(r, "board_id"); err != nil {
-		badQueryError(w, err)
-		return
-	}
-	if f.StatusID, err = optionalIntQuery(r, "status_id"); err != nil {
-		badQueryError(w, err)
-		return
-	}
-	if f.Closed, err = optionalBoolQuery(r, "closed"); err != nil {
-		badQueryError(w, err)
-		return
-	}
-	if v, err := optionalBoolQuery(r, "deleted"); err != nil {
-		badQueryError(w, err)
-		return
-	} else if v != nil {
-		f.IncludeDeleted = *v
-	}
-	if f.Page, err = intQueryDefault(r, "page", 1); err != nil {
-		badQueryError(w, err)
-		return
-	}
-	if f.PageSize, err = intQueryDefault(r, "page_size", 0); err != nil {
+	f, err := ticketFilterFromQuery(r)
+	if err != nil {
 		badQueryError(w, err)
 		return
 	}
@@ -57,6 +33,38 @@ func (h *TicketsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	outputJSON(w, page)
+}
+
+// ticketFilterFromQuery reads List's query string. sort is one of models.TicketSorts and dir is
+// asc or desc; an unknown value is a 400, like every other malformed parameter here.
+func ticketFilterFromQuery(r *http.Request) (models.TicketFilter, error) {
+	f := models.TicketFilter{Search: r.URL.Query().Get("q")}
+
+	var err error
+	if f.Sort, f.SortDesc, err = models.ParseTicketSort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir")); err != nil {
+		return f, err
+	}
+	if f.BoardID, err = optionalIntQuery(r, "board_id"); err != nil {
+		return f, err
+	}
+	if f.StatusID, err = optionalIntQuery(r, "status_id"); err != nil {
+		return f, err
+	}
+	if f.Closed, err = optionalBoolQuery(r, "closed"); err != nil {
+		return f, err
+	}
+	if v, err := optionalBoolQuery(r, "deleted"); err != nil {
+		return f, err
+	} else if v != nil {
+		f.IncludeDeleted = *v
+	}
+	if f.Page, err = intQueryDefault(r, "page", 1); err != nil {
+		return f, err
+	}
+	if f.PageSize, err = intQueryDefault(r, "page_size", 0); err != nil {
+		return f, err
+	}
+	return f, nil
 }
 
 // Get handles GET /tickets/:id

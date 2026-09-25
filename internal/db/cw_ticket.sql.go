@@ -175,8 +175,26 @@ WHERE ($1::int IS NULL OR t.board_id = $1::int)
   AND ($5::text IS NULL
        OR t.summary ILIKE '%' || $5::text || '%'
        OR t.id::text = $5::text)
-ORDER BY t.updated_on DESC, t.id DESC
-LIMIT $7 OFFSET $6
+ORDER BY
+    CASE WHEN $6::text = 'id'      AND NOT $7::bool THEN t.id END ASC,
+    CASE WHEN $6::text = 'id'      AND $7::bool     THEN t.id END DESC,
+    CASE WHEN $6::text = 'summary' AND NOT $7::bool THEN lower(t.summary) END ASC,
+    CASE WHEN $6::text = 'summary' AND $7::bool     THEN lower(t.summary) END DESC,
+    CASE WHEN $6::text = 'board'   AND NOT $7::bool THEN lower(b.name) END ASC,
+    CASE WHEN $6::text = 'board'   AND $7::bool     THEN lower(b.name) END DESC,
+    CASE WHEN $6::text = 'status'  AND NOT $7::bool THEN lower(s.name) END ASC,
+    CASE WHEN $6::text = 'status'  AND $7::bool     THEN lower(s.name) END DESC,
+    CASE WHEN $6::text = 'company' AND NOT $7::bool THEN lower(c.name) END ASC,
+    CASE WHEN $6::text = 'company' AND $7::bool     THEN lower(c.name) END DESC,
+    CASE WHEN $6::text = 'owner'   AND NOT $7::bool
+         THEN NULLIF(lower(concat_ws(' ', m.first_name, m.last_name)), '') END ASC NULLS LAST,
+    CASE WHEN $6::text = 'owner'   AND $7::bool
+         THEN NULLIF(lower(concat_ws(' ', m.first_name, m.last_name)), '') END DESC NULLS LAST,
+    CASE WHEN $6::text = 'updated' AND NOT $7::bool THEN t.updated_on END ASC,
+    CASE WHEN $6::text = 'updated' AND $7::bool     THEN t.updated_on END DESC,
+    CASE WHEN NOT $7::bool THEN t.id END ASC,
+    t.id DESC
+LIMIT $9 OFFSET $8
 `
 
 type ListTicketsPagedParams struct {
@@ -185,6 +203,8 @@ type ListTicketsPagedParams struct {
 	Closed         *bool   `json:"closed"`
 	IncludeDeleted *bool   `json:"include_deleted"`
 	Search         *string `json:"search"`
+	SortKey        string  `json:"sort_key"`
+	SortDesc       bool    `json:"sort_desc"`
 	Off            int32   `json:"off"`
 	Lim            int32   `json:"lim"`
 }
@@ -219,6 +239,9 @@ type ListTicketsPagedRow struct {
 	OwnerLastName  *string   `json:"owner_last_name"`
 }
 
+// ListTicketsPaged orders by sort_key, which models.TicketSort whitelists. One CASE per key and
+// direction keeps each branch a single type; an inactive branch is NULL on every row, and id
+// breaks ties in the same direction.
 func (q *Queries) ListTicketsPaged(ctx context.Context, arg ListTicketsPagedParams) ([]*ListTicketsPagedRow, error) {
 	rows, err := q.db.Query(ctx, listTicketsPaged,
 		arg.BoardID,
@@ -226,6 +249,8 @@ func (q *Queries) ListTicketsPaged(ctx context.Context, arg ListTicketsPagedPara
 		arg.Closed,
 		arg.IncludeDeleted,
 		arg.Search,
+		arg.SortKey,
+		arg.SortDesc,
 		arg.Off,
 		arg.Lim,
 	)
