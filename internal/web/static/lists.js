@@ -48,21 +48,22 @@ async function loadListIndex() {
 function renderListIndex(lists) {
     lsCache = lists
 
-    const thead = '<th>Name</th><th>Type</th><th class="r">Items</th><th>Description</th><th class="r">Actions</th>'
-    const rows  = lists.map(l => `<tr class="clickable" onclick="openList(${l.id})">
-        <td class="cell-primary">${esc(l.name)}</td>
-        <td>${badgeTag(lsTypeInfo(l.item_type).plural, 'outline')}</td>
-        <td class="r num">${l.item_count}</td>
-        <td class="cell-ellipsis muted">${esc(l.description || '')}</td>
-        <td class="r nowrap" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm" onclick="editList(${l.id})">${icon('edit')}Edit</button>
-            ${deleteButton(`deleteList(${l.id})`)}
-        </td>
-    </tr>`)
+    const columns = [
+        { key: 'name', label: 'Name', cls: 'cell-primary', sort: l => l.name, cell: l => esc(l.name) },
+        { key: 'type', label: 'Type', sort: l => lsTypeInfo(l.item_type).plural,
+          cell: l => badgeTag(lsTypeInfo(l.item_type).plural, 'outline') },
+        { key: 'items', label: 'Items', align: 'r', cls: 'num', sort: l => l.item_count, cell: l => l.item_count },
+        { key: 'description', label: 'Description', cls: 'cell-ellipsis muted', sort: l => l.description,
+          cell: l => esc(l.description || '') },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', attrs: () => 'onclick="event.stopPropagation()"',
+          cell: l => `<button class="btn btn-ghost btn-sm" onclick="editList(${l.id})">${icon('edit')}Edit</button>
+            ${deleteButton(`deleteList(${l.id})`)}` },
+    ]
 
     setContent(pageActions(
         editOnly(`<button class="btn btn-primary" onclick="showListModal()">${icon('plus')}New list</button>`)) +
-    tableCard(thead, rows, {
+    dataTable({
+        id: 'lists', columns, rows: lists, tr: l => `class="clickable" onclick="openList(${l.id})"`,
         empty: emptyState('No lists yet',
             'Create a list of contacts or companies, then reference it from a rule condition.',
             editOnly(`<button class="btn btn-primary btn-sm" onclick="showListModal()">${icon('plus')}New list</button>`), 'blocks'),
@@ -167,14 +168,16 @@ function renderListDetail(d) {
         : ''
 
     const detail = !!info.detail_label  // e.g. a contact's company
-    const thead = `<th>${esc(info.label)}</th>${detail ? `<th>${esc(info.detail_label)}</th>` : ''}<th class="r">ID</th><th>Added</th><th class="r">Actions</th>`
-    const rows = (d.items || []).map(it => `<tr>
-        <td class="cell-primary">${esc(it.label)}${it.missing ? ' ' + badgeTag('Not synced', 'warn') : ''}</td>
-        ${detail ? `<td class="muted">${esc(it.detail || '—')}</td>` : ''}
-        <td class="r num muted">#${it.item_id}</td>
-        <td class="muted nowrap">${fmtDateTime(it.added_on)}</td>
-        <td class="r nowrap">${deleteButton(`lsRemoveItem(${it.item_id})`, 'Remove')}</td>
-    </tr>`)
+    const columns = [
+        { key: 'label', label: info.label, cls: 'cell-primary', sort: it => it.label,
+          cell: it => `${esc(it.label)}${it.missing ? ' ' + badgeTag('Not synced', 'warn') : ''}` },
+        ...(detail ? [{ key: 'detail', label: info.detail_label, cls: 'muted', sort: it => it.detail,
+          cell: it => esc(it.detail || '—') }] : []),
+        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: it => it.item_id, cell: it => `#${it.item_id}` },
+        { key: 'added', label: 'Added', cls: 'muted nowrap', firstDir: 'desc', sort: it => tblTime(it.added_on),
+          cell: it => fmtDateTime(it.added_on) },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', cell: it => deleteButton(`lsRemoveItem(${it.item_id})`, 'Remove') },
+    ]
 
     const picker = `<span class="typeahead" style="max-width:360px;flex:1">
         <input class="input" type="text" id="ls-pick" autocomplete="off"
@@ -198,7 +201,9 @@ function renderListDetail(d) {
         </div>
     </header>
     ${usedBy}
-    ${tableCard(thead, rows, {
+    ${dataTable({
+        // per list type: a contact list has a Company column a company list does not
+        id: `list-items-${d.item_type}`, columns, rows: d.items || [],
         toolbar: `<span class="cell-sub"><span class="num">${count}</span> ${esc(noun)}</span><div class="grow"></div>${picker}`,
         empty: emptyState(`No ${esc(info.plural.toLowerCase())} in this list`,
             'Search above to add the first one. An empty list never matches a condition.',

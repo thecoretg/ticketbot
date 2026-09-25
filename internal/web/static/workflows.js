@@ -84,27 +84,27 @@ function renderWorkflowList(list) {
         ? `<div class="banner warn">${icon('alert')}<div><b>Master dry run is on.</b> Every workflow runs as a dry run — nothing is written or sent. Turn it off under Config.</div></div>`
         : ''
 
-    const thead = `<th>Board</th><th class="c">Enabled</th><th>Mode</th><th class="r">Steps</th><th class="r">Actions</th>`
-    const rows  = list.map(w => `<tr class="clickable" onclick="openWorkflow(${w.id})">
-        <td>
-            <div class="cell-primary">${esc(w.board_name || w.name)}</div>
-            ${w.name && w.name !== w.board_name ? `<div class="cell-sub">${esc(w.name)}</div>` : ''}
-        </td>
-        <td class="c">${w.enabled ? badgeTag('Enabled', 'ok') : badgeTag('Disabled', '')}</td>
-        <td>${w.dry_run ? badgeTag('Dry run', 'warn') : (appConfig?.master_dry_run ? badgeTag('Dry run (master)', 'warn') : badgeTag('Live', 'ok'))}</td>
-        <td class="r num">${(w.nodes || []).length}</td>
-        <td class="r nowrap" onclick="event.stopPropagation()">
-            <button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})">${icon('edit')}Open</button>
-            ${deleteButton(`deleteWorkflow(${w.id})`)}
-        </td>
-    </tr>`)
+    const mode = w => w.dry_run ? 'Dry run' : (appConfig?.master_dry_run ? 'Dry run (master)' : 'Live')
+    const columns = [
+        { key: 'board', label: 'Board', sort: w => w.board_name || w.name,
+          cell: w => `<div class="cell-primary">${esc(w.board_name || w.name)}</div>
+            ${w.name && w.name !== w.board_name ? `<div class="cell-sub">${esc(w.name)}</div>` : ''}` },
+        { key: 'enabled', label: 'Enabled', align: 'c', sort: w => w.enabled,
+          cell: w => w.enabled ? badgeTag('Enabled', 'ok') : badgeTag('Disabled', '') },
+        { key: 'mode', label: 'Mode', sort: mode, cell: w => badgeTag(mode(w), mode(w) === 'Live' ? 'ok' : 'warn') },
+        { key: 'steps', label: 'Steps', align: 'r', cls: 'num', sort: w => (w.nodes || []).length, cell: w => (w.nodes || []).length },
+        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', attrs: () => 'onclick="event.stopPropagation()"',
+          cell: w => `<button class="btn btn-ghost btn-sm" onclick="openWorkflow(${w.id})">${icon('edit')}Open</button>
+            ${deleteButton(`deleteWorkflow(${w.id})`)}` },
+    ]
 
     setContent(wfTabs('workflows') + pageActions(
         (list.length ? `<button class="btn btn-default" onclick="wfExportAll()">${icon('download')}Export</button>` : '') +
         editOnly(`<button class="btn btn-default" onclick="wfImportPick()">${icon('up')}Import</button>`) +
         editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
     banner +
-    tableCard(thead, rows, {
+    dataTable({
+        id: 'workflows', columns, rows: list, tr: w => `class="clickable" onclick="openWorkflow(${w.id})"`,
         empty: emptyState('No workflows yet',
             'Create a workflow for a board and ticketbot will start acting on its tickets.',
             editOnly(`<button class="btn btn-primary btn-sm" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`), 'bolt'),

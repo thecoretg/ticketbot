@@ -492,9 +492,19 @@ ul, ol { list-style: none; padding: 0; }
 
 /* ---------- 9. TABLE ---------- */
 .table-wrap { overflow-x: auto; }
-table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base); }
+/* separate borders with no spacing draw the same as collapsed ones, but each rule belongs to
+   its cell, so a header cell moved by --thead-y takes its rules (and its rounded corner) along.
+   --tbl-menu-w is the trailing column that holds the header menu. */
+table.tbl {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-base);
+  --tbl-menu-w: calc(var(--s8) + var(--s2));
+}
+/* The header follows the page scroll under the topbar. position: sticky cannot do it: the
+   wrap scrolls sideways for a wide table, which makes the wrap the scroll container the header
+   would stick inside. tables.js sets --thead-y on the wrap instead: how far the page has
+   scrolled past the wrap's top, clamped to the table. */
 .tbl thead th {
-  position: sticky; top: var(--topbar-h); z-index: 5;
+  position: relative; z-index: 5; transform: translateY(var(--thead-y, 0px));
   text-align: left; font-size: var(--text-2xs); font-weight: 600;
   letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
   padding: var(--s3) var(--s4); background: var(--surface-2);
@@ -508,11 +518,57 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .card > .table-wrap:first-child .tbl thead tr:first-child th { border-top: 0; }
 .card > .table-wrap:first-child .tbl thead tr:first-child th:first-child { border-top-left-radius: calc(var(--radius-lg) - 1px); }
 .card > .table-wrap:first-child .tbl thead tr:first-child th:last-child  { border-top-right-radius: calc(var(--radius-lg) - 1px); }
-.tbl thead th.sortable { cursor: pointer; user-select: none; }
-.tbl thead th.sortable:hover { color: var(--ink-2); }
-.tbl thead th .sort { display: inline-block; width: 10px; margin-left: 4px; color: var(--faint); }
-.tbl thead th.sorted { color: var(--ink); }
-.tbl thead th.sorted .sort { color: var(--accent-on-soft); }
+/* A sortable header is a real button so it takes focus and sorts on Enter or Space. It reaches
+   into the cell's padding to clear a 24px target without making the header row taller. The
+   arrow shows on the sorted column, and on another only while it is hovered or focused. */
+.tbl thead th .th-sort {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  min-height: var(--s6); margin: calc(-1 * var(--s1)) calc(-1 * var(--s2)); padding: var(--s1) var(--s2);
+  border-radius: var(--radius-sm); cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.tbl thead th .th-sort:hover { color: var(--ink); background: var(--bg-sunken); }
+.tbl thead th .sort { display: inline-block; width: 10px; color: var(--faint); }
+.tbl thead th:not([aria-sort]) .sort { visibility: hidden; }
+.tbl thead th .th-sort:hover .sort, .tbl thead th .th-sort:focus-visible .sort { visibility: visible; }
+.tbl thead th[aria-sort] { color: var(--ink); }
+.tbl thead th[aria-sort] .sort { color: var(--accent-on-soft); }
+
+/* Column edge: drag to resize, double-click to fit. Pointer only; the rule shows on hover. */
+.tbl thead th .col-resize {
+  position: absolute; top: 0; bottom: 0; right: 0; width: var(--s2);
+  cursor: col-resize; touch-action: none;
+}
+.tbl thead th .col-resize::after {
+  content: ""; position: absolute; top: var(--s2); bottom: var(--s2); right: 0; width: 2px;
+  border-radius: var(--radius-full); background: transparent;
+  transition: background var(--dur) var(--ease);
+}
+.tbl thead tr:hover .col-resize::after { background: var(--line); }
+.tbl thead th .col-resize:hover::after, .tbl thead th .col-resize.is-active::after { background: var(--accent); }
+/* the column being dragged to a new place, and what follows the pointer while it moves */
+.tbl thead th.is-col-source { background: var(--accent-soft); color: var(--accent-on-soft); }
+.tbl-ghost {
+  position: fixed; z-index: 70; pointer-events: none; white-space: nowrap;
+  padding: var(--s1) var(--s3); border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2);
+}
+.tbl-drop {
+  position: fixed; z-index: 70; pointer-events: none;
+  width: 2px; margin-left: -1px; border-radius: var(--radius-full); background: var(--accent);
+}
+/* The trailing column holds the header menu (Reset columns). Its body cells stay empty. */
+.tbl col.col-menu, .tbl .th-menu, .tbl .td-menu { width: var(--tbl-menu-w); }
+.tbl thead th.th-menu { padding: 0 var(--s1); text-align: center; }
+.tbl thead th.th-menu .icon-btn { margin: 0 auto; }
+/* A table with a saved layout: widths come from its <col>s and a cell too narrow for its
+   content clips it with an ellipsis rather than pushing the column wider. */
+.tbl.is-sized { table-layout: fixed; }
+.tbl.is-sized th, .tbl.is-sized td { overflow: hidden; text-overflow: ellipsis; }
+/* a double-click fit lays the table out at its natural width for one measurement */
+.tbl.is-measuring { table-layout: auto; width: max-content !important; }
 .tbl tbody td { padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
 .tbl tbody tr { transition: background 120ms var(--ease); }
 .tbl tbody tr:hover { background: var(--surface-2); }
@@ -983,7 +1039,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
   .page-title { font-size: var(--text-2xl); }
   .form-row { grid-template-columns: 1fr; gap: var(--s3); padding: var(--s5) 0; }
   .board { grid-template-columns: 1fr; }
-  .tbl thead th { position: static; }
+  /* on a phone the header scrolls away with the page: a stuck header would cover a third of
+     a short screen, and the columns there are narrow enough to read at a glance */
+  .tbl thead th { transform: none; }
   .toasts { left: var(--s4); right: var(--s4); bottom: var(--s4); }
   .toast { max-width: none; }
 }
@@ -1063,6 +1121,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .is-dragging.drag-link { cursor: crosshair; }
 .is-dragging.drag-copy { cursor: copy; }
 .is-dragging.drag-box { cursor: crosshair; }
+.is-dragging.drag-resize { cursor: col-resize; }
 .is-dragging .dock, .is-dragging .dock-bar { pointer-events: none; }
 
 /* ---- condition builder ---- */

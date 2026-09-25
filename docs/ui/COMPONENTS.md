@@ -114,23 +114,71 @@ Always pair the colour with a word. Never encode state in colour alone.
 
 ## Table
 
+Don't write this markup by hand. `dataTable(spec)` in `tables.js` builds the
+card, or `tableWrap(spec)` just the `.table-wrap` for a page that owns its
+card, from a column model:
+
+```js
+dataTable({
+  id: 'workflows',                                   // stable: keys the saved layout
+  columns: [
+    { key: 'board', label: 'Board', sort: w => w.board_name, cell: w => esc(w.board_name) },
+    { key: 'steps', label: 'Steps', align: 'r', cls: 'num', sort: w => w.nodes.length, cell: w => w.nodes.length },
+    { key: 'updated', label: 'Updated', firstDir: 'desc', sort: w => tblTime(w.updated_on), cell: … },
+    { key: 'actions', label: 'Actions', align: 'r', attrs: () => 'onclick="event.stopPropagation()"', cell: … },
+  ],
+  rows: list,
+  tr: w => `class="clickable" onclick="openWorkflow(${w.id})"`,
+  sort: { key: 'board', dir: 'asc' },                // optional default
+  onSort: sort => refetch(),                         // server-sorted: set sort: true on the columns
+  toolbar, empty, foot,
+})
+```
+
+What it renders:
+
 ```html
-<div class="table-wrap">
-  <table class="tbl">
+<div class="table-wrap" data-table="workflows">
+  <table class="tbl is-sized" style="width:max(100%, calc(560px + var(--tbl-menu-w)))">  <!-- is-sized + style only with a saved layout -->
+    <colgroup><col data-col="board" style="width:240px">…<col data-col="actions"><col class="col-menu"></colgroup>
     <thead><tr>
-      <th class="sortable sorted" data-sort="name" aria-sort="ascending">Name <span class="sort">↑</span></th>
-      <th class="r">MRR</th>
+      <th data-col="board" aria-sort="ascending">
+        <button type="button" class="th-sort" data-sort="board">Board<span class="sort" aria-hidden="true">↑</span></button>
+        <span class="col-resize" aria-hidden="true"></span>
+      </th>
+      <th class="r" data-col="actions">Actions<span class="col-resize" aria-hidden="true"></span></th>
+      <th class="th-menu"><button type="button" class="icon-btn" data-table-menu aria-haspopup="menu" aria-label="Column options">…</button></th>
     </tr></thead>
     <tbody>
-      <tr data-id="CUS-1">            <!-- data-id → opens a drawer -->
+      <tr class="clickable" onclick="…">
         <td><div class="cell-primary">Name</div><div class="cell-sub">sub</div></td>
-        <td class="r num">$3,593</td>
+        <td class="r nowrap" onclick="event.stopPropagation()">…</td>
+        <td class="td-menu"></td>
       </tr>
-      <tr data-href="#/records/1">…</tr>   <!-- data-href → navigates -->
     </tbody>
   </table>
 </div>
 ```
+
+- A sortable header is a `.th-sort` button: Enter or Space sorts, a second
+  press reverses. `aria-sort` sits on the sorted `th` only. The arrow shows on
+  the sorted column and on others while hovered or focused.
+- `.col-resize` is the column edge: drag to resize, double-click to fit the
+  widest cell. Dragging a header moves the column. Both are mouse only; the
+  table stays fully usable without them.
+- The trailing `.th-menu` column holds the header menu (also on right-click in
+  the header): **Reset columns** clears the table's saved sort, widths and
+  order.
+- The first resize snapshots every column's width, and from then on the table
+  is `.is-sized`: fixed layout, widths from the `<col>`s, the last column
+  takes what is left so the table still fills the card, and a cell narrower
+  than its content clips with an ellipsis.
+- The layout is saved per `id` in `localStorage` (`tablePrefs:<id>`) and baked
+  into the markup on every render, so a poll's `refreshContent` keeps it. A
+  poll that lands mid-drag waits until the drag ends.
+- The header follows the page scroll under the topbar: `.table-wrap` scrolls
+  sideways, so `position: sticky` would stick inside it; `tables.js` sets
+  `--thead-y` on the wrap instead. Below 860px the header scrolls away.
 
 Toolbar above (`.toolbar`), `.bulkbar` when rows are selected, `.card-foot`
 below with the count and `.pagination`. Pagination buttons need
@@ -235,7 +283,12 @@ passes over a panel instead of ending on it.
 <div class="app is-dragging">…</div>           <!-- grabbing -->
 <div class="app is-dragging drag-link">…</div> <!-- crosshair: wiring something up -->
 <div class="app is-dragging drag-copy">…</div> <!-- copy: dragging a new item in -->
+<div class="app is-dragging drag-resize">…</div> <!-- col-resize: a table column's edge -->
 ```
+
+A table column being moved gets `.is-col-source` on its header, a `.tbl-ghost`
+label follows the pointer and a `.tbl-drop` line marks where it will land;
+both hang off `<body>`.
 
 `assets/reorder.js` does not need this — it captures the pointer on a handle.
 Canvas-style drags, which have no single capture target, do.

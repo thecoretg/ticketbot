@@ -40,12 +40,6 @@
 /* The "custom message" disclosure inside a notify action. */
 .action-msg summary { cursor: pointer; user-select: none; }
 
-/* ui.css sticks table headers with `top: var(--topbar-h)`, which assumes the page
-   is the scrollport. `.table-wrap` sets `overflow-x: auto`, so it *is* the
-   scrollport, and the header is pushed 58px down over the first row. Inside the
-   wrap the header belongs at the wrap's own top edge. */
-.table-wrap .tbl thead th { top: 0; }
-
 /* Free text from ConnectWise (note previews, diff values, rendered messages) carries long
    unbroken tokens such as inline-image URLs. pre-wrap alone leaves those on one line, and
    on a phone that line runs past the viewport and gives the whole page a horizontal scroll. */
