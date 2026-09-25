@@ -29,7 +29,8 @@ Right-click a step for Duplicate, Copy, Enable or Disable and Delete. Shift-drag
 selects several steps at once, and Shift-click adds one to the selection; dragging any selected
 step moves them all. Copied steps can be pasted into another board's workflow with the wires
 between them intact, by right-clicking the empty canvas. Keyboard: ⌘C copies, ⌘V pastes, ⌘D
-duplicates, Delete removes.
+duplicates, Delete removes. Dragging with the middle mouse button pans the canvas from anywhere,
+even when it starts on a step or a wire.
 
 ## Conditions
 
