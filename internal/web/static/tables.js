@@ -131,8 +131,9 @@ function tblSortRows(spec, sort) {
 
 // ── Markup ───────────────────────────────────────────────
 // dataTable is the table card: toolbar, table, foot. spec is
-//   { id, columns, rows, tr?: row => attrs, sort?: { key, dir }, onSort?: sort => void,
-//     toolbar?, empty?, foot? }
+//   { id, columns, rows, tr?: row => attrs, menu?: row => items, sort?: { key, dir },
+//     onSort?: sort => void, toolbar?, empty?, foot? }
+// menu gives each row a kebab in the trailing column instead of an Actions column; see tblRowItems.
 // id must be stable: it keys the saved layout.
 function dataTable(spec) {
     const { toolbar = '', foot = '' } = spec
@@ -169,10 +170,12 @@ function tableWrap(spec) {
         ? `<table class="tbl is-sized" style="width:${tblTableWidth(cols.map(c => c.key), widths)}">`
         : '<table class="tbl">'
 
+    spec.shown = rows   // a row kebab's data-row indexes this, the order the rows are drawn in
     const head = cols.map(c => tblTH(c, sort)).join('') +
         `<th class="th-menu"><button type="button" class="icon-btn" data-table-menu aria-haspopup="menu" aria-label="Column options">${icon('dots')}</button></th>`
-    const body = rows.map(r => `<tr${spec.tr ? ` ${spec.tr(r)}` : ''}>${
-        cols.map(c => `<td${tblCellAttrs(c, r)}>${c.cell(r)}</td>`).join('')}<td class="td-menu"></td></tr>`).join('')
+    const body = rows.map((r, i) => `<tr${spec.tr ? ` ${spec.tr(r)}` : ''}>${
+        cols.map(c => `<td${tblCellAttrs(c, r)}>${c.cell(r)}</td>`).join('')}<td class="td-menu">${
+        tblRowItems(spec, r).length ? `<button type="button" class="icon-btn" data-row-menu="${i}" aria-haspopup="menu" aria-label="Row actions">${icon('dots')}</button>` : ''}</td></tr>`).join('')
 
     return `<div class="table-wrap" data-table="${esc(spec.id)}">${table}
         <colgroup>${colgroup}</colgroup>
@@ -187,15 +190,22 @@ function tblTableWidth(keys, widths) {
     return `max(100%, calc(${sum}px + var(--tbl-menu-w)))`
 }
 
+// tblTH is a header cell. Headers are always left-aligned, whatever their cells do: a centred or
+// right-aligned label would travel with the divider while its column is resized.
 function tblTH(c, sort) {
     const on    = sort && sort.key === c.key
-    const cls   = c.align ? ` class="${c.align}"` : ''
     const aria  = on ? ` aria-sort="${sort.dir === 'desc' ? 'descending' : 'ascending'}"` : ''
     const glyph = on ? (sort.dir === 'desc' ? '↓' : '↑') : '↕'
     const label = c.sort
         ? `<button type="button" class="th-sort" data-sort="${esc(c.key)}">${esc(c.label)}<span class="sort" aria-hidden="true">${glyph}</span></button>`
         : esc(c.label)
-    return `<th${cls} data-col="${esc(c.key)}"${aria}>${label}<span class="col-resize" aria-hidden="true"></span></th>`
+    return `<th data-col="${esc(c.key)}"${aria}>${label}<span class="col-resize" aria-hidden="true"></span></th>`
+}
+
+// tblRowItems is a row's kebab menu: spec.menu(row) in buildMenu's item shape, where an item
+// marked edit: true is dropped for a viewer. No items, no kebab.
+function tblRowItems(spec, r) {
+    return (spec.menu?.(r) || []).filter(it => it === '-' || !it.edit || canEdit())
 }
 
 function tblCellAttrs(c, r) {
@@ -439,6 +449,16 @@ document.addEventListener('click', e => {
     const menuBtn = e.target.closest('thead [data-table-menu]')
     if (menuBtn) toggleMenu(menuBtn, tblMenuItems(wrap.dataset.table))
 })
+
+// A row kebab is caught in the capture phase, before the row's own onclick would open the record.
+document.addEventListener('click', e => {
+    const btn  = e.target.closest('#content .table-wrap[data-table] tbody [data-row-menu]')
+    if (!btn) return
+    e.stopPropagation()
+    const spec = tblSpecs.get(btn.closest('.table-wrap').dataset.table)
+    const row  = spec?.shown?.[Number(btn.dataset.rowMenu)]
+    if (row) toggleMenu(btn, tblRowItems(spec, row))
+}, true)
 
 document.addEventListener('contextmenu', e => {
     const wrap = e.target.closest('#content .table-wrap[data-table]')

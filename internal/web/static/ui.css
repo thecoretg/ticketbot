@@ -559,10 +559,11 @@ table.tbl {
   position: fixed; z-index: 70; pointer-events: none;
   width: 2px; margin-left: -1px; border-radius: var(--radius-full); background: var(--accent);
 }
-/* The trailing column holds the header menu (Reset columns). Its body cells stay empty. */
+/* The trailing column holds the header menu (Reset columns) and, in each row, that row's kebab
+   (its actions: edit, delete, retry…), so a table has no separate Actions column. */
 .tbl col.col-menu, .tbl .th-menu, .tbl .td-menu { width: var(--tbl-menu-w); }
-.tbl thead th.th-menu { padding: 0 var(--s1); text-align: center; }
-.tbl thead th.th-menu .icon-btn { margin: 0 auto; }
+.tbl thead th.th-menu, .tbl tbody td.td-menu { padding: 0 var(--s1); text-align: center; }
+.tbl thead th.th-menu .icon-btn, .tbl tbody td.td-menu .icon-btn { margin: 0 auto; }
 /* A table with a saved layout: widths come from its <col>s and a cell too narrow for its
    content clips it with an ellipsis rather than pushing the column wider. */
 .tbl.is-sized { table-layout: fixed; }

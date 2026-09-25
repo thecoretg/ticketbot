@@ -55,15 +55,16 @@ function renderListIndex(lists) {
         { key: 'items', label: 'Items', align: 'r', cls: 'num', sort: l => l.item_count, cell: l => l.item_count },
         { key: 'description', label: 'Description', cls: 'cell-ellipsis muted', sort: l => l.description,
           cell: l => esc(l.description || '') },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', attrs: () => 'onclick="event.stopPropagation()"',
-          cell: l => `<button class="btn btn-ghost btn-sm" onclick="editList(${l.id})">${icon('edit')}Edit</button>
-            ${deleteButton(`deleteList(${l.id})`)}` },
+    ]
+    const menu = l => [
+        { label: 'Edit', icon: 'edit', edit: true, run: () => editList(l.id) },
+        { label: 'Delete', icon: 'trash', danger: true, edit: true, run: () => deleteList(l.id) },
     ]
 
     setContent(pageActions(
         editOnly(`<button class="btn btn-primary" onclick="showListModal()">${icon('plus')}New list</button>`)) +
     dataTable({
-        id: 'lists', columns, rows: lists, tr: l => `class="clickable" onclick="openList(${l.id})"`,
+        id: 'lists', columns, rows: lists, menu, tr: l => `class="clickable" onclick="openList(${l.id})"`,
         empty: emptyState('No lists yet',
             'Create a list of contacts or companies, then reference it from a rule condition.',
             editOnly(`<button class="btn btn-primary btn-sm" onclick="showListModal()">${icon('plus')}New list</button>`), 'blocks'),
@@ -176,8 +177,8 @@ function renderListDetail(d) {
         { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: it => it.item_id, cell: it => `#${it.item_id}` },
         { key: 'added', label: 'Added', cls: 'muted nowrap', firstDir: 'desc', sort: it => tblTime(it.added_on),
           cell: it => fmtDateTime(it.added_on) },
-        { key: 'actions', label: 'Actions', align: 'r', cls: 'nowrap', cell: it => deleteButton(`lsRemoveItem(${it.item_id})`, 'Remove') },
     ]
+    const menu = it => [{ label: 'Remove', icon: 'trash', danger: true, edit: true, run: () => lsRemoveItem(it.item_id) }]
 
     const picker = `<span class="typeahead" style="max-width:360px;flex:1">
         <input class="input" type="text" id="ls-pick" autocomplete="off"
@@ -203,7 +204,7 @@ function renderListDetail(d) {
     ${usedBy}
     ${dataTable({
         // per list type: a contact list has a Company column a company list does not
-        id: `list-items-${d.item_type}`, columns, rows: d.items || [],
+        id: `list-items-${d.item_type}`, columns, menu, rows: d.items || [],
         toolbar: `<span class="cell-sub"><span class="num">${count}</span> ${esc(noun)}</span><div class="grow"></div>${picker}`,
         empty: emptyState(`No ${esc(info.plural.toLowerCase())} in this list`,
             'Search above to add the first one. An empty list never matches a condition.',
