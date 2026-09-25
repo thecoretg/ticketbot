@@ -151,7 +151,7 @@ async function refreshTicketTable() {
 // The ticket list is paged on the server, so the server sorts it: every column's key is a
 // sort value GET /tickets accepts (models.TicketSorts), and a new sort goes back to page 1.
 const TK_COLUMNS = [
-    { key: 'id', label: 'ID', align: 'r', cls: 'nowrap', sort: true,
+    { key: 'id', label: 'ID', cls: 'nowrap', sort: true,
       cell: t => `<a class="link num ext" href="${esc(t.cw_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Ticket ${t.id}, opens in ConnectWise">#${t.id}${icon('external')}</a>` },
     { key: 'summary', label: 'Summary', cls: 'cell-ellipsis cell-primary', attrs: t => `title="${esc(t.summary)}"`, sort: true,
       cell: t => `${esc(t.summary)}${t.deleted ? ' ' + badgeTag('Deleted', 'bad') : ''}` },

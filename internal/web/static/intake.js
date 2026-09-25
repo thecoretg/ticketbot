@@ -87,12 +87,12 @@ function renderIntake(stats, rows, hourly = [], paint = setContent) {
 
     const status = r => INTAKE_STATUSES.find(s => s.value === r.status) || { label: r.status, variant: '' }
     const columns = [
-        { key: 'id', label: 'ID', align: 'r', cls: 'num muted', sort: r => r.id, cell: r => r.id },
+        { key: 'id', label: 'ID', cls: 'num muted', sort: r => r.id, cell: r => r.id },
         { key: 'ticket', label: 'Ticket', cls: 'cell-primary', sort: r => r.ticket_id,
           cell: r => `<a href="#tickets/${r.ticket_id}" class="num">#${r.ticket_id}</a>` },
         { key: 'action', label: 'Action', sort: r => r.action, cell: r => esc(r.action) },
         { key: 'status', label: 'Status', sort: r => status(r).label, cell: r => badgeTag(status(r).label, status(r).variant) },
-        { key: 'attempts', label: 'Attempts', align: 'r', cls: 'num', sort: r => r.attempts, cell: r => r.attempts },
+        { key: 'attempts', label: 'Attempts', cls: 'num', sort: r => r.attempts, cell: r => r.attempts },
         { key: 'received', label: 'Received', cls: 'muted nowrap', firstDir: 'desc', sort: r => tblTime(r.received_at),
           cell: r => fmtDateTime(r.received_at) },
         { key: 'last_error', label: 'Last error', cls: 'muted', attrs: () => 'style="max-width:360px;overflow-wrap:anywhere"',
