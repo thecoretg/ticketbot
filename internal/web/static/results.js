@@ -83,23 +83,26 @@ function renderWorkflowResults(paint = setContent) {
         <input class="input" type="number" min="1" placeholder="Ticket #" aria-label="Ticket number" value="${esc(f.ticket || '')}" onchange="rsSetFilter('ticket', this.value)" style="width:120px">
         ${Object.keys(f).length ? `<button class="btn btn-ghost btn-sm" onclick="rsClearFilters()">${icon('x')}Clear</button>` : ''}`
 
-    const thead = '<th>Started</th><th>Ticket</th><th>Board</th><th>Event</th><th class="r">Steps</th><th>Notified</th><th class="r">Writes</th><th>Outcome</th>'
-    const rows = rsRuns.map(r => `<tr class="clickable" onclick="switchTab('results', '${r.run_id}')">
-        <td class="muted nowrap">${fmtDateTime(r.started_at)}</td>
-        <td><a class="link num" href="#tickets/${r.ticket_id}" onclick="event.stopPropagation()">#${r.ticket_id}</a></td>
-        <td class="cell-primary">${esc(r.board_name || r.workflow_name || `Board ${r.board_id}`)}</td>
-        <td>${esc(r.event)}</td>
-        <td class="r num">${r.steps}</td>
-        <td class="muted">${rsNotifSummary(r)}</td>
-        <td class="r num">${r.writes}</td>
-        <td><div class="row gap2 wrap">${rsOutcomeBadge(r.outcome)}${r.dry_run ? badgeTag('Dry run', 'warn') : ''}</div></td>
-    </tr>`)
+    // No column sorts: runs page by started_at ("Load older runs"), so any other order would only
+    // hold for the pages loaded so far. Resizing, reordering and reset still apply.
+    const columns = [
+        { key: 'started',  label: 'Started',  cls: 'muted nowrap', cell: r => fmtDateTime(r.started_at) },
+        { key: 'ticket',   label: 'Ticket',   cell: r => `<a class="link num" href="#tickets/${r.ticket_id}" onclick="event.stopPropagation()">#${r.ticket_id}</a>` },
+        { key: 'board',    label: 'Board',    cls: 'cell-primary', cell: r => esc(r.board_name || r.workflow_name || `Board ${r.board_id}`) },
+        { key: 'event',    label: 'Event',    cell: r => esc(r.event) },
+        { key: 'steps',    label: 'Steps',    align: 'r', cls: 'num', cell: r => r.steps },
+        { key: 'notified', label: 'Notified', cls: 'muted', cell: r => rsNotifSummary(r) },
+        { key: 'writes',   label: 'Writes',   align: 'r', cls: 'num', cell: r => r.writes },
+        { key: 'outcome',  label: 'Outcome',  cell: r => `<div class="row gap2 wrap">${rsOutcomeBadge(r.outcome)}${r.dry_run ? badgeTag('Dry run', 'warn') : ''}</div>` },
+    ]
 
     const last = rsRuns[rsRuns.length - 1]
     const more = rsRuns.length >= 50 && last
         ? `<button class="btn btn-default btn-sm" onclick="rsLoadMore()">Load older runs</button>` : ''
 
-    paint(tableCard(thead, rows, {
+    paint(dataTable({
+        id: 'results', columns, rows: rsRuns,
+        tr: r => `class="clickable" onclick="switchTab('results', '${r.run_id}')"`,
         toolbar,
         empty: emptyState('No runs match', Object.keys(f).length ? 'Loosen a filter or clear them.' : 'Runs appear here once a ticket event reaches an enabled workflow.', '', 'bolt'),
         foot: `<span>${rsRuns.length} run${rsRuns.length === 1 ? '' : 's'} shown · refreshes every few seconds</span>${more}`,

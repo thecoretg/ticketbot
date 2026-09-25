@@ -1115,23 +1115,6 @@ function errorState(msg, retry = `<button class="btn btn-default btn-sm" onclick
     </div></div>`
 }
 
-// tableCard wraps a table in a card, with an empty state when there are no rows
-// and an optional footer (row count, pagination). It takes raw <th> and <tr> markup and has
-// none of dataTable's sorting, resizing or reordering (tables.js); only the Results table
-// still uses it, until that page's move to its own route lands and it is converted.
-function tableCard(thead, rows, opts = {}) {
-    const { empty = emptyState('Nothing here yet', 'Items you create will show up in this table.'), foot = '', toolbar = '' } = opts
-    if (!rows.length) return `<div class="card">${toolbar ? `<div class="toolbar">${toolbar}</div>` : ''}${empty}</div>`
-    return `<div class="card">
-        ${toolbar ? `<div class="toolbar">${toolbar}</div>` : ''}
-        <div class="table-wrap"><table class="tbl">
-            <thead><tr>${thead}</tr></thead>
-            <tbody>${rows.join('')}</tbody>
-        </table></div>
-        ${foot ? `<div class="card-foot">${foot}</div>` : ''}
-    </div>`
-}
-
 // deleteButton is the destructive action in a table row: a word, not a colour.
 function deleteButton(onclick, label = 'Delete') {
     return editOnly(`<button class="btn btn-ghost btn-sm" onclick="${onclick}">${icon('trash')}${esc(label)}</button>`)
