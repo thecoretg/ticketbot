@@ -61,7 +61,7 @@ each token produces. Notifications go to a room, a person, or the ticket's resou
 
 ## Seeing what ran
 
-The **Results** tab beside the workflow list shows every run: when, which ticket, what fired and
+**Results**, below Workflows in the sidebar, shows every run: when, which ticket, what fired and
 how it ended. Open a run to see the path it took drawn on the workflow's canvas, then every step,
 write and notification underneath. Filter by board, outcome, date or ticket; the **Results** button
 in a workflow's toolbar opens the list already filtered to that board.

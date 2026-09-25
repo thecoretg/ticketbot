@@ -46,6 +46,7 @@ function openPaletteMenu(e) {
 const NAV = [
     { label: 'Automation', items: [
         { tab: 'workflows', name: 'Workflows', icon: 'bolt' },
+        { tab: 'results',   name: 'Results',   icon: 'chart' },
         { tab: 'tickets',   name: 'Tickets',   icon: 'inbox' },
         { tab: 'forwards',  name: 'Forwards',  icon: 'mail' },
         { tab: 'lists',     name: 'Lists',     icon: 'blocks' },
@@ -720,12 +721,22 @@ const SKELETON_DELAY_MS = 150
 let switchSeq = 0   // increments per tab switch
 let renderSeq = 0   // increments per setContent, so a switch can tell whether its loader drew yet
 
-// hash is "tab" or "tab/sub" (e.g. tickets/123). Admin-only tabs fall back to workflows for
-// everyone else, so a stale bookmark does not open a page that can only 403.
+// hash is "tab", "tab/sub" (e.g. tickets/123) or "tab?query" (e.g. results?board=5); a sub that
+// is only a query keeps its "?". Admin-only tabs fall back to workflows for everyone else, so a
+// stale bookmark does not open a page that can only 403.
 function parseHash() {
-    const [tab, ...rest] = window.location.hash.replace(/^#/, '').split('/')
+    const h   = window.location.hash.replace(/^#/, '')
+    const cut = h.search(/[/?]/)
+    const tab = cut < 0 ? h : h.slice(0, cut)
+    const sub = cut < 0 ? '' : h.slice(h[cut] === '/' ? cut + 1 : cut)
     const known = tabLoaders[tab] && (!ADMIN_TABS.has(tab) || isAdmin())
-    return { tab: known ? tab : 'workflows', sub: rest.join('/') || null }
+    return { tab: known ? tab : 'workflows', sub: sub || null }
+}
+
+// tabHash is parseHash's inverse.
+function tabHash(tab, sub) {
+    if (!sub) return tab
+    return sub.startsWith('?') ? `${tab}${sub}` : `${tab}/${sub}`
 }
 
 function switchTab(tab, sub = null) {
@@ -741,7 +752,7 @@ function switchTab(tab, sub = null) {
     stopIntakePoll()
     rsStopPoll()
     currentTab  = tab
-    currentHash = sub ? `${tab}/${sub}` : tab
+    currentHash = tabHash(tab, sub)
     window.location.hash = currentHash
     document.querySelectorAll('.nav-item').forEach(el => {
         const on = el.dataset.tab === tab
@@ -763,6 +774,11 @@ function switchTab(tab, sub = null) {
 }
 
 function routeFromHash() {
+    // Results used to live under Workflows (#workflows/results…). Old links are rewritten in
+    // place, so Back does not return to the old hash and bounce straight here again.
+    const h = window.location.hash.replace(/^#/, '')
+    const moved = h.replace(/^workflows\/results(?=[/?]|$)/, 'results')
+    if (moved !== h) history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${moved}`)
     const { tab, sub } = parseHash()
     switchTab(tab, sub)
 }
@@ -826,6 +842,7 @@ function morphNode(from, to) {
 const EXTRA_TABS = { connected: 'Connected apps' }
 
 function setCrumbs(tab, sub) {
+    sub = sub?.replace(/\?.*$/, '')   // filters in the hash are not a place in the trail
     const item   = NAV_ITEMS.find(i => i.tab === tab)
     const name   = item ? item.name : (EXTRA_TABS[tab] || tab)
     const here   = document.getElementById('crumb-here')

@@ -117,7 +117,8 @@ tall (`CV_H`, shared between `ui.css` and the script) so ports line up, and a tr
 shows its condition as a count badge (`cvCondBadgeHTML`) with a hover card, never as text. Run history stores
 `steps` per run; rows from before the graph carry `rules`, and `tickets.js` renders both. Every run
 that found an enabled workflow also leaves a `workflow_run` summary row (written in `run.flush`)
-that the Results tab lists; its detail replays the recorded path on the editor canvas with
+that the Results tab (`#results`, `results.js`) lists; its detail replays the recorded path on the
+editor canvas with
 `cv.replay` set, so canvas edits must check `cvEditable()` rather than `canEdit()`. Summaries and
 history events age out together on `history_retention_days`.
 
