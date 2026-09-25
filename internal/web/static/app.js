@@ -784,6 +784,33 @@ function setContent(html) {
     document.getElementById('content').innerHTML = html
 }
 
+// refreshContent redraws the current page in place for a poll. Replacing the view would restart
+// the .view entry fade on every tick and drop focus, an open select and any text selection, so
+// the new markup is patched onto the nodes already there and only what differs is touched.
+function refreshContent(html) {
+    renderSeq++
+    const next = document.createElement('template')
+    next.innerHTML = html
+    morphChildren(document.getElementById('content'), next.content)
+}
+
+function morphChildren(from, to) {
+    const have = [...from.childNodes], want = [...to.childNodes]
+    want.forEach((n, i) => i < have.length ? morphNode(have[i], n) : from.appendChild(n))
+    have.slice(want.length).forEach(n => n.remove())
+}
+
+function morphNode(from, to) {
+    if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) { from.replaceWith(to); return }
+    if (from.nodeType !== Node.ELEMENT_NODE) {
+        if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue
+        return
+    }
+    for (const a of [...from.attributes]) if (!to.hasAttribute(a.name)) from.removeAttribute(a.name)
+    for (const a of to.attributes) if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value)
+    morphChildren(from, to)
+}
+
 // setCrumbs keeps the topbar trail and the document title in step with the route.
 // Pages reachable without a sidebar entry still need a name in the trail.
 const EXTRA_TABS = { connected: 'Connected apps' }

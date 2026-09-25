@@ -71,7 +71,7 @@ function rsOutcomeBadge(o) {
     return badgeTag(m[1], m[2])
 }
 
-function renderWorkflowResults() {
+function renderWorkflowResults(paint = setContent) {
     const f = rsFilter
     const boardOpts = rsBoards.filter(b => !b.deleted).sort((a, b) => a.name.localeCompare(b.name))
         .map(b => `<option value="${b.id}"${String(b.id) === f.board ? ' selected' : ''}>${esc(b.name)}</option>`).join('')
@@ -99,7 +99,7 @@ function renderWorkflowResults() {
     const more = rsRuns.length >= 50 && last
         ? `<button class="btn btn-default btn-sm" onclick="rsLoadMore()">Load older runs</button>` : ''
 
-    setContent(wfTabs('results') + tableCard(thead, rows, {
+    paint(wfTabs('results') + tableCard(thead, rows, {
         toolbar,
         empty: emptyState('No runs match', Object.keys(f).length ? 'Loosen a filter or clear them.' : 'Runs appear here once a ticket event reaches an enabled workflow.', '', 'bolt'),
         foot: `<span>${rsRuns.length} run${rsRuns.length === 1 ? '' : 's'} shown · refreshes every few seconds</span>${more}`,
@@ -130,21 +130,24 @@ async function rsLoadMore() {
     try {
         const older = await api('GET', rsApiQuery(rsFilter, { before: last.started_at }))
         rsRuns = rsRuns.concat(older || [])
-        renderWorkflowResults()
+        renderWorkflowResults(refreshContent)
     } catch (e) { toast(e.message, 'error') }
 }
 
 function rsStartPoll() {
     rsStopPoll()
+    const onList = () => currentTab === 'workflows' && currentHash.startsWith('workflows/results') && !currentHash.includes('results/')
     rsPollTimer = setInterval(async () => {
-        if (currentTab !== 'workflows' || !currentHash.startsWith('workflows/results') || currentHash.includes('results/')) { rsStopPoll(); return }
+        if (!onList()) { rsStopPoll(); return }
         if (document.getElementById('modal')?.classList.contains('on')) return
         try {
             // refresh only the first page; older pages the user loaded stay as they are
-            const fresh = await api('GET', rsApiQuery(rsFilter)) || []
+            const f = rsFilter
+            const fresh = await api('GET', rsApiQuery(f)) || []
+            if (!onList() || f !== rsFilter) return   // the user left or refiltered while the fetch was out
             const seen = new Set(fresh.map(r => r.run_id))
             rsRuns = fresh.concat(rsRuns.filter(r => !seen.has(r.run_id)))
-            renderWorkflowResults()
+            renderWorkflowResults(refreshContent)
         } catch { rsStopPoll() }
     }, 5000)
 }
