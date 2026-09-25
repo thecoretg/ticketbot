@@ -4,8 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ticketbot ingests ConnectWise PSA ticket webhooks, runs per-board workflows (conditions + actions), and notifies Webex rooms/people. Go 1.27, net/http (ServeMux), pgx, sqlc, goose; vanilla-JS dashboard embedded via `go:embed`.
 
-`docs/PLAN.md` is the v2 cutover work queue: pick the next unticked item there, and apply the
-CLAUDE.md edits it lists. Delete the file and this paragraph when everything is ticked.
+## Work tracking
+
+Work is tracked in Notion, not in the repo. The [Ticketbot Tracker](https://app.notion.com/p/3e63ef0e1b0680ba9e99d3f7e0be4d70)
+page holds the rules and two databases: **Work** (`collection://90891b8e-32af-43f9-9b74-0fce57fd603d`)
+and **Handoffs** (`collection://33a3c724-da94-44c4-87a1-34b9bffe6028`). Read the page's rules before
+the first change in a session. In short:
+
+- Pick up Work rows with Status `Next`, or whatever Danny asks for. `Hold` rows wait on data or a
+  decision; don't start them. Type `Cutover` rows start only when Danny says "start cutover".
+- A new request becomes a row first (Status `Idea`, or `Next` if Danny says to start).
+- Starting: Status `In progress` and fill Branch. Merged: Status `Done`, fill Commit, and add a
+  closing note to the row's body.
+- Never suggest a `Declined` row again unless Danny raises it.
+- A session that leaves work open ends with a Handoffs page (date, branch and pushed state, linked
+  Work rows, what to read first). Start from the newest one when a row doesn't say where things stand.
+- Property names and select options are what these rules match on: don't rename them. No secrets
+  in Notion.
+
+Without the Notion connector, ask Danny rather than guessing what is next. The v2 plan that
+preceded this (design decisions for plan items 1 to 16) is `docs/PLAN.md` in git history; its
+last version is at `42af684`.
 
 ## Commands
 
