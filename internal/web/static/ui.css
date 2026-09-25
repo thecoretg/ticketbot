@@ -1411,7 +1411,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 /* ---- flow canvas ----
    A free-positioned node graph: a pannable, zoomable .plane inside a .canvas,
    wires drawn in one oversized SVG behind the cards, ports as real buttons on
-   top. Card heights are fixed per kind (88px, 136px for .isif) and the script
+   top. Card heights are fixed (88px) and the script
    places ports from those constants: a card that sized itself from its content
    would put every wire endpoint off by the difference. Overlays over the
    canvas are .dock / .dock-bar; .is-dragging on the shell covers a gesture. */
@@ -1447,7 +1447,6 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
   box-shadow: var(--shadow-sm); touch-action: none; cursor: grab;
   transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
 }
-.node.isif { height: 136px; }
 /* the entry point reads as solid rather than tinted: a filled chip and a card
    edge carrying its hue. Both give way to .sel / .hit / .now below. */
 .node.t-start { border-color: color-mix(in srgb, var(--trigger) 32%, var(--line)); }
@@ -1468,11 +1467,46 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: var(--text-base);
 .node-body { flex: 1; min-height: 0; padding: 3px var(--s3) var(--s3); }
 .node-title { font-size: var(--text-sm); font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-sub { font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.node-cond {
-  margin: 0 var(--s3) var(--s3); padding: var(--s2); border-radius: var(--radius-sm);
-  background: var(--bg-sunken); border: 1px solid var(--line-soft);
+/* A trigger or if card shows its condition as a count; the rows themselves are in .cond-pop,
+   so a card never truncates condition text. 20px tall to fit the card's top row; the markup
+   adds .hit-expand for a 24px target. */
+.node-cbadge {
+  flex: none; display: inline-flex; align-items: center; gap: var(--s1);
+  height: 20px; padding: 0 var(--s2); border: 1px solid transparent; border-radius: var(--radius-full);
+  background: var(--bg-sunken); color: var(--ink-2);
+  font: 500 var(--text-2xs) var(--font-sans); cursor: help;
+}
+.node-cbadge svg { width: 11px; height: 11px; }
+.node-cbadge.adv { font-family: var(--font-mono); font-weight: 400; }
+.node-cbadge:hover, .node-cbadge:focus-visible, .node-cbadge[aria-describedby] {
+  background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-on-soft);
+}
+/* The popover is fixed to the viewport (placed by cvCondPopShow), so it reads at any zoom. */
+.cond-pop {
+  position: fixed; z-index: 80; width: 320px; max-height: min(420px, calc(100vh - var(--s6)));
+  overflow: auto; padding: var(--s3) var(--s4) var(--s1);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); pointer-events: none; animation: tip-in 120ms var(--ease);
+}
+.cond-pop[hidden] { display: none; }
+.cond-pop-head {
+  padding-bottom: var(--s2); font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+.cond-pop-row {
+  display: flex; flex-direction: column; gap: var(--s1); padding: var(--s2) 0;
+  border-top: 1px solid var(--line-soft); font-size: var(--text-xs); color: var(--ink-2);
+}
+.cond-pop-row.flag { flex-direction: row; align-items: center; gap: var(--s2); }
+.cond-pop-row.flag svg { width: 12px; height: 12px; flex: none; color: var(--ok); }
+.cond-pop-row.flag.no svg { color: var(--muted); }
+.cond-pop-field { font-weight: 500; color: var(--ink); }
+.cond-pop-op { color: var(--muted); }
+.cond-pop-row .chip.more { color: var(--muted); }
+.cond-pop-code {
+  padding: var(--s2) 0 var(--s3); border-top: 1px solid var(--line-soft);
   font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-2);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .step-no {
   position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%;

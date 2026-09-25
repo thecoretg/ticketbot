@@ -10,7 +10,7 @@ CLAUDE.md edits it lists. Delete the file and this paragraph when everything is 
 ## Commands
 
 - `make db-up` / `make run`: Postgres 16 in Docker on `localhost:5433` (testuser/testpass/testdb), app via `go run .` on the host. Env comes from `./.env` (1Password-mounted; see `.env.example`). `make db-nuke` drops the DB volume; `make db-down` keeps it.
-- `make run` reads `.env` line by line on purpose: macOS `/bin/sh` (bash 3.2) sources the 1Password FIFO as empty. Don't "simplify" it to `source`.
+- `make run` loads env through `op run --environment $(OP_ENVIRONMENT)` (set in the Makefile), because the 1Password `.env` FIFO serves one read and then empty ones; don't read `.env` yourself before starting it. `make run OP_ENVIRONMENT=` falls back to reading `ENV_FILE` line by line, on purpose: macOS `/bin/sh` (bash 3.2) sources the FIFO as empty. Don't "simplify" it to `source`.
 - `make gensql` (= `sqlc generate`) after editing `queries/*.sql` or adding a migration. Never hand-edit `internal/db/`.
 - Tests: `go test ./...` is unit-only. Run `TEST_POSTGRES_DSN=<dsn> go test ./internal/postgres/` (against a DB already migrated to the current version) when touching repos, queries, or migrations. `internal/server/e2e_test.go` hits the live ConnectWise API and is gated on `TEST_TICKET_IDS`; leave it to the user.
 - Dashboard files (`internal/web/static/`) are embedded at build time: restart `make run` to see changes, and hard-refresh the browser.
