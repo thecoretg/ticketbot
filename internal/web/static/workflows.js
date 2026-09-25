@@ -57,12 +57,6 @@ async function loadWorkflows(sub) {
         await loadWorkflowEditor(parseInt(sub))
         return
     }
-    const m = sub && sub.match(/^results(?:\/([^?]+))?(\?.*)?$/)
-    if (m) {
-        if (m[1]) await loadWorkflowRun(m[1])
-        else await loadWorkflowResults(m[2] ? m[2].slice(1) : '')
-        return
-    }
     await loadWorkflowList()
 }
 
@@ -99,7 +93,7 @@ function renderWorkflowList(list) {
         </td>
     </tr>`)
 
-    setContent(wfTabs('workflows') + pageActions(
+    setContent(pageActions(
         (list.length ? `<button class="btn btn-default" onclick="wfExportAll()">${icon('download')}Export</button>` : '') +
         editOnly(`<button class="btn btn-default" onclick="wfImportPick()">${icon('up')}Import</button>`) +
         editOnly(`<button class="btn btn-primary" onclick="showNewWorkflowModal()">${icon('plus')}New workflow</button>`)) +
@@ -328,7 +322,7 @@ function renderWorkflowEditor() {
         <button class="btn btn-default btn-sm" onclick="wfSimulate()">${icon('play')}Run</button>
         <span id="wf-arrange-undo">${cv.undo ? `<button class="btn btn-ghost btn-sm" onclick="cvUndoArrange()">${icon('undo')}Undo arrange</button>` : ''}</span>
         <button class="btn btn-default btn-sm" onclick="cvArrange()">${icon('branch')}Auto-arrange</button>
-        <button class="btn btn-default btn-sm" onclick="switchTab('workflows', 'results?board=${wf.board_id}')" data-tip="Runs of this workflow" data-tip-pos="bottom">${icon('chart')}Results</button>
+        <button class="btn btn-default btn-sm" onclick="switchTab('results', '?board=${wf.board_id}')" data-tip="Runs of this workflow" data-tip-pos="bottom">${icon('chart')}Results</button>
         <button class="icon-btn" onclick="wfShowHelp()" aria-label="How workflows run" data-tip="How workflows run" data-tip-pos="bottom">${icon('info')}</button>
         <span id="wf-dirty" class="row gap2${dirty ? '' : ' hidden'}">
             <span class="dirty-dot"></span><span class="cell-sub">Unsaved changes</span>
