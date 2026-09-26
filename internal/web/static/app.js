@@ -163,6 +163,8 @@ let totpEnabled       = false  // cached TOTP status for account menu
 let totpSetupRequired = false  // true when server enforces TOTP and user hasn't set it up
 let requireTOTP       = false  // cached value of config.require_totp
 let syncPollTimer     = null
+let syncLast          = null        // last /sync/status, redrawn when an error list opens
+const syncOpenErrors  = new Set()   // "<started_at>:<phase>" keys whose error list is open
 let modalSubmitFn     = null
 
 // ─────────────────────────────────────────────────────────
@@ -1728,22 +1730,107 @@ async function loadSync() {
 }
 
 function renderSync(status, paint = setContent) {
+    syncLast = status
     const running = status?.status === true
+    const run = status?.run
 
     paint(pageActions(
         // while a sync runs the button is disabled, so it drops the accent: a dimmed
         // accent fill does not hold its contrast
         `<button class="btn ${running ? 'btn-default' : 'btn-primary'}" onclick="showNewSyncModal()" ${running ? 'disabled' : ''}>${icon('globe')}Run sync</button>`) +
-    `<div class="card card-pad">
+    (run ? syncRunHTML(run, running) : `<div class="card card-pad">
         <div class="row gap3 wrap">
-            ${running
-                ? '<span class="badge ok"><i class="dot pulse"></i>Running</span>'
-                : '<span class="badge outline"><i class="dot"></i>Idle</span>'}
-            <span class="muted">${running
-                ? 'A sync is in progress. This page updates every few seconds.'
-                : 'No sync is running right now.'}</span>
+            <span class="badge outline"><i class="dot"></i>Idle</span>
+            <span class="muted">No sync has run since the app started.</span>
         </div>
-    </div>`)
+    </div>`))
+}
+
+const SYNC_PHASE_NAMES = { boards: 'Boards', webex_recipients: 'Webex recipients', tickets: 'Tickets' }
+
+// syncRunHTML is the running sync, or the last one: who started it and with what, then one
+// bar per phase. The phases run at the same time, so several bars can fill at once.
+function syncRunHTML(run, running) {
+    const failed = run.phases.some(p => p.state === 'failed')
+    const errors = run.phases.reduce((n, p) => n + p.error_count, 0)
+    const badge = running ? '<span class="badge ok"><i class="dot pulse"></i>Running</span>'
+        : failed          ? '<span class="badge bad"><i class="dot"></i>Failed</span>'
+        : errors          ? '<span class="badge warn"><i class="dot"></i>Finished with errors</span>'
+        :                   '<span class="badge ok"><i class="dot"></i>Finished</span>'
+
+    const o = run.options
+    const synced = [o.cw_boards && 'Boards', o.webex_recipients && 'Webex recipients', o.cw_tickets && 'Tickets']
+        .filter(Boolean).join(', ')
+    const n = o.board_ids?.length ?? 0
+    const took = fmtDuration(new Date(run.finished_at ?? Date.now()) - new Date(run.started_at))
+    const cell = (label, val) => `<div><div class="eyebrow">${label}</div><div class="val">${val}</div></div>`
+
+    return `<article class="card">
+        <div class="card-head">
+            <div><h3>${running ? 'Current sync' : 'Last sync'}</h3>
+                <p>${running ? 'This page updates every few seconds.' : `Finished ${esc(fmtDateTime(run.finished_at))}`}</p></div>
+            ${badge}
+        </div>
+        <div class="card-body stack gap5">
+            <div class="meta-grid">
+                ${cell('Started', esc(fmtDateTime(run.started_at)))}
+                ${cell(running ? 'Elapsed' : 'Took', `<span class="num">${took}</span>`)}
+                ${cell('Started by', esc(run.started_by || '—'))}
+                ${cell('Synced', esc(synced))}
+                ${o.cw_tickets ? cell('Ticket boards', n ? `${n} board${n === 1 ? '' : 's'}` : 'All boards') : ''}
+            </div>
+            ${run.phases.map(p => syncPhaseHTML(run, p)).join('')}
+        </div>
+    </article>`
+}
+
+function syncPhaseHTML(run, p) {
+    const name = SYNC_PHASE_NAMES[p.name] ?? p.name
+    const key = `${run.started_at}:${p.name}`
+    const open = syncOpenErrors.has(key)
+    const fetching = p.state === 'fetching'
+    // a finished phase is full even when it had nothing to do (0 of 0)
+    const pct = p.state === 'done' ? 100 : p.total ? Math.round(p.done / p.total * 100) : 0
+    const badge = {
+        fetching: '<span class="badge info"><i class="dot pulse"></i>Fetching</span>',
+        running:  '<span class="badge info"><i class="dot pulse"></i>Running</span>',
+        done:     '<span class="badge ok"><i class="dot"></i>Done</span>',
+        failed:   '<span class="badge bad"><i class="dot"></i>Failed</span>',
+    }[p.state] ?? ''
+    const aria = fetching
+        ? `role="progressbar" aria-label="${esc(name)}" aria-valuetext="${esc(p.label)}"`
+        : `role="progressbar" aria-label="${esc(name)}" aria-valuemin="0" aria-valuemax="${p.total}" aria-valuenow="${p.done}"`
+    const more = p.error_count - p.errors.length
+
+    return `<section class="stack gap2">
+        <div class="row gap3 wrap">
+            <h4>${esc(name)}</h4>
+            ${badge}
+            ${p.state === 'done' ? '' : `<span class="muted">${esc(p.label)}</span>`}
+            <span class="grow"></span>
+            ${fetching ? '' : `<span class="num muted">${p.done} / ${p.total}</span>`}
+            ${p.error_count ? `<button class="btn btn-ghost btn-sm" aria-expanded="${open}"
+                onclick="syncToggleErrors('${esc(key)}')">${icon(open ? 'up' : 'down')}${p.error_count} error${p.error_count === 1 ? '' : 's'}</button>` : ''}
+        </div>
+        <div class="meter${fetching ? ' indeterminate' : p.state === 'failed' ? ' bad' : ''}" ${aria}><i style="${fetching ? '' : `width:${pct}%`}"></i></div>
+        ${open && p.errors.length ? `<div class="card log-list sync-errors">
+            ${p.errors.map(e => `<div class="log-row error"><span class="log-level">ERROR</span><span class="log-msg">${esc(e)}</span></div>`).join('')}
+            ${more > 0 ? `<div class="log-row"><span></span><span class="log-msg muted">${more} more not shown. The server log has every one.</span></div>` : ''}
+        </div>` : ''}
+    </section>`
+}
+
+function syncToggleErrors(key) {
+    if (!syncOpenErrors.delete(key)) syncOpenErrors.add(key)
+    if (syncLast) renderSync(syncLast, refreshContent)
+}
+
+// fmtDuration renders milliseconds as "42s", "3m 12s" or "1h 4m".
+function fmtDuration(ms) {
+    const s = Math.max(0, Math.round(ms / 1000))
+    if (s < 60) return `${s}s`
+    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
+    return `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`
 }
 
 async function showNewSyncModal() {

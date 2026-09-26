@@ -12,7 +12,9 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
-func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
+// SyncWebexRecipients reports into ph. Its count is CW members looked up in Webex, the slow
+// part; the room sync before it shows as a label only.
+func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int, ph *phase) error {
 	slog.Info("beginning webex room sync")
 	start := time.Now()
 	defer func() {
@@ -30,11 +32,11 @@ func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
 		_ = tx.Rollback(ctx)
 	}()
 
-	if err := txSvc.syncWebexRooms(ctx); err != nil {
+	if err := txSvc.syncWebexRooms(ctx, ph); err != nil {
 		return fmt.Errorf("syncing webex rooms: %w", err)
 	}
 
-	if err := txSvc.syncWebexPeople(ctx, maxSyncs); err != nil {
+	if err := txSvc.syncWebexPeople(ctx, maxSyncs, ph); err != nil {
 		return fmt.Errorf("syncing webex people: %w", err)
 	}
 
@@ -45,7 +47,7 @@ func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int) error {
 	return nil
 }
 
-func (s *Service) syncWebexRooms(ctx context.Context) error {
+func (s *Service) syncWebexRooms(ctx context.Context, ph *phase) error {
 	start := time.Now()
 	defer func() {
 		slog.Info("webex room sync complete", "took_time", time.Since(start).Seconds())
@@ -64,6 +66,8 @@ func (s *Service) syncWebexRooms(ctx context.Context) error {
 	}
 	slog.Info("webex room sync: got rooms from store", "total_rooms", len(sr))
 
+	ph.label("Saving Webex rooms")
+
 	for _, r := range roomsToRecipients(wr) {
 		if _, err := s.Webex.Recipients.Upsert(ctx, r); err != nil {
 			return fmt.Errorf("upserting room with name %s: %w", r.Name, err)
@@ -73,7 +77,8 @@ func (s *Service) syncWebexRooms(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
+func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int, ph *phase) error {
+	ph.fetching("Fetching members from ConnectWise")
 	start := time.Now()
 	defer func() {
 		slog.Info("webex people sync complete", "took_time", time.Since(start).Seconds())
@@ -91,10 +96,13 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 	}
 	slog.Info("webex people sync: got people from store", "total_people", len(sp))
 
-	wp, err := s.getWxPeopleFromCwMembers(ctx, cwm, maxSyncs)
+	ph.counting("Looking up members in Webex", len(cwm))
+	wp, err := s.getWxPeopleFromCwMembers(ctx, cwm, maxSyncs, ph)
 	if err != nil {
 		return fmt.Errorf("getting webex people from connectwise members: %w", err)
 	}
+
+	ph.label("Saving Webex people")
 
 	for _, p := range peopleToRecipients(wp) {
 		if _, err := s.Webex.Recipients.Upsert(ctx, p); err != nil {
@@ -111,7 +119,7 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int) error {
 	return nil
 }
 
-func (s *Service) getWxPeopleFromCwMembers(ctx context.Context, members []psa.Member, maxSyncs int) ([]webex.Person, error) {
+func (s *Service) getWxPeopleFromCwMembers(ctx context.Context, members []psa.Member, maxSyncs int, ph *phase) ([]webex.Person, error) {
 	sem := make(chan struct{}, maxSyncs)
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(members))
@@ -128,15 +136,19 @@ func (s *Service) getWxPeopleFromCwMembers(ctx context.Context, members []psa.Me
 			defer func() { <-sem }()
 			defer wg.Done()
 
-			if m.PrimaryEmail == "" {
+			if member.PrimaryEmail == "" {
+				ph.step(nil)
 				return
 			}
 
 			ppl, err := s.Webex.WebexClient.ListPeople(ctx, member.PrimaryEmail)
 			if err != nil {
-				errCh <- fmt.Errorf("listing people for email %s: %w", member.PrimaryEmail, err)
+				err = fmt.Errorf("listing people for email %s: %w", member.PrimaryEmail, err)
+				ph.step(err)
+				errCh <- err
 				return
 			}
+			ph.step(nil)
 
 			if len(ppl) == 0 {
 				return

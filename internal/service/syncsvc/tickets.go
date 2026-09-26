@@ -13,7 +13,8 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
-func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int) error {
+// SyncOpenTickets reports into ph, one step per open ticket processed.
+func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int, ph *phase) error {
 	start := time.Now()
 	slog.Info("cwsvc: beginning ticket sync", "board_ids", boardIDs)
 	defer func() {
@@ -37,6 +38,7 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 		return fmt.Errorf("getting open tickets from connectwise: %w", err)
 	}
 	slog.Info("cwsvc: open ticket sync: got open tickets from connectwise", "total_tickets", len(tix))
+	ph.counting("Processing tickets", len(tix))
 	sem := make(chan struct{}, maxSyncs)
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(tix))
@@ -49,9 +51,12 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 			defer wg.Done()
 			opts := ticketbot.ProcessOpts{Source: models.SourceSync, RunRules: false}
 			if err := s.Ticketbot.ProcessTicket(ctx, ticket.ID, opts); err != nil {
-				errCh <- fmt.Errorf("error syncing ticket %d: %w", ticket.ID, err)
+				err = fmt.Errorf("syncing ticket %d: %w", ticket.ID, err)
+				ph.step(err)
+				errCh <- err
 				return
 			}
+			ph.step(nil)
 		}(t)
 	}
 

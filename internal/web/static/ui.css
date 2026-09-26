@@ -752,6 +752,14 @@ table.tbl {
 .meter { height: 6px; border-radius: 99px; background: var(--bg-sunken); overflow: hidden; }
 .meter > i { display: block; height: 100%; border-radius: 99px; background: var(--accent);
   transition: width 600ms var(--ease); }
+/* work whose size is not known yet: a short fill sweeps across instead of growing */
+.meter.indeterminate > i { width: 35%; animation: meter-sweep 1.4s var(--ease) infinite; }
+@keyframes meter-sweep { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+.meter.bad > i { background: var(--bad); }
+/* the global reduced-motion rule would turn the sweep into a flicker; hold a soft full bar */
+@media (prefers-reduced-motion: reduce) {
+  .meter.indeterminate > i { animation: none; width: 100%; background: var(--accent-soft); }
+}
 
 /* ---------- 13. BOARD (kanban) ---------- */
 .board { display: grid; grid-template-columns: repeat(4, minmax(260px,1fr)); gap: var(--s4); align-items: start; }

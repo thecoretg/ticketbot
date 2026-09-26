@@ -88,3 +88,5 @@
 .wf-toolbar .input.wf-name { max-width: 240px; }
 .wf-toolbar .input.wf-ticket { width: 110px; }
 /* the workflow list's step count is a plain number */
+/* a sync phase's errors have no timestamp, so the log row drops its time column */
+.sync-errors .log-row { grid-template-columns: 54px 1fr; }

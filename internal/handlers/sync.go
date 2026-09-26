@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"context"
-	"log/slog"
+	"errors"
 	"net/http"
 
+	"github.com/thecoretg/ticketbot/internal/middleware"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/models"
 )
@@ -19,8 +20,7 @@ func NewSyncHandler(svc *syncsvc.Service, cfg *models.Config) *SyncHandler {
 }
 
 func (h *SyncHandler) HandleSyncStatus(w http.ResponseWriter, r *http.Request) {
-	status := &models.SyncStatusResponse{Status: h.Svc.IsSyncing()}
-	writeJSON(w, 200, status)
+	writeJSON(w, 200, h.Svc.Status())
 }
 
 func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
@@ -35,12 +35,21 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 		p.MaxConcurrentSyncs = h.cfg.MaxConcurrentSyncs
 	}
 
+	startedBy := ""
+	if u := middleware.User(r.Context()); u != nil {
+		startedBy = u.EmailAddress
+	}
+
+	// the sync outlives this request
 	ctx := context.WithoutCancel(r.Context())
-	go func() {
-		if err := h.Svc.Sync(ctx, p); err != nil {
-			slog.Error("syncing", "error", err.Error())
+	if err := h.Svc.Start(ctx, p, startedBy); err != nil {
+		if errors.Is(err, syncsvc.ErrSyncRunning) {
+			conflictError(w, err)
+			return
 		}
-	}()
+		internalServerError(w, err)
+		return
+	}
 
 	resultJSON(w, "sync started")
 }

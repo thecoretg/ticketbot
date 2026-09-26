@@ -1,8 +1,6 @@
 package syncsvc
 
 import (
-	"sync/atomic"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
@@ -15,7 +13,7 @@ type Service struct {
 	Webex     *webexsvc.Service
 	Ticketbot *ticketbot.Service
 	pool      *pgxpool.Pool
-	syncing   atomic.Bool
+	progress  *tracker
 }
 
 func New(pool *pgxpool.Pool, cw *cwsvc.Service, wx *webexsvc.Service, tb *ticketbot.Service) *Service {
@@ -24,13 +22,15 @@ func New(pool *pgxpool.Pool, cw *cwsvc.Service, wx *webexsvc.Service, tb *ticket
 		Webex:     wx,
 		Ticketbot: tb,
 		pool:      pool,
+		progress:  &tracker{},
 	}
 }
 
 func (s *Service) withTx(tx pgx.Tx) *Service {
 	return &Service{
-		CW:    s.CW.WithTX(tx),
-		Webex: s.Webex.WithTx(tx),
-		pool:  s.pool,
+		CW:       s.CW.WithTX(tx),
+		Webex:    s.Webex.WithTx(tx),
+		pool:     s.pool,
+		progress: s.progress,
 	}
 }
