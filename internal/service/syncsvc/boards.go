@@ -10,7 +10,8 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
-func (s *Service) SyncBoards(ctx context.Context) error {
+// SyncBoards reports into ph, one step per board (the board and its statuses).
+func (s *Service) SyncBoards(ctx context.Context, ph *phase) error {
 	start := time.Now()
 	slog.Info("beginning connectwise board sync")
 	cwb, err := s.CW.CWClient.ListBoards(ctx, nil)
@@ -35,16 +36,24 @@ func (s *Service) SyncBoards(ctx context.Context) error {
 		_ = tx.Rollback(ctx)
 	}()
 
-	for _, b := range boardsToUpsert(cwb) {
+	upserts := boardsToUpsert(cwb)
+	ph.counting("Syncing boards and statuses", len(upserts))
+	for _, b := range upserts {
 		if _, err := txSvc.CW.Boards.Upsert(ctx, b); err != nil {
 			slog.Error("board sync: upserting board", "board_id", b.ID, "error", err.Error())
+			ph.step(fmt.Errorf("upserting board %d (%s): %w", b.ID, b.Name, err))
 			continue
 		}
 
 		if err := txSvc.SyncBoardStatuses(ctx, b.ID); err != nil {
 			slog.Error("board sync: status sync", "board_id", b.ID, "error", err.Error())
+			ph.step(fmt.Errorf("syncing statuses for board %d (%s): %w", b.ID, b.Name, err))
+			continue
 		}
+		ph.step(nil)
 	}
+
+	ph.label("Saving boards")
 
 	for _, b := range boardsToDelete(cwb, sb) {
 		if err := txSvc.CW.Boards.SoftDelete(ctx, b.ID); err != nil {

@@ -506,9 +506,9 @@ with `.tl-item`.
 </div>
 ```
 
-The grid's hairlines are the container showing through a 1px gap, so the last
-cell spans whatever is left of its row — otherwise a count that does not fill
-the row leaves a bare strip of `--line` where the missing cells would be.
+The grid's hairlines are each cell's right and bottom shadow, and the grid
+clips the ones on its own border. A count that does not fill the last row just
+ends there, so any number of cells is fine.
 
 ## Secrets
 
@@ -556,3 +556,14 @@ Code token spans: `.tok-field` `.tok-op` `.tok-val` `.tok-join`.
 and `rankBars`. They emit plain SVG using `var(--chart-1…6)`, so they follow the
 palette automatically. Series 1 is always the accent. Add `.meter` for a simple
 inline progress bar.
+
+```html
+<div class="meter" role="progressbar" aria-label="Tickets" aria-valuemin="0" aria-valuemax="180" aria-valuenow="42"><i style="width:23%"></i></div>
+<div class="meter indeterminate" role="progressbar" aria-label="Boards" aria-valuetext="Fetching boards"><i></i></div>
+<div class="meter bad" role="progressbar" aria-label="Webex recipients" …><i style="width:60%"></i></div>
+```
+
+`.indeterminate` is for work whose size is not known yet: the fill sweeps
+instead of growing, and holds still as a soft full bar under reduced motion.
+`.bad` fills with the danger colour for work that stopped. Pair either with a
+word next to the bar.
