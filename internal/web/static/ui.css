@@ -1084,14 +1084,15 @@ table.tbl {
 
 .meta-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--radius); overflow: hidden;
 }
-.meta-grid > div { background: var(--surface); padding: var(--s3) var(--s4); }
-/* the hairlines are the container showing through a 1px gap, so an item count
-   that does not fill the last row leaves a bare strip of --line. The last cell
-   takes the rest of its row; a full last row is unaffected. */
-.meta-grid > div:last-child { grid-column: auto / -1; }
+/* the hairlines are each cell's right and bottom shadow. The grid clips the ones that land
+   on its own border, and the cells have no background to paint over a neighbour's, so a
+   last row that is not full just ends instead of leaving a bare strip or an empty cell. */
+.meta-grid > div { padding: var(--s3) var(--s4); box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
+/* no divider after the last cell: in a short last row it would outline an empty cell */
+.meta-grid > div:last-child { box-shadow: 0 1px 0 var(--line); }
 .meta-grid .eyebrow { margin-bottom: 4px; }
 .meta-grid .val { font-size: var(--text-base); font-weight: 500; }
 
