@@ -1,8 +1,10 @@
 package syncsvc
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,4 +125,23 @@ func TestNilPhaseIsANoOp(t *testing.T) {
 	ph.step(errors.New("x"))
 	ph.done()
 	ph.fail("x", errors.New("x"))
+}
+
+func TestSnapshotEncodesEmptyListsAsArrays(t *testing.T) {
+	tr := &tracker{}
+	_ = tr.start(&models.SyncPayload{CWBoards: true}, "", time.Now())
+	b, err := json.Marshal(tr.snapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"errors":[]`) {
+		t.Errorf("a phase without errors encodes %s, want \"errors\":[]", b)
+	}
+
+	empty := &tracker{}
+	_ = empty.start(&models.SyncPayload{}, "", time.Now())
+	b, _ = json.Marshal(empty.snapshot())
+	if !strings.Contains(string(b), `"phases":[]`) {
+		t.Errorf("a run with no phases encodes %s, want \"phases\":[]", b)
+	}
 }

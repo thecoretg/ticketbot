@@ -37,9 +37,13 @@ func (t *tracker) start(p *models.SyncPayload, startedBy string, now time.Time) 
 			BoardIDs:        slices.Clone(p.BoardIDs),
 		},
 	}
+	// empty, not nil, so the JSON carries [] and the page need not guard against null
+	run.Phases = []models.SyncPhase{}
 	add := func(on bool, name, label string) {
 		if on {
-			run.Phases = append(run.Phases, models.SyncPhase{Name: name, State: models.SyncPhaseFetching, Label: label})
+			run.Phases = append(run.Phases, models.SyncPhase{
+				Name: name, State: models.SyncPhaseFetching, Label: label, Errors: []string{},
+			})
 		}
 	}
 	add(p.CWBoards, models.SyncPhaseBoards, "Fetching boards from ConnectWise")
