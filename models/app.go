@@ -34,9 +34,6 @@ type Config struct {
 	// LogRetentionDays is how many days of logs to keep in the database.
 	LogRetentionDays int `json:"log_retention_days"`
 
-	// LogCleanupIntervalHours is how often the cleanup goroutine runs to delete old logs.
-	LogCleanupIntervalHours int `json:"log_cleanup_interval_hours"`
-
 	// LogBufferSize is how many log entries to keep in the in-memory ring buffer.
 	LogBufferSize int `json:"log_buffer_size"`
 
@@ -74,6 +71,16 @@ type Config struct {
 	// They are the same story told twice, so they age out together. 0 keeps them forever.
 	HistoryRetentionDays int `json:"history_retention_days"`
 
+	// IntakeRetentionDays is how long finished webhook intake rows are kept. 0 keeps them forever.
+	IntakeRetentionDays int `json:"intake_retention_days"`
+
+	// ClosedTicketRetentionEnabled deletes closed tickets ConnectWise has not changed for
+	// ClosedTicketRetentionDays, with their notes and history. A ticket that is reopened is
+	// fetched again on its next webhook. Soft-deleted tickets always go once their delete is
+	// older than HistoryRetentionDays.
+	ClosedTicketRetentionEnabled bool `json:"closed_ticket_retention_enabled"`
+	ClosedTicketRetentionDays    int  `json:"closed_ticket_retention_days"`
+
 	// Business hours bound the stale-webhook alert: silence outside them is normal. Times are
 	// HH:MM in BusinessZone; BusinessDays is a comma-separated list of mon..sun.
 	BusinessOpen  string `json:"business_open"`
@@ -89,19 +96,18 @@ type Config struct {
 // ConfigUpdateParams is used for partial updates to Config. Pointer fields allow
 // distinguishing between "not provided" and an explicit zero/false value.
 type ConfigUpdateParams struct {
-	MasterDryRun            *bool   `json:"master_dry_run"`
-	CWAPIMemberIdentifier   *string `json:"cw_api_member_identifier"`
-	MaxMessageLength        *int    `json:"max_message_length"`
-	MaxConcurrentSyncs      *int    `json:"max_concurrent_syncs"`
-	RequireTOTP             *bool   `json:"require_totp"`
-	DebugLogging            *bool   `json:"debug_logging"`
-	LogRetentionDays        *int    `json:"log_retention_days"`
-	LogCleanupIntervalHours *int    `json:"log_cleanup_interval_hours"`
-	LogBufferSize           *int    `json:"log_buffer_size"`
-	SSOEnabled              *bool   `json:"sso_enabled"`
-	PasswordLoginEnabled    *bool   `json:"password_login_enabled"`
-	NotePreviewLength       *int    `json:"note_preview_length"`
-	WriteCapPerTicket       *int    `json:"write_cap_per_ticket"`
+	MasterDryRun          *bool   `json:"master_dry_run"`
+	CWAPIMemberIdentifier *string `json:"cw_api_member_identifier"`
+	MaxMessageLength      *int    `json:"max_message_length"`
+	MaxConcurrentSyncs    *int    `json:"max_concurrent_syncs"`
+	RequireTOTP           *bool   `json:"require_totp"`
+	DebugLogging          *bool   `json:"debug_logging"`
+	LogRetentionDays      *int    `json:"log_retention_days"`
+	LogBufferSize         *int    `json:"log_buffer_size"`
+	SSOEnabled            *bool   `json:"sso_enabled"`
+	PasswordLoginEnabled  *bool   `json:"password_login_enabled"`
+	NotePreviewLength     *int    `json:"note_preview_length"`
+	WriteCapPerTicket     *int    `json:"write_cap_per_ticket"`
 	// OpsRoomID and RedirectRoomID clear the setting when sent as 0.
 	OpsRoomID            *int    `json:"ops_room_id"`
 	RedirectRoomID       *int    `json:"redirect_room_id"`
@@ -112,27 +118,34 @@ type ConfigUpdateParams struct {
 	BusinessDays         *string `json:"business_days"`
 	BusinessZone         *string `json:"business_zone"`
 	MCPEnabled           *bool   `json:"mcp_enabled"`
+
+	IntakeRetentionDays          *int  `json:"intake_retention_days"`
+	ClosedTicketRetentionEnabled *bool `json:"closed_ticket_retention_enabled"`
+	ClosedTicketRetentionDays    *int  `json:"closed_ticket_retention_days"`
 }
 
 var DefaultConfig = Config{
-	ID:                      1,
-	MasterDryRun:            true,
-	MaxMessageLength:        300,
-	MaxConcurrentSyncs:      5,
-	RequireTOTP:             false,
-	DebugLogging:            false,
-	LogRetentionDays:        7,
-	LogCleanupIntervalHours: 24,
-	LogBufferSize:           500,
-	SSOEnabled:              false,
-	PasswordLoginEnabled:    true,
-	NotePreviewLength:       200,
-	WriteCapPerTicket:       20,
-	StaleAlertMinutes:       60,
-	HistoryRetentionDays:    90,
-	BusinessOpen:            "07:30",
-	BusinessClose:           "19:00",
-	BusinessDays:            "mon,tue,wed,thu,fri",
-	BusinessZone:            "America/Chicago",
-	MCPEnabled:              false,
+	ID:                   1,
+	MasterDryRun:         true,
+	MaxMessageLength:     300,
+	MaxConcurrentSyncs:   5,
+	RequireTOTP:          false,
+	DebugLogging:         false,
+	LogRetentionDays:     7,
+	LogBufferSize:        500,
+	SSOEnabled:           false,
+	PasswordLoginEnabled: true,
+	NotePreviewLength:    200,
+	WriteCapPerTicket:    20,
+	StaleAlertMinutes:    60,
+	HistoryRetentionDays: 90,
+	BusinessOpen:         "07:30",
+	BusinessClose:        "19:00",
+	BusinessDays:         "mon,tue,wed,thu,fri",
+	BusinessZone:         "America/Chicago",
+	MCPEnabled:           false,
+
+	IntakeRetentionDays:          7,
+	ClosedTicketRetentionEnabled: false,
+	ClosedTicketRetentionDays:    60,
 }

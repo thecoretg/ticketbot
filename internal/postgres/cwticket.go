@@ -122,6 +122,14 @@ func (p *TicketRepo) SoftDelete(ctx context.Context, id int) error {
 	return p.queries.SoftDeleteTicket(ctx, id)
 }
 
+func (p *TicketRepo) DeleteSoftDeletedOlderThan(ctx context.Context, days int) (int64, error) {
+	return p.queries.DeleteSoftDeletedTickets(ctx, days)
+}
+
+func (p *TicketRepo) DeleteClosedOlderThan(ctx context.Context, days int) (int64, error) {
+	return p.queries.DeleteClosedTickets(ctx, days)
+}
+
 func (p *TicketRepo) Delete(ctx context.Context, id int) error {
 	if err := p.queries.DeleteTicket(ctx, id); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

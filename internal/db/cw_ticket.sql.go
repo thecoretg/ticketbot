@@ -58,6 +58,36 @@ func (q *Queries) CountTicketsPaged(ctx context.Context, arg CountTicketsPagedPa
 	return count, err
 }
 
+const deleteClosedTickets = `-- name: DeleteClosedTickets :execrows
+DELETE FROM cw_ticket
+WHERE closed_flag AND NOT deleted AND updated_on < NOW()::timestamp - make_interval(days => $1::int)
+`
+
+// updated_on moves on every webhook and sync, so it is when ConnectWise last changed the ticket.
+func (q *Queries) DeleteClosedTickets(ctx context.Context, days int) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteClosedTickets, days)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSoftDeletedTickets = `-- name: DeleteSoftDeletedTickets :execrows
+DELETE FROM cw_ticket
+WHERE deleted AND updated_on < NOW()::timestamp - make_interval(days => $1::int)
+`
+
+// updated_on is when the soft delete happened: SoftDeleteTicket is the last write to a deleted
+// row, and an upsert clears the flag. updated_on is a TIMESTAMP written with NOW(), so the
+// cutoff is computed the same way rather than passed in from Go.
+func (q *Queries) DeleteSoftDeletedTickets(ctx context.Context, days int) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSoftDeletedTickets, days)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteTicket = `-- name: DeleteTicket :exec
 DELETE FROM cw_ticket
 WHERE id = $1

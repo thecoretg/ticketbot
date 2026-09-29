@@ -12,6 +12,8 @@ import (
 type SSOStore interface {
 	entra.SessionStore
 	entra.StateStore
+	// DeleteExpired removes expired sessions and flow states; Put only sweeps when SSO is in use.
+	DeleteExpired(ctx context.Context) error
 }
 
 type SSORoleMappingRepository interface {

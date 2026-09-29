@@ -110,3 +110,15 @@ WHERE id = $1;
 -- name: DeleteTicket :exec
 DELETE FROM cw_ticket
 WHERE id = $1;
+
+-- name: DeleteSoftDeletedTickets :execrows
+-- updated_on is when the soft delete happened: SoftDeleteTicket is the last write to a deleted
+-- row, and an upsert clears the flag. updated_on is a TIMESTAMP written with NOW(), so the
+-- cutoff is computed the same way rather than passed in from Go.
+DELETE FROM cw_ticket
+WHERE deleted AND updated_on < NOW()::timestamp - make_interval(days => sqlc.arg('days')::int);
+
+-- name: DeleteClosedTickets :execrows
+-- updated_on moves on every webhook and sync, so it is when ConnectWise last changed the ticket.
+DELETE FROM cw_ticket
+WHERE closed_flag AND NOT deleted AND updated_on < NOW()::timestamp - make_interval(days => sqlc.arg('days')::int);

@@ -14,8 +14,8 @@ import (
 )
 
 // SSOStore implements repos.SSOStore. Keys are the digests entra hands us; the raw cookie never
-// reaches the database. Expired rows are swept opportunistically on every Put, as
-// entra.MemoryStore does, so no scheduler is needed.
+// reaches the database. Expired rows are swept on every Put, as entra.MemoryStore does, and on
+// the hourly purge through DeleteExpired, which covers an instance where SSO has been turned off.
 type SSOStore struct {
 	queries *db.Queries
 }
@@ -111,4 +111,14 @@ func parseUserID(s string) (int, error) {
 		return 0, fmt.Errorf("sso session user id %q is not an integer: %w", s, err)
 	}
 	return id, nil
+}
+
+func (s *SSOStore) DeleteExpired(ctx context.Context) error {
+	if err := s.queries.DeleteExpiredSSOFlowStates(ctx); err != nil {
+		return fmt.Errorf("deleting expired sso flow states: %w", err)
+	}
+	if err := s.queries.DeleteExpiredSSOSessions(ctx); err != nil {
+		return fmt.Errorf("deleting expired sso sessions: %w", err)
+	}
+	return nil
 }

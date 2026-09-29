@@ -145,8 +145,10 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter,
 		Purgers: []intake.Purger{
 			&ticketbot.HistoryPurger{Runs: r.WorkflowRuns, Events: r.TicketEvents, Cfg: cfg},
-			&authsvc.SessionPurger{Sessions: r.Sessions},
+			&ticketbot.TicketPurger{Tickets: r.CW.Ticket, Cfg: cfg},
+			&authsvc.SessionPurger{Sessions: r.Sessions, TOTPPending: r.TOTPPending, SSO: r.SSO},
 			oauthSvc,
+			persister,
 		}})
 
 	wfSvc := workflow.New(workflow.Params{

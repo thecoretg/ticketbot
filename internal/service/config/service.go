@@ -19,6 +19,8 @@ var (
 	ErrWriteCap              = errors.New("write cap per ticket cannot be negative")
 	ErrStaleMinutes          = errors.New("stale alert minutes cannot be negative")
 	ErrHistoryRetention      = errors.New("history retention days cannot be negative")
+	ErrIntakeRetention       = errors.New("intake retention days cannot be negative")
+	ErrClosedTicketRetention = errors.New("closed ticket retention must be at least 1 day")
 )
 
 // ValidationError marks a rejected update the caller should report as a bad request.
@@ -61,6 +63,13 @@ func (s *Service) validate(c *models.Config) error {
 	}
 	if c.HistoryRetentionDays < 0 {
 		return ValidationError{ErrHistoryRetention}
+	}
+	if c.IntakeRetentionDays < 0 {
+		return ValidationError{ErrIntakeRetention}
+	}
+	// checked even while off, so turning it on later never meets a stored 0
+	if c.ClosedTicketRetentionDays < 1 {
+		return ValidationError{ErrClosedTicketRetention}
 	}
 	if _, err := models.ParseBusinessWindow(c.BusinessOpen, c.BusinessClose, c.BusinessDays, c.BusinessZone); err != nil {
 		return ValidationError{err}
@@ -106,9 +115,6 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.LogRetentionDays != nil {
 		merged.LogRetentionDays = *p.LogRetentionDays
 	}
-	if p.LogCleanupIntervalHours != nil {
-		merged.LogCleanupIntervalHours = *p.LogCleanupIntervalHours
-	}
 	if p.LogBufferSize != nil {
 		merged.LogBufferSize = *p.LogBufferSize
 	}
@@ -151,6 +157,15 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.MCPEnabled != nil {
 		merged.MCPEnabled = *p.MCPEnabled
 	}
+	if p.IntakeRetentionDays != nil {
+		merged.IntakeRetentionDays = *p.IntakeRetentionDays
+	}
+	if p.ClosedTicketRetentionEnabled != nil {
+		merged.ClosedTicketRetentionEnabled = *p.ClosedTicketRetentionEnabled
+	}
+	if p.ClosedTicketRetentionDays != nil {
+		merged.ClosedTicketRetentionDays = *p.ClosedTicketRetentionDays
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -182,7 +197,6 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.RequireTOTP = src.RequireTOTP
 	cfg.DebugLogging = src.DebugLogging
 	cfg.LogRetentionDays = src.LogRetentionDays
-	cfg.LogCleanupIntervalHours = src.LogCleanupIntervalHours
 	cfg.LogBufferSize = src.LogBufferSize
 	cfg.SSOEnabled = src.SSOEnabled
 	cfg.PasswordLoginEnabled = src.PasswordLoginEnabled
@@ -194,6 +208,9 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.HistoryRetentionDays = src.HistoryRetentionDays
 	cfg.BusinessOpen, cfg.BusinessClose, cfg.BusinessDays, cfg.BusinessZone = src.BusinessOpen, src.BusinessClose, src.BusinessDays, src.BusinessZone
 	cfg.MCPEnabled = src.MCPEnabled
+	cfg.IntakeRetentionDays = src.IntakeRetentionDays
+	cfg.ClosedTicketRetentionEnabled = src.ClosedTicketRetentionEnabled
+	cfg.ClosedTicketRetentionDays = src.ClosedTicketRetentionDays
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)
