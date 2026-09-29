@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	gooseMigrationVersion = 20
+	gooseMigrationVersion = 21
 	shutdownTimeout       = 10 * time.Second
 
 	// HTTP server timeouts. Webhook and dashboard requests are small and fast; anything slower is
@@ -90,6 +90,8 @@ func Run() error {
 		if err := a.Svc.Hooks.ProcessAllHooks(ctx); err != nil {
 			return fmt.Errorf("processing connectwise hooks: %w", err)
 		}
+		// The missed-webhook check stands in for webhooks, so it runs only where they are wired.
+		a.Svc.Catchup.Start(ctx)
 	}
 
 	// SameOrigin rejects cross-site POST/PUT/DELETE by Origin header; webhooks carry no Origin

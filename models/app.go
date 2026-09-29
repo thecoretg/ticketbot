@@ -81,6 +81,10 @@ type Config struct {
 	ClosedTicketRetentionEnabled bool `json:"closed_ticket_retention_enabled"`
 	ClosedTicketRetentionDays    int  `json:"closed_ticket_retention_days"`
 
+	// CatchupIntervalMinutes is how often ticketbot asks ConnectWise for tickets that changed
+	// without a webhook, and queues them as if the webhook had come. 0 turns the check off.
+	CatchupIntervalMinutes int `json:"catchup_interval_minutes"`
+
 	// Business hours bound the stale-webhook alert: silence outside them is normal. Times are
 	// HH:MM in BusinessZone; BusinessDays is a comma-separated list of mon..sun.
 	BusinessOpen  string `json:"business_open"`
@@ -122,6 +126,7 @@ type ConfigUpdateParams struct {
 	IntakeRetentionDays          *int  `json:"intake_retention_days"`
 	ClosedTicketRetentionEnabled *bool `json:"closed_ticket_retention_enabled"`
 	ClosedTicketRetentionDays    *int  `json:"closed_ticket_retention_days"`
+	CatchupIntervalMinutes       *int  `json:"catchup_interval_minutes"`
 }
 
 var DefaultConfig = Config{
@@ -148,4 +153,5 @@ var DefaultConfig = Config{
 	IntakeRetentionDays:          7,
 	ClosedTicketRetentionEnabled: false,
 	ClosedTicketRetentionDays:    60,
+	CatchupIntervalMinutes:       15,
 }

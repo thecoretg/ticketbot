@@ -22,13 +22,15 @@ const (
 	IntakeDiscarded  IntakeStatus = "discarded"  // an admin dropped it; purged like done
 )
 
-// IntakeAction is the ConnectWise callback action a queued webhook carries.
+// IntakeAction is the ConnectWise callback action a queued webhook carries, or IntakeCatchup for
+// a row the missed-webhook check queued because ConnectWise changed a ticket without calling back.
 type IntakeAction string
 
 const (
 	IntakeAdded   IntakeAction = "added"
 	IntakeUpdated IntakeAction = "updated"
 	IntakeDeleted IntakeAction = "deleted"
+	IntakeCatchup IntakeAction = "catchup"
 )
 
 // WebhookIntake is one ConnectWise ticket webhook, persisted on arrival so a restart or a transient
@@ -54,6 +56,21 @@ type IntakeHourCount struct {
 
 // IntakeStats summarises the queue for the dashboard.
 type IntakeStats struct {
-	Counts         map[IntakeStatus]int64 `json:"counts"`
-	LastReceivedAt *time.Time             `json:"last_received_at,omitempty"`
+	Counts map[IntakeStatus]int64 `json:"counts"`
+	// LastReceivedAt is the last real webhook; catch-up rows do not count.
+	LastReceivedAt *time.Time `json:"last_received_at,omitempty"`
+	// CatchupLast7Days is how many rows the missed-webhook check queued in the last seven days
+	// (bounded by the intake retention). Catchup is that check's state, when it has run.
+	CatchupLast7Days int64         `json:"catchup_last_7_days"`
+	Catchup          *CatchupState `json:"catchup,omitempty"`
+}
+
+// CatchupState is the missed-webhook check's single state row. CheckedThrough is the watermark:
+// the start of the last run that succeeded; the next run asks ConnectWise for tickets changed
+// since then. A failed run records LastRunAt and LastError and leaves the watermark alone.
+type CatchupState struct {
+	CheckedThrough *time.Time `json:"checked_through,omitempty"`
+	LastRunAt      *time.Time `json:"last_run_at,omitempty"`
+	LastQueued     int        `json:"last_queued"`
+	LastError      *string    `json:"last_error,omitempty"`
 }

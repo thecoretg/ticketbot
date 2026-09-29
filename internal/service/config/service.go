@@ -21,6 +21,14 @@ var (
 	ErrHistoryRetention      = errors.New("history retention days cannot be negative")
 	ErrIntakeRetention       = errors.New("intake retention days cannot be negative")
 	ErrClosedTicketRetention = errors.New("closed ticket retention must be at least 1 day")
+	ErrCatchupInterval       = fmt.Errorf("missed-webhook check interval must be 0 (off) or %d to %d minutes", MinCatchupMinutes, MaxCatchupMinutes)
+)
+
+// The missed-webhook check costs one ConnectWise request per run, so it may not run more often
+// than every five minutes; a day is the longest useful gap, since that is its lookback cap.
+const (
+	MinCatchupMinutes = 5
+	MaxCatchupMinutes = 1440
 )
 
 // ValidationError marks a rejected update the caller should report as a bad request.
@@ -70,6 +78,9 @@ func (s *Service) validate(c *models.Config) error {
 	// checked even while off, so turning it on later never meets a stored 0
 	if c.ClosedTicketRetentionDays < 1 {
 		return ValidationError{ErrClosedTicketRetention}
+	}
+	if m := c.CatchupIntervalMinutes; m != 0 && (m < MinCatchupMinutes || m > MaxCatchupMinutes) {
+		return ValidationError{ErrCatchupInterval}
 	}
 	if _, err := models.ParseBusinessWindow(c.BusinessOpen, c.BusinessClose, c.BusinessDays, c.BusinessZone); err != nil {
 		return ValidationError{err}
@@ -166,6 +177,9 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.ClosedTicketRetentionDays != nil {
 		merged.ClosedTicketRetentionDays = *p.ClosedTicketRetentionDays
 	}
+	if p.CatchupIntervalMinutes != nil {
+		merged.CatchupIntervalMinutes = *p.CatchupIntervalMinutes
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -211,6 +225,7 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.IntakeRetentionDays = src.IntakeRetentionDays
 	cfg.ClosedTicketRetentionEnabled = src.ClosedTicketRetentionEnabled
 	cfg.ClosedTicketRetentionDays = src.ClosedTicketRetentionDays
+	cfg.CatchupIntervalMinutes = src.CatchupIntervalMinutes
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)

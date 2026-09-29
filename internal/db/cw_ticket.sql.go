@@ -134,6 +134,39 @@ func (q *Queries) GetTicket(ctx context.Context, id int) (*CwTicket, error) {
 	return &i, err
 }
 
+const listTicketLastUpdated = `-- name: ListTicketLastUpdated :many
+SELECT id, COALESCE((raw->'_info'->>'lastUpdated')::timestamptz, 'epoch'::timestamptz)::timestamptz AS cw_last_updated
+FROM cw_ticket
+WHERE id = ANY($1::int[])
+`
+
+type ListTicketLastUpdatedRow struct {
+	ID            int       `json:"id"`
+	CwLastUpdated time.Time `json:"cw_last_updated"`
+}
+
+// ConnectWise's own lastUpdated for each stored ticket, from the raw copy. A ticket stored before
+// raw was kept reads as the epoch, so it always counts as out of date.
+func (q *Queries) ListTicketLastUpdated(ctx context.Context, ids []int) ([]*ListTicketLastUpdatedRow, error) {
+	rows, err := q.db.Query(ctx, listTicketLastUpdated, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*ListTicketLastUpdatedRow
+	for rows.Next() {
+		var i ListTicketLastUpdatedRow
+		if err := rows.Scan(&i.ID, &i.CwLastUpdated); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTickets = `-- name: ListTickets :many
 SELECT id, summary, board_id, status_id, owner_id, company_id, contact_id, resources, updated_by, updated_on, added_on, deleted, raw, priority_id, priority_name, type_id, type_name, subtype_id, subtype_name, item_id, item_name, closed_flag, latest_note_id FROM cw_ticket
 ORDER BY id

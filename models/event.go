@@ -26,6 +26,8 @@ const (
 	SourceWebhook EventSource = "webhook"
 	SourceSync    EventSource = "sync"
 	SourceManual  EventSource = "manual"
+	// SourceCatchup is the missed-webhook check: ConnectWise changed the ticket but never called.
+	SourceCatchup EventSource = "catchup"
 )
 
 // TicketEvent is one entry in a ticket's activity thread.

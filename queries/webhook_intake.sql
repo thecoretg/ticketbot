@@ -64,7 +64,8 @@ SELECT status, COUNT(*)::bigint AS n FROM webhook_intake GROUP BY status;
 SELECT COUNT(*)::bigint FROM webhook_intake WHERE received_at >= $1;
 
 -- name: LastWebhookIntakeReceivedAt :one
-SELECT received_at FROM webhook_intake ORDER BY received_at DESC LIMIT 1;
+-- Catch-up rows are not webhooks; counting them would hide the silence the stale alert is for.
+SELECT received_at FROM webhook_intake WHERE action <> 'catchup' ORDER BY received_at DESC LIMIT 1;
 
 -- name: DeleteFinishedWebhookIntakeBefore :execrows
 DELETE FROM webhook_intake
@@ -73,6 +74,14 @@ WHERE status IN ('done', 'discarded') AND finished_at < $1;
 -- name: CountWebhookIntakeByHour :many
 SELECT date_trunc('hour', received_at)::timestamptz AS hour, COUNT(*)::bigint AS n
 FROM webhook_intake
-WHERE received_at >= $1
+WHERE received_at >= $1 AND action <> 'catchup'
 GROUP BY 1
 ORDER BY 1;
+
+-- name: ListOpenWebhookIntakeTickets :many
+-- Of the given tickets, those with a row still waiting or in flight.
+SELECT DISTINCT ticket_id FROM webhook_intake
+WHERE status IN ('pending', 'processing') AND ticket_id = ANY(sqlc.arg('ticket_ids')::int[]);
+
+-- name: CountWebhookIntakeByActionSince :one
+SELECT COUNT(*)::bigint FROM webhook_intake WHERE action = $1 AND received_at >= $2;

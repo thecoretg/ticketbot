@@ -14,6 +14,7 @@ import (
 	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/alerts"
 	"github.com/thecoretg/ticketbot/internal/service/authsvc"
+	"github.com/thecoretg/ticketbot/internal/service/catchup"
 	"github.com/thecoretg/ticketbot/internal/service/config"
 	"github.com/thecoretg/ticketbot/internal/service/cwsvc"
 	"github.com/thecoretg/ticketbot/internal/service/intake"
@@ -72,6 +73,7 @@ type Services struct {
 	Notifier  *notifier.Service
 	Ticketbot *ticketbot.Service
 	Intake    *intake.Service
+	Catchup   *catchup.Service
 	Workflow  *workflow.Service
 	Lists     *lists.Service
 	Transfer  *transfer.Service
@@ -142,7 +144,7 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 	if cfg.MCPEnabled && e.RootURL == "" {
 		slog.Warn("mcp_enabled is on but ROOT_URL is not set; the MCP server stays off")
 	}
-	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter,
+	intakeSvc := intake.New(intake.Params{Repo: r.WebhookIntake, Processor: tb, Cfg: cfg, Alerter: alerter, CatchupState: r.CatchupState,
 		Purgers: []intake.Purger{
 			&ticketbot.HistoryPurger{Runs: r.WorkflowRuns, Events: r.TicketEvents, Cfg: cfg},
 			&ticketbot.TicketPurger{Tickets: r.CW.Ticket, Cfg: cfg},
@@ -191,13 +193,15 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 			Notifier:  ns,
 			Ticketbot: tb,
 			Intake:    intakeSvc,
-			Workflow:  wfSvc,
-			Lists:     listSvc,
-			Transfer:  transfer.New(transfer.Params{Workflows: wfSvc, Lists: listSvc, Recipients: r.WebexRecipients, Boards: r.CW.Board}),
-			SSO:       ssoSvc,
-			OAuth:     oauthSvc,
-			Simulate:  simSvc,
-			MCP:       mcpSvc,
+			Catchup: catchup.New(catchup.Params{CW: cw, Queue: intakeSvc, Intake: r.WebhookIntake, Tickets: r.CW.Ticket,
+				Workflows: r.Workflows, State: r.CatchupState, Cfg: cfg}),
+			Workflow: wfSvc,
+			Lists:    listSvc,
+			Transfer: transfer.New(transfer.Params{Workflows: wfSvc, Lists: listSvc, Recipients: r.WebexRecipients, Boards: r.CW.Board}),
+			SSO:      ssoSvc,
+			OAuth:    oauthSvc,
+			Simulate: simSvc,
+			MCP:      mcpSvc,
 		},
 	}, persister, nil
 }

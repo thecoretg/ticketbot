@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -128,6 +129,18 @@ func (p *TicketRepo) DeleteSoftDeletedOlderThan(ctx context.Context, days int) (
 
 func (p *TicketRepo) DeleteClosedOlderThan(ctx context.Context, days int) (int64, error) {
 	return p.queries.DeleteClosedTickets(ctx, days)
+}
+
+func (p *TicketRepo) CWLastUpdated(ctx context.Context, ids []int) (map[int]time.Time, error) {
+	rows, err := p.queries.ListTicketLastUpdated(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int]time.Time, len(rows))
+	for _, r := range rows {
+		out[r.ID] = r.CwLastUpdated
+	}
+	return out, nil
 }
 
 func (p *TicketRepo) Delete(ctx context.Context, id int) error {

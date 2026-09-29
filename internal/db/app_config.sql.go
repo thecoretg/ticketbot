@@ -10,7 +10,7 @@ import (
 )
 
 const getAppConfig = `-- name: GetAppConfig :one
-SELECT id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days FROM app_config
+SELECT id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days, catchup_interval_minutes FROM app_config
 WHERE id = 1
 `
 
@@ -43,6 +43,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 		&i.IntakeRetentionDays,
 		&i.ClosedTicketRetentionEnabled,
 		&i.ClosedTicketRetentionDays,
+		&i.CatchupIntervalMinutes,
 	)
 	return &i, err
 }
@@ -50,7 +51,7 @@ func (q *Queries) GetAppConfig(ctx context.Context) (*AppConfig, error) {
 const insertDefaultAppConfig = `-- name: InsertDefaultAppConfig :one
 INSERT INTO app_config (id) VALUES (1)
 ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days
+RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days, catchup_interval_minutes
 `
 
 func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error) {
@@ -82,13 +83,14 @@ func (q *Queries) InsertDefaultAppConfig(ctx context.Context) (*AppConfig, error
 		&i.IntakeRetentionDays,
 		&i.ClosedTicketRetentionEnabled,
 		&i.ClosedTicketRetentionDays,
+		&i.CatchupIntervalMinutes,
 	)
 	return &i, err
 }
 
 const upsertAppConfig = `-- name: UpsertAppConfig :one
-INSERT INTO app_config(id, master_dry_run, cw_api_member_identifier, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days)
-VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+INSERT INTO app_config(id, master_dry_run, cw_api_member_identifier, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days, catchup_interval_minutes)
+VALUES(1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 ON CONFLICT (id) DO UPDATE SET
     master_dry_run = EXCLUDED.master_dry_run,
     cw_api_member_identifier = EXCLUDED.cw_api_member_identifier,
@@ -113,8 +115,9 @@ ON CONFLICT (id) DO UPDATE SET
     mcp_enabled = EXCLUDED.mcp_enabled,
     intake_retention_days = EXCLUDED.intake_retention_days,
     closed_ticket_retention_enabled = EXCLUDED.closed_ticket_retention_enabled,
-    closed_ticket_retention_days = EXCLUDED.closed_ticket_retention_days
-RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days
+    closed_ticket_retention_days = EXCLUDED.closed_ticket_retention_days,
+    catchup_interval_minutes = EXCLUDED.catchup_interval_minutes
+RETURNING id, max_message_length, max_concurrent_syncs, require_totp, debug_logging, log_retention_days, log_buffer_size, master_dry_run, cw_api_member_identifier, sso_enabled, password_login_enabled, note_preview_length, write_cap_per_ticket, ops_room_id, redirect_room_id, stale_alert_minutes, history_retention_days, business_open, business_close, business_days, business_zone, mcp_enabled, intake_retention_days, closed_ticket_retention_enabled, closed_ticket_retention_days, catchup_interval_minutes
 `
 
 type UpsertAppConfigParams struct {
@@ -142,6 +145,7 @@ type UpsertAppConfigParams struct {
 	IntakeRetentionDays          int    `json:"intake_retention_days"`
 	ClosedTicketRetentionEnabled bool   `json:"closed_ticket_retention_enabled"`
 	ClosedTicketRetentionDays    int    `json:"closed_ticket_retention_days"`
+	CatchupIntervalMinutes       int    `json:"catchup_interval_minutes"`
 }
 
 func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams) (*AppConfig, error) {
@@ -170,6 +174,7 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		arg.IntakeRetentionDays,
 		arg.ClosedTicketRetentionEnabled,
 		arg.ClosedTicketRetentionDays,
+		arg.CatchupIntervalMinutes,
 	)
 	var i AppConfig
 	err := row.Scan(
@@ -198,6 +203,7 @@ func (q *Queries) UpsertAppConfig(ctx context.Context, arg UpsertAppConfigParams
 		&i.IntakeRetentionDays,
 		&i.ClosedTicketRetentionEnabled,
 		&i.ClosedTicketRetentionDays,
+		&i.CatchupIntervalMinutes,
 	)
 	return &i, err
 }

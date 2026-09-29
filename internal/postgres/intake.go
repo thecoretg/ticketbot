@@ -140,6 +140,44 @@ func (p *WebhookIntakeRepo) DeleteFinishedBefore(ctx context.Context, before tim
 	return p.queries.DeleteFinishedWebhookIntakeBefore(ctx, &before)
 }
 
+func (p *WebhookIntakeRepo) OpenTickets(ctx context.Context, ticketIDs []int) ([]int, error) {
+	return p.queries.ListOpenWebhookIntakeTickets(ctx, ticketIDs)
+}
+
+func (p *WebhookIntakeRepo) CountActionSince(ctx context.Context, action models.IntakeAction, since time.Time) (int64, error) {
+	return p.queries.CountWebhookIntakeByActionSince(ctx, db.CountWebhookIntakeByActionSinceParams{Action: string(action), ReceivedAt: since})
+}
+
+// CatchupStateRepo implements repos.CatchupStateRepository.
+type CatchupStateRepo struct {
+	queries *db.Queries
+}
+
+func NewCatchupStateRepo(pool *pgxpool.Pool) *CatchupStateRepo {
+	return &CatchupStateRepo{queries: db.New(pool)}
+}
+
+func (p *CatchupStateRepo) Get(ctx context.Context) (*models.CatchupState, error) {
+	r, err := p.queries.GetWebhookCatchup(ctx)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &models.CatchupState{CheckedThrough: r.CheckedThrough, LastRunAt: r.LastRunAt, LastQueued: r.LastQueued, LastError: r.LastError}, nil
+}
+
+func (p *CatchupStateRepo) Save(ctx context.Context, st *models.CatchupState) error {
+	_, err := p.queries.SaveWebhookCatchup(ctx, db.SaveWebhookCatchupParams{
+		CheckedThrough: st.CheckedThrough,
+		LastRunAt:      st.LastRunAt,
+		LastQueued:     st.LastQueued,
+		LastError:      st.LastError,
+	})
+	return err
+}
+
 func intakeFromPG(r *db.WebhookIntake) *models.WebhookIntake {
 	return &models.WebhookIntake{
 		ID:            r.ID,

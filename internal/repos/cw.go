@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/thecoretg/ticketbot/models"
@@ -59,6 +60,9 @@ type TicketRepository interface {
 	// last change while closed, is more than days old. Both cascade to everything under a ticket.
 	DeleteSoftDeletedOlderThan(ctx context.Context, days int) (int64, error)
 	DeleteClosedOlderThan(ctx context.Context, days int) (int64, error)
+	// CWLastUpdated returns ConnectWise's lastUpdated from the stored raw copy of each of ids that
+	// is stored. A ticket stored before raw was kept maps to the epoch.
+	CWLastUpdated(ctx context.Context, ids []int) (map[int]time.Time, error)
 }
 
 type TicketNoteRepository interface {

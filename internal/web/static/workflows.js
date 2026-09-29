@@ -1547,6 +1547,7 @@ function wfShowHelp(section = '') {
     openModal('How workflows run', `<div class="stack gap3" style="max-height:60vh;overflow-y:auto">
         ${h('flow', 'The flow')}
         <p>A workflow belongs to one board. Every ticket event on that board (created, or updated) enters at each <b>Trigger</b> that listens for it, and walks the wires from there. A trigger can carry an <b>Only when</b> condition; when it does not hold, that lane simply does not run.</p>
+        <p>ConnectWise occasionally changes a ticket without telling ticketbot. A check every few minutes finds those tickets and runs the workflow then, so a notification can arrive a few minutes late; its history shows the source as <b>catchup</b>.</p>
         <p>An <b>If</b> step sends the walk out of its <b>match</b> port when its condition holds and <b>else</b> when it does not. A port with nothing wired to it simply ends that path. A step that two paths both reach runs once.</p>
         <p><b>Skip notify</b> silences the Notify steps after it on its own path only. Other paths still notify.</p>
         <p>Right-click a step to duplicate, copy, disable or delete it. Shift-drag on empty canvas selects several steps; dragging any of them moves the group, and a copied group pastes into another workflow with its wires.</p>

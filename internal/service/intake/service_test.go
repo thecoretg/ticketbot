@@ -103,12 +103,14 @@ type fakeProcessor struct {
 	calls   []string
 	fail    int // fail this many calls before succeeding
 	deletes int
+	opts    []ticketbot.ProcessOpts
 }
 
-func (p *fakeProcessor) ProcessTicket(_ context.Context, id int, _ ticketbot.ProcessOpts) error {
+func (p *fakeProcessor) ProcessTicket(_ context.Context, id int, opts ticketbot.ProcessOpts) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.calls = append(p.calls, "process")
+	p.opts = append(p.opts, opts)
 	if p.fail > 0 {
 		p.fail--
 		return errors.New("connectwise unavailable")
@@ -291,5 +293,17 @@ func TestPurgeFinishedUsesIntakeRetention(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCatchupActionRunsWorkflowsAsCatchup(t *testing.T) {
+	proc := &fakeProcessor{}
+	s := New(Params{Repo: &fakeRepo{}, Processor: proc})
+	if err := s.run(context.Background(), &models.WebhookIntake{TicketID: 42, Action: models.IntakeCatchup}); err != nil {
+		t.Fatal(err)
+	}
+	want := ticketbot.ProcessOpts{Source: models.SourceCatchup, RunRules: true}
+	if len(proc.opts) != 1 || proc.opts[0] != want {
+		t.Errorf("process opts = %+v, want %+v", proc.opts, want)
 	}
 }

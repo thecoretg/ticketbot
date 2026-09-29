@@ -13,6 +13,7 @@ type AllRepos struct {
 	WebexRecipients     WebexRecipientRepository
 	TicketEvents        TicketEventRepository
 	WebhookIntake       WebhookIntakeRepository
+	CatchupState        CatchupStateRepository
 	WorkflowRuns        WorkflowRunRepository
 	Workflows           WorkflowRepository
 	Lists               ListRepository
