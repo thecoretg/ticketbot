@@ -90,3 +90,5 @@
 /* the workflow list's step count is a plain number */
 /* a sync phase's errors have no timestamp, so the log row drops its time column */
 .sync-errors .log-row { grid-template-columns: 54px 1fr; }
+/* "Load older events" sits at the ticket history's old end, above or below the rail, lined up with the cards */
+.tk-older { margin: var(--s3) 0 var(--s3) var(--s6); }
