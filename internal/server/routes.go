@@ -132,6 +132,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	sh := handlers.NewSyncHandler(a.Svc.Sync, a.Config)
 	rt.handle("POST /sync", sh.HandleSync, auth, admin)
 	rt.handle("GET /sync/status", sh.HandleSyncStatus, auth, admin)
+	rt.handle("POST /sync/cancel", sh.HandleSyncCancel, auth, admin)
 
 	uh := handlers.NewUserHandler(a.Svc.User)
 	rt.handle("GET /users", uh.ListUsers, auth, admin)

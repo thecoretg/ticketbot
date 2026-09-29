@@ -18,11 +18,15 @@ type SyncPayload struct {
 
 // SyncRun is the progress of one sync. It lives in memory only: a restart forgets it.
 type SyncRun struct {
-	StartedAt  time.Time   `json:"started_at"`
-	FinishedAt *time.Time  `json:"finished_at"`
-	StartedBy  string      `json:"started_by"`
-	Options    SyncOptions `json:"options"`
-	Phases     []SyncPhase `json:"phases"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+	StartedBy  string     `json:"started_by"`
+	// CancelledAt is set when someone asks the run to stop; FinishedAt follows once every
+	// phase has wound down.
+	CancelledAt *time.Time  `json:"cancelled_at"`
+	CancelledBy string      `json:"cancelled_by"`
+	Options     SyncOptions `json:"options"`
+	Phases      []SyncPhase `json:"phases"`
 }
 
 type SyncOptions struct {
@@ -40,6 +44,8 @@ const (
 	SyncPhaseRunning  SyncPhaseState = "running"
 	SyncPhaseDone     SyncPhaseState = "done"
 	SyncPhaseFailed   SyncPhaseState = "failed"
+	// SyncPhaseCancelled means the run was cancelled before this phase finished.
+	SyncPhaseCancelled SyncPhaseState = "cancelled"
 )
 
 const (

@@ -1,7 +1,9 @@
 package syncsvc
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -9,18 +11,23 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
-var ErrSyncRunning = errors.New("a sync is already running")
+var (
+	ErrSyncRunning   = errors.New("a sync is already running")
+	ErrNoSyncRunning = errors.New("no sync is running")
+)
 
 // tracker holds the running sync, or the last one, for GET /sync/status. It is shared by
 // the Service and its withTx copies, so every phase reports into the same run.
 type tracker struct {
-	mu  sync.Mutex
-	run *models.SyncRun
+	mu     sync.Mutex
+	run    *models.SyncRun
+	cancel context.CancelFunc // stops the unfinished run; nil once it finishes
 }
 
 // start begins a run with one phase per selected sync, in page order. It fails while
-// another run is unfinished, which is also what keeps two syncs from overlapping.
-func (t *tracker) start(p *models.SyncPayload, startedBy string, now time.Time) error {
+// another run is unfinished, which is also what keeps two syncs from overlapping. cancel
+// is what stop calls; it may be nil when nothing needs stopping.
+func (t *tracker) start(p *models.SyncPayload, startedBy string, now time.Time, cancel context.CancelFunc) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.run != nil && t.run.FinishedAt == nil {
@@ -50,6 +57,7 @@ func (t *tracker) start(p *models.SyncPayload, startedBy string, now time.Time) 
 	add(p.WebexRecipients, models.SyncPhaseWebexRecipients, "Fetching rooms from Webex")
 	add(p.CWTickets, models.SyncPhaseTickets, "Fetching open tickets from ConnectWise")
 	t.run = run
+	t.cancel = cancel
 	return nil
 }
 
@@ -59,6 +67,28 @@ func (t *tracker) finish(now time.Time) {
 	if t.run != nil {
 		t.run.FinishedAt = &now
 	}
+	if t.cancel != nil {
+		t.cancel() // releases the run's context
+		t.cancel = nil
+	}
+}
+
+// stop asks the unfinished run to end and records who asked. A second stop while the run
+// winds down changes nothing: the first canceller stays on record.
+func (t *tracker) stop(by string, now time.Time) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.run == nil || t.run.FinishedAt != nil {
+		return ErrNoSyncRunning
+	}
+	if t.run.CancelledAt != nil {
+		return nil
+	}
+	t.run.CancelledAt, t.run.CancelledBy = &now, by
+	if t.cancel != nil {
+		t.cancel()
+	}
+	return nil
 }
 
 func (t *tracker) running() bool {
@@ -79,6 +109,10 @@ func (t *tracker) snapshot() *models.SyncRun {
 	if r.FinishedAt != nil {
 		f := *r.FinishedAt
 		r.FinishedAt = &f
+	}
+	if r.CancelledAt != nil {
+		c := *r.CancelledAt
+		r.CancelledAt = &c
 	}
 	r.Phases = slices.Clone(r.Phases)
 	for i := range r.Phases {
@@ -137,8 +171,12 @@ func (p *phase) label(label string) {
 	p.update(func(ph *models.SyncPhase) { ph.Label = label })
 }
 
-// step counts one item as processed; a non-nil err is recorded against it.
+// step counts one item as processed; a non-nil err is recorded against it. An item the
+// cancel cut short is not counted: it was neither processed nor a failure.
 func (p *phase) step(err error) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
 	p.update(func(ph *models.SyncPhase) {
 		ph.Done++
 		if err != nil {
@@ -158,6 +196,22 @@ func (p *phase) fail(label string, err error) {
 	p.update(func(ph *models.SyncPhase) {
 		ph.State, ph.Label = models.SyncPhaseFailed, label
 		addError(ph, err)
+	})
+}
+
+// cancelled ends a phase the cancel cut short. A phase that writes in one transaction saved
+// nothing; the ticket phase keeps what it processed.
+func (p *phase) cancelled(rolledBack bool) {
+	p.update(func(ph *models.SyncPhase) {
+		ph.State = models.SyncPhaseCancelled
+		switch {
+		case rolledBack:
+			ph.Label = "Cancelled, rolled back"
+		case ph.Total > 0:
+			ph.Label = fmt.Sprintf("Cancelled after %d of %d", ph.Done, ph.Total)
+		default:
+			ph.Label = "Cancelled"
+		}
 	})
 }
 

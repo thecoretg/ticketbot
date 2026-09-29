@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
@@ -39,28 +38,21 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 	}
 	slog.Info("cwsvc: open ticket sync: got open tickets from connectwise", "total_tickets", len(tix))
 	ph.counting("Processing tickets", len(tix))
-	sem := make(chan struct{}, maxSyncs)
-	var wg sync.WaitGroup
 	errCh := make(chan error, len(tix))
 
-	for _, t := range tix {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(ticket psa.Ticket) {
-			defer func() { <-sem }()
-			defer wg.Done()
-			opts := ticketbot.ProcessOpts{Source: models.SourceSync, RunRules: false}
-			if err := s.Ticketbot.ProcessTicket(ctx, ticket.ID, opts); err != nil {
-				err = fmt.Errorf("syncing ticket %d: %w", ticket.ID, err)
-				ph.step(err)
-				errCh <- err
-				return
-			}
-			ph.step(nil)
-		}(t)
-	}
-
-	wg.Wait()
+	// A cancel stops new tickets from starting. The ones already running finish on a context
+	// the cancel does not reach, so a saved ticket always gets its sync event.
+	running := context.WithoutCancel(ctx)
+	stopped := forEach(ctx, tix, maxSyncs, func(ticket psa.Ticket) {
+		opts := ticketbot.ProcessOpts{Source: models.SourceSync, RunRules: false}
+		if err := s.Ticketbot.ProcessTicket(running, ticket.ID, opts); err != nil {
+			err = fmt.Errorf("syncing ticket %d: %w", ticket.ID, err)
+			ph.step(err)
+			errCh <- err
+			return
+		}
+		ph.step(nil)
+	})
 	close(errCh)
 
 	for err := range errCh {
@@ -69,7 +61,7 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 		}
 	}
 
-	return nil
+	return stopped
 }
 
 func boardIDParam(ids []int) string {

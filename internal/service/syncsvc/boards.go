@@ -33,12 +33,16 @@ func (s *Service) SyncBoards(ctx context.Context, ph *phase) error {
 
 	txSvc := s.withTx(tx)
 	defer func() {
-		_ = tx.Rollback(ctx)
+		// not ctx: after a cancel the rollback still has to reach the database
+		_ = tx.Rollback(context.WithoutCancel(ctx))
 	}()
 
 	upserts := boardsToUpsert(cwb)
 	ph.counting("Syncing boards and statuses", len(upserts))
 	for _, b := range upserts {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if _, err := txSvc.CW.Boards.Upsert(ctx, b); err != nil {
 			slog.Error("board sync: upserting board", "board_id", b.ID, "error", err.Error())
 			ph.step(fmt.Errorf("upserting board %d (%s): %w", b.ID, b.Name, err))

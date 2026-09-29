@@ -53,3 +53,21 @@ func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {
 
 	resultJSON(w, "sync started")
 }
+
+func (h *SyncHandler) HandleSyncCancel(w http.ResponseWriter, r *http.Request) {
+	by := ""
+	if u := middleware.User(r.Context()); u != nil {
+		by = u.EmailAddress
+	}
+
+	if err := h.Svc.Cancel(by); err != nil {
+		if errors.Is(err, syncsvc.ErrNoSyncRunning) {
+			conflictError(w, err)
+			return
+		}
+		internalServerError(w, err)
+		return
+	}
+
+	resultJSON(w, "sync cancelling")
+}

@@ -29,7 +29,8 @@ func (s *Service) SyncWebexRecipients(ctx context.Context, maxSyncs int, ph *pha
 	txSvc := s.withTx(tx)
 
 	defer func() {
-		_ = tx.Rollback(ctx)
+		// not ctx: after a cancel the rollback still has to reach the database
+		_ = tx.Rollback(context.WithoutCancel(ctx))
 	}()
 
 	if err := txSvc.syncWebexRooms(ctx, ph); err != nil {
@@ -120,8 +121,6 @@ func (s *Service) syncWebexPeople(ctx context.Context, maxSyncs int, ph *phase) 
 }
 
 func (s *Service) getWxPeopleFromCwMembers(ctx context.Context, members []psa.Member, maxSyncs int, ph *phase) ([]webex.Person, error) {
-	sem := make(chan struct{}, maxSyncs)
-	var wg sync.WaitGroup
 	errCh := make(chan error, len(members))
 
 	var (
@@ -129,39 +128,34 @@ func (s *Service) getWxPeopleFromCwMembers(ctx context.Context, members []psa.Me
 		mu sync.Mutex
 	)
 
-	for _, m := range members {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(member psa.Member) {
-			defer func() { <-sem }()
-			defer wg.Done()
-
-			if member.PrimaryEmail == "" {
-				ph.step(nil)
-				return
-			}
-
-			ppl, err := s.Webex.WebexClient.ListPeople(ctx, member.PrimaryEmail)
-			if err != nil {
-				err = fmt.Errorf("listing people for email %s: %w", member.PrimaryEmail, err)
-				ph.step(err)
-				errCh <- err
-				return
-			}
+	stopped := forEach(ctx, members, maxSyncs, func(member psa.Member) {
+		if member.PrimaryEmail == "" {
 			ph.step(nil)
+			return
+		}
 
-			if len(ppl) == 0 {
-				return
-			}
+		ppl, err := s.Webex.WebexClient.ListPeople(ctx, member.PrimaryEmail)
+		if err != nil {
+			err = fmt.Errorf("listing people for email %s: %w", member.PrimaryEmail, err)
+			ph.step(err)
+			errCh <- err
+			return
+		}
+		ph.step(nil)
 
-			mu.Lock()
-			wp = append(wp, ppl[0])
-			mu.Unlock()
-		}(m)
-	}
+		if len(ppl) == 0 {
+			return
+		}
 
-	wg.Wait()
+		mu.Lock()
+		wp = append(wp, ppl[0])
+		mu.Unlock()
+	})
 	close(errCh)
+
+	if stopped != nil {
+		return nil, stopped
+	}
 
 	if len(errCh) > 0 {
 		return nil, <-errCh

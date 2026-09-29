@@ -14,10 +14,10 @@ import (
 func TestTrackerRefusesOverlappingRuns(t *testing.T) {
 	tr := &tracker{}
 	now := time.Now()
-	if err := tr.start(&models.SyncPayload{CWBoards: true}, "a@x", now); err != nil {
+	if err := tr.start(&models.SyncPayload{CWBoards: true}, "a@x", now, nil); err != nil {
 		t.Fatalf("first start: %v", err)
 	}
-	if err := tr.start(&models.SyncPayload{CWBoards: true}, "b@x", now); !errors.Is(err, ErrSyncRunning) {
+	if err := tr.start(&models.SyncPayload{CWBoards: true}, "b@x", now, nil); !errors.Is(err, ErrSyncRunning) {
 		t.Fatalf("second start = %v, want ErrSyncRunning", err)
 	}
 	if !tr.running() {
@@ -28,7 +28,7 @@ func TestTrackerRefusesOverlappingRuns(t *testing.T) {
 	if tr.running() {
 		t.Fatal("running() = true after finish")
 	}
-	if err := tr.start(&models.SyncPayload{CWTickets: true}, "b@x", now); err != nil {
+	if err := tr.start(&models.SyncPayload{CWTickets: true}, "b@x", now, nil); err != nil {
 		t.Fatalf("start after finish: %v", err)
 	}
 	if got := tr.snapshot().StartedBy; got != "b@x" {
@@ -38,7 +38,7 @@ func TestTrackerRefusesOverlappingRuns(t *testing.T) {
 
 func TestTrackerPhasesFollowTheSelection(t *testing.T) {
 	tr := &tracker{}
-	_ = tr.start(&models.SyncPayload{CWBoards: true, CWTickets: true}, "", time.Now())
+	_ = tr.start(&models.SyncPayload{CWBoards: true, CWTickets: true}, "", time.Now(), nil)
 
 	run := tr.snapshot()
 	if len(run.Phases) != 2 || run.Phases[0].Name != models.SyncPhaseBoards || run.Phases[1].Name != models.SyncPhaseTickets {
@@ -56,7 +56,7 @@ func TestTrackerPhasesFollowTheSelection(t *testing.T) {
 
 func TestPhaseCountsFailuresAndCapsMessages(t *testing.T) {
 	tr := &tracker{}
-	_ = tr.start(&models.SyncPayload{CWTickets: true}, "", time.Now())
+	_ = tr.start(&models.SyncPayload{CWTickets: true}, "", time.Now(), nil)
 	ph := tr.phase(models.SyncPhaseTickets)
 
 	total := models.MaxSyncPhaseErrors + 10
@@ -81,7 +81,7 @@ func TestPhaseCountsFailuresAndCapsMessages(t *testing.T) {
 
 func TestPhaseFailRecordsTheReason(t *testing.T) {
 	tr := &tracker{}
-	_ = tr.start(&models.SyncPayload{CWBoards: true}, "", time.Now())
+	_ = tr.start(&models.SyncPayload{CWBoards: true}, "", time.Now(), nil)
 	ph := tr.phase(models.SyncPhaseBoards)
 
 	ph.counting("Syncing boards and statuses", 3)
@@ -99,7 +99,7 @@ func TestPhaseFailRecordsTheReason(t *testing.T) {
 
 func TestSnapshotIsACopy(t *testing.T) {
 	tr := &tracker{}
-	_ = tr.start(&models.SyncPayload{CWTickets: true, BoardIDs: []int{1}}, "", time.Now())
+	_ = tr.start(&models.SyncPayload{CWTickets: true, BoardIDs: []int{1}}, "", time.Now(), nil)
 	ph := tr.phase(models.SyncPhaseTickets)
 	ph.counting("Processing tickets", 2)
 	ph.step(errors.New("first"))
@@ -129,7 +129,7 @@ func TestNilPhaseIsANoOp(t *testing.T) {
 
 func TestSnapshotEncodesEmptyListsAsArrays(t *testing.T) {
 	tr := &tracker{}
-	_ = tr.start(&models.SyncPayload{CWBoards: true}, "", time.Now())
+	_ = tr.start(&models.SyncPayload{CWBoards: true}, "", time.Now(), nil)
 	b, err := json.Marshal(tr.snapshot())
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func TestSnapshotEncodesEmptyListsAsArrays(t *testing.T) {
 	}
 
 	empty := &tracker{}
-	_ = empty.start(&models.SyncPayload{}, "", time.Now())
+	_ = empty.start(&models.SyncPayload{}, "", time.Now(), nil)
 	b, _ = json.Marshal(empty.snapshot())
 	if !strings.Contains(string(b), `"phases":[]`) {
 		t.Errorf("a run with no phases encodes %s, want \"phases\":[]", b)
