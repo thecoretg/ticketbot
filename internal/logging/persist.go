@@ -16,11 +16,10 @@ type LogPersistRepository interface {
 // LogConfig is the subset of app config the persister reads.
 type LogConfig interface {
 	GetLogRetentionDays() int
-	GetLogCleanupIntervalHours() int
 }
 
-// Persister batches log entries from a BufferHandler into the DB and
-// runs a periodic cleanup goroutine to enforce the retention policy.
+// Persister batches log entries from a BufferHandler into the DB. Its Purge enforces the
+// retention policy on the intake service's hourly purge tick.
 type Persister struct {
 	repo LogPersistRepository
 	buf  *BufferHandler
@@ -51,11 +50,10 @@ func (p *Persister) SeedBuffer(ctx context.Context) error {
 	return nil
 }
 
-// Start launches the writer and cleanup goroutines. It returns immediately;
-// both goroutines stop when ctx is cancelled.
+// Start launches the writer goroutine. It returns immediately; the writer stops when ctx is
+// cancelled.
 func (p *Persister) Start(ctx context.Context) {
 	go p.runWriter(ctx)
-	go p.runCleanup(ctx)
 }
 
 func (p *Persister) runWriter(ctx context.Context) {
@@ -94,45 +92,18 @@ func (p *Persister) runWriter(ctx context.Context) {
 	}
 }
 
-func (p *Persister) runCleanup(ctx context.Context) {
-	// check every minute whether enough time has elapsed since the last cleanup
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-
-	var lastCleanup time.Time
-
-	doCleanup := func() {
-		retentionDays := p.cfg.GetLogRetentionDays()
-		if retentionDays <= 0 {
-			return
-		}
-		cutoff := time.Now().AddDate(0, 0, -retentionDays)
-		n, err := p.repo.DeleteOlderThan(ctx, cutoff)
-		if err != nil {
-			slog.Warn("log persister: cleanup failed", "error", err)
-			return
-		}
-		if n > 0 {
-			slog.Info("log persister: cleaned up old entries", "deleted", n, "retention_days", retentionDays)
-		}
-		lastCleanup = time.Now()
+// Purge implements intake.Purger: log rows older than the retention setting go. 0 keeps them.
+func (p *Persister) Purge(ctx context.Context, now time.Time) {
+	retentionDays := p.cfg.GetLogRetentionDays()
+	if retentionDays <= 0 {
+		return
 	}
-
-	// run once immediately on startup
-	doCleanup()
-
-	for {
-		select {
-		case <-ticker.C:
-			intervalHours := p.cfg.GetLogCleanupIntervalHours()
-			if intervalHours <= 0 {
-				intervalHours = 24
-			}
-			if time.Since(lastCleanup) >= time.Duration(intervalHours)*time.Hour {
-				doCleanup()
-			}
-		case <-ctx.Done():
-			return
-		}
+	n, err := p.repo.DeleteOlderThan(ctx, now.AddDate(0, 0, -retentionDays))
+	if err != nil {
+		slog.Warn("log persister: cleanup failed", "error", err)
+		return
+	}
+	if n > 0 {
+		slog.Info("log persister: cleaned up old entries", "deleted", n, "retention_days", retentionDays)
 	}
 }

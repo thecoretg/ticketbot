@@ -84,6 +84,12 @@ open row, so one ticket's webhooks run in arrival order and never concurrently; 
 is otherwise free. Failed attempts back off (5s to 1h, six tries) and then park as `failed` for the
 Intake page's retry or discard. The queue assumes a single app instance: rows left `processing`
 are reset to `pending` on start. Ticket intake logic itself stays in `internal/service/ticketbot`.
+The intake service's hourly purge tick (also run once at start) is the only scheduler: it ages
+out finished intake rows on `intake_retention_days`, then runs each `intake.Purger` wired in
+`server.go` (history, tickets, sign-in leftovers, OAuth, logs). Add new cleanup there, not as
+another goroutine. Soft-deleted tickets are hard-deleted once older than
+`history_retention_days`; closed tickets only while `closed_ticket_retention_enabled` is on.
+Ticket deletes cascade to everything under the ticket.
 
 ## Layering
 

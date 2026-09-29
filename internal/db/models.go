@@ -31,29 +31,31 @@ type ApiUser struct {
 }
 
 type AppConfig struct {
-	ID                      int    `json:"id"`
-	MaxMessageLength        int    `json:"max_message_length"`
-	MaxConcurrentSyncs      int    `json:"max_concurrent_syncs"`
-	RequireTotp             bool   `json:"require_totp"`
-	DebugLogging            bool   `json:"debug_logging"`
-	LogRetentionDays        int    `json:"log_retention_days"`
-	LogCleanupIntervalHours int    `json:"log_cleanup_interval_hours"`
-	LogBufferSize           int    `json:"log_buffer_size"`
-	MasterDryRun            bool   `json:"master_dry_run"`
-	CwApiMemberIdentifier   string `json:"cw_api_member_identifier"`
-	SsoEnabled              bool   `json:"sso_enabled"`
-	PasswordLoginEnabled    bool   `json:"password_login_enabled"`
-	NotePreviewLength       int    `json:"note_preview_length"`
-	WriteCapPerTicket       int    `json:"write_cap_per_ticket"`
-	OpsRoomID               *int   `json:"ops_room_id"`
-	RedirectRoomID          *int   `json:"redirect_room_id"`
-	StaleAlertMinutes       int    `json:"stale_alert_minutes"`
-	HistoryRetentionDays    int    `json:"history_retention_days"`
-	BusinessOpen            string `json:"business_open"`
-	BusinessClose           string `json:"business_close"`
-	BusinessDays            string `json:"business_days"`
-	BusinessZone            string `json:"business_zone"`
-	McpEnabled              bool   `json:"mcp_enabled"`
+	ID                           int    `json:"id"`
+	MaxMessageLength             int    `json:"max_message_length"`
+	MaxConcurrentSyncs           int    `json:"max_concurrent_syncs"`
+	RequireTotp                  bool   `json:"require_totp"`
+	DebugLogging                 bool   `json:"debug_logging"`
+	LogRetentionDays             int    `json:"log_retention_days"`
+	LogBufferSize                int    `json:"log_buffer_size"`
+	MasterDryRun                 bool   `json:"master_dry_run"`
+	CwApiMemberIdentifier        string `json:"cw_api_member_identifier"`
+	SsoEnabled                   bool   `json:"sso_enabled"`
+	PasswordLoginEnabled         bool   `json:"password_login_enabled"`
+	NotePreviewLength            int    `json:"note_preview_length"`
+	WriteCapPerTicket            int    `json:"write_cap_per_ticket"`
+	OpsRoomID                    *int   `json:"ops_room_id"`
+	RedirectRoomID               *int   `json:"redirect_room_id"`
+	StaleAlertMinutes            int    `json:"stale_alert_minutes"`
+	HistoryRetentionDays         int    `json:"history_retention_days"`
+	BusinessOpen                 string `json:"business_open"`
+	BusinessClose                string `json:"business_close"`
+	BusinessDays                 string `json:"business_days"`
+	BusinessZone                 string `json:"business_zone"`
+	McpEnabled                   bool   `json:"mcp_enabled"`
+	IntakeRetentionDays          int    `json:"intake_retention_days"`
+	ClosedTicketRetentionEnabled bool   `json:"closed_ticket_retention_enabled"`
+	ClosedTicketRetentionDays    int    `json:"closed_ticket_retention_days"`
 }
 
 type AppLog struct {

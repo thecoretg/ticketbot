@@ -28,7 +28,7 @@ type Alerter = alerts.Alerter
 
 // RetentionConfig is the slice of app config the purge and staleness goroutines read.
 type RetentionConfig interface {
-	GetLogRetentionDays() int
+	GetIntakeRetentionDays() int
 	GetStaleAlertMinutes() int
 	BusinessWindow() models.BusinessWindow
 }
@@ -249,20 +249,7 @@ func (s *Service) runPurge(ctx context.Context) {
 	defer ticker.Stop()
 
 	purge := func() {
-		days := 7
-		if s.Cfg != nil && s.Cfg.GetLogRetentionDays() > 0 {
-			days = s.Cfg.GetLogRetentionDays()
-		}
-		n, err := s.Repo.DeleteFinishedBefore(ctx, s.now().AddDate(0, 0, -days))
-		if err != nil {
-			if ctx.Err() == nil {
-				slog.Warn("intake: purging finished rows", "error", err.Error())
-			}
-			return
-		}
-		if n > 0 {
-			slog.Info("intake: purged finished rows", "deleted", n, "retention_days", days)
-		}
+		s.purgeFinished(ctx)
 		for _, p := range s.Purgers {
 			p.Purge(ctx, s.now())
 		}
@@ -276,5 +263,26 @@ func (s *Service) runPurge(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// purgeFinished deletes done and discarded rows older than the intake retention. 0 keeps them.
+func (s *Service) purgeFinished(ctx context.Context) {
+	days := 0
+	if s.Cfg != nil {
+		days = s.Cfg.GetIntakeRetentionDays()
+	}
+	if days <= 0 {
+		return
+	}
+	n, err := s.Repo.DeleteFinishedBefore(ctx, s.now().AddDate(0, 0, -days))
+	if err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("intake: purging finished rows", "error", err.Error())
+		}
+		return
+	}
+	if n > 0 {
+		slog.Info("intake: purged finished rows", "deleted", n, "retention_days", days)
 	}
 }

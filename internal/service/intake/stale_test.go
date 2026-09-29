@@ -10,8 +10,8 @@ import (
 
 type staleCfg int
 
-func (c staleCfg) GetLogRetentionDays() int  { return 7 }
-func (c staleCfg) GetStaleAlertMinutes() int { return int(c) }
+func (c staleCfg) GetIntakeRetentionDays() int { return 7 }
+func (c staleCfg) GetStaleAlertMinutes() int   { return int(c) }
 func (c staleCfg) BusinessWindow() models.BusinessWindow {
 	return (&models.Config{}).BusinessWindow() // the defaults: 07:30 to 19:00 Central, weekdays
 }

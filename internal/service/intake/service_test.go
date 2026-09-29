@@ -19,6 +19,8 @@ type fakeRepo struct {
 	mu   sync.Mutex
 	rows []*models.WebhookIntake
 	seq  int64
+	// purgedBefore records each DeleteFinishedBefore cutoff.
+	purgedBefore []time.Time
 }
 
 func (f *fakeRepo) Insert(_ context.Context, ticketID int, action models.IntakeAction, payload []byte) (*models.WebhookIntake, error) {
@@ -74,7 +76,12 @@ func (f *fakeRepo) Fail(_ context.Context, id int64, lastError string) error {
 
 func (f *fakeRepo) ResetProcessing(context.Context) (int64, error) { return 0, nil }
 
-func (f *fakeRepo) DeleteFinishedBefore(context.Context, time.Time) (int64, error) { return 0, nil }
+func (f *fakeRepo) DeleteFinishedBefore(_ context.Context, before time.Time) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.purgedBefore = append(f.purgedBefore, before)
+	return 0, nil
+}
 
 func (f *fakeRepo) Stats(context.Context) (*models.IntakeStats, error) {
 	return &models.IntakeStats{}, nil
@@ -252,4 +259,37 @@ func TestWorkerDrainsEnqueuedRows(t *testing.T) {
 	waitCtx, waitCancel := context.WithTimeout(context.Background(), time.Second)
 	defer waitCancel()
 	s.Wait(waitCtx)
+}
+
+type retentionCfg int
+
+func (c retentionCfg) GetIntakeRetentionDays() int           { return int(c) }
+func (c retentionCfg) GetStaleAlertMinutes() int             { return 0 }
+func (c retentionCfg) BusinessWindow() models.BusinessWindow { return models.BusinessWindow{} }
+
+func TestPurgeFinishedUsesIntakeRetention(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name string
+		days int
+		want []time.Time
+	}{
+		{"kept for the configured days", 14, []time.Time{now.AddDate(0, 0, -14)}},
+		{"0 keeps them forever", 0, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeRepo{}
+			s := New(Params{Repo: repo, Processor: &fakeProcessor{}, Cfg: retentionCfg(tc.days)})
+			s.now = func() time.Time { return now }
+			s.purgeFinished(context.Background())
+			if len(repo.purgedBefore) != len(tc.want) {
+				t.Fatalf("cutoffs = %v, want %v", repo.purgedBefore, tc.want)
+			}
+			for i := range tc.want {
+				if !repo.purgedBefore[i].Equal(tc.want[i]) {
+					t.Errorf("cutoff = %v, want %v", repo.purgedBefore[i], tc.want[i])
+				}
+			}
+		})
+	}
 }

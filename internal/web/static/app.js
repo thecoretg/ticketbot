@@ -2156,9 +2156,14 @@ function renderConfig(cfg, recipients = []) {
         ${row('Log retention',
             'How many days of logs to keep in the database. 0 keeps them forever.',
             numberInput('c-log-retention', cfg.log_retention_days, 0))}
-        ${row('Log cleanup interval',
-            'How often old logs are deleted, in hours.',
-            numberInput('c-log-cleanup-interval', cfg.log_cleanup_interval_hours, 1))}
+        ${row('Intake retention',
+            'How many days to keep webhooks that finished processing or were discarded, for the Intake page. Failed ones stay until retried or discarded. 0 keeps them forever.',
+            numberInput('c-intake-retention', cfg.intake_retention_days, 0))}
+        ${row('Delete closed tickets',
+            'Delete closed tickets ConnectWise has not changed for this many days, with their notes and history. A ticket that is reopened is fetched again on its next webhook. Tickets deleted in ConnectWise are always removed once they are older than the history retention.',
+            `${toggle(`id="c-closed-retention-enabled"`, cfg.closed_ticket_retention_enabled, { tip: 'Delete closed tickets' })}
+             ${numberInput('c-closed-retention', cfg.closed_ticket_retention_days, 1)}
+             <span class="muted">days</span>`)}
     </div>`)
 }
 
@@ -2194,7 +2199,9 @@ async function saveConfig() {
             debug_logging:              document.getElementById('c-debug-logging').checked,
             log_buffer_size:            num('c-log-buffer-size', 'Log buffer size'),
             log_retention_days:         num('c-log-retention', 'Log retention'),
-            log_cleanup_interval_hours: num('c-log-cleanup-interval', 'Log cleanup interval'),
+            intake_retention_days:      num('c-intake-retention', 'Intake retention'),
+            closed_ticket_retention_enabled: document.getElementById('c-closed-retention-enabled').checked,
+            closed_ticket_retention_days:    num('c-closed-retention', 'Closed ticket retention'),
         })
         if (res) appConfig = res
         toast('Config saved', 'success')

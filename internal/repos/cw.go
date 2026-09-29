@@ -55,6 +55,10 @@ type TicketRepository interface {
 	Upsert(ctx context.Context, c *models.Ticket) (*models.Ticket, error)
 	SoftDelete(ctx context.Context, id int) error
 	Delete(ctx context.Context, id int) error
+	// DeleteSoftDeletedOlderThan and DeleteClosedOlderThan hard-delete tickets whose delete, or
+	// last change while closed, is more than days old. Both cascade to everything under a ticket.
+	DeleteSoftDeletedOlderThan(ctx context.Context, days int) (int64, error)
+	DeleteClosedOlderThan(ctx context.Context, days int) (int64, error)
 }
 
 type TicketNoteRepository interface {
