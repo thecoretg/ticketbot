@@ -1753,7 +1753,11 @@ const SYNC_PHASE_NAMES = { boards: 'Boards', webex_recipients: 'Webex recipients
 function syncRunHTML(run, running) {
     const failed = run.phases.some(p => p.state === 'failed')
     const errors = run.phases.reduce((n, p) => n + p.error_count, 0)
-    const badge = running ? '<span class="badge ok"><i class="dot pulse"></i>Running</span>'
+    // a cancelled run keeps running until its phases wind down: rollbacks and the tickets in flight
+    const cancelling = running && !!run.cancelled_at
+    const badge = cancelling ? '<span class="badge warn"><i class="dot pulse"></i>Cancelling…</span>'
+        : running         ? '<span class="badge ok"><i class="dot pulse"></i>Running</span>'
+        : run.cancelled_at ? '<span class="badge warn"><i class="dot"></i>Cancelled</span>'
         : failed          ? '<span class="badge bad"><i class="dot"></i>Failed</span>'
         : errors          ? '<span class="badge warn"><i class="dot"></i>Finished with errors</span>'
         :                   '<span class="badge ok"><i class="dot"></i>Finished</span>'
@@ -1769,13 +1773,20 @@ function syncRunHTML(run, running) {
         <div class="card-head">
             <div><h3>${running ? 'Current sync' : 'Last sync'}</h3>
                 <p>${running ? 'This page updates every few seconds.' : `Finished ${esc(fmtDateTime(run.finished_at))}`}</p></div>
-            ${badge}
+            <div class="row gap3 wrap">
+                ${badge}
+                ${running
+                    // disabled once asked, and plain then: a dimmed danger fill does not hold its contrast
+                    ? `<button class="btn ${cancelling ? 'btn-default' : 'btn-danger'} btn-sm" onclick="syncCancel()" ${cancelling ? 'disabled' : ''}>Cancel sync</button>`
+                    : ''}
+            </div>
         </div>
         <div class="card-body stack gap5">
             <div class="meta-grid">
                 ${cell('Started', esc(fmtDateTime(run.started_at)))}
                 ${cell(running ? 'Elapsed' : 'Took', `<span class="num">${took}</span>`)}
                 ${cell('Started by', esc(run.started_by || '—'))}
+                ${run.cancelled_at ? cell('Cancelled by', esc(run.cancelled_by || '—')) : ''}
                 ${cell('Synced', esc(synced))}
                 ${o.cw_tickets ? cell('Ticket boards', n ? `${n} board${n === 1 ? '' : 's'}` : 'All boards') : ''}
             </div>
@@ -1796,6 +1807,7 @@ function syncPhaseHTML(run, p) {
         running:  '<span class="badge info"><i class="dot pulse"></i>Running</span>',
         done:     '<span class="badge ok"><i class="dot"></i>Done</span>',
         failed:   '<span class="badge bad"><i class="dot"></i>Failed</span>',
+        cancelled: '<span class="badge warn"><i class="dot"></i>Cancelled</span>',
     }[p.state] ?? ''
     const aria = fetching
         ? `role="progressbar" aria-label="${esc(name)}" aria-valuetext="${esc(p.label)}"`
@@ -1818,6 +1830,20 @@ function syncPhaseHTML(run, p) {
             ${more > 0 ? `<div class="log-row"><span></span><span class="log-msg muted">${more} more not shown. The server log has every one.</span></div>` : ''}
         </div>` : ''}
     </section>`
+}
+
+// syncCancel asks the running sync to stop, then repaints at once so the page shows Cancelling
+// without waiting for the next poll. The poll keeps going until the run finishes.
+async function syncCancel() {
+    try {
+        await api('POST', '/sync/cancel')
+    } catch (e) {
+        toast(e.message, 'error')
+    }
+    try {
+        const status = await api('GET', '/sync/status')
+        if (currentTab === 'sync') renderSync(status, refreshContent)
+    } catch { /* the poll catches up */ }
 }
 
 function syncToggleErrors(key) {
