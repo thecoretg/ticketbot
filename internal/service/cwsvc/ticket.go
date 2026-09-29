@@ -248,6 +248,13 @@ func (s *Service) ensureStatus(ctx context.Context, id, boardID int) (*models.Ti
 	return st, nil
 }
 
+// EnsureCompany returns the stored company, fetching it from ConnectWise when it is missing or
+// older than the store TTL. The contact sync uses it when a contact has moved to a company
+// ticketbot has not stored.
+func (s *Service) EnsureCompany(ctx context.Context, id int) (*models.Company, error) {
+	return s.ensureCompany(ctx, id)
+}
+
 func (s *Service) ensureCompany(ctx context.Context, id int) (*models.Company, error) {
 	c, err := s.Companies.Get(ctx, id)
 	if err == nil && !s.withinTTL(c.UpdatedOn, "company", id) {

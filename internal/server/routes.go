@@ -129,7 +129,7 @@ func NewHandler(a *App, shutdown func()) http.Handler {
 	rt.handle("GET /users/grants/{id}", oh.ListUserGrants, auth, admin)
 	rt.handle("DELETE /users/grants/{id}/{grant_id}", oh.RevokeUserGrant, auth, admin)
 
-	sh := handlers.NewSyncHandler(a.Svc.Sync, a.Config)
+	sh := handlers.NewSyncHandler(a.Svc.Sync, a.Stores.ScheduledJobs, a.Config)
 	rt.handle("POST /sync", sh.HandleSync, auth, admin)
 	rt.handle("GET /sync/status", sh.HandleSyncStatus, auth, admin)
 	rt.handle("POST /sync/cancel", sh.HandleSyncCancel, auth, admin)

@@ -57,6 +57,9 @@ type AppConfig struct {
 	ClosedTicketRetentionEnabled bool   `json:"closed_ticket_retention_enabled"`
 	ClosedTicketRetentionDays    int    `json:"closed_ticket_retention_days"`
 	CatchupIntervalMinutes       int    `json:"catchup_interval_minutes"`
+	NightlySyncEnabled           bool   `json:"nightly_sync_enabled"`
+	NightlySyncTime              string `json:"nightly_sync_time"`
+	NightlySyncRunWorkflows      bool   `json:"nightly_sync_run_workflows"`
 }
 
 type AppLog struct {
@@ -218,6 +221,13 @@ type OauthToken struct {
 	ExpiresAt time.Time  `json:"expires_at"`
 	CreatedOn time.Time  `json:"created_on"`
 	UsedAt    *time.Time `json:"used_at"`
+}
+
+type ScheduledJob struct {
+	Name           string     `json:"name"`
+	LastStartedAt  *time.Time `json:"last_started_at"`
+	LastFinishedAt *time.Time `json:"last_finished_at"`
+	LastError      *string    `json:"last_error"`
 }
 
 type Session struct {

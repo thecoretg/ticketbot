@@ -84,7 +84,7 @@ open row, so one ticket's webhooks run in arrival order and never concurrently; 
 is otherwise free. Failed attempts back off (5s to 1h, six tries) and then park as `failed` for the
 Intake page's retry or discard. The queue assumes a single app instance: rows left `processing`
 are reset to `pending` on start. Ticket intake logic itself stays in `internal/service/ticketbot`.
-The intake service's hourly purge tick (also run once at start) is the only scheduler: it ages
+The intake service's hourly purge tick (also run once at start) is the only cleanup scheduler: it ages
 out finished intake rows on `intake_retention_days`, then runs each `intake.Purger` wired in
 `server.go` (history, tickets, sign-in leftovers, OAuth, logs). Add new cleanup there, not as
 another goroutine. Soft-deleted tickets are hard-deleted once older than
@@ -95,6 +95,13 @@ when `SKIP_HOOKS` is unset): one ConnectWise list of tickets on boards with an e
 changed since the `webhook_catchup` watermark, compared with `raw._info.lastUpdated`, and each
 mismatch without an open row is queued as action `catchup`, which runs workflows with source
 `catchup`. Catch-up rows are excluded from the stale alert and the webhooks-per-hour chart.
+`syncsvc.Nightly` runs the full sync once a day at `nightly_sync_time` in `business_zone`
+(`nightly_sync_enabled`; a missed run still starts up to three hours late): every phase, including
+members and the stored companies and contacts, open tickets only on boards with an enabled
+workflow (workflows run only with `nightly_sync_run_workflows`), and `EnsureTicketCallback`, which
+alerts the ops room when it had to re-register the callback. Its record is the `nightly_sync` row
+of `scheduled_job`; a new clock-driven job gets its own row there. Contacts run after companies,
+never beside them, because both write companies in their own transaction.
 
 ## Layering
 

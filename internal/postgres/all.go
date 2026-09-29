@@ -20,6 +20,7 @@ func AllRepos(pool *pgxpool.Pool) *repos.AllRepos {
 		TicketEvents:        NewTicketEventRepo(pool),
 		WebhookIntake:       NewWebhookIntakeRepo(pool),
 		CatchupState:        NewCatchupStateRepo(pool),
+		ScheduledJobs:       NewScheduledJobRepo(pool),
 		WorkflowRuns:        NewWorkflowRunRepo(pool),
 		Workflows:           NewWorkflowRepo(pool),
 		Lists:               NewListRepo(pool),

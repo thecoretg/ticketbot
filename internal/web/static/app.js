@@ -1738,15 +1738,48 @@ function renderSync(status, paint = setContent) {
         // while a sync runs the button is disabled, so it drops the accent: a dimmed
         // accent fill does not hold its contrast
         `<button class="btn ${running ? 'btn-default' : 'btn-primary'}" onclick="showNewSyncModal()" ${running ? 'disabled' : ''}>${icon('globe')}Run sync</button>`) +
-    (run ? syncRunHTML(run, running) : `<div class="card card-pad">
-        <div class="row gap3 wrap">
-            <span class="badge outline"><i class="dot"></i>Idle</span>
-            <span class="muted">No sync has run since the app started.</span>
-        </div>
-    </div>`))
+    `<div class="stack gap5">
+        ${run ? syncRunHTML(run, running) : `<div class="card card-pad">
+            <div class="row gap3 wrap">
+                <span class="badge outline"><i class="dot"></i>Idle</span>
+                <span class="muted">No sync has run since the app started.</span>
+            </div>
+        </div>`}
+        ${syncNightlyHTML(status?.nightly)}
+    </div>`)
 }
 
-const SYNC_PHASE_NAMES = { boards: 'Boards', webex_recipients: 'Webex recipients', tickets: 'Tickets' }
+// syncNightlyHTML describes the scheduled reconcile and how its last run went. The run itself
+// shows above like any other while it is the current or last sync.
+function syncNightlyHTML(job) {
+    const cfg = appConfig || {}
+    const zone = (cfg.business_zone || 'America/Chicago').replace('America/', '').replace('_', ' ')
+    const on = cfg.nightly_sync_enabled !== false
+    const what = `Boards, Webex recipients, members, stored companies and contacts, open tickets on boards with an enabled workflow (${cfg.nightly_sync_run_workflows ? 'their workflows run on changes' : 'workflows do not run'}), and the ConnectWise ticket callback.`
+    const when = on ? `Every day at ${esc(cfg.nightly_sync_time || '02:00')} ${esc(zone)} time.` : 'Off. Turn it on under Config.'
+    const last = !job?.last_started_at ? 'It has not run yet.'
+        : job.last_finished_at && new Date(job.last_finished_at) >= new Date(job.last_started_at)
+            ? `Last run started ${fmtDateTime(job.last_started_at)} and finished ${fmtDateTime(job.last_finished_at)}.`
+            : `Last run started ${fmtDateTime(job.last_started_at)} and has not finished.`
+    const failed = job?.last_error
+        ? `<div class="callout warn">${icon('alert')}<div class="body"><b>The last run had errors</b>${esc(job.last_error)}</div></div>`
+        : ''
+    return `<article class="card">
+        <div class="card-head">
+            <div><h3>Nightly sync</h3><p>${esc(what)}</p></div>
+            <span class="badge outline">${on ? 'On' : 'Off'}</span>
+        </div>
+        <div class="card-body stack gap3">
+            <p class="muted">${when} ${esc(last)}</p>
+            ${failed}
+        </div>
+    </article>`
+}
+
+const SYNC_PHASE_NAMES = {
+    boards: 'Boards', webex_recipients: 'Webex recipients', members: 'Members',
+    companies: 'Companies', contacts: 'Contacts', tickets: 'Tickets',
+}
 
 // syncRunHTML is the running sync, or the last one: who started it and with what, then one
 // bar per phase. The phases run at the same time, so several bars can fill at once.
@@ -1763,7 +1796,8 @@ function syncRunHTML(run, running) {
         :                   '<span class="badge ok"><i class="dot"></i>Finished</span>'
 
     const o = run.options
-    const synced = [o.cw_boards && 'Boards', o.webex_recipients && 'Webex recipients', o.cw_tickets && 'Tickets']
+    const synced = [o.cw_boards && 'Boards', o.webex_recipients && 'Webex recipients', o.cw_members && 'Members',
+        o.cw_companies && 'Companies', o.cw_contacts && 'Contacts', o.cw_tickets && 'Tickets']
         .filter(Boolean).join(', ')
     const n = o.board_ids?.length ?? 0
     const took = fmtDuration(new Date(run.finished_at ?? Date.now()) - new Date(run.started_at))
@@ -1789,6 +1823,7 @@ function syncRunHTML(run, running) {
                 ${run.cancelled_at ? cell('Cancelled by', esc(run.cancelled_by || '—')) : ''}
                 ${cell('Synced', esc(synced))}
                 ${o.cw_tickets ? cell('Ticket boards', n ? `${n} board${n === 1 ? '' : 's'}` : 'All boards') : ''}
+                ${o.cw_tickets ? cell('Workflows', o.run_workflows ? 'Run on changes' : 'Not run') : ''}
             </div>
             ${run.phases.map(p => syncPhaseHTML(run, p)).join('')}
         </div>
@@ -1874,7 +1909,16 @@ async function showNewSyncModal() {
                 <div class="stack gap2" style="margin-top:2px">
                     ${checkbox('Boards', 'id="f-sync-boards"', true)}
                     ${checkbox('Webex recipients', 'id="f-sync-webex"', true)}
+                    ${checkbox('Members', 'id="f-sync-members"', true)}
+                    ${checkbox('Companies (the ones ticketbot has stored)', 'id="f-sync-companies"')}
+                    ${checkbox('Contacts (the ones ticketbot has stored)', 'id="f-sync-contacts"')}
                     ${checkbox('Tickets', 'id="f-sync-tickets"')}
+                </div>
+            </div>
+            <div class="field">
+                <label>Ticket options</label>
+                <div class="stack gap2" style="margin-top:2px">
+                    ${checkbox('Run workflows on tickets that changed', 'id="f-sync-run-workflows"')}
                 </div>
             </div>
             ${boards.length ? `<div class="field">
@@ -1890,7 +1934,11 @@ async function showNewSyncModal() {
             await api('POST', '/sync', {
                 cw_boards:        document.getElementById('f-sync-boards').checked,
                 webex_recipients: document.getElementById('f-sync-webex').checked,
+                cw_members:       document.getElementById('f-sync-members').checked,
+                cw_companies:     document.getElementById('f-sync-companies').checked,
+                cw_contacts:      document.getElementById('f-sync-contacts').checked,
                 cw_tickets:       document.getElementById('f-sync-tickets').checked,
+                run_workflows:    document.getElementById('f-sync-run-workflows').checked,
                 board_ids:        boardIds,
             })
             closeModal()
@@ -2121,6 +2169,13 @@ function renderConfig(cfg, recipients = []) {
         ${row('Redirect notifications to',
             'While set, every notification goes to this room instead of its intended recipient, prefixed with who it was for, and is sent even under dry run. Use it for the parallel run; clear it at cutover.',
             roomSelect('c-redirect-room', cfg.redirect_room_id, 'Redirect room'))}
+        ${row('Nightly sync',
+            'Once a day, at this time in the business-hours time zone: every sync on the Sync page, open tickets on boards with an enabled workflow, and a check that ConnectWise still has the ticket callback. Errors go to the ops room.',
+            `${toggle(`id="c-nightly-enabled"`, cfg.nightly_sync_enabled, { tip: 'Nightly sync' })}
+             <input class="input" type="time" id="c-nightly-time" value="${esc(cfg.nightly_sync_time || '02:00')}" aria-label="Nightly sync time" style="width:130px">`)}
+        ${row('Run workflows in the nightly sync',
+            'When the nightly sync finds a ticket changed, run its workflow as a webhook would. Off, the sync only refreshes the stored ticket.',
+            toggle(`id="c-nightly-workflows"`, cfg.nightly_sync_run_workflows, { tip: 'Run workflows in the nightly sync' }))}
         ${row('Missed-webhook check',
             'Minutes between checks for tickets ConnectWise changed without sending a webhook. Each check is one ConnectWise request; tickets it finds are queued and run their workflows as if the webhook had come. 0 turns it off; otherwise 5 to 1440.',
             numberInput('c-catchup-minutes', cfg.catchup_interval_minutes, 0))}
@@ -2193,6 +2248,9 @@ async function saveConfig() {
             redirect_room_id:           Number(document.getElementById('c-redirect-room').value),
             stale_alert_minutes:        num('c-stale-minutes', 'Stale webhook alert'),
             catchup_interval_minutes:   num('c-catchup-minutes', 'Missed-webhook check'),
+            nightly_sync_enabled:       document.getElementById('c-nightly-enabled').checked,
+            nightly_sync_time:          document.getElementById('c-nightly-time').value,
+            nightly_sync_run_workflows: document.getElementById('c-nightly-workflows').checked,
             history_retention_days:     num('c-history-retention', 'History retention'),
             business_open:              document.getElementById('c-biz-open').value,
             business_close:             document.getElementById('c-biz-close').value,

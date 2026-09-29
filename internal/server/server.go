@@ -74,6 +74,7 @@ type Services struct {
 	Ticketbot *ticketbot.Service
 	Intake    *intake.Service
 	Catchup   *catchup.Service
+	Nightly   *syncsvc.Nightly
 	Workflow  *workflow.Service
 	Lists     *lists.Service
 	Transfer  *transfer.Service
@@ -173,6 +174,13 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 		Forwards: ns, Config: cfgSvc, Simulator: simSvc, CW: cws, Webex: ws, Intake: intakeSvc, Logs: logBuf,
 	}})
 
+	syncSvc := syncsvc.New(s.Pool, cws, ws, tb)
+	hooksSvc := webhooks.New(cw, e.RootURL)
+	nightly := syncsvc.Nightly{Sync: syncSvc, Workflows: r.Workflows, Jobs: r.ScheduledJobs, Cfg: cfg, Alerter: alerter}
+	if !e.SkipHooks {
+		nightly.Callbacks = hooksSvc
+	}
+
 	return &App{
 		Env:           e,
 		Config:        cfg,
@@ -186,13 +194,14 @@ func NewApp(ctx context.Context, e *env.Env, migVersion int64, level *slog.Level
 			Auth:      authsvc.New(r.APIUser, r.Sessions, r.TOTPPending, r.TOTPRecovery, cfg, e.InitialAdminEmail, e.Entra.Configured()),
 			Config:    cfgSvc,
 			User:      user.New(r.APIUser, r.APIKey, e.InitialAdminEmail),
-			Hooks:     webhooks.New(cw, e.RootURL),
+			Hooks:     hooksSvc,
 			CW:        cws,
 			Webex:     ws,
-			Sync:      syncsvc.New(s.Pool, cws, ws, tb),
+			Sync:      syncSvc,
 			Notifier:  ns,
 			Ticketbot: tb,
 			Intake:    intakeSvc,
+			Nightly:   syncsvc.NewNightly(nightly),
 			Catchup: catchup.New(catchup.Params{CW: cw, Queue: intakeSvc, Intake: r.WebhookIntake, Tickets: r.CW.Ticket,
 				Workflows: r.Workflows, State: r.CatchupState, Cfg: cfg}),
 			Workflow: wfSvc,

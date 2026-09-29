@@ -33,24 +33,32 @@ func (s *Service) ProcessAllHooks(ctx context.Context) error {
 }
 
 func (s *Service) ProcessCWHooks(ctx context.Context) error {
+	_, err := s.EnsureTicketCallback(ctx)
+	return err
+}
+
+// EnsureTicketCallback makes sure ConnectWise has exactly one ticket callback pointing at this
+// instance, and reports whether it had to add it: true means ConnectWise had lost it, so no
+// ticket webhooks were arriving.
+func (s *Service) EnsureTicketCallback(ctx context.Context) (added bool, err error) {
 	p := map[string]string{
 		"pageSize": "1000",
 	}
 
 	cwh, err := s.CWClient.ListCallbacks(ctx, p)
 	if err != nil {
-		return fmt.Errorf("listing connectwise callbacks: %w", err)
+		return false, fmt.Errorf("listing connectwise callbacks: %w", err)
 	}
 	slog.Debug("hook sync: got existing connectwise callbacks", "total", len(cwh))
 
-	if err := s.processCWHook(ctx, ticketsWebhookURL(s.RootURL), "ticket", "owner", 1, cwh); err != nil {
-		return fmt.Errorf("processing ticketbot hook: %w", err)
+	added, err = s.processCWHook(ctx, ticketsWebhookURL(s.RootURL), "ticket", "owner", 1, cwh)
+	if err != nil {
+		return false, fmt.Errorf("processing ticketbot hook: %w", err)
 	}
-
-	return nil
+	return added, nil
 }
 
-func (s *Service) processCWHook(ctx context.Context, url, entity, level string, objectID int, currentHooks []psa.Callback) error {
+func (s *Service) processCWHook(ctx context.Context, url, entity, level string, objectID int, currentHooks []psa.Callback) (bool, error) {
 	expected := psa.Callback{
 		URL:      url,
 		Type:     entity,
@@ -67,7 +75,7 @@ func (s *Service) processCWHook(ctx context.Context, url, entity, level string, 
 				continue
 			} else {
 				if err := s.CWClient.DeleteCallback(ctx, h.ID); err != nil {
-					return fmt.Errorf("deleting callback: %w", err)
+					return false, fmt.Errorf("deleting callback: %w", err)
 				}
 				slog.Info("hook sync: deleted unused callback", "id", h.ID, "url", h.URL)
 			}
@@ -77,11 +85,12 @@ func (s *Service) processCWHook(ctx context.Context, url, entity, level string, 
 	if !found {
 		newHook, err := s.CWClient.PostCallback(ctx, &expected)
 		if err != nil {
-			return fmt.Errorf("posting callback: %w", err)
+			return false, fmt.Errorf("posting callback: %w", err)
 		}
 		slog.Info("hook sync: added new connectwise hook", "id", newHook.ID, "url", url, "entity", entity, "level", level, "objectID", objectID)
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 func cwHooksMatch(expected, existing psa.Callback) bool {

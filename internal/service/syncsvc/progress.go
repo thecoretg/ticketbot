@@ -40,8 +40,12 @@ func (t *tracker) start(p *models.SyncPayload, startedBy string, now time.Time, 
 		Options: models.SyncOptions{
 			CWBoards:        p.CWBoards,
 			WebexRecipients: p.WebexRecipients,
+			CWMembers:       p.CWMembers,
+			CWCompanies:     p.CWCompanies,
+			CWContacts:      p.CWContacts,
 			CWTickets:       p.CWTickets,
 			BoardIDs:        slices.Clone(p.BoardIDs),
+			RunWorkflows:    p.RunWorkflows,
 		},
 	}
 	// empty, not nil, so the JSON carries [] and the page need not guard against null
@@ -55,6 +59,13 @@ func (t *tracker) start(p *models.SyncPayload, startedBy string, now time.Time, 
 	}
 	add(p.CWBoards, models.SyncPhaseBoards, "Fetching boards from ConnectWise")
 	add(p.WebexRecipients, models.SyncPhaseWebexRecipients, "Fetching rooms from Webex")
+	add(p.CWMembers, models.SyncPhaseMembers, "Fetching members from ConnectWise")
+	add(p.CWCompanies, models.SyncPhaseCompanies, "Fetching stored companies from ConnectWise")
+	contactsLabel := "Fetching stored contacts from ConnectWise"
+	if p.CWCompanies {
+		contactsLabel = "Waiting for companies" // contacts run after companies; see run
+	}
+	add(p.CWContacts, models.SyncPhaseContacts, contactsLabel)
 	add(p.CWTickets, models.SyncPhaseTickets, "Fetching open tickets from ConnectWise")
 	t.run = run
 	t.cancel = cancel

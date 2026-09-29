@@ -14,6 +14,7 @@ type AllRepos struct {
 	TicketEvents        TicketEventRepository
 	WebhookIntake       WebhookIntakeRepository
 	CatchupState        CatchupStateRepository
+	ScheduledJobs       ScheduledJobRepository
 	WorkflowRuns        WorkflowRunRepository
 	Workflows           WorkflowRepository
 	Lists               ListRepository
