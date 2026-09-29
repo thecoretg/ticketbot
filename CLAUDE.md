@@ -7,9 +7,10 @@ Ticketbot ingests ConnectWise PSA ticket webhooks, runs per-board workflows (con
 ## Work tracking
 
 Work is tracked in Notion, not in the repo. The [Ticketbot Tracker](https://app.notion.com/p/3e63ef0e1b0680ba9e99d3f7e0be4d70)
-page holds the rules and two databases: **Work** (`collection://90891b8e-32af-43f9-9b74-0fce57fd603d`)
-and **Handoffs** (`collection://33a3c724-da94-44c4-87a1-34b9bffe6028`). Read the page's rules before
-the first change in a session. In short:
+page shows the **Work** database inline (`collection://90891b8e-32af-43f9-9b74-0fce57fd603d`) and
+links to **Handoffs** (`collection://33a3c724-da94-44c4-87a1-34b9bffe6028`) and to
+[Agent Notes](https://app.notion.com/p/3ea3ef0e1b0681b3ad73ef4a5128bbca), which holds the rules. Read
+Agent Notes before the first change in a session. In short:
 
 - Pick up Work rows with Status `Next`, or whatever Danny asks for. `Hold` rows wait on data or a
   decision; don't start them. Type `Cutover` rows start only when Danny says "start cutover".
