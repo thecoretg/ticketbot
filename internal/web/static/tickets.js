@@ -8,6 +8,17 @@ let tkRequestSeq  = 0      // drops stale responses when filters change quickly
 let tkShowNoops   = false  // history: also show runs where nothing happened (no workflow, no match, loop guard)
 let tkDetail      = null   // last loaded ticket detail, for re-rendering the history toggle
 let tkWfLinkHTML  = ''     // the "Open workflow" control for tkDetail, kept across re-renders
+let tkHasOlder    = false  // the history may have events older than the ones loaded
+let tkLoadingOlder = false
+
+// GET /tickets/{id} returns at most this many events (detailEventLimit in cwsvc); "Load older"
+// pages further back in steps of the same size.
+const TK_EVENT_PAGE = 100
+
+// tkNewestFirst is the history order, remembered per browser. Newest first unless changed.
+let tkNewestFirst = (() => {
+    try { return localStorage.getItem('ticketHistoryOrder') !== 'oldest' } catch { return true }
+})()
 
 async function loadTickets(sub) {
     if (sub && /^\d+$/.test(sub)) {
@@ -198,8 +209,10 @@ async function loadTicketDetail(id) {
         setContent(backRow('tickets', 'Tickets', `#${id}`) + errorState(e.message))
         return
     }
-    tkDetail     = data
-    tkWfLinkHTML = ''
+    tkDetail       = data
+    tkWfLinkHTML   = ''
+    tkHasOlder     = (data.events || []).length >= TK_EVENT_PAGE
+    tkLoadingOlder = false
     renderTicketDetail(data)
     setCrumbHere(`#${data.ticket.id}`)
     tkLoadWorkflowLink(data.ticket)
@@ -231,6 +244,36 @@ function tkToggleNoops(on) {
     if (tkDetail) renderTicketDetail(tkDetail)
 }
 
+// tkSetOrder flips the history order. The page is patched in place so the pressed button keeps focus.
+function tkSetOrder(newestFirst) {
+    tkNewestFirst = newestFirst
+    try { localStorage.setItem('ticketHistoryOrder', newestFirst ? 'newest' : 'oldest') } catch {}
+    if (tkDetail) refreshContent(tkDetailHTML(tkDetail))
+}
+
+// tkLoadOlder prepends the next page of older events. /events pages newest-first from before_id;
+// tkDetail.events stays oldest-first like the detail response.
+async function tkLoadOlder() {
+    const d = tkDetail
+    if (!d || tkLoadingOlder || !d.events?.length) return
+    tkLoadingOlder = true
+    refreshContent(tkDetailHTML(d))
+    let page
+    try {
+        page = (await api('GET', `/tickets/${d.ticket.id}/events?limit=${TK_EVENT_PAGE}&before_id=${d.events[0].id}`)) || []
+    } catch (e) {
+        toast(`Could not load older events: ${e.message}`, 'error')
+        page = null
+    }
+    if (tkDetail !== d) return   // another ticket was opened meanwhile
+    tkLoadingOlder = false
+    if (page) {
+        d.events   = page.reverse().concat(d.events)
+        tkHasOlder = page.length >= TK_EVENT_PAGE
+    }
+    refreshContent(tkDetailHTML(d))
+}
+
 // tkIsNoop reports events that only say "nothing happened": a board with no workflow, a disabled
 // workflow, a run that reached no action step, or a self-authored update the loop guard skipped.
 // Anything that ran, would run (dry run) or failed stays visible. Runs recorded before the graph
@@ -249,6 +292,10 @@ function tkIsNoop(ev) {
 }
 
 function renderTicketDetail(d) {
+    setContent(tkDetailHTML(d))
+}
+
+function tkDetailHTML(d) {
     const t   = d.ticket
     const all = d.events || []
     const evs = tkShowNoops ? all : all.filter(ev => !tkIsNoop(ev))
@@ -257,8 +304,12 @@ function renderTicketDetail(d) {
     const resources = (d.resources || []).map(m => memberLabel(m)).join(', ') || (t.resources || '—')
 
     const meta = (label, value) => `<div><div class="eyebrow">${label}</div><div class="val">${value}</div></div>`
+    const shown = tkNewestFirst ? evs.slice().reverse() : evs
+    const older = tkHasOlder
+        ? `<button class="btn btn-default tk-older" onclick="tkLoadOlder()"${tkLoadingOlder ? ' disabled' : ''}>${tkLoadingOlder ? 'Loading…' : 'Load older events'}</button>`
+        : ''
 
-    setContent(`${backRow('tickets', 'Tickets', `#${t.id}`)}
+    return `${backRow('tickets', 'Tickets', `#${t.id}`)}
     <header class="page-head row spread wrap gap4">
         <div>
             <h1 class="page-title">${esc(t.summary)}</h1>
@@ -287,16 +338,24 @@ function renderTicketDetail(d) {
     <div class="section-head row spread wrap gap4">
         <div class="row gap3 wrap" style="align-items:baseline">
             <h3>History</h3>
-            <p>${evs.length} event${evs.length === 1 ? '' : 's'}, oldest first</p>
+            <p>${evs.length} event${evs.length === 1 ? '' : 's'}${tkHasOlder ? ' loaded' : ''}</p>
         </div>
-        ${checkbox(`Show runs where nothing happened${!tkShowNoops && hidden ? ` <span class="muted">(${hidden})</span>` : ''}`,
-            'onchange="tkToggleNoops(this.checked)"', tkShowNoops)}
+        <div class="row gap4 wrap">
+            ${checkbox(`Show runs where nothing happened${!tkShowNoops && hidden ? ` <span class="muted">(${hidden})</span>` : ''}`,
+                'onchange="tkToggleNoops(this.checked)"', tkShowNoops)}
+            <div class="seg" role="group" aria-label="History order">
+                <button class="${tkNewestFirst ? 'on' : ''}" aria-pressed="${tkNewestFirst}" onclick="tkSetOrder(true)">Newest first</button>
+                <button class="${tkNewestFirst ? '' : 'on'}" aria-pressed="${!tkNewestFirst}" onclick="tkSetOrder(false)">Oldest first</button>
+            </div>
+        </div>
     </div>
+    ${!tkNewestFirst ? older : ''}
     ${evs.length
-        ? `<div class="events">${evs.map(tkEventHTML).join('')}</div>`
+        ? `<div class="events">${shown.map(tkEventHTML).join('')}</div>`
         : `<div class="card">${emptyState('No events recorded',
             'Events appear here when ConnectWise sends a webhook for this ticket and a workflow runs.',
-            '', 'clock')}</div>`}`)
+            '', 'clock')}</div>`}
+    ${tkNewestFirst ? older : ''}`
 }
 
 function memberLabel(m) {
