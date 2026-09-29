@@ -39,3 +39,10 @@ type CatchupStateRepository interface {
 	Get(ctx context.Context) (*models.CatchupState, error)
 	Save(ctx context.Context, st *models.CatchupState) error
 }
+
+// ScheduledJobRepository keeps one record per clock-driven job. Get returns nil and no error
+// before a job's first run.
+type ScheduledJobRepository interface {
+	Get(ctx context.Context, name string) (*models.ScheduledJob, error)
+	Save(ctx context.Context, j *models.ScheduledJob) error
+}

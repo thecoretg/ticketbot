@@ -85,6 +85,14 @@ type Config struct {
 	// without a webhook, and queues them as if the webhook had come. 0 turns the check off.
 	CatchupIntervalMinutes int `json:"catchup_interval_minutes"`
 
+	// NightlySyncEnabled runs a full reconcile once a day at NightlySyncTime (HH:MM in
+	// BusinessZone): boards, statuses, Webex recipients, members, stored companies and contacts,
+	// open tickets on boards with an enabled workflow, and the ConnectWise ticket callback.
+	// NightlySyncRunWorkflows runs workflows on tickets the sync finds changed.
+	NightlySyncEnabled      bool   `json:"nightly_sync_enabled"`
+	NightlySyncTime         string `json:"nightly_sync_time"`
+	NightlySyncRunWorkflows bool   `json:"nightly_sync_run_workflows"`
+
 	// Business hours bound the stale-webhook alert: silence outside them is normal. Times are
 	// HH:MM in BusinessZone; BusinessDays is a comma-separated list of mon..sun.
 	BusinessOpen  string `json:"business_open"`
@@ -127,6 +135,10 @@ type ConfigUpdateParams struct {
 	ClosedTicketRetentionEnabled *bool `json:"closed_ticket_retention_enabled"`
 	ClosedTicketRetentionDays    *int  `json:"closed_ticket_retention_days"`
 	CatchupIntervalMinutes       *int  `json:"catchup_interval_minutes"`
+
+	NightlySyncEnabled      *bool   `json:"nightly_sync_enabled"`
+	NightlySyncTime         *string `json:"nightly_sync_time"`
+	NightlySyncRunWorkflows *bool   `json:"nightly_sync_run_workflows"`
 }
 
 var DefaultConfig = Config{
@@ -154,4 +166,8 @@ var DefaultConfig = Config{
 	ClosedTicketRetentionEnabled: false,
 	ClosedTicketRetentionDays:    60,
 	CatchupIntervalMinutes:       15,
+
+	NightlySyncEnabled:      true,
+	NightlySyncTime:         "02:00",
+	NightlySyncRunWorkflows: false,
 }

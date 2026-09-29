@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/thecoretg/ticketbot/internal/logging"
 	"github.com/thecoretg/ticketbot/internal/repos"
@@ -21,6 +22,7 @@ var (
 	ErrHistoryRetention      = errors.New("history retention days cannot be negative")
 	ErrIntakeRetention       = errors.New("intake retention days cannot be negative")
 	ErrClosedTicketRetention = errors.New("closed ticket retention must be at least 1 day")
+	ErrNightlySyncTime       = errors.New("nightly sync time must be HH:MM, 24-hour")
 	ErrCatchupInterval       = fmt.Errorf("missed-webhook check interval must be 0 (off) or %d to %d minutes", MinCatchupMinutes, MaxCatchupMinutes)
 )
 
@@ -81,6 +83,9 @@ func (s *Service) validate(c *models.Config) error {
 	}
 	if m := c.CatchupIntervalMinutes; m != 0 && (m < MinCatchupMinutes || m > MaxCatchupMinutes) {
 		return ValidationError{ErrCatchupInterval}
+	}
+	if _, err := time.Parse("15:04", c.NightlySyncTime); err != nil {
+		return ValidationError{ErrNightlySyncTime}
 	}
 	if _, err := models.ParseBusinessWindow(c.BusinessOpen, c.BusinessClose, c.BusinessDays, c.BusinessZone); err != nil {
 		return ValidationError{err}
@@ -180,6 +185,15 @@ func (s *Service) Update(ctx context.Context, p *models.ConfigUpdateParams) (*mo
 	if p.CatchupIntervalMinutes != nil {
 		merged.CatchupIntervalMinutes = *p.CatchupIntervalMinutes
 	}
+	if p.NightlySyncEnabled != nil {
+		merged.NightlySyncEnabled = *p.NightlySyncEnabled
+	}
+	if p.NightlySyncTime != nil {
+		merged.NightlySyncTime = strings.TrimSpace(*p.NightlySyncTime)
+	}
+	if p.NightlySyncRunWorkflows != nil {
+		merged.NightlySyncRunWorkflows = *p.NightlySyncRunWorkflows
+	}
 
 	if err := s.validate(&merged); err != nil {
 		return nil, err
@@ -226,6 +240,9 @@ func (s *Service) applyChanges(src *models.Config) {
 	cfg.ClosedTicketRetentionEnabled = src.ClosedTicketRetentionEnabled
 	cfg.ClosedTicketRetentionDays = src.ClosedTicketRetentionDays
 	cfg.CatchupIntervalMinutes = src.CatchupIntervalMinutes
+	cfg.NightlySyncEnabled = src.NightlySyncEnabled
+	cfg.NightlySyncTime = src.NightlySyncTime
+	cfg.NightlySyncRunWorkflows = src.NightlySyncRunWorkflows
 
 	if s.logBuf != nil && src.LogBufferSize > 0 && src.LogBufferSize != s.logBuf.Size() {
 		s.logBuf.Resize(src.LogBufferSize)

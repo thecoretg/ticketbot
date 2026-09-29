@@ -178,6 +178,33 @@ func (p *CatchupStateRepo) Save(ctx context.Context, st *models.CatchupState) er
 	return err
 }
 
+// ScheduledJobRepo implements repos.ScheduledJobRepository.
+type ScheduledJobRepo struct {
+	queries *db.Queries
+}
+
+func NewScheduledJobRepo(pool *pgxpool.Pool) *ScheduledJobRepo {
+	return &ScheduledJobRepo{queries: db.New(pool)}
+}
+
+func (p *ScheduledJobRepo) Get(ctx context.Context, name string) (*models.ScheduledJob, error) {
+	r, err := p.queries.GetScheduledJob(ctx, name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &models.ScheduledJob{Name: r.Name, LastStartedAt: r.LastStartedAt, LastFinishedAt: r.LastFinishedAt, LastError: r.LastError}, nil
+}
+
+func (p *ScheduledJobRepo) Save(ctx context.Context, j *models.ScheduledJob) error {
+	_, err := p.queries.SaveScheduledJob(ctx, db.SaveScheduledJobParams{
+		Name: j.Name, LastStartedAt: j.LastStartedAt, LastFinishedAt: j.LastFinishedAt, LastError: j.LastError,
+	})
+	return err
+}
+
 func intakeFromPG(r *db.WebhookIntake) *models.WebhookIntake {
 	return &models.WebhookIntake{
 		ID:            r.ID,

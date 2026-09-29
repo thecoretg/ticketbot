@@ -6,21 +6,30 @@ import (
 	"net/http"
 
 	"github.com/thecoretg/ticketbot/internal/middleware"
+	"github.com/thecoretg/ticketbot/internal/repos"
 	"github.com/thecoretg/ticketbot/internal/service/syncsvc"
 	"github.com/thecoretg/ticketbot/models"
 )
 
 type SyncHandler struct {
-	Svc *syncsvc.Service
-	cfg *models.Config
+	Svc  *syncsvc.Service
+	Jobs repos.ScheduledJobRepository
+	cfg  *models.Config
 }
 
-func NewSyncHandler(svc *syncsvc.Service, cfg *models.Config) *SyncHandler {
-	return &SyncHandler{Svc: svc, cfg: cfg}
+func NewSyncHandler(svc *syncsvc.Service, jobs repos.ScheduledJobRepository, cfg *models.Config) *SyncHandler {
+	return &SyncHandler{Svc: svc, Jobs: jobs, cfg: cfg}
 }
 
 func (h *SyncHandler) HandleSyncStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, h.Svc.Status())
+	st := h.Svc.Status()
+	nightly, err := h.Jobs.Get(r.Context(), syncsvc.NightlyJobName)
+	if err != nil {
+		internalServerError(w, err)
+		return
+	}
+	st.Nightly = nightly
+	writeJSON(w, 200, st)
 }
 
 func (h *SyncHandler) HandleSync(w http.ResponseWriter, r *http.Request) {

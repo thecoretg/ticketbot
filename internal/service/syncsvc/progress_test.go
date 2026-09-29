@@ -145,3 +145,27 @@ func TestSnapshotEncodesEmptyListsAsArrays(t *testing.T) {
 		t.Errorf("a run with no phases encodes %s, want \"phases\":[]", b)
 	}
 }
+
+func TestTrackerReferencePhasesInPageOrder(t *testing.T) {
+	tr := &tracker{}
+	_ = tr.start(&models.SyncPayload{CWMembers: true, CWCompanies: true, CWContacts: true, CWTickets: true}, "", time.Now(), nil)
+
+	run := tr.snapshot()
+	var names []string
+	for _, ph := range run.Phases {
+		names = append(names, ph.Name)
+	}
+	want := []string{models.SyncPhaseMembers, models.SyncPhaseCompanies, models.SyncPhaseContacts, models.SyncPhaseTickets}
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		t.Fatalf("phases = %v, want %v", names, want)
+	}
+	if run.Phases[2].Label != "Waiting for companies" {
+		t.Errorf("contacts label = %q, want it to say it waits for companies", run.Phases[2].Label)
+	}
+}
+
+func TestIDCondition(t *testing.T) {
+	if got := idCondition([]int{3, 41, 900}); got != "id in (3,41,900)" {
+		t.Errorf("idCondition = %q", got)
+	}
+}

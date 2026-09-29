@@ -13,7 +13,9 @@ import (
 )
 
 // SyncOpenTickets reports into ph, one step per open ticket processed.
-func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int, ph *phase) error {
+// SyncOpenTickets fetches every open ticket on boardIDs (all boards when empty). runRules runs
+// each ticket's workflow when the fetch finds a change, as a webhook would.
+func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs int, runRules bool, ph *phase) error {
 	start := time.Now()
 	slog.Info("cwsvc: beginning ticket sync", "board_ids", boardIDs)
 	defer func() {
@@ -44,7 +46,7 @@ func (s *Service) SyncOpenTickets(ctx context.Context, boardIDs []int, maxSyncs 
 	// the cancel does not reach, so a saved ticket always gets its sync event.
 	running := context.WithoutCancel(ctx)
 	stopped := forEach(ctx, tix, maxSyncs, func(ticket psa.Ticket) {
-		opts := ticketbot.ProcessOpts{Source: models.SourceSync, RunRules: false}
+		opts := ticketbot.ProcessOpts{Source: models.SourceSync, RunRules: runRules}
 		if err := s.Ticketbot.ProcessTicket(running, ticket.ID, opts); err != nil {
 			err = fmt.Errorf("syncing ticket %d: %w", ticket.ID, err)
 			ph.step(err)

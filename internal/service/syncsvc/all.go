@@ -33,8 +33,23 @@ func (s *Service) Start(ctx context.Context, payload *models.SyncPayload, starte
 		cancel()
 		return err
 	}
-	go s.run(ctx, payload)
+	go func() { _ = s.run(ctx, payload) }()
 	return nil
+}
+
+// RunAndWait is Start that blocks until the sync finishes and returns every phase's failure
+// joined, for the nightly schedule, which reports them. It returns ErrSyncRunning at once while
+// another sync is unfinished, and nil for a run that was cancelled.
+func (s *Service) RunAndWait(ctx context.Context, payload *models.SyncPayload, startedBy string) error {
+	if payload == nil {
+		return errors.New("received nil payload")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	if err := s.progress.start(payload, startedBy, time.Now(), cancel); err != nil {
+		cancel()
+		return err
+	}
+	return s.run(ctx, payload)
 }
 
 // Cancel stops the running sync, or returns ErrNoSyncRunning. It returns at once; the run
@@ -43,16 +58,20 @@ func (s *Service) Cancel(by string) error {
 	return s.progress.stop(by, time.Now())
 }
 
-func (s *Service) run(ctx context.Context, payload *models.SyncPayload) {
+func (s *Service) run(ctx context.Context, payload *models.SyncPayload) error {
 	slog.Info("received sync payload",
 		slog.Bool("sync_boards", payload.CWBoards),
 		slog.Bool("sync_recipients", payload.WebexRecipients),
+		slog.Bool("sync_members", payload.CWMembers),
+		slog.Bool("sync_companies", payload.CWCompanies),
+		slog.Bool("sync_contacts", payload.CWContacts),
 		slog.Bool("sync_tickets", payload.CWTickets),
 		slog.Any("ticket_board_ids", payload.BoardIDs),
+		slog.Bool("run_workflows", payload.RunWorkflows),
 		slog.Int("max_concurrent_syncs", payload.MaxConcurrentSyncs),
 	)
 
-	errch := make(chan error, 3)
+	errch := make(chan error, 6)
 	var wg sync.WaitGroup
 
 	start := time.Now()
@@ -88,10 +107,35 @@ func (s *Service) run(ctx context.Context, payload *models.SyncPayload) {
 		})
 	}
 
+	// members, companies and contacts each write in one transaction, like boards. Contacts run
+	// after companies, not beside them: a contact can write its company, and two transactions
+	// writing the same companies in different orders can deadlock.
+	type refPhase struct {
+		on   bool
+		name string
+		fn   func(context.Context, *phase) error
+	}
+	runRef := func(ps ...refPhase) {
+		wg.Go(func() {
+			for _, p := range ps {
+				if !p.on {
+					continue
+				}
+				ph := s.progress.phase(p.name)
+				if err := endPhase(ctx, ph, p.fn(ctx, ph), "Rolled back, nothing saved", true); err != nil {
+					errch <- fmt.Errorf("syncing connectwise %s: %w", p.name, err)
+				}
+			}
+		})
+	}
+	runRef(refPhase{payload.CWMembers, models.SyncPhaseMembers, s.SyncMembers})
+	runRef(refPhase{payload.CWCompanies, models.SyncPhaseCompanies, s.SyncCompanies},
+		refPhase{payload.CWContacts, models.SyncPhaseContacts, s.SyncContacts})
+
 	if payload.CWTickets {
 		ph := s.progress.phase(models.SyncPhaseTickets)
 		wg.Go(func() {
-			err := s.SyncOpenTickets(ctx, payload.BoardIDs, payload.MaxConcurrentSyncs, ph)
+			err := s.SyncOpenTickets(ctx, payload.BoardIDs, payload.MaxConcurrentSyncs, payload.RunWorkflows, ph)
 			if err := endPhase(ctx, ph, err, "Stopped", false); err != nil {
 				errch <- fmt.Errorf("syncing connectwise tickets: %w", err)
 			}
@@ -101,12 +145,15 @@ func (s *Service) run(ctx context.Context, payload *models.SyncPayload) {
 	wg.Wait()
 	close(errch)
 
+	var errs []error
 	for err := range errch {
 		if err != nil {
 			errored = true
-			slog.Error("hook sync", "error", err.Error())
+			errs = append(errs, err)
+			slog.Error("sync", "error", err.Error())
 		}
 	}
+	return errors.Join(errs...)
 }
 
 // endPhase records how a phase ended and returns err when it is a failure. An error once
