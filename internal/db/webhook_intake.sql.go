@@ -49,10 +49,26 @@ func (q *Queries) ClaimWebhookIntake(ctx context.Context) (*WebhookIntake, error
 	return &i, err
 }
 
+const countWebhookIntakeByActionSince = `-- name: CountWebhookIntakeByActionSince :one
+SELECT COUNT(*)::bigint FROM webhook_intake WHERE action = $1 AND received_at >= $2
+`
+
+type CountWebhookIntakeByActionSinceParams struct {
+	Action     string    `json:"action"`
+	ReceivedAt time.Time `json:"received_at"`
+}
+
+func (q *Queries) CountWebhookIntakeByActionSince(ctx context.Context, arg CountWebhookIntakeByActionSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countWebhookIntakeByActionSince, arg.Action, arg.ReceivedAt)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countWebhookIntakeByHour = `-- name: CountWebhookIntakeByHour :many
 SELECT date_trunc('hour', received_at)::timestamptz AS hour, COUNT(*)::bigint AS n
 FROM webhook_intake
-WHERE received_at >= $1
+WHERE received_at >= $1 AND action <> 'catchup'
 GROUP BY 1
 ORDER BY 1
 `
@@ -215,14 +231,41 @@ func (q *Queries) InsertWebhookIntake(ctx context.Context, arg InsertWebhookInta
 }
 
 const lastWebhookIntakeReceivedAt = `-- name: LastWebhookIntakeReceivedAt :one
-SELECT received_at FROM webhook_intake ORDER BY received_at DESC LIMIT 1
+SELECT received_at FROM webhook_intake WHERE action <> 'catchup' ORDER BY received_at DESC LIMIT 1
 `
 
+// Catch-up rows are not webhooks; counting them would hide the silence the stale alert is for.
 func (q *Queries) LastWebhookIntakeReceivedAt(ctx context.Context) (time.Time, error) {
 	row := q.db.QueryRow(ctx, lastWebhookIntakeReceivedAt)
 	var received_at time.Time
 	err := row.Scan(&received_at)
 	return received_at, err
+}
+
+const listOpenWebhookIntakeTickets = `-- name: ListOpenWebhookIntakeTickets :many
+SELECT DISTINCT ticket_id FROM webhook_intake
+WHERE status IN ('pending', 'processing') AND ticket_id = ANY($1::int[])
+`
+
+// Of the given tickets, those with a row still waiting or in flight.
+func (q *Queries) ListOpenWebhookIntakeTickets(ctx context.Context, ticketIds []int) ([]int, error) {
+	rows, err := q.db.Query(ctx, listOpenWebhookIntakeTickets, ticketIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int
+	for rows.Next() {
+		var ticket_id int
+		if err := rows.Scan(&ticket_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ticket_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listWebhookIntake = `-- name: ListWebhookIntake :many

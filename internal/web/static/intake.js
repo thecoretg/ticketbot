@@ -69,6 +69,34 @@ function intakeChart(hourly) {
     </div>`
 }
 
+// intakeCatchupCard reports the missed-webhook check: how often ConnectWise changed a ticket
+// without calling back, and whether the check itself is healthy.
+function intakeCatchupCard(stats) {
+    const c = stats?.catchup
+    const minutes = appConfig?.catchup_interval_minutes
+    const week = stats?.catchup_last_7_days || 0
+    let summary
+    if (minutes === 0) summary = 'Off. Turn it on under Config.'
+    else if (!c?.last_run_at) summary = `Runs every ${minutes || 15} minutes; it has not run yet.`
+    else summary = `Runs every ${minutes || 15} minutes. Last run ${fmtDateTime(c.last_run_at)}, queued ${c.last_queued}.`
+    const failed = c?.last_error
+        ? `<div class="callout warn">${icon('alert')}<div class="body"><b>The last run failed</b>${esc(c.last_error.replace(/\.?$/, '.'))} The next run checks the same window again.</div></div>`
+        : ''
+    return `<article class="card">
+        <div class="card-head">
+            <div><h3>Missed-webhook check</h3><p>Tickets ConnectWise changed without sending a webhook, queued as if it had.</p></div>
+            <span class="badge outline">${week} in 7 days</span>
+        </div>
+        <div class="card-body stack gap3">
+            <p class="muted">${esc(summary)}</p>
+            ${failed}
+        </div>
+    </article>`
+}
+
+// Catch-up rows carry no ConnectWise action of their own; name them for what they are.
+const INTAKE_ACTION_LABELS = { catchup: 'missed webhook' }
+
 function renderIntake(stats, rows, hourly = [], paint = setContent) {
     const counts = stats?.counts || {}
     const tiles = INTAKE_STATUSES.filter(s => s.value !== 'discarded').map(s => `
@@ -90,7 +118,7 @@ function renderIntake(stats, rows, hourly = [], paint = setContent) {
         { key: 'id', label: 'ID', cls: 'num muted', sort: r => r.id, cell: r => r.id },
         { key: 'ticket', label: 'Ticket', cls: 'cell-primary', sort: r => r.ticket_id,
           cell: r => `<a href="#tickets/${r.ticket_id}" class="num">#${r.ticket_id}</a>` },
-        { key: 'action', label: 'Action', sort: r => r.action, cell: r => esc(r.action) },
+        { key: 'action', label: 'Action', sort: r => r.action, cell: r => esc(INTAKE_ACTION_LABELS[r.action] || r.action) },
         { key: 'status', label: 'Status', sort: r => status(r).label, cell: r => badgeTag(status(r).label, status(r).variant) },
         { key: 'attempts', label: 'Attempts', cls: 'num', sort: r => r.attempts, cell: r => r.attempts },
         { key: 'received', label: 'Received', cls: 'muted nowrap', firstDir: 'desc', sort: r => tblTime(r.received_at),
@@ -108,13 +136,14 @@ function renderIntake(stats, rows, hourly = [], paint = setContent) {
         failed:     ['Nothing has failed', 'A webhook lands here only after every retry failed. Retries run for about two hours before giving up.'],
         pending:    ['Nothing waiting', 'Webhooks wait here between attempts; most are processed within a second of arriving.'],
         processing: ['Nothing in flight', 'Rows appear here while a worker is fetching the ticket and running its workflow.'],
-        done:       ['Nothing processed yet', 'Processed webhooks stay here for the log retention period, then are purged.'],
+        done:       ['Nothing processed yet', 'Processed webhooks stay here for the intake retention period, then are purged.'],
         discarded:  ['Nothing discarded', 'Failed webhooks an admin dropped are kept here until purged.'],
     }[intakeFilter] || ['Nothing here', '']
 
     paint(`<div class="stack gap6">
         <div class="grid g4">${tiles}</div>
         ${intakeChart(hourly)}
+        ${intakeCatchupCard(stats)}
         <p class="muted">${esc(last)} The table refreshes every few seconds.</p>
         ${dataTable({
             id: 'intake', columns, rows, menu,

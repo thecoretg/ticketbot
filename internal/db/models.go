@@ -56,6 +56,7 @@ type AppConfig struct {
 	IntakeRetentionDays          int    `json:"intake_retention_days"`
 	ClosedTicketRetentionEnabled bool   `json:"closed_ticket_retention_enabled"`
 	ClosedTicketRetentionDays    int    `json:"closed_ticket_retention_days"`
+	CatchupIntervalMinutes       int    `json:"catchup_interval_minutes"`
 }
 
 type AppLog struct {
@@ -299,6 +300,14 @@ type WebexRecipient struct {
 	LastActivity time.Time `json:"last_activity"`
 	CreatedOn    time.Time `json:"created_on"`
 	UpdatedOn    time.Time `json:"updated_on"`
+}
+
+type WebhookCatchup struct {
+	ID             int        `json:"id"`
+	CheckedThrough *time.Time `json:"checked_through"`
+	LastRunAt      *time.Time `json:"last_run_at"`
+	LastQueued     int        `json:"last_queued"`
+	LastError      *string    `json:"last_error"`
 }
 
 type WebhookIntake struct {

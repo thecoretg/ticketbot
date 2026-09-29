@@ -62,6 +62,8 @@ type Service struct {
 	Backoff   []time.Duration
 	// Purgers run after the queue's own purge, on the same hourly tick.
 	Purgers []Purger
+	// CatchupState, when set, adds the missed-webhook check's state to Stats.
+	CatchupState repos.CatchupStateRepository
 
 	wake chan struct{}
 	wg   sync.WaitGroup
@@ -74,6 +76,8 @@ type Params struct {
 	Alerter   Alerter
 	Cfg       RetentionConfig
 	Purgers   []Purger
+
+	CatchupState repos.CatchupStateRepository
 }
 
 func New(p Params) *Service {
@@ -83,9 +87,11 @@ func New(p Params) *Service {
 		Alerter:   p.Alerter,
 		Cfg:       p.Cfg,
 		Purgers:   p.Purgers,
-		Backoff:   DefaultBackoff,
-		wake:      make(chan struct{}, 1),
-		now:       time.Now,
+
+		CatchupState: p.CatchupState,
+		Backoff:      DefaultBackoff,
+		wake:         make(chan struct{}, 1),
+		now:          time.Now,
 	}
 	if s.Alerter == nil {
 		s.Alerter = alerts.Log{}
@@ -150,8 +156,21 @@ func (s *Service) List(ctx context.Context, status *models.IntakeStatus, limit i
 	return s.Repo.List(ctx, status, limit)
 }
 
+// Stats summarises the queue, with what the missed-webhook check has found.
 func (s *Service) Stats(ctx context.Context) (*models.IntakeStats, error) {
-	return s.Repo.Stats(ctx)
+	st, err := s.Repo.Stats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if st.CatchupLast7Days, err = s.Repo.CountActionSince(ctx, models.IntakeCatchup, s.now().AddDate(0, 0, -7)); err != nil {
+		return nil, err
+	}
+	if s.CatchupState != nil {
+		if st.Catchup, err = s.CatchupState.Get(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return st, nil
 }
 
 // Hourly returns webhook counts per hour for the last days days, oldest first, for the dashboard.
@@ -236,6 +255,8 @@ func (s *Service) run(ctx context.Context, row *models.WebhookIntake) error {
 	switch row.Action {
 	case models.IntakeAdded, models.IntakeUpdated:
 		return s.Processor.ProcessTicket(ctx, row.TicketID, ticketbot.ProcessOpts{Source: models.SourceWebhook, RunRules: true})
+	case models.IntakeCatchup:
+		return s.Processor.ProcessTicket(ctx, row.TicketID, ticketbot.ProcessOpts{Source: models.SourceCatchup, RunRules: true})
 	case models.IntakeDeleted:
 		return s.Processor.SoftDeleteTicket(ctx, row.TicketID, models.SourceWebhook)
 	default:

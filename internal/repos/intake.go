@@ -28,4 +28,14 @@ type WebhookIntakeRepository interface {
 	// CountsByHour returns one row per hour that received at least one webhook since the given time.
 	CountsByHour(ctx context.Context, since time.Time) ([]models.IntakeHourCount, error)
 	DeleteFinishedBefore(ctx context.Context, before time.Time) (int64, error)
+	// OpenTickets returns which of ticketIDs have a pending or processing row.
+	OpenTickets(ctx context.Context, ticketIDs []int) ([]int, error)
+	CountActionSince(ctx context.Context, action models.IntakeAction, since time.Time) (int64, error)
+}
+
+// CatchupStateRepository holds the missed-webhook check's single state row. Get returns nil and
+// no error before the first run.
+type CatchupStateRepository interface {
+	Get(ctx context.Context) (*models.CatchupState, error)
+	Save(ctx context.Context, st *models.CatchupState) error
 }

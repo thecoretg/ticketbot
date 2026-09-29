@@ -90,6 +90,11 @@ out finished intake rows on `intake_retention_days`, then runs each `intake.Purg
 another goroutine. Soft-deleted tickets are hard-deleted once older than
 `history_retention_days`; closed tickets only while `closed_ticket_retention_enabled` is on.
 Ticket deletes cascade to everything under the ticket.
+`internal/service/catchup` is the missed-webhook check (every `catchup_interval_minutes`, only
+when `SKIP_HOOKS` is unset): one ConnectWise list of tickets on boards with an enabled workflow
+changed since the `webhook_catchup` watermark, compared with `raw._info.lastUpdated`, and each
+mismatch without an open row is queued as action `catchup`, which runs workflows with source
+`catchup`. Catch-up rows are excluded from the stale alert and the webhooks-per-hour chart.
 
 ## Layering
 

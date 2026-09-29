@@ -2121,6 +2121,9 @@ function renderConfig(cfg, recipients = []) {
         ${row('Redirect notifications to',
             'While set, every notification goes to this room instead of its intended recipient, prefixed with who it was for, and is sent even under dry run. Use it for the parallel run; clear it at cutover.',
             roomSelect('c-redirect-room', cfg.redirect_room_id, 'Redirect room'))}
+        ${row('Missed-webhook check',
+            'Minutes between checks for tickets ConnectWise changed without sending a webhook. Each check is one ConnectWise request; tickets it finds are queued and run their workflows as if the webhook had come. 0 turns it off; otherwise 5 to 1440.',
+            numberInput('c-catchup-minutes', cfg.catchup_interval_minutes, 0))}
         ${row('Stale webhook alert',
             'Minutes without a ticket webhook, during the business hours below, before the ops room is alerted. 0 disables the check.',
             numberInput('c-stale-minutes', cfg.stale_alert_minutes, 0))}
@@ -2189,6 +2192,7 @@ async function saveConfig() {
             ops_room_id:                Number(document.getElementById('c-ops-room').value),
             redirect_room_id:           Number(document.getElementById('c-redirect-room').value),
             stale_alert_minutes:        num('c-stale-minutes', 'Stale webhook alert'),
+            catchup_interval_minutes:   num('c-catchup-minutes', 'Missed-webhook check'),
             history_retention_days:     num('c-history-retention', 'History retention'),
             business_open:              document.getElementById('c-biz-open').value,
             business_close:             document.getElementById('c-biz-close').value,

@@ -12,6 +12,10 @@ If; when it does not hold, that lane does not run and the run's history says so.
 its own trigger, a lane, rather than hanging rules off one another. The canvas is the workflow: steps are cards, wires are the paths between
 them.
 
+ConnectWise occasionally changes a ticket without telling ticketbot. A check every few minutes
+finds those tickets and runs the workflow then, so a notification can arrive a few minutes late;
+its history shows the source as **catchup**.
+
 ## How a walk moves
 
 - An **If** step leaves by its **match** port when its condition holds and by **else** when it

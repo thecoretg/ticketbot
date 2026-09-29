@@ -83,6 +83,7 @@ func configToUpsertParams(c *models.Config) db.UpsertAppConfigParams {
 		IntakeRetentionDays:          c.IntakeRetentionDays,
 		ClosedTicketRetentionEnabled: c.ClosedTicketRetentionEnabled,
 		ClosedTicketRetentionDays:    c.ClosedTicketRetentionDays,
+		CatchupIntervalMinutes:       c.CatchupIntervalMinutes,
 	}
 }
 
@@ -113,5 +114,6 @@ func configFromPG(pg *db.AppConfig) *models.Config {
 		IntakeRetentionDays:          pg.IntakeRetentionDays,
 		ClosedTicketRetentionEnabled: pg.ClosedTicketRetentionEnabled,
 		ClosedTicketRetentionDays:    pg.ClosedTicketRetentionDays,
+		CatchupIntervalMinutes:       pg.CatchupIntervalMinutes,
 	}
 }

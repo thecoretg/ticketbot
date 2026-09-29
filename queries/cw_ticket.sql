@@ -122,3 +122,10 @@ WHERE deleted AND updated_on < NOW()::timestamp - make_interval(days => sqlc.arg
 -- updated_on moves on every webhook and sync, so it is when ConnectWise last changed the ticket.
 DELETE FROM cw_ticket
 WHERE closed_flag AND NOT deleted AND updated_on < NOW()::timestamp - make_interval(days => sqlc.arg('days')::int);
+
+-- name: ListTicketLastUpdated :many
+-- ConnectWise's own lastUpdated for each stored ticket, from the raw copy. A ticket stored before
+-- raw was kept reads as the epoch, so it always counts as out of date.
+SELECT id, COALESCE((raw->'_info'->>'lastUpdated')::timestamptz, 'epoch'::timestamptz)::timestamptz AS cw_last_updated
+FROM cw_ticket
+WHERE id = ANY(sqlc.arg('ids')::int[]);
