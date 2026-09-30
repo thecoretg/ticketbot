@@ -171,6 +171,8 @@ func TestValidateStructure(t *testing.T) {
 		{"trigger with a broken condition and settings", &models.Workflow{Nodes: []models.Node{{ID: "t", Kind: models.NodeTrigger, Title: "t", Events: []models.TriggerEvent{models.TriggerCreated}, Condition: "id = ", ActionSettings: models.ActionSettings{Notify: &models.NotifyAction{}}}}}, []string{"condition:", "notify:no action settings"}},
 		{"if with events and settings", flow(models.Node{ID: "c", Kind: models.NodeIf, Title: "c", Events: []models.TriggerEvent{models.TriggerCreated}, ActionSettings: models.ActionSettings{AddNote: &models.AddNoteAction{}}}), []string{"events:only a trigger", "add_note:no action settings"}},
 		{"action with condition", flow(models.Node{ID: "n", Kind: "skip_notify", Title: "n", Condition: "id = 1"}), []string{"condition:only an if node"}},
+		{"order off a trigger", flow(models.Node{ID: "n", Kind: "skip_notify", Title: "n", Order: 2}), []string{"order:only a trigger"}},
+		{"negative order", &models.Workflow{Nodes: []models.Node{{ID: "t", Kind: models.NodeTrigger, Title: "t", Enabled: true, Order: -1, Events: []models.TriggerEvent{models.TriggerCreated}}}}, []string{"order:cannot be negative"}},
 		{"unknown kind", flow(models.Node{ID: "x", Kind: "teleport", Title: "x"}), []string{"kind:unknown node kind"}},
 		{"untitled", flow(models.Node{ID: "c", Kind: models.NodeIf, Enabled: true}), []string{"title:title is required"}},
 		{"edge to missing node", func() *models.Workflow {

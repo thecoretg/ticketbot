@@ -4,7 +4,8 @@
 // A workflow is a graph: trigger nodes accept ticket events, if nodes branch on a condition, action
 // nodes do something, and edges wire an output port to a node's input. The editor is a pannable,
 // zoomable canvas (cv*) with a step list docked left and an inspector docked right. Node positions
-// are part of the document and are saved with it.
+// are part of the document and are saved with it. The canvas shows one trigger at a time: a tab per
+// trigger holds the steps its wires reach, and the All triggers tab sets the firing order.
 // ─────────────────────────────────────────────────────────
 let wf           = null   // working copy of the workflow being edited
 let wfOriginal   = ''     // JSON.stringify(wf) at load/save time, for dirty compare
@@ -275,6 +276,9 @@ function wfNormalize(w) {
         if (n.kind === 'if' || n.kind === 'trigger') n.condition = n.condition || ''
         if (n.kind === 'trigger') n.events = n.events || []
     }
+    // every trigger gets an explicit place in the firing order; a document saved before the tabs
+    // has none, and numbering it in the engine's fallback order (canvas position) keeps its order
+    cvSortTriggers(w.nodes).forEach((t, i) => { t.order = i + 1 })
     return w
 }
 
@@ -339,28 +343,449 @@ function renderWorkflowEditor() {
         ${editOnly(`<button id="wf-save" class="btn ${dirty ? 'btn-primary' : 'btn-default'}" onclick="saveWorkflow()" ${dirty ? '' : 'disabled'}>Save</button>`)}
     </div>
 
-    <div class="canvas wf-canvas" id="cv">
-        <div class="plane" id="cv-plane">
-            <svg class="wires" id="cv-wires" viewBox="-4000 -4000 8000 8000" aria-hidden="true"></svg>
-            <div id="cv-nodes"></div>
-        </div>
-        <div id="cv-rail"></div>
-        <div id="cv-side"></div>
-        <div class="dock-bar bl">
-            <button class="icon-btn" onclick="cvZoomBy(0.8)" aria-label="Zoom out">${icon('minus')}</button>
-            <span class="pct" id="cv-pct">100%</span>
-            <button class="icon-btn" onclick="cvZoomBy(1.25)" aria-label="Zoom in">${icon('plus')}</button>
-            <button class="icon-btn" onclick="cvFit()" aria-label="Fit the whole flow in view">${icon('fit')}</button>
-        </div>
-        <div class="dock-bar br" id="cv-hint"></div>
-    </div>
+    ${cvCanvasHTML()}
     </div>`)
 
     cvMount()
+    cvRenderAll()
+}
+
+// cvCanvasHTML is the trigger tab strip and the canvas under it, shared by the editor and the
+// results page's replay. The strip and #cv-over (the All triggers overview) are filled by
+// cvRenderTabs and cvRenderGraph.
+function cvCanvasHTML(extra = '') {
+    return `<div class="cv-frame">
+        <div class="cv-tabs" id="cv-tabs"></div>
+        <div class="canvas wf-canvas${extra ? ` ${extra}` : ''}" id="cv">
+            <div class="plane" id="cv-plane">
+                <svg class="wires" id="cv-wires" viewBox="-4000 -4000 8000 8000" aria-hidden="true"></svg>
+                <div id="cv-nodes"></div>
+            </div>
+            <div class="cv-over" id="cv-over" hidden></div>
+            <div id="cv-rail"></div>
+            <div id="cv-side"></div>
+            <div class="dock-bar bl">
+                <button class="icon-btn" onclick="cvZoomBy(0.8)" aria-label="Zoom out">${icon('minus')}</button>
+                <span class="pct" id="cv-pct">100%</span>
+                <button class="icon-btn" onclick="cvZoomBy(1.25)" aria-label="Zoom in">${icon('plus')}</button>
+                <button class="icon-btn" onclick="cvFit()" aria-label="Fit this trigger in view">${icon('fit')}</button>
+            </div>
+            <div class="dock-bar br" id="cv-hint"></div>
+        </div>
+    </div>`
+}
+
+function cvRenderAll() {
+    cvRenderTabs()
     cvRenderGraph()
     cvRenderRail()
     cvRenderSide()
     cvApplyView()
+}
+
+// ── Trigger tabs ─────────────────────────────────────────
+// The document stays one graph per board; the canvas shows it one trigger at a time. A trigger's
+// tab holds every step its wires reach, so a step two triggers both reach is on both tabs (with an
+// "Also in" chip). A step not wired to any trigger yet, just dropped or cut loose, stays on the tab
+// it was on when that happened (cv.home), so it never vanishes mid-edit. The All triggers tab lists
+// the triggers in firing order and is where that order changes.
+
+// cvSortTriggers is the engine's firing order (models.Workflow.TriggersInOrder): order, then left
+// to right and top to bottom on the canvas, then id.
+function cvSortTriggers(nodes) {
+    return nodes.filter(n => n.kind === 'trigger').sort((a, b) =>
+        (a.order || 0) - (b.order || 0) || (a.x || 0) - (b.x || 0) || (a.y || 0) - (b.y || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+function cvTriggers() { return wf ? cvSortTriggers(wf.nodes) : [] }
+
+function cvNextOrder() {
+    return Math.max(0, ...wf.nodes.filter(n => n.kind === 'trigger').map(n => n.order || 0)) + 1
+}
+
+function cvAdj(doc = wf) {
+    const adj = {}
+    for (const e of doc.edges || []) (adj[e.from] = adj[e.from] || []).push(e.to)
+    return adj
+}
+
+// cvReach is every node id the seeds lead to along wires, the seeds included.
+function cvReach(seeds, adj = cvAdj()) {
+    const seen = new Set(seeds), queue = [...seeds]
+    while (queue.length) {
+        for (const to of adj[queue.shift()] || []) if (!seen.has(to)) { seen.add(to); queue.push(to) }
+    }
+    return seen
+}
+
+// cvShown lists the node ids trigger tid's tab shows: what its wires reach, plus the unwired steps
+// that belong to it and whatever those lead to. An unwired step with no home goes to the first tab.
+function cvShown(tid) {
+    const adj = cvAdj()
+    const trigs = cvTriggers()
+    const wired = cvReach(trigs.map(t => t.id), adj)
+    const first = trigs[0]?.id
+    const seeds = [tid]
+    for (const n of wf.nodes) {
+        if (wired.has(n.id)) continue
+        const home = trigs.some(t => t.id === cv.home[n.id]) ? cv.home[n.id] : first
+        if (home === tid) seeds.push(n.id)
+    }
+    return cvReach(seeds, adj)
+}
+
+// cvIsShown answers from the last render; before the first one everything counts as shown.
+function cvIsShown(id) { return !cv.shown || cv.shown.has(id) }
+
+// cvAdopt gives each newly unwired step the open tab as its home. It runs before every render, so
+// a step cut loose by the edit that caused the render stays where the edit happened.
+function cvAdopt() {
+    if (!wf || !cv.tab || cv.tab === 'all' || cv.replay) return
+    const wired = cvReach(cvTriggers().map(t => t.id))
+    for (const n of wf.nodes) {
+        if (!wired.has(n.id) && wfNode(cv.home[n.id])?.kind !== 'trigger') cv.home[n.id] = cv.tab
+    }
+}
+
+// cvAlsoIn maps each step on the open tab to the other triggers whose tabs show it too.
+function cvAlsoIn() {
+    const out = {}
+    if (!cv.tab || cv.tab === 'all') return out
+    for (const t of cvTriggers()) {
+        if (t.id === cv.tab) continue
+        for (const id of cvShown(t.id)) if (id !== t.id && cv.shown.has(id)) (out[id] = out[id] || []).push(t)
+    }
+    return out
+}
+
+// cvOnlyIn lists the steps only tid's tab shows, ignoring the triggers in leaving (being deleted
+// alongside it). They are what deleting the trigger takes with it.
+function cvOnlyIn(tid, leaving = []) {
+    const elsewhere = new Set()
+    for (const t of cvTriggers()) {
+        if (t.id === tid || leaving.includes(t.id)) continue
+        for (const id of cvShown(t.id)) elsewhere.add(id)
+    }
+    return [...cvShown(tid)].filter(id => id !== tid && !elsewhere.has(id))
+}
+
+function cvEnsureTab() {
+    if (!wf || cv.tab === 'all') return
+    if (wfNode(cv.tab)?.kind !== 'trigger') cv.tab = cvTriggers()[0]?.id || 'all'
+}
+
+function cvSetTab(id) {
+    if (cv.drag || id === cv.tab) return
+    cv.tab = id
+    cv.sel = null
+    cv.multi = new Set()
+    cv.selEdge = null
+    cvCondPopHide()
+    cvRenderTabs()
+    cvRenderGraph()
+    cvRenderRail()
+    cvRenderSide()
+    cvFit()
+    cvShowTab()
+}
+
+// cvReveal opens a tab that shows node id when the open one does not, so a problem the canvas
+// points at is on screen.
+function cvReveal(id) {
+    if (!id || !wfNode(id)) return
+    if (cv.tab !== 'all' && cvShown(cv.tab).has(id)) return
+    const t = cvTriggers().find(t => cvShown(t.id).has(id))
+    if (t) cvSetTab(t.id)
+}
+
+// cvRunOf says what a simulated or recorded run did with trigger t: ran, held (its only-when
+// condition failed) or idle (it never fired: wrong event, or disabled).
+function cvRunOf(t) {
+    const s = cv.run?.steps.find(x => x.node_id === t.id)
+    if (!s) return 'idle'
+    return s.matched === false ? 'held' : 'ran'
+}
+
+// cvOpenRanTab moves to the first trigger a run fired, unless the open tab is one of them.
+function cvOpenRanTab() {
+    const ran = cvTriggers().filter(t => cvRunOf(t) === 'ran')
+    if (ran.length && !ran.some(t => t.id === cv.tab)) cvSetTab(ran[0].id)
+}
+
+// the saved document, parsed once per save, for each tab's unsaved-changes dot
+let cvOrigCache = { src: null, doc: null }
+function cvOriginalDoc() {
+    if (cvOrigCache.src !== wfOriginal) cvOrigCache = { src: wfOriginal, doc: wfOriginal ? JSON.parse(wfOriginal) : null }
+    return cvOrigCache.doc
+}
+
+// cvTabDirty compares what a tab shows with what the same trigger reached when last saved.
+function cvTabDirty(tid, shown, orig) {
+    if (!orig) return false
+    if (!orig.nodes.some(n => n.id === tid)) return true
+    const sig = (nodes, edges, ids) => JSON.stringify([
+        nodes.filter(n => ids.has(n.id)).sort((a, b) => a.id < b.id ? -1 : 1).map(n => { const c = { ...n }; delete c._ui; return c }),
+        edges.filter(e => ids.has(e.from) && ids.has(e.to)).map(e => e.id).sort(),
+    ])
+    return sig(wf.nodes, wf.edges, shown) !== sig(orig.nodes, orig.edges, cvReach([tid], cvAdj(orig)))
+}
+
+// cvTabStatus is the one badge a tab carries: the run's verdict while a run is on the canvas,
+// else how many of its steps still need something, else Off.
+function cvTabStatus(t, shown) {
+    if (cv.run) {
+        const r = cvRunOf(t)
+        if (r === 'ran') return badgeTag('Ran', 'ok')
+        if (r === 'held') return badgeTag('Didn’t match', 'warn')
+        return badgeTag('Didn’t run', 'outline')
+    }
+    if (!cv.replay) {
+        const k = [...shown].filter(id => { const n = wfNode(id); return n && (id === cv.errNode || wfNodeProblem(n)) }).length
+        if (k) return badgeTag(`${k} to fix`, 'bad')
+    }
+    return t.enabled ? '' : badgeTag('Off', 'outline')
+}
+
+function cvTabHTML(t, orig) {
+    const on = cv.tab === t.id
+    const shown = cvShown(t.id)
+    const steps = shown.size - 1
+    const ev = (t.events || []).length ? `on ${t.events.join(' & ')}` : 'no events'
+    const dirty = !cv.replay && cvTabDirty(t.id, shown, orig)
+    return `<button type="button" role="tab" id="cv-tab-${t.id}" class="cv-tab${on ? ' on' : ''}${t.enabled ? '' : ' off'}" aria-selected="${on}" tabindex="${on ? 0 : -1}" onclick="cvSetTab('${t.id}')">
+        <span class="cv-tab-dot" aria-hidden="true"></span>
+        <span class="cv-tab-text"><span class="cv-tab-name">${esc(t.title || 'Trigger')}</span><span class="cv-tab-sub">${esc(ev)} · ${steps} step${steps === 1 ? '' : 's'}</span></span>
+        ${cvTabStatus(t, shown)}${dirty ? '<span class="dirty-dot" role="img" aria-label="Unsaved changes"></span>' : ''}
+    </button>`
+}
+
+// cvRenderTabs redraws the strip above the canvas. It runs on every edit (wfMarkDirty) so names,
+// dots and badges stay current, and hands focus back to whichever control in it had it.
+function cvRenderTabs() {
+    const host = document.getElementById('cv-tabs')
+    if (!host || !wf) return
+    cvEnsureTab()
+    const focused = host.contains(document.activeElement) ? document.activeElement.id : ''
+    const scrolled = host.querySelector('.cv-tabs-scroll')?.scrollLeft || 0
+    const trigs = cvTriggers()
+    const edit = cvEditable()
+    const all = cv.tab === 'all'
+    const cur = all ? null : wfNode(cv.tab)
+    const orig = cvOriginalDoc()
+    host.innerHTML = `<div class="cv-tabs-scroll" role="tablist" aria-label="Triggers" onkeydown="cvTabKey(event)">
+        <button type="button" role="tab" id="cv-tab-all" class="cv-tab all${all ? ' on' : ''}" aria-selected="${all}" tabindex="${all ? 0 : -1}" onclick="cvSetTab('all')">
+            ${icon('blocks')}
+            <span class="cv-tab-text"><span class="cv-tab-name">All triggers</span><span class="cv-tab-sub">${trigs.length} · firing order</span></span>
+        </button>
+        <span class="cv-tabs-sep" aria-hidden="true"></span>
+        ${trigs.map(t => cvTabHTML(t, orig)).join('')}
+        ${edit ? `<button type="button" id="cv-tab-new" class="btn btn-ghost btn-sm cv-tab-new" onclick="cvNewTrigger()">${icon('plus')}New trigger</button>` : ''}
+    </div>
+    <div class="cv-tabs-tools">
+        <button type="button" id="cv-tab-jump" class="btn btn-ghost btn-sm" hidden aria-haspopup="menu" onclick="toggleMenu(this, cvJumpMenu())">${trigs.length} triggers${icon('chevDn')}</button>
+    ${cur && edit ? `
+        ${toggle(`id="cv-tab-on" onchange="cvSetTriggerEnabled('${cur.id}', this.checked)"`, cur.enabled, { label: 'Enabled', small: true })}
+        <button type="button" id="cv-tab-rename" class="icon-btn" aria-label="Rename this trigger" data-tip="Rename" data-tip-pos="bottom" onclick="cvRenameTrigger('${cur.id}')">${icon('edit')}</button>
+        <button type="button" id="cv-tab-more" class="icon-btn" aria-haspopup="menu" aria-label="More trigger actions" onclick="toggleMenu(this, cvTriggerMenu('${cur.id}'))">${icon('dots')}</button>` : ''}
+    </div>`
+    // many triggers: the tabs scroll sideways, and a menu lists every trigger once they overflow
+    const strip = host.querySelector('.cv-tabs-scroll')
+    strip.scrollLeft = scrolled
+    document.getElementById('cv-tab-jump').hidden = strip.scrollWidth <= strip.clientWidth
+    if (focused) document.getElementById(focused)?.focus()
+}
+
+// cvShowTab scrolls the strip just enough to show the open tab.
+function cvShowTab() {
+    const strip = document.querySelector('#cv-tabs .cv-tabs-scroll')
+    const tab = document.getElementById(`cv-tab-${cv.tab}`)
+    if (!strip || !tab) return
+    const l = tab.offsetLeft - strip.offsetLeft, r = l + tab.offsetWidth
+    if (l < strip.scrollLeft) strip.scrollLeft = l
+    else if (r > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = r - strip.clientWidth
+}
+
+function cvJumpMenu() {
+    return [
+        { label: 'All triggers', icon: 'blocks', current: cv.tab === 'all', run: () => cvSetTab('all') },
+        '-',
+        ...cvTriggers().map((t, i) => ({ label: `${i + 1}. ${t.title || 'Trigger'}${t.enabled ? '' : ' (off)'}`, icon: 'bolt', current: cv.tab === t.id, run: () => cvSetTab(t.id) })),
+    ]
+}
+
+// cvTabKey moves between tabs with the arrow keys, Home and End, opening each as it goes.
+function cvTabKey(e) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+    const tabs = [...document.querySelectorAll('#cv-tabs [role="tab"]')]
+    const i = tabs.indexOf(document.activeElement)
+    if (i < 0) return
+    e.preventDefault()
+    const j = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+    tabs[j].focus()
+    tabs[j].click()
+}
+
+function cvTriggerMenu(id) {
+    return [
+        { label: 'Rename', icon: 'edit', run: () => cvRenameTrigger(id) },
+        '-',
+        { label: 'Delete trigger', icon: 'trash', danger: true, run: () => cvRemove([id]) },
+    ]
+}
+
+function cvRenameTrigger(id) {
+    cvSelect(id)
+    const input = document.getElementById('insp-title')
+    input?.focus()
+    input?.select()
+}
+
+function cvSetTriggerEnabled(id, on) {
+    const n = wfNode(id)
+    if (!n) return
+    n.enabled = on
+    cvRefreshNode(id)
+    document.querySelector(`.cv-trig[data-trig="${id}"]`)?.classList.toggle('off', !on)
+    if (cv.sel === id) cvRenderSide()
+    wfMarkDirty()
+}
+
+// cvNewTrigger adds a trigger at the end of the firing order and opens its tab with its name
+// ready to type. Where it sits on the plane does not matter: no other tab shows it.
+function cvNewTrigger() {
+    if (!cvEditable()) return
+    const n = cvNewNode('trigger', 0, 0)
+    n.title = `Trigger ${cvTriggers().length + 1}`
+    n.order = cvNextOrder()
+    wf.nodes.push(n)
+    cvSetTab(n.id)
+    cvRenameTrigger(n.id)
+    cvFit()
+    wfMarkDirty()
+}
+
+// ── All triggers (the overview tab) ──────────────────────
+function cvOverviewHTML() {
+    const trigs = cvTriggers()
+    const edit = cvEditable()
+    const cards = trigs.map((t, i) => {
+        const title = t.title || 'Trigger'
+        const ev = (t.events || []).length ? `on ticket ${t.events.join(' or ')}` : 'no events: nothing enters'
+        const c = cvCondInfo(t)
+        const cond = !c ? '' : c.advanced ? ' · advanced condition' : ` · ${c.rows.length} condition${c.rows.length === 1 ? '' : 's'}`
+        return `<article class="card cv-trig${t.enabled ? '' : ' off'}" data-trig="${t.id}"${edit ? ` draggable="true" ondragstart="cvTrigDragStart(event, '${t.id}')" ondragend="cvTrigDragEnd()"` : ''} ondragover="cvTrigDragOver(event)" ondrop="cvTrigDrop(event, '${t.id}')">
+            <div class="cv-trig-head">
+                ${edit ? `<button type="button" class="icon-btn cv-grip" aria-label="Move ${esc(title)}; the arrow keys change its place" data-tip="Drag the card, or use the arrow keys" data-tip-align="left" onkeydown="cvTrigKey(event, '${t.id}')">${icon('grip')}</button>` : ''}
+                <span class="cv-trig-no">${i + 1}</span>
+                <span class="cv-trig-ico">${icon('bolt')}</span>
+                <div class="grow"><div class="cell-primary">${esc(title)}</div><div class="cell-sub">${esc(ev + cond)}</div></div>
+                ${edit ? toggle(`onchange="cvSetTriggerEnabled('${t.id}', this.checked)"`, t.enabled, { small: true, tip: `${title} enabled` }) : (t.enabled ? '' : badgeTag('Off', 'outline'))}
+            </div>
+            <div class="cv-trig-steps">${cvTreeHTML(t.id)}</div>
+            <div class="cv-trig-foot">
+                ${cv.run ? cvTabStatus(t, new Set()) : ''}
+                <button type="button" class="btn btn-default btn-sm" onclick="cvSetTab('${t.id}')">Open${icon('arrowR')}</button>
+            </div>
+        </article>`
+    }).join('')
+    return `<div class="cv-over-head">
+            <h3>Triggers on this board</h3>
+            <p>When a ticket event arrives, every enabled trigger listening for it runs, in this order.${edit ? ' Drag a card to change the order; the tabs follow it.' : ''}</p>
+        </div>
+        <div class="cv-trig-grid">${cards}${edit ? `<button type="button" class="cv-trig-new" onclick="cvNewTrigger()">${icon('plus')}<b>New trigger</b><span>Opens on its own tab</span></button>` : ''}</div>`
+}
+
+// cvTreeHTML is a trigger's steps as an indented outline, the first few rows of it.
+function cvTreeHTML(tid, max = 7) {
+    const out = {}
+    for (const e of wf.edges) out[`${e.from}/${e.port}`] = e
+    const first = out[`${tid}/out`]
+    if (!first) return '<span class="cell-sub">Nothing wired yet</span>'
+    const rows = [], seen = new Set()
+    let total = 0, listed = 0
+    const visit = (id, depth, port) => {
+        const n = wfNode(id)
+        if (!n) return
+        const pad = `style="padding-left:calc(var(--s4) * ${depth})"`
+        const tag = port ? `<span class="cv-trow-port">${port}</span>` : ''
+        if (seen.has(id)) {
+            if (rows.length < max) rows.push(`<div class="cv-trow" ${pad}>${tag}<span class="cell-sub">joins ${esc(n.title || cvKind(n.kind).label)}</span></div>`)
+            return
+        }
+        seen.add(id)
+        total++
+        if (rows.length < max) {
+            const k = cvKind(n.kind)
+            rows.push(`<div class="cv-trow${n.enabled ? '' : ' off'}" ${pad}>${tag}<span class="swat ${k.tone}"></span><span class="cv-trow-kind">${esc(k.label)}</span>${n.title && n.title !== k.label ? `<span class="cv-trow-title">${esc(n.title)}</span>` : ''}</div>`)
+            listed++
+        }
+        for (const p of cvPorts(n)) {
+            const e = out[`${id}/${p}`]
+            if (e) visit(e.to, n.kind === 'if' ? depth + 1 : depth, n.kind === 'if' ? (p === 'yes' ? 'match' : 'else') : '')
+        }
+    }
+    visit(first.to, 0, '')
+    const more = total - listed
+    return rows.join('') + (more ? `<span class="cell-sub">and ${more} more step${more === 1 ? '' : 's'}</span>` : '')
+}
+
+// Reordering: drag a card onto another (left half: before it, right half: after it), or focus
+// its grip and use the arrow keys. Order is renumbered 1..n every time.
+function cvTrigDragStart(e, id) {
+    cv.dragTrig = id
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+    e.currentTarget.classList.add('dragging')
+}
+
+function cvTrigDragEnd() {
+    cv.dragTrig = null
+    document.querySelectorAll('.cv-trig.dragging, .cv-trig.drop-before, .cv-trig.drop-after')
+        .forEach(el => el.classList.remove('dragging', 'drop-before', 'drop-after'))
+}
+
+function cvTrigDropAfter(e) {
+    const r = e.currentTarget.getBoundingClientRect()
+    return e.clientX > r.left + r.width / 2
+}
+
+function cvTrigDragOver(e) {
+    if (!cv.dragTrig) return
+    e.preventDefault()
+    const card = e.currentTarget, after = cvTrigDropAfter(e)
+    document.querySelectorAll('.cv-trig.drop-before, .cv-trig.drop-after').forEach(el => { if (el !== card) el.classList.remove('drop-before', 'drop-after') })
+    card.classList.toggle('drop-after', after)
+    card.classList.toggle('drop-before', !after)
+}
+
+function cvTrigDrop(e, target) {
+    if (!cv.dragTrig) return
+    e.preventDefault()
+    const id = cv.dragTrig, after = cvTrigDropAfter(e)
+    cvTrigDragEnd()
+    if (id === target) return
+    const list = cvTriggers().map(t => t.id).filter(x => x !== id)
+    list.splice(list.indexOf(target) + (after ? 1 : 0), 0, id)
+    cvApplyOrder(list)
+}
+
+function cvTrigKey(e, id) {
+    const back = e.key === 'ArrowLeft' || e.key === 'ArrowUp', fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown'
+    if (!back && !fwd) return
+    e.preventDefault()
+    const list = cvTriggers().map(t => t.id)
+    const i = list.indexOf(id), j = i + (fwd ? 1 : -1)
+    if (j < 0 || j >= list.length) return
+    list.splice(i, 1)
+    list.splice(j, 0, id)
+    cvApplyOrder(list)
+    document.querySelector(`.cv-trig[data-trig="${id}"] .cv-grip`)?.focus()
+}
+
+function cvApplyOrder(ids) {
+    ids.forEach((id, i) => { const n = wfNode(id); if (n) n.order = i + 1 })
+    cvRenderGraph()
+    wfMarkDirty()
 }
 
 // ── Canvas state ─────────────────────────────────────────
@@ -378,11 +803,15 @@ const cv = {
     errNode: null,   // node the last server validation error pointed at
     ghost: null,     // { kind, x, y } while a palette drag is over the canvas
     link: null,      // { x, y } pointer position in plane space during a link drag
+    tab: null,       // trigger id whose tab is open, or 'all' for the overview
+    shown: null,     // Set of node ids the open tab shows, from the last cvRenderGraph
+    home: {},        // node id → trigger id, for steps not wired to any trigger yet (see cvAdopt)
+    dragTrig: null,  // trigger id being dragged on the overview
 }
 
 function cvReset() {
     cvClearTimers()
-    Object.assign(cv, { el: null, zoom: 1, tx: 40, ty: 40, sel: null, multi: new Set(), selEdge: null, drag: null, run: null, undo: null, errNode: null, ghost: null, link: null, replay: false })
+    Object.assign(cv, { el: null, zoom: 1, tx: 40, ty: 40, sel: null, multi: new Set(), selEdge: null, drag: null, run: null, undo: null, errNode: null, ghost: null, link: null, replay: false, tab: null, shown: null, home: {}, dragTrig: null })
 }
 
 function cvClearTimers() {
@@ -410,13 +839,14 @@ function cvPt(e) {
 function cvHitNode(p) {
     for (let i = wf.nodes.length - 1; i >= 0; i--) {
         const n = wf.nodes[i]
+        if (!cvIsShown(n.id)) continue
         if (p.x >= n.x && p.x <= n.x + CV_W && p.y >= n.y && p.y <= n.y + CV_H) return n
     }
     return null
 }
 
-// the docks sit over the canvas, so pointer events inside them are not canvas gestures
-function cvInChrome(t) { return !!(t && t.closest && t.closest('.dock, .dock-bar')) }
+// the docks and the overview sit over the canvas, so pointer events inside them are not canvas gestures
+function cvInChrome(t) { return !!(t && t.closest && t.closest('.dock, .dock-bar, .cv-over')) }
 
 // ── Mount and events ─────────────────────────────────────
 function cvMount() {
@@ -458,7 +888,7 @@ function cvOnDown(e) {
         cvGrabPort(port.dataset.portOf, port.dataset.port, e)
         return
     }
-    if (t.closest?.('.wirex, .wirehit')) return
+    if (t.closest?.('.wirex, .wirehit, .node-also')) return
     const node = t.closest?.('.node')
     if (node) {
         e.preventDefault()
@@ -535,6 +965,8 @@ function cvOnClick(e) {
     const hit = t.closest?.('.wirehit')
     if (hit) { cvSelectEdge(hit.dataset.edge); return }
     if (t.closest?.('.wirex')) { cvCutEdge(); return }
+    const also = t.closest?.('.node-also')
+    if (also) { cvSetTab(also.dataset.also); return }
 }
 
 // double-clicking a step in the list appends it below the selection
@@ -655,6 +1087,8 @@ async function cvPlace(snap, at) {
     const x0 = Math.min(...snap.nodes.map(n => n.x)), y0 = Math.min(...snap.nodes.map(n => n.y))
     const dx = at ? Math.round(at.x) - x0 : 32, dy = at ? Math.round(at.y) - y0 : 32
     const added = snap.nodes.map(n => ({ ...JSON.parse(JSON.stringify(n)), id: ids[n.id], x: n.x + dx, y: n.y + dy }))
+    let next = cvNextOrder()
+    for (const n of added) if (n.kind === 'trigger') n.order = next++
     for (const e of snap.edges) wf.edges.push({ id: cvNewID(), from: ids[e.from], to: ids[e.to], port: e.port })
     wf.nodes.push(...added)
     const ifs = added.filter(n => n.kind === 'if' || n.kind === 'trigger')
@@ -675,22 +1109,10 @@ function cvSetSelectionEnabled(on) {
     wfMarkDirty()
 }
 
-// cvDeleteSelection removes the selected steps and their wires, keeping the last trigger.
+// cvDeleteSelection removes the selected steps and their wires. A selected trigger takes the steps
+// only it reaches along (cvRemove asks first).
 function cvDeleteSelection() {
-    const ids = new Set(cvSelection())
-    if (!ids.size) return
-    const keepTrigger = wf.nodes.filter(n => n.kind === 'trigger' && !ids.has(n.id)).length === 0
-    if (keepTrigger) {
-        const first = wf.nodes.find(n => n.kind === 'trigger' && ids.has(n.id))
-        if (first) { ids.delete(first.id); toast('Kept one trigger: a workflow needs at least one', 'info') }
-    }
-    wf.nodes = wf.nodes.filter(n => !ids.has(n.id))
-    wf.edges = wf.edges.filter(e => !ids.has(e.from) && !ids.has(e.to))
-    cv.multi = new Set()
-    cv.sel = null
-    cvRenderGraph()
-    cvRenderSide()
-    wfMarkDirty()
+    cvRemove(cvSelection())
 }
 
 // Dragging an output port picks up whatever was attached to it, so pulling a link off and
@@ -792,7 +1214,7 @@ function cvOnUp(e) {
     }
     if (d.type === 'box') {
         const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1)
-        const hit = wf.nodes.filter(n => n.x < x1 && n.x + CV_W > x0 && n.y < y1 && n.y + CV_H > y0).map(n => n.id)
+        const hit = wf.nodes.filter(n => cvIsShown(n.id) && n.x < x1 && n.x + CV_W > x0 && n.y < y1 && n.y + CV_H > y0).map(n => n.id)
         document.querySelector('#cv-nodes .marquee')?.remove()
         cvSetSelection(hit)
         return
@@ -848,12 +1270,13 @@ function cvZoomBy(k) {
     cvZoomAt(cv.zoom * k, r.width / 2, r.height / 2)
 }
 
-// cvFit frames every node in the space the open docks leave, so nothing lands underneath them.
+// cvFit frames the open tab's steps in the space the open docks leave, so nothing lands underneath them.
 function cvFit() {
-    if (!cv.el || !wf?.nodes.length) return
+    const nodes = wf ? wf.nodes.filter(n => cvIsShown(n.id)) : []
+    if (!cv.el || !nodes.length) return
     const r = cv.el.getBoundingClientRect()
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-    for (const n of wf.nodes) {
+    for (const n of nodes) {
         x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y)
         x1 = Math.max(x1, n.x + CV_W); y1 = Math.max(y1, n.y + CV_H)
     }
@@ -909,22 +1332,37 @@ function cvToggleRail() {
 function cvRenderGraph() {
     const host = document.getElementById('cv-nodes')
     if (!host) return
+    cvEnsureTab()
+    const over = cv.tab === 'all'
+    cv.el?.classList.toggle('overview', over)
+    const overEl = document.getElementById('cv-over')
+    if (overEl) { overEl.hidden = !over; overEl.innerHTML = over ? cvOverviewHTML() : '' }
+    if (over) {
+        cv.shown = new Set()
+        host.innerHTML = ''
+        cvRenderWires()
+        return
+    }
+    cvAdopt()
+    cv.shown = cvShown(cv.tab)
+    const also = cvAlsoIn()
     const run = cv.run
     const shown = run ? run.steps.slice(0, run.step) : []
     const onPath = {}
     for (const s of shown) if (!onPath[s.node_id]) onPath[s.node_id] = s.no
     const nowId = shown.length ? shown[shown.length - 1].node_id : null
 
+    const nodes = wf.nodes.filter(n => cv.shown.has(n.id))
     let html = ''
-    for (const n of wf.nodes) {
+    for (const n of nodes) {
         let cls = ''
         if (n.id === cv.sel || cv.multi.has(n.id)) cls += 'sel '
         if (!n.enabled) cls += 'off '
         if (n.id === cv.errNode) cls += 'err '
         if (run) cls += onPath[n.id] ? (n.id === nowId ? 'now ' : 'hit ') : 'dim '
-        html += cvNodeHTML(n, cls, onPath[n.id] || 0)
+        html += cvNodeHTML(n, cls, onPath[n.id] || 0, also[n.id])
     }
-    for (const n of wf.nodes) {
+    for (const n of nodes) {
         if (n.kind !== 'trigger') {
             const ip = cvInPt(n)
             html += `<button class="port inp" data-port-of="${n.id}" data-port="in" style="left:${ip.x}px;top:${ip.y}px" tabindex="-1" aria-label="Input of ${esc(n.title)}"></button>`
@@ -946,10 +1384,13 @@ function cvRenderGraph() {
     cvRenderHint()
 }
 
-function cvNodeHTML(n, cls, stepNo) {
+// also lists the other triggers whose tabs show this step too; its chip opens the first of them.
+function cvNodeHTML(n, cls, stepNo, also = []) {
     const k = cvKind(n.kind)
+    const alsoLabel = also.length === 1 ? `Also in ${also[0].title || 'Trigger'}` : `Also in ${also.length} triggers`
     return `<article class="node ${k.tone} ${cls}" data-node="${n.id}" style="transform:translate(${n.x}px, ${n.y}px)">
         ${stepNo ? `<span class="step-no">${stepNo}</span>` : ''}
+        ${also.length ? `<button type="button" class="node-also" data-also="${also[0].id}" aria-label="${esc(alsoLabel)}: open that tab" data-tip="An edit here changes it on every trigger that reaches it">${esc(alsoLabel)}</button>` : ''}
         <div class="node-top">
             <span class="node-ico">${icon(k.icon)}</span>
             <span class="node-kind grow">${esc(k.label)}</span>
@@ -1170,7 +1611,7 @@ function cvRenderWires() {
     let cut = null
     for (const e of wf.edges) {
         const a = wfNode(e.from), b = wfNode(e.to)
-        if (!a || !b) continue
+        if (!a || !b || !cvIsShown(a.id) || !cvIsShown(b.id)) continue
         const p = cvOutPt(a, e.port), q = cvInPt(b)
         let cls = ''
         if (run) cls = ran.has(e.id) ? 'ran' : 'dim'
@@ -1222,12 +1663,13 @@ function cvRenderHint() {
 function cvRenderRail() {
     const host = document.getElementById('cv-rail')
     if (!host) return
-    if (!cvEditable()) { host.innerHTML = ''; return }
+    if (!cvEditable() || cv.tab === 'all') { host.innerHTML = ''; return }
     if (!cv.rail) {
         host.innerHTML = `<button class="dock-bar tl" style="cursor:pointer" onclick="cvToggleRail()">${icon('plus')}<span>Add a step</span></button>`
         return
     }
-    const groups = CV_GROUPS.map(g => {
+    // a new trigger is a new tab, so it comes from the tab strip rather than the step list
+    const groups = CV_GROUPS.filter(g => g !== 'Triggers').map(g => {
         const kinds = Object.entries(CV_KINDS).filter(([, k]) => k.group === g)
         return `<div class="eyebrow" style="margin:var(--s3) 0 var(--s2)">${esc(g)}</div>
         <div class="pal-list">${kinds.map(([kind, k]) =>
@@ -1250,6 +1692,7 @@ function cvRenderRail() {
 function cvRenderSide() {
     const host = document.getElementById('cv-side')
     if (!host) return
+    if (cv.tab === 'all') { host.innerHTML = ''; return }
     if (cv.run) { host.innerHTML = cvRunHTML(); return }
     if (cv.multi.size > 1) {
         const n = cv.multi.size
@@ -1297,7 +1740,7 @@ function cvInspectorHTML(n) {
                 ${checkbox('created', `onchange="cvToggleEvent('${id}', 'created', this.checked)"${dis}`, has('created'))}
                 ${checkbox('updated', `onchange="cvToggleEvent('${id}', 'updated', this.checked)"${dis}`, has('updated'))}
             </div>
-            <span class="hint">A flow can have more than one trigger. Every trigger that accepts an event runs; a step two paths both reach runs once.</span>
+            <span class="hint">Each trigger has its own tab. Every enabled trigger that accepts an event runs, in the order set on All triggers; a step two triggers both reach runs once.</span>
         </div>
         <div id="trigger-warn-${id}">${ev.length ? '' : `<div class="callout warn">${icon('alert')}<div>No events selected, so nothing ever enters here.</div></div>`}</div>
         ${wfConditionHTML(n)}`
@@ -1423,7 +1866,7 @@ function cvInspectorHTML(n) {
         </div>
         <div class="row spread gap3">
             ${toggle(`onchange="wfSetNode('${id}', 'enabled', this.checked)"${dis}`, n.enabled, { label: 'Enabled' })}
-            ${canEdit() ? `<button class="btn btn-ghost btn-sm" onclick="cvDeleteNode('${id}')"${canDelete ? '' : ' disabled data-tip="A workflow needs at least one trigger" data-tip-align="right"'}>${icon('trash')}Delete step</button>` : ''}
+            ${canEdit() ? `<button class="btn btn-ghost btn-sm" onclick="cvDeleteNode('${id}')"${canDelete ? '' : ' disabled data-tip="A workflow needs at least one trigger" data-tip-align="right"'}>${icon('trash')}${n.kind === 'trigger' ? 'Delete trigger' : 'Delete step'}</button>` : ''}
         </div>
         ${body}
     </div>`
@@ -1541,13 +1984,15 @@ async function wfPreviewMessage(id) {
     }
 }
 
-// wfShowHelp opens the concepts guide. section scrolls to one of: flow, conditions, messages, testing.
+// wfShowHelp opens the concepts guide. section scrolls to one of: flow, triggers, conditions, messages, testing.
 function wfShowHelp(section = '') {
     const h = (id, title) => `<h4 id="wf-help-${id}" style="margin-top:var(--s4)">${title}</h4>`
     openModal('How workflows run', `<div class="stack gap3" style="max-height:60vh;overflow-y:auto">
         ${h('flow', 'The flow')}
-        <p>A workflow belongs to one board. Every ticket event on that board (created, or updated) enters at each <b>Trigger</b> that listens for it, and walks the wires from there. A trigger can carry an <b>Only when</b> condition; when it does not hold, that lane simply does not run.</p>
+        <p>A workflow belongs to one board. Every ticket event on that board (created, or updated) enters at each <b>Trigger</b> that listens for it, and walks the wires from there. A trigger can carry an <b>Only when</b> condition; when it does not hold, that trigger's steps simply do not run.</p>
         <p>ConnectWise occasionally changes a ticket without telling ticketbot. A check every few minutes finds those tickets and runs the workflow then, so a notification can arrive a few minutes late; its history shows the source as <b>catchup</b>.</p>
+        ${h('triggers', 'Triggers and tabs')}
+        <p>Each trigger has its own tab above the canvas, holding the steps its wires reach; <b>New trigger</b> at the end of the tabs adds one. Give each rule its own trigger rather than hanging rules off one another, and branch with an If when two outcomes exclude each other. When several triggers accept the same event they run one after another, in the order shown on <b>All triggers</b>: drag the cards there, or focus a card's grip and use the arrow keys, to change it. A step two triggers both reach shows on both tabs with an <b>Also in</b> chip and runs once; an edit to it changes it on both. Deleting a trigger also deletes the steps only it reaches.</p>
         <p>An <b>If</b> step sends the walk out of its <b>match</b> port when its condition holds and <b>else</b> when it does not. A port with nothing wired to it simply ends that path. A step that two paths both reach runs once.</p>
         <p><b>Skip notify</b> silences the Notify steps after it on its own path only. Other paths still notify.</p>
         <p>Right-click a step to duplicate, copy, disable or delete it. Shift-drag on empty canvas selects several steps; dragging any of them moves the group, and a copied group pastes into another workflow with its wires.</p>
@@ -1576,6 +2021,7 @@ function wfInsertPlaceholder(el, name) {
 }
 
 function wfMarkDirty() {
+    cvRenderTabs()
     const dirty = wfIsDirty()
     document.getElementById('wf-dirty')?.classList.toggle('hidden', !dirty)
     const save = document.getElementById('wf-save')
@@ -1606,7 +2052,7 @@ function cvNewID() {
 function cvNewNode(kind, x, y) {
     const n = { id: cvNewID(), kind, title: cvKind(kind).label, enabled: true, x: Math.round(x), y: Math.round(y) }
     switch (kind) {
-    case 'trigger':      n.events = ['created', 'updated']; n.condition = ''; n._ui = wfDefaultUI(); break
+    case 'trigger':      n.events = ['created', 'updated']; n.condition = ''; n.order = 1; n._ui = wfDefaultUI(); break
     case 'if':           n.condition = ''; n._ui = wfDefaultUI(); break
     case 'notify':       n.notify       = { channel: 'webex_room', recipient_id: null }; break
     case 'add_note':     n.add_note     = { text: '', internal: true, discussion: false, resolution: false }; break
@@ -1635,7 +2081,8 @@ function cvDrop(kind, x, y) {
 
 // cvAppend adds a step below the selected node (or the lowest node) and wires it there.
 function cvAppend(kind) {
-    const anchor = wfNode(cv.sel) || wf.nodes.reduce((a, n) => (!a || n.y > a.y ? n : a), null)
+    if (cv.tab === 'all') return
+    const anchor = wfNode(cv.sel) || wf.nodes.filter(n => cvIsShown(n.id)).reduce((a, n) => (!a || n.y > a.y ? n : a), null)
     if (!anchor) { cvDrop(kind, 0, 0); return }
     cvDrop(kind, anchor.x, anchor.y + CV_H + 56)
 }
@@ -1643,6 +2090,7 @@ function cvAppend(kind) {
 function cvNearestFree(y, x) {
     let best = null
     for (const n of wf.nodes) {
+        if (!cvIsShown(n.id)) continue
         const bottom = n.y + CV_H
         if (bottom > y) continue
         for (const p of cvPorts(n)) {
@@ -1655,18 +2103,45 @@ function cvNearestFree(y, x) {
 }
 
 function cvDeleteNode(id) {
-    const n = wfNode(id)
-    if (!n) return
-    if (n.kind === 'trigger' && wf.nodes.filter(x => x.kind === 'trigger').length < 2) {
-        toast('A workflow needs at least one trigger', 'error')
-        return
+    if (wfNode(id)) cvRemove([id])
+}
+
+// cvRemove deletes steps and their wires. Deleting a trigger also deletes the steps that only its
+// tab shows, since nothing would reach them any more; steps another trigger reaches stay. That
+// wider delete is confirmed first, and the last trigger is always kept.
+function cvRemove(list) {
+    const ids = new Set(list.filter(id => wfNode(id)))
+    if (!ids.size) return
+    const trigs = [...ids].map(wfNode).filter(n => n.kind === 'trigger')
+    if (trigs.length && trigs.length >= cvTriggers().length) {
+        ids.delete(trigs[0].id)
+        trigs.shift()
+        toast('Kept one trigger: a workflow needs at least one', 'info')
+        if (!ids.size) return
     }
-    wf.nodes = wf.nodes.filter(x => x.id !== id)
-    wf.edges = wf.edges.filter(e => e.from !== id && e.to !== id)
-    if (cv.sel === id) cv.sel = null
-    cvRenderGraph()
-    cvRenderSide()
-    wfMarkDirty()
+    const extra = new Set()
+    for (const t of trigs) for (const id of cvOnlyIn(t.id, trigs.map(x => x.id))) if (!ids.has(id)) extra.add(id)
+    const apply = () => {
+        const gone = new Set([...ids, ...extra])
+        wf.nodes = wf.nodes.filter(n => !gone.has(n.id))
+        wf.edges = wf.edges.filter(e => !gone.has(e.from) && !gone.has(e.to))
+        cv.multi = new Set()
+        cv.sel = null
+        cvRenderGraph()
+        cvRenderSide()
+        wfMarkDirty()
+    }
+    if (!trigs.length) { apply(); return }
+    const names = trigs.map(t => esc(t.title || 'Trigger')).join(', ')
+    const n = extra.size
+    confirmModal({
+        title: trigs.length === 1 ? 'Delete this trigger?' : `Delete ${trigs.length} triggers?`,
+        body: `<b>${names}</b>${n
+            ? `${n} step${n === 1 ? '' : 's'} that no other trigger reaches ${n === 1 ? 'goes' : 'go'} with ${trigs.length === 1 ? 'it' : 'them'}. Steps another trigger also reaches stay.`
+            : 'Its steps stay: another trigger reaches every one of them.'} Nothing is saved until you press Save.`,
+        confirmLabel: trigs.length === 1 ? 'Delete trigger' : 'Delete triggers',
+        onConfirm: apply,
+    })
 }
 
 function cvCutEdge() {
@@ -1678,13 +2153,16 @@ function cvCutEdge() {
 }
 
 // ── Auto-arrange: a layered forest, top to bottom ────────
-// Depth is the LONGEST path from any trigger, so a node several paths reach lands below all of
-// them and the merge reads as a merge. Positions persist, so the previous layout is kept for undo.
+// It lays out the open tab only. Depth is the LONGEST path from the trigger, so a node several paths
+// reach lands below all of them and the merge reads as a merge. A step another trigger shares moves
+// on that tab too. Positions persist, so the previous layout is kept for undo.
 function cvArrange() {
     const GAP = 48, VGAP = 66
-    const nodes = wf.nodes, edges = wf.edges
+    if (cv.tab === 'all') { toast('Open a trigger to arrange its steps', 'info'); return }
+    const nodes = wf.nodes.filter(n => cvIsShown(n.id))
+    const edges = wf.edges.filter(e => cvIsShown(e.from) && cvIsShown(e.to))
     if (!nodes.length) return
-    cv.undo = Object.fromEntries(nodes.map(n => [n.id, { x: n.x, y: n.y }]))
+    cv.undo = Object.fromEntries(wf.nodes.map(n => [n.id, { x: n.x, y: n.y }]))
 
     // a child remembers the port it hangs off: match branches lean left, else branches right,
     // so an if node's two paths fan out instead of stacking in one column
@@ -1816,6 +2294,8 @@ async function wfSimulate() {
         cv.sel = null
         cv.selEdge = null
         cv.run = { ticket: id, asNew: wfSimAsNew, res, steps: res.workflow?.steps || [], step: 0 }
+        cvOpenRanTab()
+        cvRenderTabs()
         cvRenderGraph()
         cvRenderSide()
         cvRenderHint()
@@ -1838,6 +2318,7 @@ async function wfSimulate() {
 function cvClearRun() {
     cvClearTimers()
     cv.run = null
+    cvRenderTabs()
     cvRenderGraph()
     cvRenderSide()
     cvRenderHint()
@@ -1925,7 +2406,7 @@ function cvStepText(s, n) {
     if (s.error) return ['bad', `Error: ${esc(s.error)}${s.kind === 'if' ? ' — took the else branch.' : ''}`]
     switch (s.kind) {
     case 'trigger':
-        if (s.matched === false) return ['warn', 'Its condition did not hold, so this lane did not run.']
+        if (s.matched === false) return ['warn', 'Its condition did not hold, so its steps did not run.']
         return ['accent', `Accepted the ${esc(cv.run.asNew ? 'created' : 'updated')} event${s.matched ? ' and its condition held' : ''}.`]
     case 'if':
         if (s.skipped === 'disabled') return ['warn', 'Disabled — took the else branch.']
@@ -1951,45 +2432,48 @@ function cvStepText(s, n) {
 function wfClientValidate() {
     if (!wf.nodes.some(n => n.kind === 'trigger')) return { msg: 'A workflow needs at least one trigger' }
     for (const n of wf.nodes) {
-        const name = n.title || cvKind(n.kind).label
-        const bad = msg => ({ id: n.id, msg: `${name}: ${msg}` })
-        switch (n.kind) {
-        case 'trigger':
-            if (!(n.events || []).length) return bad('pick at least one event')
-            if (n._ui?.mode === 'builder') {
-                const c = wfCompile(n._ui)
-                if (c.errors.length) return bad(c.errors[0])
-            }
-            break
-        case 'if':
-            if (n._ui?.mode === 'builder') {
-                const c = wfCompile(n._ui)
-                if (c.errors.length) return bad(c.errors[0])
-            }
-            break
-        case 'notify':
-            if (n.notify?.channel !== 'resources_owner' && !n.notify?.recipient_id) return bad(`choose a ${wfChannelRecipientType(n.notify?.channel)}`)
-            break
-        case 'add_note':
-            if (!n.add_note?.text?.trim()) return bad('note text is required')
-            if (!n.add_note.internal && !n.add_note.discussion && !n.add_note.resolution) return bad('pick at least one note type')
-            break
-        case 'set_status':
-            if (!n.set_status?.status_id) return bad('choose a status')
-            break
-        case 'set_priority':
-            if (!n.set_priority?.priority_id) return bad('choose a priority')
-            break
-        case 'set_owner':
-        case 'add_resource':
-            if (!n[n.kind]?.member_id) return bad('choose a member')
-            break
-        case 'patch': {
-            const err = wfPatchOpsError(n.patch?.ops)
-            if (err) return bad(err)
-            break
+        const msg = wfNodeProblem(n)
+        if (msg) return { id: n.id, msg: `${n.title || cvKind(n.kind).label}: ${msg}` }
+    }
+    return null
+}
+
+// wfNodeProblem says what one step still needs before it can be saved, or null. The tabs count
+// these to flag a trigger with something to fix.
+function wfNodeProblem(n) {
+    switch (n.kind) {
+    case 'trigger':
+        if (!(n.events || []).length) return 'pick at least one event'
+        if (n._ui?.mode === 'builder') {
+            const c = wfCompile(n._ui)
+            if (c.errors.length) return c.errors[0]
         }
+        break
+    case 'if':
+        if (n._ui?.mode === 'builder') {
+            const c = wfCompile(n._ui)
+            if (c.errors.length) return c.errors[0]
         }
+        break
+    case 'notify':
+        if (n.notify?.channel !== 'resources_owner' && !n.notify?.recipient_id) return `choose a ${wfChannelRecipientType(n.notify?.channel)}`
+        break
+    case 'add_note':
+        if (!n.add_note?.text?.trim()) return 'note text is required'
+        if (!n.add_note.internal && !n.add_note.discussion && !n.add_note.resolution) return 'pick at least one note type'
+        break
+    case 'set_status':
+        if (!n.set_status?.status_id) return 'choose a status'
+        break
+    case 'set_priority':
+        if (!n.set_priority?.priority_id) return 'choose a priority'
+        break
+    case 'set_owner':
+    case 'add_resource':
+        if (!n[n.kind]?.member_id) return 'choose a member'
+        break
+    case 'patch':
+        return wfPatchOpsError(n.patch?.ops)
     }
     return null
 }
@@ -2015,7 +2499,7 @@ function wfPatchOpsError(ops) {
 // optional settings removed, patch ops parsed.
 function wfNodeForServer(n) {
     const out = { id: n.id, kind: n.kind, title: n.title, enabled: !!n.enabled, x: Math.round(n.x || 0), y: Math.round(n.y || 0) }
-    if (n.kind === 'trigger') { out.events = n.events || []; if (n.condition) out.condition = n.condition }
+    if (n.kind === 'trigger') { out.events = n.events || []; out.order = n.order || 0; if (n.condition) out.condition = n.condition }
     else if (n.kind === 'if') { if (n.condition) out.condition = n.condition }
     else if (n[n.kind]) {
         const s = JSON.parse(JSON.stringify(n[n.kind]))
@@ -2052,8 +2536,9 @@ function wfProblemFromDetail(d) {
 // cvShowProblem selects the offending step or wire, marks it, and says what is wrong.
 function cvShowProblem(p) {
     toast(p.msg, 'error')
-    if (p.edge) { cvSelectEdge(p.edge); return }
+    if (p.edge) { cvReveal(wfEdge(p.edge)?.from); cvSelectEdge(p.edge); return }
     if (!p.id) return
+    cvReveal(p.id)
     cv.errNode = p.id
     cvSelect(p.id)
     if (p.field === 'condition' && typeof p.pos === 'number') {

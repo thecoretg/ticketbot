@@ -8,13 +8,22 @@ editor.
 A workflow belongs to one ConnectWise board. Every ticket event on that board, a ticket being
 created or updated, enters the workflow at each **Trigger** that listens for that event and walks
 the wires from there. A trigger can carry an **Only when** condition, built the same way as an
-If; when it does not hold, that lane does not run and the run's history says so. Give each rule
-its own trigger, a lane, rather than hanging rules off one another. The canvas is the workflow: steps are cards, wires are the paths between
-them.
+If; when it does not hold, that trigger's steps do not run and the run's history says so. The
+canvas is the workflow: steps are cards, wires are the paths between them.
 
 ConnectWise occasionally changes a ticket without telling ticketbot. A check every few minutes
 finds those tickets and runs the workflow then, so a notification can arrive a few minutes late;
 its history shows the source as **catchup**.
+
+## Triggers and tabs
+
+Each trigger has its own tab above the canvas, holding the steps its wires reach; **New trigger**
+at the end of the tabs adds one. Give each rule its own trigger rather than hanging rules off one
+another, and branch with an If when two outcomes exclude each other. When several triggers accept
+the same event they run one after another, in the order shown on **All triggers**: drag the cards
+there, or focus a card's grip and use the arrow keys, to change it. A step two triggers both reach
+shows on both tabs with an **Also in** chip and runs once; an edit to it changes it on both.
+Deleting a trigger also deletes the steps only it reaches.
 
 ## How a walk moves
 

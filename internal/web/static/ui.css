@@ -1630,6 +1630,88 @@ table.tbl {
 .pal:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-on-soft); }
 .pal .swat { width: 8px; height: 8px; border-radius: 2px; background: var(--nc); flex: none; }
 
+/* ---- trigger tabs ----
+   .cv-frame stacks a strip of folder tabs on the canvas's top edge: one .cv-tab
+   per trigger, the open one (.on) filled with the canvas colour so it joins it.
+   The tabs scroll sideways in .cv-tabs-scroll; .cv-tabs-tools (the open
+   trigger's switch and actions) stays put at the right. */
+.cv-frame { display: flex; flex-direction: column; min-height: 0; }
+.cv-tabs { display: flex; align-items: flex-end; gap: var(--s3); min-height: 49px; margin-bottom: -1px; position: relative; z-index: 1; }
+.cv-tabs-scroll {
+  flex: 1; min-width: 0; display: flex; align-items: flex-end; gap: 2px;
+  padding: 0 var(--s3); overflow-x: auto; scrollbar-width: none;
+}
+.cv-tabs-scroll::-webkit-scrollbar { display: none; }
+.cv-tab {
+  flex: none; display: flex; align-items: center; gap: var(--s2); height: 48px;
+  padding: 0 var(--s4); border: 1px solid transparent; border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0; color: var(--ink-2); text-align: left; white-space: nowrap;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.cv-tab:hover { background: var(--surface-2); color: var(--ink); }
+.cv-tab.on { background: var(--bg-sunken); border-color: var(--line); color: var(--ink); box-shadow: inset 0 2px 0 var(--trigger); }
+.cv-tab.all.on { box-shadow: inset 0 2px 0 var(--accent); }
+.cv-tab > svg { width: 14px; height: 14px; flex: none; }
+.cv-tab-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--trigger); flex: none; }
+.cv-tab.off .cv-tab-dot { background: transparent; border: 2px solid var(--faint); }
+.cv-tab-text { display: flex; flex-direction: column; line-height: 1.25; }
+.cv-tab-name { font-size: var(--text-sm); font-weight: 600; }
+.cv-tab-sub { font-size: var(--text-2xs); color: var(--muted); }
+.cv-tabs-sep { flex: none; width: 1px; height: 22px; margin: 0 var(--s2) 13px; background: var(--line); }
+.cv-tab-new { flex: none; margin: 0 0 var(--s2) var(--s2); }
+.cv-tabs-tools { flex: none; display: flex; align-items: center; gap: var(--s1); padding: 0 var(--s1) var(--s2) 0; }
+.cv-tabs-tools .switch { margin-right: var(--s2); font-size: var(--text-sm); color: var(--ink-2); }
+
+/* a step more than one trigger reaches carries this chip over its top edge; it opens the other tab */
+.node-also {
+  position: absolute; right: var(--s3); top: -11px; height: 22px; padding: 0 var(--s2);
+  border: 1px solid var(--accent-line); border-radius: var(--radius-full); background: var(--surface-2);
+  color: var(--accent-on-soft); font-size: var(--text-2xs); font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.node-also:hover { background: var(--accent-soft); }
+
+/* All triggers: the overview replaces the plane inside the same .canvas */
+.canvas.overview { cursor: default; }
+.canvas.overview .plane, .canvas.overview .dock-bar { display: none; }
+.cv-over { position: absolute; inset: 0; overflow: auto; padding: var(--s8); touch-action: auto; display: flex; flex-direction: column; gap: var(--s5); }
+.cv-over[hidden] { display: none; }
+.cv-over-head h3 { font-size: var(--text-md); }
+.cv-over-head p { font-size: var(--text-sm); color: var(--muted); max-width: 680px; margin-top: var(--s1); }
+.cv-trig-grid { display: flex; flex-wrap: wrap; gap: var(--s4); align-items: flex-start; }
+.cv-trig { width: 340px; display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4); border-radius: var(--radius-lg); }
+.cv-trig[draggable="true"] { cursor: grab; }
+.cv-trig.dragging { border-style: dashed; }
+.cv-trig.drop-before { box-shadow: -3px 0 0 var(--accent), var(--shadow-sm); }
+.cv-trig.drop-after { box-shadow: 3px 0 0 var(--accent), var(--shadow-sm); }
+.cv-trig-head { display: flex; align-items: center; gap: var(--s2); }
+.cv-grip { cursor: grab; color: var(--faint); }
+.cv-trig-no {
+  width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--ink-2); font-family: var(--font-mono); font-size: var(--text-xs);
+}
+.cv-trig-ico {
+  width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--radius-sm);
+  background: var(--trigger); color: var(--accent-ink);
+}
+.cv-trig.off .cv-trig-ico { background: var(--surface-2); color: var(--muted); }
+.cv-trig-ico svg { width: 14px; height: 14px; }
+.cv-trig-steps { display: flex; flex-direction: column; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line-soft); }
+.cv-trow { display: flex; align-items: center; gap: var(--s2); font-size: var(--text-xs); color: var(--ink-2); min-width: 0; }
+.cv-trow .swat { width: 8px; height: 8px; border-radius: 2px; background: var(--nc); flex: none; }
+.cv-trow-port { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--muted); min-width: 36px; }
+.cv-trow-kind { color: var(--muted); min-width: 68px; }
+.cv-trow-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-trow.off .cv-trow-title { text-decoration: line-through; }
+.cv-trig-foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--s2); }
+.cv-trig-foot .badge { margin-right: auto; }
+.cv-trig-new {
+  width: 240px; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s2);
+  border: 2px dashed var(--line); border-radius: var(--radius-lg); color: var(--ink-2); font-size: var(--text-sm);
+}
+.cv-trig-new:hover { border-color: var(--accent-line); color: var(--ink); }
+.cv-trig-new svg { width: 18px; height: 18px; }
+.cv-trig-new span { font-size: var(--text-xs); color: var(--muted); }
+
 /* zoom cluster and status line are .dock-bar corners; .pct is the zoom readout */
 .dock-bar .pct { min-width: 46px; text-align: center; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); }
 

@@ -205,6 +205,11 @@ func (s *Service) Validate(ctx context.Context, w *models.Workflow) models.Valid
 		if n.Kind == models.NodeTrigger {
 			triggers++
 		}
+		if n.Order < 0 {
+			nodeErr(n.ID, "order", "order cannot be negative", nil)
+		} else if n.Order != 0 && n.Kind != models.NodeTrigger {
+			nodeErr(n.ID, "order", "only a trigger has an order", nil)
+		}
 		for _, m := range s.validateNode(ctx, w.BoardID, n) {
 			nodeErr(n.ID, m.field, m.text, m.pos)
 		}
@@ -353,7 +358,7 @@ func (s *Service) validateNode(ctx context.Context, boardID int, n *models.Node)
 			}
 			seen[ev] = true
 		}
-		// an optional "only when" condition gates the lane; empty fires on every event
+		// an optional "only when" condition gates its steps; empty fires on every event
 		if strings.TrimSpace(n.Condition) != "" {
 			out = append(out, s.validateCondition(ctx, n.Condition)...)
 		}

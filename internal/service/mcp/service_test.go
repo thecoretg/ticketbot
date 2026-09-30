@@ -200,7 +200,7 @@ func TestCallWorkflowTools(t *testing.T) {
 	if err := json.Unmarshal([]byte(text), &rows); err != nil {
 		t.Fatalf("list_workflows not JSON: %v\n%s", err, text)
 	}
-	if len(rows) != 1 || rows[0].Lanes != 2 || rows[0].Nodes != 5 || rows[0].BoardName != "Help Desk" {
+	if len(rows) != 1 || rows[0].Triggers != 2 || rows[0].Nodes != 5 || rows[0].BoardName != "Help Desk" {
 		t.Fatalf("rows: %+v", rows)
 	}
 
@@ -210,10 +210,10 @@ func TestCallWorkflowTools(t *testing.T) {
 	}
 	walk := res.Content[0].(*sdk.TextContent).Text
 	for _, want := range []string{
-		"Lane 1:", `"New ticket"`, "fires on: created", "only when: priority/name = 'High'",
+		"Trigger 1:", `"New ticket"`, "fires on: created", "only when: priority/name = 'High'",
 		"if contact/id in list 3", "yes:", "notify", "webex_room recipient 4", "New high ticket",
 		"no:", `set_status`, "Triage", "[disabled: passes through]",
-		"Lane 2:", "[disabled: never fires]", "(nothing wired)",
+		"Trigger 2:", "[disabled: never fires]", "(nothing wired)",
 	} {
 		if !strings.Contains(walk, want) {
 			t.Errorf("walk lacks %q:\n%s", want, walk)

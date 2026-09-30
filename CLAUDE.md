@@ -72,7 +72,7 @@ built per request holding only the tools that principal's role and scopes allow,
 `tools/list` is already filtered. Tools live in `tools.go` as `def(...)` entries with a role
 floor; every dependency is a narrow interface in `Deps`. Tool names carry the `ticketbot_`
 prefix so they never collide with the ConnectWise PSA connector's `cw_*` tools, and
-`ticketbot_get_workflow` renders the graph as lanes (`describe.go`) rather than dumping nodes
+`ticketbot_get_workflow` renders the graph one block per trigger (`describe.go`) rather than dumping nodes
 and edges. Simulate and evaluate-condition logic is in `internal/service/simulate`, shared by
 the dashboard handlers and the MCP tools. One `mcp: tool call` log line per call is the audit trail.
 
@@ -114,7 +114,8 @@ A workflow is a graph, not a rule list: `models.Workflow` holds `Nodes` (trigger
 `WorkflowDocument` (`{"version":2,"nodes":[],"edges":[]}`); a bare array is the v1 rule chain and
 `models.DecodeWorkflowDocument` upgrades it on read (`UpgradeRules`), so no SQL migration was needed
 and v1 rows persist until their next save. Engine semantics (`internal/service/workflow/engine.go`):
-every enabled trigger listening for the event fires, in canvas order; a walk follows the port an if
+every enabled trigger listening for the event fires, in firing order (`Workflow.TriggersInOrder`: a trigger's
+`order`, then canvas position for documents saved before it existed); a walk follows the port an if
 node picks and ends at an unwired port; a node reached by a second walk is recorded as `joined` and
 not re-run; `skip_notify` silences only the notifies after it on its own walk; disabled nodes pass
 through (an if takes its `no` port). Ticket writes are batched: `set_*` and `patch` operations
@@ -131,7 +132,10 @@ Documents that still say `target` are upgraded on read by `NotifyAction.Normaliz
 Webex id) and lists (by name) and rewrites those references on import; ConnectWise ids are the
 same on every instance and travel as they are. `Validate` in `service.go` owns the structural rules (one
 trigger minimum, one wire per port, nothing into a trigger, no cycles, everything reachable). The
-canvas (`internal/web/static/workflows.js`, `cv*` functions) is the only editor; every card is 88px
+canvas (`internal/web/static/workflows.js`, `cv*` functions) is the only editor. It shows one trigger per
+tab (`cvShown`: what its wires reach, plus unwired steps homed there in `cv.home` so they never vanish
+mid-edit); a step two triggers reach is on both tabs with an "Also in" chip, and the All triggers tab
+sets `order`. Filter canvas work (hit tests, fit, arrange) through `cvIsShown`. Every card is 88px
 tall (`CV_H`, shared between `ui.css` and the script) so ports line up, and a trigger or if card
 shows its condition as a count badge (`cvCondBadgeHTML`) with a hover card, never as text. Run history stores
 `steps` per run; rows from before the graph carry `rules`, and `tickets.js` renders both. Every run
