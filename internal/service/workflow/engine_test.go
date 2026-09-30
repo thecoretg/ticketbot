@@ -232,6 +232,19 @@ func TestEveryListeningTriggerFires(t *testing.T) {
 	}
 }
 
+func TestTriggerOrderBeatsCanvasPosition(t *testing.T) {
+	cw := &fakeCW{ticket: ticket()}
+	left, right := trig("t-left", 0), trig("t-right", 600)
+	w := graph([]models.Node{left, right, act("n1", notify(models.ChannelWebexRoom, rid(1))), act("n2", notify(models.ChannelWebexRoom, rid(2)))},
+		edge("t-left", models.PortOut, "n1"), edge("t-right", models.PortOut, "n2"))
+
+	// unset order: canvas position, as documents saved before tabs always ran
+	eq(t, "canvas order", path(exec(t, cw, w, Input{IsNew: true})), []string{"t-left", "n1", "t-right", "n2"})
+
+	w.Nodes[0].Order, w.Nodes[1].Order = 2, 1
+	eq(t, "explicit order", path(exec(t, cw, w, Input{IsNew: true})), []string{"t-right", "n2", "t-left", "n1"})
+}
+
 func TestBranchesFollowThePortAndRejoinOnce(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	w := graph([]models.Node{

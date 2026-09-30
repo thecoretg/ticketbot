@@ -7,8 +7,8 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
-// describeWorkflow renders the graph as lanes: one block per trigger, walking the wires and
-// indenting under each if branch. It is what ticketbot_get_workflow returns by default, because
+// describeWorkflow renders the graph one block per trigger, in firing order (the editor shows each
+// as its own tab), walking the wires and indenting under each if branch. It is what ticketbot_get_workflow returns by default, because
 // the stored document is nodes plus edges and reads poorly in a context window.
 func describeWorkflow(w *models.Workflow) string {
 	var b strings.Builder
@@ -33,13 +33,9 @@ func describeWorkflow(w *models.Workflow) string {
 		return models.Node{}, false
 	}
 
-	lane := 0
-	for _, n := range w.Nodes {
-		if n.Kind != models.NodeTrigger {
-			continue
-		}
-		lane++
-		fmt.Fprintf(&b, "\nLane %d: %s", lane, title(n))
+	triggers := w.TriggersInOrder()
+	for i, n := range triggers {
+		fmt.Fprintf(&b, "\nTrigger %d: %s", i+1, title(*n))
 		if !n.Enabled {
 			b.WriteString(" [disabled: never fires]")
 		}
@@ -59,7 +55,7 @@ func describeWorkflow(w *models.Workflow) string {
 		}
 		walk(&b, start, next, 1, map[string]bool{})
 	}
-	if lane == 0 {
+	if len(triggers) == 0 {
 		b.WriteString("\n(no trigger nodes)\n")
 	}
 	return b.String()
@@ -173,7 +169,7 @@ func describeAction(n models.Node) string {
 		}
 		return fmt.Sprintf("%s ops=%s", head, truncate(string(a.Patch.Ops), 200))
 	case models.ActionSkipNotify:
-		return head + " (silences the notifies after it on this lane)"
+		return head + " (silences the notifies after it on this path)"
 	}
 	return head
 }

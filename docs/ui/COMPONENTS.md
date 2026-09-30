@@ -281,6 +281,32 @@ width and the controls float on top of it. The parent needs
 and foot stay put. Show a dock only when it has something to say: an inspector
 with nothing selected is a column of nothing.
 
+## Tabs on a canvas's top edge
+
+The workflow editor shows one trigger at a time. `.cv-frame` stacks a strip of
+folder tabs on the canvas so the open one (`.on`) joins it; the tabs scroll
+sideways and `.cv-tabs-tools` stays at the right.
+
+```html
+<div class="cv-frame">
+  <div class="cv-tabs">
+    <div class="cv-tabs-scroll" role="tablist" aria-label="Triggers">
+      <button class="cv-tab all" role="tab" aria-selected="false"><!--blocks-->
+        <span class="cv-tab-text"><span class="cv-tab-name">All triggers</span><span class="cv-tab-sub">2 · firing order</span></span></button>
+      <span class="cv-tabs-sep" aria-hidden="true"></span>
+      <button class="cv-tab on" role="tab" aria-selected="true"><span class="cv-tab-dot"></span>
+        <span class="cv-tab-text"><span class="cv-tab-name">Ticket Created</span><span class="cv-tab-sub">on created · 3 steps</span></span></button>
+    </div>
+    <div class="cv-tabs-tools">…switch, icon buttons…</div>
+  </div>
+  <div class="canvas">…</div>
+</div>
+```
+
+`.cv-tab.off` hollows the dot; a badge or `.dirty-dot` goes after the text.
+`.canvas.overview` hides the plane and its dock bars for `.cv-over`, a
+scrolling page of `.cv-trig` cards in the same frame.
+
 ## A pointer drag in progress
 
 Put `.is-dragging` on the shell for the length of the gesture, and take it off

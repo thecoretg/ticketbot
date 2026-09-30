@@ -70,6 +70,8 @@
     display: flex; flex-direction: column;
     height: calc(100vh - var(--topbar-h) - var(--s8) - var(--s12));
 }
+/* the tab strip and canvas share the page's height: the frame takes it, the canvas the rest */
+.wf-page .cv-frame { flex: 1; }
 .wf-canvas { flex: 1; min-height: 480px; }
 /* the results page shows the canvas above the run's events, so it takes a fixed height instead of the view */
 .run-canvas { flex: none; height: 460px; min-height: 0; }

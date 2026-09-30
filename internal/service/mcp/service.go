@@ -32,7 +32,7 @@ const (
 	defaultLimit = 20
 	maxLimit     = 100
 
-	instructions = "ticketbot watches ConnectWise PSA ticket webhooks, runs workflows (lanes of " +
+	instructions = "ticketbot watches ConnectWise PSA ticket webhooks, runs workflows (graphs of " +
 		"trigger, if and action nodes) against them and notifies Webex rooms and people. These " +
 		"tools read ticketbot's own state: its workflows, what each run did, the history it kept " +
 		"per ticket, its lists, forwards and settings. They are not a ConnectWise client: for " +

@@ -200,7 +200,7 @@ func (s *Service) toolDefs() []toolDef {
 	d := s.deps
 	return []toolDef{
 		def("list_workflows", "List ticketbot's workflows: one per ConnectWise board, with whether it is enabled, "+
-			"in dry run, and how many lanes it has. Use ticketbot_get_workflow for what a workflow does.",
+			"in dry run, and how many triggers it has. Use ticketbot_get_workflow for what a workflow does.",
 			models.RoleViewer, func(ctx context.Context, _ empty) (any, error) {
 				ws, err := d.Workflows.List(ctx)
 				if err != nil {
@@ -213,7 +213,7 @@ func (s *Service) toolDefs() []toolDef {
 				return out, nil
 			}),
 
-		def("get_workflow", "Describe a workflow as a readable walk: each lane's trigger, its 'only when' "+
+		def("get_workflow", "Describe a workflow as a readable walk: each trigger in firing order, its 'only when' "+
 			"condition, the if branches and the actions on each path. Pass raw=true for the stored "+
 			"document (nodes and edges JSON).",
 			models.RoleViewer, func(ctx context.Context, in workflowInput) (any, error) {
@@ -419,7 +419,7 @@ type workflowRow struct {
 	BoardName string    `json:"board_name,omitempty"`
 	Enabled   bool      `json:"enabled"`
 	DryRun    bool      `json:"dry_run"`
-	Lanes     int       `json:"lanes"`
+	Triggers  int       `json:"triggers"`
 	Nodes     int       `json:"nodes"`
 	UpdatedOn time.Time `json:"updated_on"`
 }
@@ -428,7 +428,7 @@ func workflowRowOf(w *models.Workflow) workflowRow {
 	r := workflowRow{ID: w.ID, Name: w.Name, BoardID: w.BoardID, BoardName: w.BoardName, Enabled: w.Enabled, DryRun: w.DryRun, Nodes: len(w.Nodes), UpdatedOn: w.UpdatedOn}
 	for _, n := range w.Nodes {
 		if n.Kind == models.NodeTrigger {
-			r.Lanes++
+			r.Triggers++
 		}
 	}
 	return r

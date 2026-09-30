@@ -180,21 +180,8 @@ async function loadWorkflowRun(runID) {
             cv.replay = true
             cv.rail = false
             cv.run = { record: true, ticket: run.ticket_id, asNew: run.event === 'created', res: { actions, workflow: wfEvent?.payload }, steps, step: steps.length, outcome: run.outcome, dryRun: run.dry_run }
-            canvas = `<div class="canvas wf-canvas run-canvas" id="cv">
-                <div class="plane" id="cv-plane">
-                    <svg class="wires" id="cv-wires" viewBox="-4000 -4000 8000 8000" aria-hidden="true"></svg>
-                    <div id="cv-nodes"></div>
-                </div>
-                <div id="cv-rail"></div>
-                <div id="cv-side"></div>
-                <div class="dock-bar bl">
-                    <button class="icon-btn" onclick="cvZoomBy(0.8)" aria-label="Zoom out">${icon('minus')}</button>
-                    <span class="pct" id="cv-pct">100%</span>
-                    <button class="icon-btn" onclick="cvZoomBy(1.25)" aria-label="Zoom in">${icon('plus')}</button>
-                    <button class="icon-btn" onclick="cvFit()" aria-label="Fit the whole flow in view">${icon('fit')}</button>
-                </div>
-                <div class="dock-bar br" id="cv-hint"></div>
-            </div>`
+            cvOpenRanTab()
+            canvas = cvCanvasHTML('run-canvas')
         } else {
             canvas = `<div class="callout warn">${icon('alert')}<div class="body"><b>This workflow no longer exists</b>The steps and events below are the record of the run.</div></div>`
         }
@@ -233,10 +220,7 @@ async function loadWorkflowRun(runID) {
 
         if (d.workflow) {
             cvMount()
-            cvRenderGraph()
-            cvRenderRail()
-            cvRenderSide()
-            cvApplyView()
+            cvRenderAll()
             cvFit()
         }
     } catch (e) {

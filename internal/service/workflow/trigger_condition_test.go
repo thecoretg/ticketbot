@@ -6,9 +6,9 @@ import (
 	"github.com/thecoretg/ticketbot/models"
 )
 
-// A trigger's own condition gates its lane: a failing or erroring condition records the trigger
+// A trigger's own condition gates its steps: a failing or erroring condition records the trigger
 // step and starts nothing; a passing one walks as before.
-func TestTriggerConditionGatesTheLane(t *testing.T) {
+func TestTriggerConditionGatesItsSteps(t *testing.T) {
 	cw := &fakeCW{ticket: ticket()}
 	yes, no, bad := trig("yes", 0), trig("no", 100), trig("bad", 200)
 	yes.Condition = "status/id = 10"

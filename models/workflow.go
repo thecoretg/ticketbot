@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -158,7 +159,36 @@ type Node struct {
 
 	Events    []TriggerEvent `json:"events,omitempty"`    // trigger: which intakes enter here
 	Condition string         `json:"condition,omitempty"` // if: cwquery source, empty always matches; trigger: optional "only when" gate
+	// Order is a trigger's place in the firing order, from 1; the editor's tabs set it. Zero
+	// means unset, and unset triggers fall back to canvas position (see TriggersInOrder).
+	Order int `json:"order,omitempty"`
 	ActionSettings
+}
+
+// TriggersInOrder returns the workflow's trigger nodes in firing order: by Order, then left to
+// right and top to bottom on the canvas, then by id. Documents saved before triggers had an
+// order carry zero everywhere, so they keep the canvas order they always had.
+func (w *Workflow) TriggersInOrder() []*Node {
+	var out []*Node
+	for i := range w.Nodes {
+		if w.Nodes[i].Kind == NodeTrigger {
+			out = append(out, &w.Nodes[i])
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Order != b.Order {
+			return a.Order < b.Order
+		}
+		if a.X != b.X {
+			return a.X < b.X
+		}
+		if a.Y != b.Y {
+			return a.Y < b.Y
+		}
+		return a.ID < b.ID
+	})
+	return out
 }
 
 // Ports lists the node's output ports.

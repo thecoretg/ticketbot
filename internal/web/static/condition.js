@@ -260,7 +260,7 @@ function wfLookupLabel(source, it) {
 function wfConditionHTML(r) {
     const i = r.id
     const ui = r._ui || (r._ui = wfDefaultUI())
-    // a trigger's condition is a gate on its lane, an if's a fork; same builder, different words
+    // a trigger's condition is a gate on its steps, an if's a fork; same builder, different words
     const isTrigger = r.kind === 'trigger'
     const advanced = ui.mode === 'advanced'
     const compiled = advanced ? null : wfCompile(ui)

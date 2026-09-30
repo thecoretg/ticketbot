@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 
 	"github.com/thecoretg/tctg-go/connectwise/psa"
@@ -235,7 +234,7 @@ type pendingNote struct {
 }
 
 // Run walks the workflow graph for the ticket. Every enabled trigger listening for the intake's
-// event starts a walk, in canvas order; each walk follows the port its nodes select until a port
+// event starts a walk, in firing order (models.Workflow.TriggersInOrder); each walk follows the port its nodes select until a port
 // has no wire, a node another walk already ran is reached, or the step cap trips. Notify nodes are
 // collected as intents for the caller. Ticket-mutating nodes are queued: field operations merge
 // into one PATCH (the last node to set a path wins and the earlier one is marked superseded) and
@@ -293,25 +292,14 @@ func (e *Engine) Run(ctx context.Context, wf *models.Workflow, in Input) (*Resul
 	return r.res, nil
 }
 
-// triggers lists the enabled trigger nodes listening for the event, left to right then top to
-// bottom as they sit on the canvas.
+// triggers lists the enabled trigger nodes listening for the event, in firing order.
 func (r *run) triggers() []*models.Node {
 	var out []*models.Node
-	for _, n := range r.nodes {
-		if n.Kind == models.NodeTrigger && n.Enabled && n.Listens(r.res.Event) {
+	for _, n := range r.wf.TriggersInOrder() {
+		if n.Enabled && n.Listens(r.res.Event) {
 			out = append(out, n)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.X != b.X {
-			return a.X < b.X
-		}
-		if a.Y != b.Y {
-			return a.Y < b.Y
-		}
-		return a.ID < b.ID
-	})
 	return out
 }
 
@@ -334,8 +322,8 @@ func (e *Engine) walk(ctx context.Context, r *run, trigger *models.Node) {
 		switch {
 		case cur.Kind == models.NodeTrigger:
 			port = models.PortOut
-			// A trigger's own condition gates the lane: when it fails or errors the walk never
-			// starts, and the step is still recorded so the run shows the lane did not fire.
+			// A trigger's own condition gates its steps: when it fails or errors the walk never
+			// starts, and the step is still recorded so the run shows the trigger did not fire.
 			if strings.TrimSpace(cur.Condition) != "" {
 				matched, err := e.evalCondition(ctx, r, cur.Condition)
 				if err != nil {
